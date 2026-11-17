@@ -1,0 +1,16 @@
+.diff {
+  font-size: 12px;
+  max-height: 420px;
+  overflow: auto;
+}
+.add {
+  background: light-dark(var(--mantine-color-teal-0), rgba(18, 184, 134, 0.15));
+  color: light-dark(var(--mantine-color-teal-9), var(--mantine-color-teal-3));
+}
+.del {
+  background: light-dark(var(--mantine-color-red-0), rgba(250, 82, 82, 0.15));
+  color: light-dark(var(--mantine-color-red-9), var(--mantine-color-red-3));
+}
+.meta {
+  color: var(--mantine-color-dimmed);
+}
