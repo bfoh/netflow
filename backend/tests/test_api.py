@@ -1,0 +1,243 @@
+import pytest
+from api_helpers import FIREWALL, FIREWALL_INTENT, SWITCH, SWITCH_INTENT, make_client
+
+from undm.db.models import DeploymentRecord, Device
+from undm.drivers.mock.lab import default_lab
+from undm.services.deployments import recover_interrupted_deployments
+
+
+@pytest.fixture
+def ctx():
+    client, factory = make_client()
+    with client:
+        yield client, factory
+
+
+@pytest.fixture
+def client(ctx):
+    return ctx[0]
+
+
+def project(client, name="Lab A"):
+    r = client.post("/api/projects", json={"name": name, "site": "Site 1"})
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+def device(client, pid, body, intent=None):
+    r = client.post(f"/api/projects/{pid}/devices", json=body)
+    assert r.status_code == 201, r.text
+    did = r.json()["id"]
+    if intent:
+        assert client.put(f"/api/devices/{did}/intent", json=intent).status_code == 200
+    return did
+
+
+def generate(client, did):
+    r = client.post(f"/api/devices/{did}/configs/generate")
+    assert r.status_code == 200 and r.json()["ok"], r.text
+    return r.json()["version"]
+
+
+def test_health_drivers_models(client):
+    assert client.get("/api/health").json()["status"] == "ok"
+    drivers = client.get("/api/drivers").json()
+    assert {d["driver_id"] for d in drivers} == {
+        "mock.aruba.aoscx", "mock.fortinet.fortios", "mock.cisco.iosxe"}
+    assert all(d["simulated"] for d in drivers)
+    models = client.get("/api/device-models").json()
+    assert all(m["support"] == "simulated_only" for m in models)
+
+
+def test_project_crud(client):
+    pid = project(client)
+    assert client.post("/api/projects", json={"name": "Lab A"}).status_code == 409
+    r = client.patch(f"/api/projects/{pid}", json={"description": "updated"})
+    assert r.json()["description"] == "updated"
+    assert [p["id"] for p in client.get("/api/projects").json()] == [pid]
+    assert client.delete(f"/api/projects/{pid}").status_code == 204
+    assert client.get(f"/api/projects/{pid}").status_code == 404
+
+
+def test_device_inventory_and_validation(client):
+    pid = project(client)
+    sw = device(client, pid, SWITCH)
+    fw = device(client, pid, FIREWALL)
+    listed = client.get(f"/api/projects/{pid}/devices").json()
+    assert [d["name"] for d in listed] == ["fw1", "sw1"]
+    sw_out = client.get(f"/api/devices/{sw}").json()
+    assert sw_out["environment"] == "simulated"
+    assert "supports_configuration_rollback" in sw_out["capabilities"]
+    assert sw_out["observed_facts"] is None  # nothing discovered yet
+    assert client.post(f"/api/projects/{pid}/devices", json=SWITCH).status_code == 409
+    bad = dict(SWITCH, name="x", driver_id="nope")
+    assert client.post(f"/api/projects/{pid}/devices", json=bad).status_code == 400
+    r = client.patch(f"/api/devices/{fw}", json={"environment": "production"})
+    assert r.status_code == 400 and "simulation" in r.json()["error"]
+    assert client.patch(f"/api/devices/{fw}", json={"role": "core-fw"}).json()["role"] == "core-fw"
+
+
+def test_intent_validation_errors_are_reported(client):
+    pid = project(client)
+    fw = device(client, pid, FIREWALL, {
+        "hostname": "fw1", "static_routes": [{"prefix": "0.0.0.0/0", "next_hop": "192.0.2.1"}]})
+    r = client.post(f"/api/devices/{fw}/configs/generate").json()
+    assert not r["ok"] and r["version"] is None
+    assert "egress_interface_required" in {i["code"] for i in r["issues"]}
+    bad = client.put(f"/api/devices/{fw}/intent", json={"hostname": "bad name"})
+    assert bad.status_code == 422
+
+
+def test_generate_and_version_configs(client):
+    pid = project(client)
+    sw = device(client, pid, SWITCH, SWITCH_INTENT)
+    v = generate(client, sw)
+    assert "interface vlan 99" in v["text"]
+    assert v["verification"] == "docs_reviewed_not_lab_verified"
+    generate(client, sw)
+    assert len(client.get(f"/api/devices/{sw}/configs").json()) == 2
+
+
+def test_read_only_operations_and_impacting_forbidden(client):
+    pid = project(client)
+    sw = device(client, pid, SWITCH)
+    r = client.post(f"/api/devices/{sw}/operations/get_facts").json()
+    assert r["status"] == "success" and r["data"]["extra"]["simulated"] is True
+    dev = client.get(f"/api/devices/{sw}").json()
+    assert dev["observed_facts"]["serial_number"].startswith("SIM-")
+    assert client.post(f"/api/devices/{sw}/operations/backup_configuration").json()["status"] \
+        == "success"
+    r = client.post(f"/api/devices/{sw}/operations/reboot")
+    assert r.status_code == 403 and "approved deployment" in r.json()["error"]
+
+
+def test_full_simulated_deployment_flow(client):
+    """Directive section 28, steps 3-14."""
+    pid = project(client)
+    sw = device(client, pid, SWITCH, SWITCH_INTENT)
+    fw = device(client, pid, FIREWALL, FIREWALL_INTENT)
+    generate(client, sw)
+    generate(client, fw)
+    r = client.post(f"/api/projects/{pid}/deployments", json={"device_ids": [sw, fw]},
+                    headers={"X-UNDM-Actor": "alice"})
+    assert r.status_code == 201, r.text
+    dep = r.json()
+    assert dep["state"] == "awaiting_approval"
+    assert all(t["diff"] for t in dep["targets"])
+    # cannot execute before approval
+    assert client.post(f"/api/deployments/{dep['id']}/execute").status_code == 409
+    r = client.post(f"/api/deployments/{dep['id']}/approve", headers={"X-UNDM-Actor": "bob"})
+    assert r.json()["state"] == "ready" and r.json()["approved_by"] == "bob"
+    r = client.post(f"/api/deployments/{dep['id']}/execute", headers={"X-UNDM-Actor": "bob"})
+    out = r.json()
+    assert out["state"] == "succeeded", out["events"]
+    assert {t["state"] for t in out["targets"]} == {"verified"}
+    assert all(t["backup_version_id"] for t in out["targets"])
+    stages = [e["status"] for e in out["events"] if e["stage"] == "lifecycle"]
+    assert stages[-5:] == ["preflight", "backing_up", "deploying", "verifying", "succeeded"]
+    sw_after = client.get(f"/api/devices/{sw}").json()
+    assert sw_after["deployment_status"] == "in_sync"
+    assert sw_after["last_connection_at"] and sw_after["last_backup_at"]
+    assert default_lab().get("10.255.0.11").hostname == "sw1"
+    actions = {a["action"] for a in client.get("/api/audit").json()}
+    assert {"deployment.create", "deployment.approve", "deployment.execute"} <= actions
+    actors = {a["actor"] for a in client.get("/api/audit", params={"target_id": dep["id"]}).json()}
+    assert actors == {"alice", "bob"}
+
+
+def test_dry_run_changes_nothing(client):
+    pid = project(client)
+    sw = device(client, pid, SWITCH, SWITCH_INTENT)
+    generate(client, sw)
+    dep = client.post(f"/api/projects/{pid}/deployments",
+                      json={"device_ids": [sw], "dry_run": True}).json()
+    assert dep["state"] == "ready"
+    out = client.post(f"/api/deployments/{dep['id']}/execute").json()
+    assert out["state"] == "succeeded"
+    assert default_lab().get("10.255.0.11").running_config == ""
+    assert client.get(f"/api/devices/{sw}").json()["deployment_status"] == "never_deployed"
+
+
+def test_separate_approver_policy():
+    client, _ = make_client(require_separate_approver=True)
+    with client:
+        pid = project(client)
+        sw = device(client, pid, SWITCH, SWITCH_INTENT)
+        generate(client, sw)
+        h = {"X-UNDM-Actor": "alice"}
+        dep = client.post(f"/api/projects/{pid}/deployments", json={"device_ids": [sw]},
+                          headers=h).json()
+        assert client.post(f"/api/deployments/{dep['id']}/approve", headers=h).status_code == 403
+
+
+def test_deployment_requires_generated_config(client):
+    pid = project(client)
+    sw = device(client, pid, SWITCH)
+    r = client.post(f"/api/projects/{pid}/deployments", json={"device_ids": [sw]})
+    assert r.status_code == 409 and "generate" in r.json()["error"]
+
+
+def test_cancel(client):
+    pid = project(client)
+    sw = device(client, pid, SWITCH, SWITCH_INTENT)
+    generate(client, sw)
+    dep = client.post(f"/api/projects/{pid}/deployments", json={"device_ids": [sw]}).json()
+    assert client.post(f"/api/deployments/{dep['id']}/cancel").json()["state"] == "cancelled"
+    assert client.post(f"/api/deployments/{dep['id']}/approve").status_code == 409
+
+
+def test_locked_device_rejects_second_deployment(ctx):
+    client, factory = ctx
+    pid = project(client)
+    sw = device(client, pid, SWITCH, SWITCH_INTENT)
+    generate(client, sw)
+    dep = client.post(f"/api/projects/{pid}/deployments", json={"device_ids": [sw]}).json()
+    client.post(f"/api/deployments/{dep['id']}/approve")
+    with factory() as s:  # simulate another deployment holding the device
+        s.get(Device, sw).locked_by_deployment_id = "other"
+        s.commit()
+    r = client.post(f"/api/deployments/{dep['id']}/execute")
+    assert r.status_code == 409 and "busy" in r.json()["error"]
+    assert client.get(f"/api/deployments/{dep['id']}").json()["state"] == "ready"
+    assert client.patch(f"/api/devices/{sw}", json={"role": "x"}).status_code == 409
+
+
+def test_interrupted_deployment_is_resolved_on_restart(ctx):
+    client, factory = ctx
+    pid = project(client)
+    sw = device(client, pid, SWITCH, SWITCH_INTENT)
+    generate(client, sw)
+    dep = client.post(f"/api/projects/{pid}/deployments", json={"device_ids": [sw]}).json()
+    with factory() as s:  # simulate a crash while deploying
+        s.get(DeploymentRecord, dep["id"]).state = "deploying"
+        s.get(Device, sw).locked_by_deployment_id = dep["id"]
+        s.commit()
+        assert recover_interrupted_deployments(s) == [dep["id"]]
+    out = client.get(f"/api/deployments/{dep['id']}").json()
+    assert out["state"] == "recovery_required"
+    assert "application stopped" in out["events"][-1]["message"]
+    d = client.get(f"/api/devices/{sw}").json()
+    assert d["deployment_status"] == "unknown" and d["locked_by_deployment_id"] is None
+
+
+def test_audit_details_are_redacted(client):
+    pid = project(client)
+    sw = device(client, pid, SWITCH)
+    client.patch(f"/api/devices/{sw}", json={"notes": "enable password 0 hunter2"})
+    entry = client.get("/api/audit", params={"target_id": sw}).json()[0]
+    assert "hunter2" not in str(entry["details"])
+
+
+def test_list_all_deployments_and_config_diff(client):
+    pid = project(client)
+    sw = device(client, pid, SWITCH, SWITCH_INTENT)
+    v1 = generate(client, sw)
+    client.put(f"/api/devices/{sw}/intent", json=dict(SWITCH_INTENT, hostname="sw1-new"))
+    v2 = generate(client, sw)
+    d = client.get("/api/configs/diff", params={"from_version": v1["id"],
+                                                "to_version": v2["id"]}).json()
+    assert d["changed"] and "+hostname sw1-new" in d["unified"]
+    client.post(f"/api/projects/{pid}/deployments", json={"device_ids": [sw]})
+    all_deps = client.get("/api/deployments").json()
+    assert len(all_deps) == 1 and all_deps[0]["project_id"] == pid
+    assert client.get("/api/deployments", params={"state": "succeeded"}).json() == []

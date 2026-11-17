@@ -1,0 +1,18 @@
+hostname {{ intent.hostname }}
+{% for v in intent.vlans %}
+vlan {{ v.vlan_id }}
+{% if v.name %}
+    name {{ v.name }}
+{% endif %}
+{% endfor %}
+{% for i in intent.interfaces %}
+interface vlan {{ i.svi_vlan }}
+{% if i.description %}
+    description {{ i.description }}
+{% endif %}
+    ip address {{ i.address.with_prefixlen }}
+    {{ "no shutdown" if i.enabled else "shutdown" }}
+{% endfor %}
+{% for r in intent.static_routes %}
+ip route {{ r.prefix.with_prefixlen }} {{ r.next_hop }}
+{% endfor %}

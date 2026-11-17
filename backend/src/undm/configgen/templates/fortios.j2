@@ -1,0 +1,24 @@
+config system global
+    set hostname "{{ intent.hostname }}"
+end
+{% if intent.interfaces %}
+config system interface
+{% for i in intent.interfaces %}
+    edit "{{ i.interface }}"
+        set ip {{ i.address.ip }} {{ i.address.netmask }}
+        set status {{ "up" if i.enabled else "down" }}
+    next
+{% endfor %}
+end
+{% endif %}
+{% if intent.static_routes %}
+config router static
+{% for r in intent.static_routes %}
+    edit {{ loop.index }}
+        set dst {{ r.prefix.network_address }} {{ r.prefix.netmask }}
+        set gateway {{ r.next_hop }}
+        set device "{{ r.egress_interface }}"
+    next
+{% endfor %}
+end
+{% endif %}
