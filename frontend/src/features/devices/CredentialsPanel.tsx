@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Badge, Button, Card, Group, Modal, PasswordInput, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Card, Checkbox, Group, Modal, PasswordInput, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconKey, IconPlus, IconShieldLock, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -13,11 +13,13 @@ function SecretForm({ onSubmit, busy, submitLabel }:
   { onSubmit: (u: string, p: string) => void; busy: boolean; submitLabel: string }) {
   const [u, setU] = useState('');
   const [p, setP] = useState('');
+  const [none, setNone] = useState(false);
   return (
     <Stack>
       <TextInput label="Device username" value={u} onChange={(e) => setU(e.currentTarget.value)} autoComplete="off" />
-      <PasswordInput label="Device password" value={p} onChange={(e) => setP(e.currentTarget.value)} autoComplete="new-password" />
-      <Button onClick={() => onSubmit(u, p)} loading={busy} disabled={!u || !p}>{submitLabel}</Button>
+      <PasswordInput label="Device password" value={none ? '' : p} disabled={none} onChange={(e) => setP(e.currentTarget.value)} autoComplete="new-password" />
+      <Checkbox label="No password (factory-default device)" checked={none} onChange={(e) => setNone(e.currentTarget.checked)} />
+      <Button onClick={() => onSubmit(u, none ? '' : p)} loading={busy} disabled={!u || (!p && !none)}>{submitLabel}</Button>
     </Stack>
   );
 }

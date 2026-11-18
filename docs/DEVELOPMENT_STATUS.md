@@ -1,8 +1,8 @@
 # Development Status
 
-_Last updated: 2026-11-19 — ArubaOS-Switch (Aruba 2930F) platform and sanitized diagnostics,
-on top of configuration import, real-device SSH drivers (experimental), credentials,
-firmware manager and topology designer._
+_Last updated: 2026-11-19 — console bootstrap for ArubaOS-Switch (Provisioning Center),
+staging use case and design recorded; on top of the 2930F platform, sanitized diagnostics,
+configuration import, experimental SSH drivers, credentials, firmware manager, topology._
 
 ## What works (implemented and tested)
 | Area | Details |
@@ -16,8 +16,9 @@ firmware manager and topology designer._
 | Firmware | Repository with SHA-256 vs vendor checksum, approval/retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery — **simulated devices only** |
 | Topology | Canvas (React Flow), interface links with mode/VLANs, saved layout, auto-arrange, validation (interface reuse, self links, subnet mismatch, VLANs, duplicate IPs, isolated devices) |
 | Audit & logging | All significant actions, redacted details and device output |
+| Console bootstrap (provisioning) | ArubaOS-Switch over a serial console from the PC running UNDM: per-device settings (VLAN, port, address), command preview, factory-default check, stop on first error, read-back before `write memory`, idempotent re-run, transcript (raw + sanitized). **Tested against a simulated console only; not yet run on hardware** |
 | Sanitized diagnostics | Shareable report of last retrieved device output with IPs, MACs, serials, names and secrets masked |
-| Migrations | Two Alembic revisions; batch mode; tested on SQLite with existing data and on PostgreSQL |
+| Migrations | Three Alembic revisions; batch mode; tested on SQLite with existing data and on PostgreSQL |
 
 ## What is simulated or experimental
 - Simulated drivers: all three families, full feature set including firmware.
@@ -28,7 +29,8 @@ firmware manager and topology designer._
 
 ## Not implemented
 Authentication and RBAC (attribution header only — keep the backend on localhost);
-provisioning workflows (console/ZTP); real-device firmware; vendor signature verification;
+provisioning for FortiGate and Black Box, zero-touch provisioning; the staging run
+across all four devices; full-configuration push to real devices; real-device firmware; vendor signature verification;
 replace mode and rollback for real devices; addressing plans and site hierarchy; template
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
@@ -36,13 +38,13 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 172 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 199 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
-| ruff / mypy --strict | clean / clean (56 files) |
-| Frontend Vitest | 13 passed |
+| ruff / mypy --strict | clean / clean (62 files) |
+| Frontend Vitest | 14 passed |
 | tsc / oxlint / vite build | clean / clean / success |
-| Playwright E2E | 2 tests, 6/6 passed over 3 repeated runs (acceptance flow; import + topology + firmware) |
+| Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
 
 ## Known issues and limitations
 - Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole
@@ -57,8 +59,10 @@ library; intent beyond the first slice; project export/import; persistent job ru
 
 ## Primary use case (restated by the product owner 2026-11-19)
 Staging four factory-default devices per system (FortiGate 101F, Black Box switch,
-2 × Aruba 2930F) from one place: see `docs/requirements/staging-use-case.md`.
-Planning is waiting on answers to Q-10…Q-16 in `REFERENCE_ANALYSIS.md`.
+2 × Aruba 2930F) from one place: `docs/requirements/staging-use-case.md`, design and
+build order in `docs/requirements/staging-run-design.md`. Still needed from the product
+owner: sample configuration files, Aruba firmware versions, Black Box manuals and the
+exact LE2700-series model (Q-12, Q-13, Q-14, Q-17 in `REFERENCE_ANALYSIS.md`).
 
 ## Next milestone
 1. **Aruba 2930F lab acceptance, phase A (read-only)** — steps 3 (test connection) and

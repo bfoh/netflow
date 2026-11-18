@@ -10,7 +10,7 @@ import { DeploymentsPage } from './pages/DeploymentsPage';
 import { DeviceDetailPage } from './pages/DeviceDetailPage';
 import { DevicesPage } from './pages/DevicesPage';
 import { FirmwarePage } from './pages/FirmwarePage';
-import { ProvisioningPage } from './pages/PlannedPages';
+import { ProvisioningPage } from './pages/ProvisioningPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { SettingsPage } from './pages/SettingsPage';

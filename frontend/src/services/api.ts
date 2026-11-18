@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, Compatibility, Topology, TopologyLink, TopologyLinkInput, ConfigDiff, ConfigVersion, CredentialRef, FirmwareImage, Policy, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent,
+  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, Compatibility, SerialPort, Topology, TopologyLink, TopologyLinkInput, ConfigDiff, ConfigVersion, CredentialRef, FirmwareImage, Policy, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent,
   DeviceModel, Driver, GenerateResult, OperationResult, Project,
 } from '../types/api';
 
@@ -125,6 +125,12 @@ export const api = {
   executeDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/execute`),
   cancelDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/cancel`),
 
+  serialPorts: () => request<SerialPort[]>('GET', '/provisioning/serial-ports'),
+  bootstrapPreview: (id: string, profile: BootstrapProfile) =>
+    request<BootstrapPreview>('POST', `/devices/${id}/provisioning/console-bootstrap/preview`, { profile }),
+  consoleBootstrap: (id: string, body: {
+    serial_port: string; baudrate: number; profile: BootstrapProfile; confirm_device_name: string; allow_configured: boolean;
+  }) => request<BootstrapResult>('POST', `/devices/${id}/provisioning/console-bootstrap`, body),
   topology: (pid: string) => request<Topology>('GET', `/projects/${pid}/topology`),
   createLink: (pid: string, body: TopologyLinkInput) => request<TopologyLink>('POST', `/projects/${pid}/topology/links`, body),
   updateLink: (id: string, body: TopologyLinkInput) => request<TopologyLink>('PUT', `/topology/links/${id}`, body),

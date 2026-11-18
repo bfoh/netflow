@@ -65,6 +65,7 @@ export interface Device {
   last_backup_at: string | null;
   last_deployment_at: string | null;
   locked_by_deployment_id: string | null;
+  bootstrap_profile: BootstrapProfile | null;
   capabilities: string[];
   created_at: string;
   updated_at: string;
@@ -252,3 +253,27 @@ export interface TopologyLink {
 export type TopologyLinkInput = Omit<TopologyLink, 'id'>;
 
 export interface Topology { nodes: TopologyNode[]; links: TopologyLink[]; issues: Issue[] }
+
+export interface BootstrapProfile {
+  vlan_id: number;
+  vlan_name: string;
+  untagged_port: string;
+  address: string; // CIDR, e.g. "192.168.1.1/24"
+}
+
+export interface SerialPort { port: string; description: string; hardware_id: string }
+
+export interface BootstrapPreview { supported: boolean; commands: string[]; notes: string[] }
+
+export interface BootstrapResult {
+  status: 'bootstrapped' | 'already_configured' | 'refused' | 'failed';
+  message: string;
+  commands_sent: string[];
+  findings: string[];
+  verified: boolean;
+  saved: boolean;
+  transcript: string;
+  sanitized_transcript: string;
+  network_reachable: boolean | null;
+  network_hint: string;
+}

@@ -1,0 +1,134 @@
+from ipaddress import IPv4Interface
+
+import pytest
+
+from undm.drivers.base import Credentials
+from undm.provisioning.aos_switch import (
+    ArubaOSSwitchConsole,
+    BootstrapParams,
+    BootstrapStatus,
+    bootstrap,
+    is_configured,
+    parse_vlans,
+    site_config_findings,
+)
+from undm.provisioning.console import ConsoleSession, clean
+from undm.provisioning.simulated import SimulatedArubaConsole
+
+PARAMS = BootstrapParams(222, "OOBM_VLAN", "2", IPv4Interface("192.168.1.1/24"))
+
+
+def run(sim, params=PARAMS, creds=None, **kw):
+    session = ConsoleSession(sim, read_timeout=0.3, settle_time=0)
+    console = ArubaOSSwitchConsole(session, creds, wake_delay=0, login_timeout=0.3)
+    return bootstrap(console, params, **kw)
+
+
+def test_commands_match_the_manual_procedure():
+    assert PARAMS.commands() == [
+        "configure", "vlan 222", 'name "OOBM_VLAN"', "untagged 2",
+        "ip address 192.168.1.1 255.255.255.0", "exit", "write memory"]
+    port3 = BootstrapParams(222, "OOBM_VLAN", "3", IPv4Interface("192.168.1.1/24"))
+    assert "untagged 3" in port3.commands()
+
+
+@pytest.mark.parametrize("kw", [
+    {"vlan_id": 1}, {"vlan_id": 5000}, {"vlan_name": 'x" ; reload'}, {"untagged_port": "2;reload"},
+    {"address": IPv4Interface("192.168.1.0/24")}, {"address": IPv4Interface("192.168.1.1/32")},
+])
+def test_parameters_are_validated(kw):
+    base = {"vlan_id": 222, "vlan_name": "OOBM_VLAN", "untagged_port": "2",
+            "address": IPv4Interface("192.168.1.1/24")}
+    with pytest.raises(ValueError):
+        BootstrapParams(**{**base, **kw})
+
+
+def test_factory_default_switch_is_bootstrapped_and_saved():
+    sim = SimulatedArubaConsole()
+    r = run(sim)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED and r.verified and r.saved, r.message
+    assert sim.vlans[222] == {"name": "OOBM_VLAN", "untagged": {"2"},
+                              "ip": "192.168.1.1 255.255.255.0"}
+    assert "2" not in sim.vlans[1]["untagged"]
+    assert sim.saved_config is not None and "vlan 222" in sim.saved_config
+    assert r.commands_sent == PARAMS.commands()
+    assert "Press any key to continue" in r.transcript and "<<< vlan 222" in r.transcript
+
+
+def test_second_run_changes_nothing():
+    sim = SimulatedArubaConsole()
+    run(sim)
+    before = list(sim.commands_received)
+    sim2_state = sim.render()
+    sim._state, sim._enters = "asleep", 0  # a new console session on the same switch
+    r = run(sim)
+    assert r.status is BootstrapStatus.ALREADY_CONFIGURED and r.commands_sent == []
+    assert sim.render() == sim2_state
+    new = sim.commands_received[len(before):]
+    assert not any(c.startswith(("configure", "vlan", "untagged", "write")) for c in new)
+
+
+def test_switch_with_site_configuration_is_refused_unless_allowed():
+    sim = SimulatedArubaConsole(extra_config=[
+        "ip authorized-managers 192.0.2.10 255.255.255.255 access manager",
+        "ip route 0.0.0.0 0.0.0.0 192.0.2.1"])
+    r = run(sim)
+    assert r.status is BootstrapStatus.REFUSED and r.commands_sent == []
+    assert any("authorized-managers" in f for f in r.findings)
+    assert 222 not in sim.vlans and sim.saved_config is None
+    sim._state, sim._enters = "asleep", 0
+    assert run(sim, allow_configured=True).status is BootstrapStatus.BOOTSTRAPPED
+
+
+def test_switch_with_password_is_not_factory_default():
+    sim = SimulatedArubaConsole(username="manager", password="Example-Only-1")
+    r = run(sim)
+    assert r.status is BootstrapStatus.FAILED and "not in factory-default state" in r.message
+    assert 222 not in sim.vlans
+    sim = SimulatedArubaConsole(username="manager", password="Example-Only-1")
+    r = run(sim, creds=Credentials("manager", "Example-Only-1"))
+    assert r.status is BootstrapStatus.BOOTSTRAPPED
+    assert "Example-Only-1" not in r.transcript
+
+
+def test_operator_level_console_is_elevated():
+    r = run(SimulatedArubaConsole(operator_level=True))
+    assert r.status is BootstrapStatus.BOOTSTRAPPED and "<<< enable" in r.transcript
+
+
+def test_rejected_command_stops_without_saving():
+    sim = SimulatedArubaConsole(fail_on={"untagged 2"})
+    r = run(sim)
+    assert r.status is BootstrapStatus.FAILED and "rejected 'untagged 2'" in r.message
+    assert sim.saved_config is None and not r.saved
+    assert r.commands_sent == ["configure", "vlan 222", 'name "OOBM_VLAN"', "untagged 2"]
+
+
+def test_invalid_port_reported_by_switch():
+    r = run(SimulatedArubaConsole(), BootstrapParams(222, "OOBM_VLAN", "99",
+                                                     IPv4Interface("192.168.1.1/24")))
+    assert r.status is BootstrapStatus.FAILED and "untagged 99" in r.message
+
+
+def test_silently_ignored_command_is_caught_by_read_back():
+    sim = SimulatedArubaConsole(silently_ignore={"ip address 192.168.1.1 255.255.255.0"})
+    r = run(sim)
+    assert r.status is BootstrapStatus.FAILED and "read back" in r.message
+    assert sim.saved_config is None
+
+
+def test_dead_console_times_out_cleanly():
+    r = run(SimulatedArubaConsole(silent=True))
+    assert r.status is BootstrapStatus.FAILED and "No expected prompt" in r.message
+
+
+def test_parsing_helpers():
+    cfg = ('hostname "x"\nvlan 1\n   name "DEFAULT_VLAN"\n   untagged 1,3-52\n'
+           "   ip address dhcp-bootp\n   exit\nvlan 222\n   name \"OOBM_VLAN\"\n   untagged 2\n"
+           "   ip address 192.168.1.1 255.255.255.0\n   exit\n")
+    assert set(parse_vlans(cfg)) == {1, 222}
+    assert is_configured(cfg, PARAMS)
+    assert not is_configured(cfg, BootstrapParams(222, "OOBM_VLAN", "3",
+                                                  IPv4Interface("192.168.1.1/24")))
+    assert site_config_findings(cfg, PARAMS) == []
+    assert clean("\x1b[24;1H\x1b[?25hsw# \r\n") == "sw# \n"

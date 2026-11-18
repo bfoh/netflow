@@ -35,7 +35,10 @@ independent of it: no DIMETRA assumptions, no TNDM code, no TNDM assets.
 - Vendor specifics live only in `drivers/<vendor>` and `configgen/templates`. Core code
   branches on **capabilities**, never on vendor names.
 - Every device-changing action goes through the deployment lifecycle
-  (`domain/lifecycle.py`); no API endpoint may change a device directly.
+  (`domain/lifecycle.py`); no API endpoint may change a device directly. One exception:
+  console bootstrap of factory-default devices (`services/provisioning.py`), which has
+  its own safeguards (preview, typed confirmation, write switch, factory-default check,
+  read-back before save, audit) — see DECISIONS D-025. Do not add other exceptions.
 - Unsupported operations return `OperationResult.unsupported(...)`; they do not raise.
 - Declared (user-entered) device data and observed (retrieved) data stay separate.
 
@@ -47,6 +50,7 @@ backend/            FastAPI app, package `undm` (src layout)
   src/undm/orchestration/  deployment + firmware orchestrators (pure logic)
   src/undm/configgen/ intent -> config rendering, Jinja2 templates, diff
   src/undm/drivers/   driver contract, registry, mock/ simulated lab + drivers, ssh/ real (experimental)
+  src/undm/provisioning/  serial console sessions, console bootstrap procedures, simulated console
   src/undm/domain/    enums, intent model, validation, lifecycle, operation impact
   src/undm/inventory/ device model catalog, driver/environment rules
   src/undm/db/        SQLAlchemy models, sessions
@@ -79,6 +83,11 @@ Frontend (from `frontend/`):
 - Tests first or alongside; every new driver must pass `tests/test_driver_contract.py`.
 - Small commits; update `docs/DEVELOPMENT_STATUS.md` and `docs/DECISIONS.md` with changes.
 - Use RFC 5737 / RFC 1918 addresses and fictional names in fixtures and examples.
+
+## Primary use case
+Staging four factory-default devices per system (FortiGate 101F, a Black Box switch,
+two Aruba 2930F) from one laptop: `docs/requirements/staging-use-case.md` and
+`docs/requirements/staging-run-design.md`. Prioritise work that serves it.
 
 ## Current focus
 See `docs/DEVELOPMENT_STATUS.md` ("Next milestone"). Real-device drivers are experimental

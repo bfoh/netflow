@@ -16,6 +16,12 @@ Two different actors must be distinguished:
 | Lab (real) | allowed | only with `UNDM_ENABLE_REAL_DEVICE_WRITES=true`, through approved deployments | **not implemented** (drivers declare no firmware capability) |
 | Production (real) | only with `UNDM_ALLOW_PRODUCTION_READ_ONLY=true` | only with writes enabled **and** `UNDM_ALLOW_PRODUCTION_DEPLOYMENTS=true` | not implemented |
 
+Console bootstrap (Provisioning Center) writes to a device over a serial cable. For real
+devices it needs `UNDM_ENABLE_REAL_DEVICE_WRITES=true`, a typed confirmation of the device
+name, and a switch that looks factory default (no password prompt, no site configuration)
+unless the operator explicitly overrides that check. It is meant for spare or new units on
+an isolated bench.
+
 Rules are re-checked when a deployment executes, not only when it is planned. A device's
 environment cannot be `simulated` with a real driver or vice versa.
 
@@ -47,6 +53,8 @@ Real-device output shared with the developer must go through **Sanitized diagnos
   Linux Secret Service); secrets are written through `PUT /api/credential-refs/{id}/secret`
   and can never be read back through the API. `env` — read-only, from
   `UNDM_CRED_<LOCATOR>_USERNAME/PASSWORD`. A vault provider is planned (Phase 8).
+- Passwords mentioned in conversations with the developer are never written to the
+  repository. Factory-default (empty) passwords can be stored for devices that have none.
 - SSH error messages and device output are redacted before they reach logs or the audit trail.
 - Logs are JSON and pass through redaction (`undm.security.redaction`): keys such as
   password/secret/token/key/community/psk are masked, and CLI fragments such as

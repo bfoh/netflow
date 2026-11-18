@@ -1,5 +1,5 @@
 import { Accordion, Alert, Anchor, Badge, Button, Card, Code, Group, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
-import { IconAlertTriangle, IconEdit, IconLock, IconPlugConnected } from '@tabler/icons-react';
+import { IconAlertTriangle, IconEdit, IconLock, IconPlugConnected, IconTerminal2 } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { Link, useParams } from 'react-router';
 
@@ -117,6 +117,14 @@ function Activity({ deviceId }: { deviceId: string }) {
   );
 }
 
+/** Shown for platforms that have a console bootstrap procedure. */
+function ConsoleBootstrapLink({ d }: { d: Device }) {
+  const drivers = useDrivers();
+  const platform = drivers.data?.find((x) => x.driver_id === d.driver_id)?.platform;
+  if (platform !== 'aos_switch') return null;
+  return <Button variant="default" component={Link} to={`/provisioning?device=${d.id}`} leftSection={<IconTerminal2 size={16} />}>Console bootstrap</Button>;
+}
+
 function RealDeviceNotice({ d }: { d: Device }) {
   const drivers = useDrivers();
   const policy = usePolicy();
@@ -148,7 +156,10 @@ export function DeviceDetailPage() {
     <>
       <PageHeader title={d.name}
         description={<Group gap="xs" component="span"><EnvironmentBadge env={d.environment} /><span>{d.manufacturer} {d.model} · <Anchor component={Link} to={`/projects/${d.project_id}`} size="sm">project</Anchor></span></Group>}
-        actions={<Button variant="default" leftSection={<IconEdit size={16} />} onClick={openEdit} disabled={!!d.locked_by_deployment_id}>Edit device</Button>} />
+        actions={<>
+          <ConsoleBootstrapLink d={d} />
+          <Button variant="default" leftSection={<IconEdit size={16} />} onClick={openEdit} disabled={!!d.locked_by_deployment_id}>Edit device</Button>
+        </>} />
       <RealDeviceNotice d={d} />
       {editing && <EditDeviceModal device={d} opened={editing} onClose={closeEdit} />}
       {d.locked_by_deployment_id && (

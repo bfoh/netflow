@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from ipaddress import IPv4Interface
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -84,7 +85,19 @@ class CredentialSecretIn(BaseModel):
     """Write-only. Never returned by any endpoint."""
 
     username: str = Field(min_length=1, max_length=120)
-    password: str = Field(min_length=1, max_length=512, repr=False)
+    # May be empty: factory-default devices often have no password.
+    password: str = Field(max_length=512, repr=False)
+
+
+class BootstrapProfile(BaseModel):
+    """Console bootstrap settings: an out-of-band management VLAN on one port."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    vlan_id: int = Field(ge=2, le=4094)
+    vlan_name: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")
+    untagged_port: str = Field(pattern=r"^[A-Za-z0-9/]{1,8}$")
+    address: IPv4Interface  # e.g. "192.168.1.1/24"
 
 
 class DeviceBase(BaseModel):
@@ -108,6 +121,7 @@ class DeviceBase(BaseModel):
     provisioning_status: ProvisioningStatus | None = None
     notes: str | None = None
     tags: list[str] | None = None
+    bootstrap_profile: BootstrapProfile | None = None
 
 
 class DeviceIn(DeviceBase):
@@ -153,6 +167,7 @@ class DeviceOut(ORM):
     last_backup_at: datetime | None
     last_deployment_at: datetime | None
     locked_by_deployment_id: str | None
+    bootstrap_profile: dict[str, Any] | None
     capabilities: list[str] = []
     created_at: datetime
     updated_at: datetime
@@ -341,3 +356,40 @@ class FirmwareDeploymentIn(BaseModel):
 
 class DiagnosticsOut(BaseModel):
     text: str
+
+
+class SerialPortOut(BaseModel):
+    port: str
+    description: str
+    hardware_id: str = ""
+
+
+class BootstrapPreviewIn(BaseModel):
+    profile: BootstrapProfile | None = None  # default: the profile saved on the device
+
+
+class BootstrapPreviewOut(BaseModel):
+    supported: bool
+    commands: list[str]
+    notes: list[str]
+
+
+class ConsoleBootstrapIn(BaseModel):
+    serial_port: str = Field(min_length=1, max_length=64)
+    baudrate: Literal[9600, 19200, 38400, 57600, 115200] = 115200
+    profile: BootstrapProfile | None = None
+    confirm_device_name: str
+    allow_configured: bool = False
+
+
+class ConsoleBootstrapOut(BaseModel):
+    status: str
+    message: str
+    commands_sent: list[str]
+    findings: list[str]
+    verified: bool
+    saved: bool
+    transcript: str
+    sanitized_transcript: str
+    network_reachable: bool | None
+    network_hint: str

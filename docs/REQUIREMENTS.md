@@ -60,7 +60,11 @@ Status values: **Done** (implemented and tested), **Partial**, **Planned** (phas
 ## FR-PRV / FR-FW — Provisioning and firmware
 | ID | Requirement | Status |
 |---|---|---|
-| FR-PRV-01 | Provisioning approaches A–D (directive 16) with status tracking | Planned (Phase 6); simulated driver operation only |
+| FR-PRV-01 | Provisioning approaches A–D (directive 16) with status tracking | Approach B (console) built for ArubaOS-Switch; others planned |
+| FR-PRV-02 | Console bootstrap for ArubaOS-Switch: per-device settings, preview, factory-default check, read-back before save, idempotent, transcript | Done (simulated-tested); hardware validation pending |
+| FR-PRV-03 | Factory-default access for FortiGate (forced password change) and Black Box | Planned |
+| FR-STG-01 | Staging run: all devices of a system through bootstrap, firmware, configuration, verification, one report | Planned (design in `requirements/staging-run-design.md`) |
+| FR-STG-02 | Full-configuration push from supplied files, per platform | Planned |
 | FR-FW-01 | Firmware repository with SHA-256 integrity vs vendor checksum, approval, retire | Done |
 | FR-FW-02 | Offline compatibility (platform, models, minimum version, no downgrade) | Done |
 | FR-FW-03 | Upgrade plans: maintenance window, second approver, backup, stage/install/reboot/wait/verify, rollback or manual recovery | Done for simulated devices |

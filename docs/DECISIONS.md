@@ -150,3 +150,28 @@ although merge mode removes nothing. Merge previews now list each intended line 
 (will be added) or unchanged (already present), using the driver's verification hooks.
 Replace mode keeps the full diff. The intent editor defaults the hostname to the observed
 hostname and warns before a rename.
+
+### D-025 Console bootstrap is a provisioning workflow outside the deployment lifecycle (2026-11-19)
+A factory-default device cannot be previewed against or approved over the network, and
+the technician is alone at the bench. Console bootstrap therefore has its own safeguards
+instead of the Draft→Approve lifecycle: exact command preview, typed device-name
+confirmation, the real-device write switch, a factory-default check (refuses switches
+with site configuration or a password unless explicitly overridden), stop at the first
+error, save only after read-back matches, idempotent re-runs, audit record, transcript.
+The backend opens the PC's COM port itself (pyserial), so no separate agent is needed
+while UNDM runs on the technician's PC.
+
+### D-026 Per-device bootstrap settings; temporary staging address (2026-11-19)
+Bootstrap settings (VLAN, name, untagged port, address) are stored on each device, not
+hard-coded, so the two switch roles keep their own port. The product owner approved
+giving one switch 192.168.1.2 during staging so both can be on the bench at once.
+
+### D-027 Secrets mentioned in conversation are never recorded (2026-11-19)
+A password was shared in the development conversation. It is not written to code, docs,
+fixtures, tests or commits. Operators enter passwords only in UNDM's credential store.
+Empty passwords are allowed there because factory-default devices have none.
+
+### D-028 Follow the team's FortiGate upgrade practice (2026-11-19)
+The team upgrades FortiGate 101F from 7.2.7 directly to 7.6.5. UNDM will perform that
+single step and not invent intermediate versions; the firmware image's
+"minimum version to upgrade from" rule stays available if the team wants to enforce a path.

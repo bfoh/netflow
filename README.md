@@ -106,6 +106,15 @@ For the Aruba 2930F follow `docs/vendor-support/aruba-2930f-acceptance.md`.
 What the SSH drivers do not do yet: replace mode, automatic rollback (failures end in
 "manual recovery required" with the stored backup), firmware upgrades, multi-VDOM FortiGates.
 
+## Console bootstrap (Aruba 2930F and other ArubaOS-Switch models)
+For a factory-default switch with no management address: **Provisioning** → choose the
+switch → enter the management VLAN, port and address → **Preview commands** → choose the
+console cable's COM port → **Run console bootstrap**. Simulated devices use the
+`SIMULATED` console port, so you can try the workflow without hardware. Real switches
+need `UNDM_ENABLE_REAL_DEVICE_WRITES=true`; PuTTY must be closed while UNDM uses the COM
+port. First real run: follow `docs/vendor-support/aruba-2930f-console-bootstrap.md`
+on a spare switch.
+
 ## Tests
 ```bash
 cd backend && .venv/bin/pytest && .venv/bin/ruff check src tests && .venv/bin/mypy src

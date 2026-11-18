@@ -48,6 +48,7 @@ export const useDrivers = () => useQuery({ queryKey: keys.drivers, queryFn: api.
 export const useFirmwareImages = () => useQuery({ queryKey: ['firmware-images'], queryFn: api.firmwareImages });
 export const useTopology = (pid: string) =>
   useQuery({ queryKey: ['topology', pid], queryFn: () => api.topology(pid), enabled: !!pid });
+export const useSerialPorts = () => useQuery({ queryKey: ['serial-ports'], queryFn: api.serialPorts });
 export const usePolicy = () => useQuery({ queryKey: ['policy'], queryFn: api.policy });
 export const useCredentialRefs = (pid: string) =>
   useQuery({ queryKey: ['credential-refs', pid], queryFn: () => api.credentialRefs(pid), enabled: !!pid });

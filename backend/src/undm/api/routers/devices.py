@@ -82,7 +82,7 @@ def list_all_devices(session: SessionDep, registry: RegistryDep) -> list[DeviceO
 def create_device(project_id: str, body: DeviceIn, session: SessionDep,
                   registry: RegistryDep, actor: ActorDep) -> DeviceOut:
     get_project(session, project_id)
-    values = {k: v for k, v in body.model_dump().items() if v is not None}
+    values = {k: v for k, v in body.model_dump(mode="json").items() if v is not None}
     _check_refs(session, registry, project_id, values)
     d = Device(project_id=project_id, **values)
     session.add(d)
@@ -104,7 +104,7 @@ def read_device(device_id: str, session: SessionDep, registry: RegistryDep) -> D
 def update_device(device_id: str, body: DevicePatch, session: SessionDep,
                   registry: RegistryDep, actor: ActorDep) -> DeviceOut:
     d = get_device(session, device_id)
-    changes = body.model_dump(exclude_unset=True)
+    changes = body.model_dump(mode="json", exclude_unset=True)
     if d.locked_by_deployment_id:
         raise ConflictError("Device is locked by a running deployment")
     _check_refs(session, registry, d.project_id, changes, d)

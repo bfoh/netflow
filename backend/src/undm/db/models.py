@@ -94,6 +94,8 @@ class Device(TimestampMixin, Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     tags: Mapped[list[Any]] = mapped_column(default=list)
     intent: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
+    # Console bootstrap settings for this device (management VLAN, port, address).
+    bootstrap_profile: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
     # observed attributes (retrieved from the device)
     observed_facts: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
     facts_retrieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

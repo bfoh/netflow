@@ -11,7 +11,7 @@ const device = (over: Partial<Device>): Device => ({
   site: '', rack_location: '', driver_id: 'mock.aruba.aoscx', credential_ref_id: null, environment: 'simulated',
   provisioning_status: 'planned', deployment_status: 'never_deployed', notes: '', tags: [], intent: null,
   observed_facts: null, facts_retrieved_at: null, last_connection_at: null, last_backup_at: null,
-  last_deployment_at: null, locked_by_deployment_id: null, capabilities: [], created_at: '', updated_at: '',
+  last_deployment_at: null, locked_by_deployment_id: null, bootstrap_profile: null, capabilities: [], created_at: '', updated_at: '',
   ...over,
 });
 
@@ -48,10 +48,33 @@ describe('application shell', () => {
     expect(screen.getByRole('button', { name: 'Perform' })).toBeDisabled();
   });
 
-  it('planned modules say they are not implemented', async () => {
+  it('provisioning page states what is not implemented yet', async () => {
     mockApi({});
     renderAt('/provisioning');
-    expect(await screen.findByText(/Provisioning is not implemented yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/Zero-touch and network-based provisioning is not implemented yet/)).toBeInTheDocument();
+  });
+
+  it('provisioning page previews the exact console commands for a switch', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const sw = device({ id: 'sw', name: 'dmz-sw', driver_id: 'mock.aruba.aos_switch',
+      bootstrap_profile: { vlan_id: 222, vlan_name: 'OOBM_VLAN', untagged_port: '2', address: '192.168.1.1/24' } });
+    const calls = mockApi({
+      '/devices': [sw, device({ id: 'cx', name: 'other', driver_id: 'mock.aruba.aoscx' })],
+      '/drivers': [
+        { driver_id: 'mock.aruba.aos_switch', platform: 'aos_switch', simulated: true, vendor: 'Aruba', os_family: 'ArubaOS-Switch', description: '', capabilities: [], maturity: 'simulation', transport: 'simulated', notes: [] },
+        { driver_id: 'mock.aruba.aoscx', platform: 'aoscx', simulated: true, vendor: 'Aruba', os_family: 'AOS-CX', description: '', capabilities: [], maturity: 'simulation', transport: 'simulated', notes: [] },
+      ],
+      '/provisioning/serial-ports': [{ port: 'SIMULATED', description: 'Simulated switch console', hardware_id: '' }, { port: 'COM7', description: 'USB Serial', hardware_id: '' }],
+      '/devices/sw/provisioning/console-bootstrap/preview': { supported: true, commands: ['configure', 'vlan 222', 'untagged 2', 'write memory'], notes: ['Saved only after read-back.'] },
+    });
+    renderAt('/provisioning?device=sw');
+    expect(await screen.findByDisplayValue('OOBM_VLAN')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('192.168.1.1/24')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Preview commands' }));
+    expect(await screen.findByText(/untagged 2/)).toBeInTheDocument();
+    const sent = calls.find((c) => c.url.endsWith('/console-bootstrap/preview'));
+    expect(JSON.parse(String(sent?.init?.body)).profile.untagged_port).toBe('2');
+    expect(screen.getByRole('button', { name: 'Run console bootstrap…' })).toBeEnabled();
   });
 
   it('header shows when real-device changes are enabled', async () => {

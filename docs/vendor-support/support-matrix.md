@@ -25,6 +25,13 @@ password is sent if an enable password is requested), then `terminal width 511` 
 `no page` for the session; answers "no" to the save prompt on logout. Needs a manager login.
 Checklist: `aruba-2930f-acceptance.md`.
 
+## Console bootstrap (factory-default devices)
+| Family | Procedure | Status |
+|---|---|---|
+| ArubaOS-Switch (2930F) | Serial console: out-of-band management VLAN, one untagged port, address, `write memory` | Simulated-tested; **hardware validation pending** (`aruba-2930f-console-bootstrap.md`) |
+| FortiOS (FortiGate 101F) | Default address + forced first-login password change | Not built |
+| Black Box LIG1014A / LE2700 series | Default address | Not built; manuals needed |
+
 ## Templates (generation)
 | Template | Intent features rendered | Verification |
 |---|---|---|

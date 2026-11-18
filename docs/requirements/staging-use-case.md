@@ -9,7 +9,7 @@ Every system has four network elements:
 | Device | Factory-default access (as stated by the product owner) |
 |---|---|
 | 1 × Fortinet FortiGate 101F | 192.168.1.99 on the management port; user `admin`, no password |
-| 1 × Black Box LIG1014A (industrial managed Gigabit switch, 10 copper + 4 SFP) | 192.0.2.1; user `admin`, no password |
+| 1 × Black Box switch: LIG1014A in some systems, an LE2700-series model in others | 192.0.2.1; user `admin`, no password |
 | 2 × Aruba 2930F | no usable management IP; user `manager`, no password |
 
 For the two Aruba switches a technician connects to the **console port** and configures
@@ -61,3 +61,23 @@ UNKNOWN until the user manual is available: CLI syntax (modes, show/save command
 how configuration files are backed up and restored, the firmware upgrade procedure,
 console port settings, whether SSH is enabled at factory default. No driver will be
 written before these are documented (rule: no invented vendor facts).
+
+## Answers from the product owner (2026-11-19, USER-CONFIRMED)
+- **Cabling today:** the laptop is connected to each device directly, one at a time.
+  Wanted: reach all four from the laptop at once.
+- **Address clash:** both Aruba switches normally get 192.168.1.1. During staging one of
+  them may use **192.168.1.2** and be changed back to 192.168.1.1 afterwards.
+- **Aruba console commands used today** (role: DMZ switch — OOBM on port 2; role: LTE
+  switch — OOBM on port 3):
+  `configure` / `vlan 222` / `name "OOBM_VLAN"` / `untagged <2|3>` /
+  `ip address 192.168.1.1 255.255.255.0` / `exit`, then save.
+- **Configuration files** are produced by another team and loaded through each vendor's
+  web interface. Formats not yet seen. A generator inside UNDM may come later.
+- **Firmware:** FortiGate arrives on 7.2.7 and is upgraded **directly** to 7.6.5 (the
+  team's established practice). Black Box arrives on v00.01.00 and is upgraded to
+  v00.01.01. Aruba from/to versions not yet stated (the unit read on 2026-11-19 runs
+  WC.16.10.0025).
+- **FortiGate first login** forces a password change; the team sets the organisation's
+  approved password. (The password itself is deliberately not recorded anywhere in this
+  repository; it is entered into UNDM's credential store by the operator.)
+- **Spare factory-default units** on a bench not connected to live networks: available.
