@@ -33,7 +33,7 @@ driver has passed acceptance tests for the exact model and firmware.
 ### Approved lab devices
 | Date | Device | Firmware | Status | Allowed operations |
 |---|---|---|---|---|
-| 2026-11-19 | Aruba 2930F (ArubaOS-Switch), named by the product owner | to be confirmed | lab/spare status to be confirmed by the product owner | Phase A read-only (`docs/vendor-support/aruba-2930f-acceptance.md`); writes only in phase B after phase A is accepted |
+| 2026-11-19 | Aruba 2930F-48G-4SFP (ArubaOS-Switch), named by the product owner | WC.16.10.0025 | lab/spare status to be confirmed by the product owner | Phase A read-only (`docs/vendor-support/aruba-2930f-acceptance.md`); writes only in phase B after phase A is accepted |
 
 Real-device output shared with the developer must go through **Sanitized diagnostics**
 (or equivalent manual masking) and be reviewed by the product owner first.
