@@ -55,10 +55,18 @@ Copy-Item .env.example .env
 ### 3. Frontend (terminal 2)
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 Open http://127.0.0.1:5173. API documentation: http://127.0.0.1:5173/api/docs.
+
+Use `npm ci` instead of `npm install` to get exactly the tested versions from
+`package-lock.json`. Do **not** run `npm audit fix --force`: it downgrades Vite and
+Vitest to older releases with more serious advisories. As of 2026-11-18 `npm audit`
+reports one advisory (picomatch ReDoS, GHSA-fc5q-39xc-vjpf) counted once per dependent
+package; no fixed picomatch release exists, and it only affects build/test tooling
+matching our own file patterns — nothing shipped to the browser. See
+`docs/DEVELOPMENT_STATUS.md`.
 
 ## Tests
 ```bash

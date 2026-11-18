@@ -56,6 +56,12 @@ mid-run cancellation, timeouts; real drivers of any kind; drift detection.
 - Deployment execution is synchronous in the HTTP request (fine for simulation only).
 - Production build is a single 600 kB JS chunk (code splitting not done yet).
 - No formal accessibility audit yet.
+- `npm audit` (2026-11-18): 1 advisory, picomatch <= 4.0.7 ReDoS (GHSA-fc5q-39xc-vjpf),
+  reported as 8 "high" entries because vite, vitest, tinyglobby, fdir, postcss-mixins,
+  postcss-preset-mantine and @vitejs/plugin-react depend on it. No patched release
+  exists. Exposure: dev/build/test tooling only, patterns come from project config.
+  Action: upgrade when picomatch publishes a fix; never use `npm audit fix --force`
+  (it downgrades to Vite 6 / Vitest 3 with critical advisories).
 
 ## Next milestone
 **M1 — Authentication and role-based access** (see `PROJECT_MASTER_PLAN.md`), then M2
