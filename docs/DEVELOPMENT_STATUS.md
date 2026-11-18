@@ -36,15 +36,17 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 168 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 172 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (56 files) |
-| Frontend Vitest | 12 passed |
+| Frontend Vitest | 13 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 2 tests, 6/6 passed over 3 repeated runs (acceptance flow; import + topology + firmware) |
 
 ## Known issues and limitations
+- Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole
+  running configuration appeared as removed on devices with existing configuration).
 - SSH verification is textual (stripped line presence); real platforms may display some
   lines differently than sent, which would show up as verification failure → manual recovery.
 - FortiOS template writes static routes as IDs 1..n (warning shown).

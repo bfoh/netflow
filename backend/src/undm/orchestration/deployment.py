@@ -187,7 +187,7 @@ class DeploymentOrchestrator:
                     ok = self._fail_target(dep, t, "preview", TargetState.PREVIEW_FAILED,
                                            running.message)
                     continue
-                t.diff = diff_configs(running.data, t.intended_config, t.device_name)
+                t.diff = self._preview_diff(dep, t, running.data)
                 t.state = TargetState.PREVIEWED
                 self._emit(dep, "preview", "ok", f"+{t.diff.added} -{t.diff.removed} lines", t)
             finally:
@@ -267,7 +267,7 @@ class DeploymentOrchestrator:
                 ok = self._fail_target(dep, t, "preflight", TargetState.PREFLIGHT_FAILED,
                                        running.message)
                 continue
-            t.diff = diff_configs(running.data, t.intended_config, t.device_name)
+            t.diff = self._preview_diff(dep, t, running.data)
             t.state = TargetState.PREFLIGHT_PASSED
             self._emit(dep, "preflight", "ok",
                        f"reachable, identity ok; +{t.diff.added} -{t.diff.removed} lines", t)
@@ -285,6 +285,32 @@ class DeploymentOrchestrator:
             t.state = TargetState.BACKED_UP
             self._emit(dep, "backup", "ok", f"backup {t.backup.reference}", t)
         return ok
+
+    @staticmethod
+    def _preview_diff(dep: Deployment, t: DeploymentTarget, running: str) -> ConfigDiff:
+        """What the deployment will change.
+
+        Replace mode: a full diff (lines not in the intended config are removed).
+        Merge mode: nothing is removed, so show the intended lines only, marking each as
+        "+" (will be added) or unchanged (already on the device). Showing the whole running
+        configuration as removed would misrepresent a merge.
+        """
+        if dep.apply_mode is ApplyMode.REPLACE:
+            return diff_configs(running, t.intended_config, t.device_name)
+        present = t.driver.present_lines(running)
+        lines = [f"--- {t.device_name} (current)",
+                 f"+++ {t.device_name} (merge: '+' lines are added; nothing is removed)"]
+        added = 0
+        for raw in t.intended_config.splitlines():
+            if not raw.strip():
+                continue
+            keys = t.driver.expected_lines(raw)
+            if keys and keys[0] not in present:
+                lines.append("+" + raw)
+                added += 1
+            else:
+                lines.append(" " + raw)
+        return ConfigDiff("\n".join(lines) if added else "", added, 0)
 
     @staticmethod
     def _missing(t: DeploymentTarget, running: str) -> list[str]:

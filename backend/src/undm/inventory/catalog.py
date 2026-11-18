@@ -2,10 +2,11 @@
 
 A catalog of product models users can pick from when adding a network
 element. ``support`` states what UNDM can actually do with the model today;
-for every entry below that is SIMULATED ONLY: the model can be designed and
-exercised against a mock driver. An experimental SSH driver is listed second;
-it has not been validated on lab equipment for any model, so the support level
-stays ``simulated_only`` until it has. Listing a model is not a compatibility claim.
+for most entries that is SIMULATED ONLY: the model can be designed and exercised
+against a mock driver; an experimental SSH driver is listed second but has not been
+validated on lab equipment. ``lab_read_only`` means read-only operations passed
+acceptance on the model/firmware named in ``notes``. Listing a model is not a
+compatibility claim.
 """
 
 from __future__ import annotations
@@ -44,8 +45,10 @@ CATALOG: tuple[DeviceModel, ...] = (
                 "AOS-CX", ("mock.aruba.aoscx", "ssh.aruba.aoscx"), SupportLevel.SIMULATED_ONLY),
     DeviceModel("aruba-2930f", "Aruba", "2930F", "2930F", DeviceCategory.SWITCH,
                 "ArubaOS-Switch", ("mock.aruba.aos_switch", "ssh.aruba.aos_switch"),
-                SupportLevel.SIMULATED_ONLY,
-                notes="Runs ArubaOS-Switch (not AOS-CX). Named for lab acceptance 2026-11-19."),
+                SupportLevel.LAB_READ_ONLY,
+                notes="Runs ArubaOS-Switch (not AOS-CX). Read-only acceptance passed 2026-11-19 "
+                      "on 2930F-48G-4SFP (JL260A) WC.16.10.0025: connect, facts, backup. "
+                      "Configuration changes not yet validated."),
     DeviceModel("fortinet-fg-60f", "Fortinet", "FortiGate", "FortiGate-60F",
                 DeviceCategory.FIREWALL, "FortiOS", _FORTIOS, SupportLevel.SIMULATED_ONLY),
     DeviceModel("fortinet-fg-100f", "Fortinet", "FortiGate", "FortiGate-100F",

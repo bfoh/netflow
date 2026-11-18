@@ -50,7 +50,9 @@ def test_health_drivers_models(client):
         assert d["maturity"] == ("simulation" if d["simulated"] else "experimental")
     assert client.get("/api/policy").json()["enable_real_device_writes"] is False
     models = client.get("/api/device-models").json()
-    assert all(m["support"] == "simulated_only" for m in models)
+    support = {m["model_id"]: m["support"] for m in models}
+    assert support.pop("aruba-2930f") == "lab_read_only"  # acceptance phase A, 2026-11-19
+    assert set(support.values()) == {"simulated_only"}
 
 
 def test_project_crud(client):

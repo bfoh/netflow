@@ -323,3 +323,35 @@ def test_real_2930f_diagnostics_use_one_placeholder_per_value(scenario, mem_keyr
         assert "SG00FAKE01" not in text and "001122-334455" not in text and "lab-2930f" not in text
         assert "<serial-2>" not in text and text.count("<serial-1>") == 3  # facts, system, modules
         assert "product_number: JL260A" in text and "rom_version: WC.16.01.0010" in text
+
+
+def test_2930f_step8_dry_run_preview_lists_only_new_vlan(scenario, mem_keyring):
+    """Acceptance step 8: dry run of a test VLAN on a switch with existing config."""
+    from fake_netmiko import AOS_SWITCH_RUNNING
+    scenario.outputs.update(_fixture_outputs())
+    scenario.running = AOS_SWITCH_RUNNING + "interface 1\n   name \"uplink\"\n   exit\n"
+    client, _ = make_client()
+    with client:
+        pid = client.post("/api/projects", json={"name": "Step 8"}).json()["id"]
+        ref = client.post(f"/api/projects/{pid}/credential-refs", json={"name": "c"}).json()
+        client.put(f"/api/credential-refs/{ref['id']}/secret",
+                   json={"username": "netops", "password": "Example-Only-1"})
+        did = client.post(f"/api/projects/{pid}/devices", json={
+            "name": "sw", "manufacturer": "Aruba", "category": "switch", "model": "2930F",
+            "os_family": "ArubaOS-Switch", "driver_id": "ssh.aruba.aos_switch",
+            "environment": "lab", "management_address": "192.0.2.31",
+            "credential_ref_id": ref["id"]}).json()["id"]
+        client.post(f"/api/devices/{did}/operations/get_facts")
+        client.put(f"/api/devices/{did}/intent", json={
+            "hostname": "lab-2930f", "vlans": [{"vlan_id": 3999, "name": "undm-test"}]})
+        assert client.post(f"/api/devices/{did}/configs/generate").json()["ok"]
+        dep = client.post(f"/api/projects/{pid}/deployments",
+                          json={"device_ids": [did], "dry_run": True}).json()
+        diff = dep["targets"][0]["diff"].splitlines()
+        assert [ln for ln in diff[2:] if ln.startswith("+")] == [
+            "+vlan 3999", '+   name "undm-test"']
+        assert not any(ln.startswith("-") for ln in diff[2:])
+        assert ' hostname "lab-2930f"' in diff  # unchanged: already the switch's hostname
+        out = client.post(f"/api/deployments/{dep['id']}/execute").json()
+        assert out["state"] == "succeeded"
+        assert not any(c[0] == "send_config_set" for c in scenario.calls)  # nothing sent

@@ -114,3 +114,20 @@ describe('observed facts', () => {
     expect(screen.getByText(/Chassis: 2930F-48G-4SFP/)).toBeInTheDocument();
   });
 });
+
+
+describe('intent editor hostname safety', () => {
+  it('defaults to the observed hostname and warns before renaming', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const sw = device({ id: 'sw', name: 'inventory-name', observed_facts: { hostname: 'switch-real-name' } });
+    mockApi({ '/devices/sw': sw });
+    renderAt('/devices/sw');
+    await userEvent.click(await screen.findByRole('tab', { name: 'Intent' }));
+    const field = await screen.findByLabelText(/Hostname/);
+    expect(field).toHaveValue('switch-real-name');
+    expect(screen.queryByText('This intent renames the device')).not.toBeInTheDocument();
+    await userEvent.clear(field);
+    await userEvent.type(field, 'other');
+    expect(screen.getByText('This intent renames the device')).toBeInTheDocument();
+  });
+});

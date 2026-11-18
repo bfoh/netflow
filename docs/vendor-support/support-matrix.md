@@ -9,7 +9,7 @@ public documentation and Netmiko's source, tested only against fake connections.
 | Aruba AOS-CX | `mock.aruba.aoscx` | simulation | ✔ | ✔ merge | ✔ | ✔ | ✔ (simulated, with rollback) |
 | Aruba AOS-CX | `ssh.aruba.aoscx` | **experimental** | ✔ (`show version`, `show system`, `show running-config`) | ✔ merge, save `copy running-config startup-config` | ✘ | ✘ manual | ✘ |
 | ArubaOS-Switch (2930F) | `mock.aruba.aos_switch` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✔ (simulated dual image banks, with rollback) |
-| ArubaOS-Switch (2930F) | `ssh.aruba.aos_switch` | **experimental** — connection and facts parsing confirmed on 2930F-48G-4SFP WC.16.10.0025; backup comparison pending | ✔ (`show system`, `show modules`, `show running-config`) ⁵ | ✔ merge, save `write memory` | ✘ | ✘ manual | ✘ |
+| ArubaOS-Switch (2930F) | `ssh.aruba.aos_switch` | **experimental**; read-only operations **lab-accepted** on 2930F-48G-4SFP (JL260A) WC.16.10.0025 | ✔ (`show system`, `show modules`, `show running-config`) ⁵ | ✔ merge, save `write memory` | ✘ | ✘ manual | ✘ |
 | Fortinet FortiOS | `mock.fortinet.fortios` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✔ (simulated, no rollback) |
 | Fortinet FortiOS | `ssh.fortinet.fortios` | **experimental** | ✔ (`get system status`, `show`) ¹ | ✔ merge; FortiOS commits on `end` ² | ✘ | ✘ manual | ✘ |
 | Cisco IOS-XE | `mock.cisco.iosxe` | simulation | ✔ | ✔ merge | ✔ | ✔ | ✔ (simulated, no rollback) |
@@ -42,8 +42,9 @@ Not rendered (generation reports an error): ArubaOS-Switch routed ports and VLAN
 (needs a parent-interface concept) and interface descriptions.
 
 ## Device model registry
-All catalog entries are `simulated_only` (the support level rises to `lab_read_only` /
-`lab_validated` only after acceptance tests on that model).
+`aruba-2930f` is `lab_read_only` (connect, facts, backup accepted on 2930F-48G-4SFP,
+WC.16.10.0025, 2026-11-19). All other entries are `simulated_only`. The level rises to
+`lab_validated` only after configuration changes pass acceptance too.
 
 ## What must be validated per model before a driver leaves "experimental"
 Facts parsing against real output; behaviour of each rendered configuration line; how

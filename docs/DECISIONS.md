@@ -142,3 +142,11 @@ Sanitized real output is stored under `backend/tests/fixtures/<model>_<firmware>
 exact layout and whitespace kept, and masked identifiers replaced by fictional values, so
 parsers are tested against what devices really print. Drivers state the model/firmware
 combinations their parser was checked on (`parser_validated_on`), shown in the facts.
+
+### D-024 Merge previews show intended lines, not a full diff (2026-11-19)
+Found while preparing the first real dry run: a full unified diff of the running config
+against a few intended lines showed nearly the whole real configuration as "removed",
+although merge mode removes nothing. Merge previews now list each intended line as "+"
+(will be added) or unchanged (already present), using the driver's verification hooks.
+Replace mode keeps the full diff. The intent editor defaults the hostname to the observed
+hostname and warns before a rename.

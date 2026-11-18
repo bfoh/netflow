@@ -1,5 +1,5 @@
-import { ActionIcon, Button, Card, Group, NumberInput, Stack, Switch, Table, Text, TextInput, Title } from '@mantine/core';
-import { IconPlus, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Alert, Button, Card, Group, NumberInput, Stack, Switch, Table, Text, TextInput, Title } from '@mantine/core';
+import { IconAlertTriangle, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import { useAction } from '../../hooks/queries';
@@ -11,7 +11,10 @@ const orNull = (v: string | null | undefined) => (v && v.trim() ? v.trim() : nul
 
 /** Structured, vendor-neutral intent editor (hostname, VLANs, L3 interfaces, static routes). */
 export function IntentEditor({ device }: { device: Device }) {
-  const [intent, setIntent] = useState<DeviceIntent>(() => normalizeIntent(device.intent, device.name));
+  // Prefer the hostname read from the device, so a new intent does not rename it by accident.
+  const observedHostname = typeof device.observed_facts?.hostname === 'string' ? device.observed_facts.hostname : null;
+  const [intent, setIntent] = useState<DeviceIntent>(() => normalizeIntent(device.intent, observedHostname ?? device.name));
+  const renames = !!observedHostname && intent.hostname.trim() !== '' && intent.hostname.trim() !== observedHostname;
   const save = useAction((i: DeviceIntent) => api.setIntent(device.id, i), 'Intent saved');
   const update = <K extends keyof DeviceIntent>(k: K, v: DeviceIntent[K]) => setIntent({ ...intent, [k]: v });
   const patchRow = <K extends 'vlans' | 'interfaces' | 'static_routes'>(k: K, i: number, row: Partial<DeviceIntent[K][number]>) =>
@@ -34,6 +37,13 @@ export function IntentEditor({ device }: { device: Device }) {
       </Text>
       <Card withBorder>
         <TextInput label="Hostname" required maw={320} value={intent.hostname} onChange={(e) => update('hostname', e.currentTarget.value)} />
+        {renames && (
+          <Alert color="orange" mt="sm" icon={<IconAlertTriangle size={16} />} title="This intent renames the device">
+            The device currently reports hostname <b>{observedHostname}</b>. Deploying this intent sets it to <b>{intent.hostname}</b>.
+            Keep the current name unless you mean to rename it.
+            <Button size="xs" variant="light" ml="sm" onClick={() => update('hostname', observedHostname!)}>Use {observedHostname}</Button>
+          </Alert>
+        )}
       </Card>
 
       <Card withBorder>

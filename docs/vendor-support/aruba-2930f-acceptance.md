@@ -50,8 +50,9 @@ a test fixture, and the 2930F model is promoted to `lab_read_only` for that firm
 | 2026-11-19 | 3 Test connection | **Pass** | SSH session established with `ssh.aruba.aos_switch`: login with stored credential, banner handling and `enable` worked. |
 | 2026-11-19 | 4 Retrieve information | **Pass** — hostname, firmware and serial confirmed against the switch's `show system` by the product owner | Model 2930F-48G-4SFP, firmware WC.16.10.0025. Hostname and serial parsed (not recorded here). |
 | 2026-11-19 | 6 Sanitized diagnostics | **Received** | Real `show system` / `show modules` layout confirmed the parser. Found and fixed: serial placeholder re-masking (`<serial-1>` vs `<serial-2>`); model now split into model + product number (JL260A); ROM version captured. Output kept as fixture `backend/tests/fixtures/aruba_2930f_wc_16_10_0025/` (identifiers replaced with fictional values). |
-| 2026-11-19 | 5 Backup vs `show running-config` | **Not yet conclusive** | First comparison was against a stored reference configuration file, not live output. The backup itself has the switch's own `; <product> Configuration Editor` header and 3-space indentation, consistent with live `show running-config`. To repeat with live output (`no page`, then `show running-config`). |
-| — | 7–8 Generate + dry run | pending | |
+| 2026-11-19 | 5 Backup vs `show running-config` | **Pass** | Compared with live output: identical content. Only differences: the `Running configuration:` header/blank lines, and 80-column wrapping in the terminal copy (UNDM's session uses `terminal width 511`, so its copy is unwrapped). (A first attempt had compared against a stored reference file.) |
+| 2026-11-19 | **Phase A criteria (steps 3–5)** | **Met** | 2930F catalog entry promoted to `lab_read_only` for 2930F-48G-4SFP (JL260A) WC.16.10.0025. Driver stays `experimental` overall until writes are validated (phase B). |
+| — | 7–8 Generate + dry run | pending | Fixed before this step: merge-mode preview now lists only the intended lines (+ = will be added), never the existing configuration as removed; intent hostname defaults to the switch's reported hostname and warns before a rename. |
 
 ## Observations from the reference-file comparison (2026-11-19)
 Comparing the live backup with a stored reference configuration file showed (without

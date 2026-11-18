@@ -163,3 +163,35 @@ def test_events_are_emitted_to_sink():
     orch.approve(dep, "bob")
     orch.execute(dep)
     assert seen == dep.events
+
+
+def test_merge_preview_never_shows_existing_config_as_removed():
+    running = ("hostname sw1\nvlan 1\n name default\nsnmp-server location lab\n"
+               "ntp server 192.0.2.5\n")
+    lab_device("10.0.0.1", running=running)
+    orch = DeploymentOrchestrator()
+    dep = Deployment("d1", [target("sw1", "10.0.0.1")], created_by="alice")
+    assert orch.prepare(dep)
+    diff = dep.targets[0].diff
+    assert diff.removed == 0 and diff.added == 2  # "vlan 10" and " name users"
+    body = diff.unified.splitlines()[2:]
+    assert not any(ln.startswith("-") for ln in body)
+    assert "+vlan 10" in body and " hostname sw1" in body  # already present: unchanged
+    assert "snmp-server" not in diff.unified  # unrelated config is not listed at all
+
+
+def test_merge_preview_empty_when_already_compliant():
+    lab_device("10.0.0.1", running=CFG.format(name="sw1") + "extra line\n")
+    orch = DeploymentOrchestrator()
+    dep = Deployment("d1", [target("sw1", "10.0.0.1")], created_by="alice")
+    orch.prepare(dep)
+    assert not dep.targets[0].diff.changed and dep.targets[0].diff.unified == ""
+
+
+def test_replace_preview_still_shows_removals():
+    lab_device("10.0.0.1", running="hostname x\nsnmp-server community example\n")
+    orch = DeploymentOrchestrator()
+    dep = Deployment("d1", [target("r1", "10.0.0.1", "mock.cisco.iosxe")], created_by="alice",
+                     apply_mode=ApplyMode.REPLACE)
+    orch.prepare(dep)
+    assert dep.targets[0].diff.removed >= 1
