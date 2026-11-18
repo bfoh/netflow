@@ -48,4 +48,4 @@ a test fixture, and the 2930F model is promoted to `lab_read_only` for that firm
 | Date | Step | Result | Notes |
 |---|---|---|---|
 | 2026-11-19 | 3 Test connection | **Pass** | SSH session established with `ssh.aruba.aos_switch`: login with stored credential, banner handling and `enable` worked. |
-| 2026-11-19 | 4 Retrieve information | **All fields parsed**; comparison with the switch's `show system` pending | Model 2930F-48G-4SFP, firmware WC.16.10.0025. Hostname and serial parsed (not recorded here). |
+| 2026-11-19 | 4 Retrieve information | **Pass** — hostname, firmware and serial confirmed against the switch's `show system` by the product owner | Model 2930F-48G-4SFP, firmware WC.16.10.0025. Hostname and serial parsed (not recorded here). |

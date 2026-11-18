@@ -55,7 +55,7 @@ library; intent beyond the first slice; project export/import; persistent job ru
 
 ## Next milestone
 1. **Aruba 2930F lab acceptance, phase A (read-only)** — steps 3 (test connection) and
-   4 (retrieve information: all fields parsed, WC.16.10.0025) done on 2026-11-19; steps 5–8 pending — product owner runs
+   4 (retrieve information, confirmed against `show system`, WC.16.10.0025) passed on 2026-11-19; steps 5–8 pending — product owner runs
    `docs/vendor-support/aruba-2930f-acceptance.md` and shares the sanitized diagnostics;
    fix parser/verification against the real output and keep it as a fixture; then phase B
    (one supervised VLAN change). Firmware version of the unit still to be confirmed.
