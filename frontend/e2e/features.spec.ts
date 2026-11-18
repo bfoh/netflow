@@ -16,6 +16,7 @@ async function setActor(page: Page, name: string) {
 test('import config, draw topology, upgrade firmware (simulated)', async ({ page }) => {
   const id = String(Date.now()).slice(-6);
   const project = `Features ${id}`;
+  const octet = Number(id.slice(-2));
   await page.goto('/');
   await setActor(page, 'e2e-engineer');
 
@@ -25,8 +26,8 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   await page.getByRole('button', { name: 'Create project' }).click();
   await expect(page.getByRole('heading', { name: project })).toBeVisible();
 
-  for (const [model, name, addr] of [[/Aruba 6300M/, `sw-${id}`, `10.201.${id.slice(-2)}.11`],
-    [/FortiGate-60F/, `fw-${id}`, `10.201.${id.slice(-2)}.1`]] as const) {
+  for (const [model, name, addr] of [[/Aruba 6300M/, `sw-${id}`, `10.201.${octet}.11`],
+    [/FortiGate-60F/, `fw-${id}`, `10.201.${octet}.1`]] as const) {
     await page.getByRole('button', { name: 'Add device' }).first().click();
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('combobox', { name: 'Device model' }).click();

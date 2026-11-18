@@ -1,0 +1,14 @@
+hostname "{{ intent.hostname }}"
+{% for vid in vlan_ids %}
+vlan {{ vid }}
+{% if vlan_names.get(vid) %}
+   name "{{ vlan_names[vid] }}"
+{% endif %}
+{% if svi_addresses.get(vid) %}
+   ip address {{ svi_addresses[vid].ip }} {{ svi_addresses[vid].netmask }}
+{% endif %}
+   exit
+{% endfor %}
+{% for r in intent.static_routes %}
+ip route {{ r.prefix.network_address }} {{ r.prefix.netmask }} {{ r.next_hop }}
+{% endfor %}

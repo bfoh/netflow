@@ -45,7 +45,8 @@ class FakeConnection:
     def __init__(self, scenario: Scenario, **kwargs: object) -> None:
         self.s = scenario
         self.kwargs = kwargs
-        scenario.calls.append(("connect", {k: v for k, v in kwargs.items() if k != "password"}))
+        scenario.calls.append(("connect", {k: v for k, v in kwargs.items()
+                                          if k not in ("password", "secret")}))
 
     def send_command(self, command: str, read_timeout: int = 0) -> str:
         self.s.calls.append(("send_command", command))
@@ -83,3 +84,32 @@ def factory_for(scenario: Scenario):
             raise scenario.connect_error
         return FakeConnection(scenario, **kwargs)
     return factory
+
+# ArubaOS-Switch (e.g. 2930F): two-column "show system" layout. SYNTHETIC.
+AOS_SWITCH_SHOW_SYSTEM = """
+ Status and Counters - General System Information
+
+  System Name        : lab-2930f
+  System Contact     :
+  System Location    :
+
+  Software revision  : WC.16.10.0012        Base MAC Addr      : 001122-334455
+  ROM Version        : WC.17.02.0006        Serial Number      : CN00TEST01
+
+  Up Time            : 6 days               Memory   - Total   : 330,059,264
+"""
+AOS_SWITCH_SHOW_MODULES = """
+ Status and Counters - Module Information
+
+  Chassis: 2930F-24G-4SFPP JL259A          Serial Number:   CN00TEST01
+"""
+AOS_SWITCH_RUNNING = """Running configuration:
+
+; JL259A Configuration Editor; Created on release #WC.16.10.0012
+hostname "lab-2930f"
+vlan 1
+   name "DEFAULT_VLAN"
+   untagged 1-28
+   ip address dhcp-bootp
+   exit
+"""

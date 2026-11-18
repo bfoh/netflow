@@ -14,6 +14,7 @@ from undm.api.schemas import (
     DeviceIn,
     DeviceOut,
     DevicePatch,
+    DiagnosticsOut,
     GenerateOut,
     IntentIn,
     IssueOut,
@@ -182,6 +183,14 @@ def read_config(version_id: str, session: SessionDep) -> ConfigVersion:
     if v is None:
         raise NotFoundError("Configuration version not found")
     return v
+
+
+@router.get("/api/devices/{device_id}/diagnostics", response_model=DiagnosticsOut)
+def diagnostics(device_id: str, session: SessionDep, registry: RegistryDep,
+                actor: ActorDep) -> DiagnosticsOut:
+    """Sanitized report of the last retrieved device information. Does not contact the device."""
+    d = get_device(session, device_id)
+    return DiagnosticsOut(text=svc.sanitized_diagnostics(session, d, registry, actor))
 
 
 @router.post("/api/devices/{device_id}/operations/{operation}", response_model=OperationOut)

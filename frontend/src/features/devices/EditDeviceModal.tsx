@@ -66,6 +66,12 @@ export function EditDeviceModal({ device, opened, onClose }: { device: Device; o
             data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={f.credential_ref_id ?? null}
             onChange={(v) => setF({ ...f, credential_ref_id: v })} />
         </SimpleGrid>
+        {driver && f.os_family && driver.os_family !== f.os_family && (
+          <Alert color="red" icon={<IconAlertTriangle size={18} />} title="Operating system mismatch">
+            This device is recorded as <b>{f.os_family}</b> but the driver is for <b>{driver.os_family}</b>. Choose the driver
+            matching the device's operating system (for example, an Aruba 2930F runs ArubaOS-Switch, not AOS-CX).
+          </Alert>
+        )}
         {driver && !driver.simulated && (
           <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Experimental real-device driver">
             <Text size="sm">{driver.description}</Text>

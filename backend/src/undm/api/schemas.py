@@ -337,3 +337,7 @@ class FirmwareDeploymentIn(BaseModel):
     device_ids: list[str] = Field(min_length=1)
     image_id: str
     dry_run: bool = False
+
+
+class DiagnosticsOut(BaseModel):
+    text: str

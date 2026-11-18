@@ -100,6 +100,7 @@ export const api = {
   config: (versionId: string) => request<ConfigVersion>('GET', `/configs/${versionId}`),
   configDiff: (fromVersion: string, toVersion: string) =>
     request<ConfigDiff>('GET', `/configs/diff?from_version=${fromVersion}&to_version=${toVersion}`),
+  diagnostics: (id: string) => request<{ text: string }>('GET', `/devices/${id}/diagnostics`),
   runOperation: (id: string, op: string) =>
     request<OperationResult>('POST', `/devices/${id}/operations/${op}`),
 

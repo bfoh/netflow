@@ -5,14 +5,15 @@ generate or import vendor configurations, preview and approve changes, and deplo
 backup, verification and recovery; design topologies; manage firmware images and upgrades.
 
 > Status: see `docs/DEVELOPMENT_STATUS.md`. Everything works against **simulated devices**.
-> Real devices can be reached through **experimental** SSH drivers (Aruba AOS-CX, FortiOS,
-> Cisco IOS-XE) that have **not been validated on lab equipment**. Real-device configuration
+> Real devices can be reached through **experimental** SSH drivers (ArubaOS-Switch such as
+> the 2930F, Aruba AOS-CX, FortiOS, Cisco IOS-XE) that have **not been validated on lab equipment**. Real-device configuration
 > changes are off by default; real-device firmware upgrades are not implemented.
 
 ## What you can do today
 - Projects and network elements (simulated, or real lab devices over SSH).
 - Vendor-neutral intent (hostname, VLANs, L3 interfaces, static routes) → generated
-  configuration for AOS-CX, FortiOS, IOS-XE; or **import a configuration file**.
+  configuration for ArubaOS-Switch (e.g. 2930F), AOS-CX, FortiOS, IOS-XE; or
+  **import a configuration file**.
 - Compare versions and backups; deploy through validate → preview → approve → preflight
   (reachability + identity) → backup → deploy → verify, with rollback or manual recovery.
 - **Topology designer**: devices and interface-to-interface links with validation.
@@ -86,12 +87,14 @@ Then start the backend and frontend as usual. `alembic upgrade head` keeps your 
 
 ## Using real lab devices (experimental)
 Use **isolated lab equipment only**. Read `docs/SECURITY_BOUNDARIES.md` first.
+For the Aruba 2930F follow `docs/vendor-support/aruba-2930f-acceptance.md`.
 1. Project → **Credentials** → *Add credential*: enter the device username and password.
    They are stored in Windows Credential Manager (macOS Keychain / Linux Secret Service),
    not in the UNDM database.
 2. Project → **Add device** → choose the model → **Real lab device (SSH)**, enter the
    management address and pick the credential. The device is created in the `lab` environment.
 3. On the device page: **Test connection**, **Retrieve information**, **Back up**. These only read.
+   **Sanitized diagnostics** produces a shareable report with identifying details masked.
    (FortiGate note: if console paging is on, the SSH library temporarily sets
    `config system console / set output standard` for the session and restores it afterwards.)
 4. Deployment **dry runs** are allowed. To let approved deployments change lab devices, add

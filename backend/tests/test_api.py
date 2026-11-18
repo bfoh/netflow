@@ -43,8 +43,8 @@ def test_health_drivers_models(client):
     assert client.get("/api/health").json()["status"] == "ok"
     drivers = client.get("/api/drivers").json()
     assert {d["driver_id"] for d in drivers} == {
-        "mock.aruba.aoscx", "mock.fortinet.fortios", "mock.cisco.iosxe",
-        "ssh.aruba.aoscx", "ssh.fortinet.fortios", "ssh.cisco.iosxe"}
+        "mock.aruba.aoscx", "mock.fortinet.fortios", "mock.cisco.iosxe", "mock.aruba.aos_switch",
+        "ssh.aruba.aoscx", "ssh.fortinet.fortios", "ssh.cisco.iosxe", "ssh.aruba.aos_switch"}
     for d in drivers:
         assert d["simulated"] == d["driver_id"].startswith("mock.")
         assert d["maturity"] == ("simulation" if d["simulated"] else "experimental")

@@ -178,3 +178,44 @@ def run_read_only_operation(
     audit.record(session, actor, f"device.{op.value}", "device", device.id,
                  result.status.value, {"message": result.message})
     return {"status": result.status.value, "message": result.message, "data": payload}
+
+
+def sanitized_diagnostics(session: Session, device: Device, registry: DriverRegistry,
+                          actor: str) -> str:
+    """Shareable report of what UNDM last read from the device (no device contact)."""
+    from datetime import UTC, datetime
+
+    from undm.security.sanitize import new_mapper, sanitize
+
+    facts = dict(device.observed_facts or {})
+    extra = dict(facts.pop("extra", {}) or {})
+    raw = dict(extra.pop("raw_output", {}) or {})
+    known = [("hostname", device.name), ("hostname", str(facts.get("hostname") or "")),
+             ("serial", str(facts.get("serial_number") or "")),
+             ("ip", device.management_address)]
+    mapper = new_mapper()
+
+    def s(text: object) -> str:
+        return sanitize(str(text), known, mapper)
+
+    driver = registry.get(device.driver_id).info if device.driver_id in registry else None
+    lines = [
+        "UNDM sanitized diagnostics",
+        f"generated: {datetime.now(UTC).isoformat(timespec='seconds')}",
+        f"driver: {device.driver_id}"
+        + (f" ({driver.maturity.value}, {driver.os_family})" if driver else ""),
+        f"environment: {device.environment}",
+        f"declared: {device.manufacturer} {device.model} / {device.os_family}",
+        f"facts retrieved: {device.facts_retrieved_at or 'never'}",
+        "",
+        "== parsed facts ==",
+        *[f"{k}: {s(v)}" for k, v in facts.items()],
+        *[f"{k}: {s(v)}" for k, v in extra.items()],
+    ]
+    for command, output in raw.items():
+        lines += ["", f"== raw output: {command} ==", s(output).rstrip()]
+    if not raw:
+        lines += ["", "(no raw command output stored: run 'Retrieve information' first)"]
+    lines += ["", "Masking is automatic and best effort. Review before sharing."]
+    audit.record(session, actor, "device.diagnostics.export", "device", device.id)
+    return "\n".join(lines) + "\n"

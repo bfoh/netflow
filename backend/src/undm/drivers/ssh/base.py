@@ -98,6 +98,10 @@ class SshCliDriver(DeviceDriver):
     def present_lines(self, running: str) -> set[str]:
         return {ln.strip() for ln in running.splitlines() if ln.strip()}
 
+    def _connect_kwargs(self) -> dict[str, object]:
+        """Extra Netmiko arguments for a platform (never logged)."""
+        return {}
+
     def parse_facts(self, outputs: dict[str, str], prompt: str) -> DeviceFacts:
         raise NotImplementedError
 
@@ -129,6 +133,7 @@ class SshCliDriver(DeviceDriver):
                 auth_timeout=self.connect_timeout,
                 banner_timeout=self.connect_timeout,
                 fast_cli=False,
+                **self._connect_kwargs(),
             )
         except NetmikoAuthenticationException:
             return OperationResult.failed(op, "Authentication failed (check the credential)")

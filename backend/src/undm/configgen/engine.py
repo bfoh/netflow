@@ -61,6 +61,13 @@ PLATFORMS: dict[str, PlatformTemplate] = {
                    Feature.INTERFACE_DESCRIPTION, Feature.STATIC_ROUTES}),
         VerificationStatus.DOCS_REVIEWED,
     ),
+    # ArubaOS-Switch (formerly ProCurve), e.g. Aruba 2930F. Layer-3 addresses live in
+    # VLAN contexts; there are no routed physical ports.
+    "aos_switch": PlatformTemplate(
+        "aos_switch", "aos_switch.j2", "0.1.0",
+        frozenset({Feature.HOSTNAME, Feature.VLANS, Feature.SVI_ADDRESS, Feature.STATIC_ROUTES}),
+        VerificationStatus.DOCS_REVIEWED,
+    ),
     "fortios": PlatformTemplate(
         "fortios", "fortios.j2", "0.1.0",
         frozenset({Feature.HOSTNAME, Feature.PHYSICAL_INTERFACE_ADDRESS, Feature.STATIC_ROUTES}),
@@ -135,6 +142,14 @@ def check_platform_support(intent: DeviceIntent, platform: str) -> list[Validati
         for feature, path in required_features(intent).items()
         if feature not in tpl.features
     ]
+    if platform == "aos_switch" and intent.static_routes:
+        issues.append(ValidationIssue(
+            Severity.WARNING, "aos_switch_routes_need_ip_routing",
+            "ArubaOS-Switch uses 'ip route' entries only when IP routing is enabled on the "
+            "switch; this template does not enable it (a management-only default gateway is "
+            "configured differently and is not modelled yet)",
+            "static_routes",
+        ))
     if platform == "fortios" and intent.static_routes:
         issues.append(ValidationIssue(
             Severity.WARNING, "fortios_static_route_ids_overwrite",
@@ -155,6 +170,14 @@ def check_platform_support(intent: DeviceIntent, platform: str) -> list[Validati
     return issues
 
 
+def _vlan_context(intent: DeviceIntent) -> dict[str, object]:
+    """VLAN-centric view used by templates that group settings per VLAN (ArubaOS-Switch)."""
+    names = {v.vlan_id: v.name for v in intent.vlans if v.name}
+    svis = {i.svi_vlan: i.address for i in intent.interfaces if i.svi_vlan is not None}
+    ids = sorted({v.vlan_id for v in intent.vlans} | set(svis))
+    return {"vlan_ids": ids, "vlan_names": names, "svi_addresses": svis}
+
+
 def generate(intent: DeviceIntent, platform: str) -> GenerationResult:
     tpl = PLATFORMS.get(platform)
     if tpl is None:
@@ -162,5 +185,5 @@ def generate(intent: DeviceIntent, platform: str) -> GenerationResult:
     issues = validate_intent(intent) + check_platform_support(intent, platform)
     if has_errors(issues):
         return GenerationResult(platform, tpl.version, tpl.verification, issues)
-    text = _env.get_template(tpl.template).render(intent=intent)
+    text = _env.get_template(tpl.template).render(intent=intent, **_vlan_context(intent))
     return GenerationResult(platform, tpl.version, tpl.verification, issues, text)

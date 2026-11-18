@@ -8,6 +8,8 @@ public documentation and Netmiko's source, tested only against fake connections.
 |---|---|---|---|---|---|---|---|
 | Aruba AOS-CX | `mock.aruba.aoscx` | simulation | ✔ | ✔ merge | ✔ | ✔ | ✔ (simulated, with rollback) |
 | Aruba AOS-CX | `ssh.aruba.aoscx` | **experimental** | ✔ (`show version`, `show system`, `show running-config`) | ✔ merge, save `copy running-config startup-config` | ✘ | ✘ manual | ✘ |
+| ArubaOS-Switch (2930F) | `mock.aruba.aos_switch` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✔ (simulated dual image banks, with rollback) |
+| ArubaOS-Switch (2930F) | `ssh.aruba.aos_switch` | **experimental** — lab acceptance pending | ✔ (`show system`, `show modules`, `show running-config`) ⁵ | ✔ merge, save `write memory` | ✘ | ✘ manual | ✘ |
 | Fortinet FortiOS | `mock.fortinet.fortios` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✔ (simulated, no rollback) |
 | Fortinet FortiOS | `ssh.fortinet.fortios` | **experimental** | ✔ (`get system status`, `show`) ¹ | ✔ merge; FortiOS commits on `end` ² | ✘ | ✘ manual | ✘ |
 | Cisco IOS-XE | `mock.cisco.iosxe` | simulation | ✔ | ✔ merge | ✔ | ✔ | ✔ (simulated, no rollback) |
@@ -18,18 +20,25 @@ public documentation and Netmiko's source, tested only against fake connections.
 Multi-VDOM devices are not supported.
 ² Relies on the default `cfg-save automatic`; not checked on the device.
 ³ Requires a privilege-15 login; enable-password prompts are not handled.
+⁵ Netmiko `aruba_osswitch`: passes the "Press any key" banner, runs `enable` (the login
+password is sent if an enable password is requested), then `terminal width 511` and
+`no page` for the session; answers "no" to the save prompt on logout. Needs a manager login.
+Checklist: `aruba-2930f-acceptance.md`.
 
 ## Templates (generation)
 | Template | Intent features rendered | Verification |
 |---|---|---|
 | `aoscx.j2` v0.1.0 | hostname, VLANs, VLAN-interface addresses + description, static routes | docs-reviewed, not lab-verified |
 | `fortios.j2` v0.1.0 | hostname, physical interface addresses, static routes (egress interface required) ⁴ | docs-reviewed, not lab-verified |
+| `aos_switch.j2` v0.1.0 | hostname, VLANs (name), VLAN addresses (per-VLAN context, `exit`), static routes ⁶ | docs-reviewed, not lab-verified |
 | `iosxe.j2` v0.1.0 | hostname, VLANs, interface (physical + SVI) addresses + description, static routes | docs-reviewed, not lab-verified |
 
 ⁴ Static routes are written as entries `1..n`; on a real device this overwrites existing
 routes with the same IDs. Generation shows a warning.
 
-Not rendered (generation reports an error): AOS-CX routed physical ports; FortiOS VLANs
+⁶ `ip route` entries only take effect with IP routing enabled (warning shown).
+
+Not rendered (generation reports an error): ArubaOS-Switch routed ports and VLAN interface descriptions; AOS-CX routed physical ports; FortiOS VLANs
 (needs a parent-interface concept) and interface descriptions.
 
 ## Device model registry

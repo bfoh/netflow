@@ -124,4 +124,56 @@ class FortiOSSsh(SshCliDriver):
                         "not checked)")
 
 
-SSH_DRIVERS: tuple[type[SshCliDriver], ...] = (ArubaAOSCXSsh, CiscoIOSXESsh, FortiOSSsh)
+class ArubaOSSwitchSsh(SshCliDriver):
+    """ArubaOS-Switch (formerly ProCurve), e.g. Aruba 2930F.
+
+    Netmiko 'aruba_osswitch' (HPProcurveSSH) session behaviour, checked in its source:
+    passes the 'Press any key to continue' banner, runs 'enable', then 'terminal width 511'
+    and 'no page' for the session; on logout it answers 'no' to the save prompt.
+    """
+
+    netmiko_device_type = "aruba_osswitch"
+    facts_commands = ("show system", "show modules")
+    running_config_command = "show running-config"
+    skip_line_patterns = (r"^\s*;", r"^Running configuration:")
+    error_pattern = SshCliDriver.error_pattern + r"|Incomplete input|Ambiguous input"
+    info = DriverInfo(
+        driver_id="ssh.aruba.aos_switch",
+        vendor="Aruba",
+        platform="aos_switch",
+        os_family="ArubaOS-Switch",
+        description="ArubaOS-Switch (e.g. 2930F) over SSH CLI (Netmiko 'aruba_osswitch'). "
+                    "Experimental, not lab-validated.",
+        simulated=False,
+        capabilities=SSH_CAPABILITIES,
+        maturity=DriverMaturity.EXPERIMENTAL,
+        transport="ssh",
+        notes=(
+            "Needs a manager-level login (the session runs 'enable'); if the switch asks for "
+            "an enable password, the login password is sent.",
+            "Session runs 'terminal width 511' and 'no page' (session only).",
+            "On logout Netmiko answers 'no' to the save prompt; saving uses 'write memory' "
+            "only as part of a deployment.",
+            "No automatic rollback: failures end in manual recovery from the stored backup.",
+        ),
+    )
+
+    def _connect_kwargs(self) -> dict[str, object]:
+        assert self._credentials is not None
+        return {"secret": self._credentials.password}
+
+    def parse_facts(self, outputs: dict[str, str], prompt: str) -> DeviceFacts:
+        system = outputs.get("show system", "")
+        modules = outputs.get("show modules", "")
+        return DeviceFacts(
+            hostname=self._search(r"System Name\s*:\s*(\S+)", system) or prompt.rstrip("#> "),
+            vendor="Aruba",
+            model=self._search(r"Chassis:\s*(\S+(?: \S+)?)", modules) or "unknown",
+            os_version=self._search(r"Software revision\s*:\s*(\S+)", system) or "unknown",
+            serial_number=self._search(r"Serial Number\s*:\s*(\S+)", system),
+        )
+
+
+SSH_DRIVERS: tuple[type[SshCliDriver], ...] = (
+    ArubaAOSCXSsh, ArubaOSSwitchSsh, CiscoIOSXESsh, FortiOSSsh,
+)

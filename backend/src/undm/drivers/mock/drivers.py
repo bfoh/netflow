@@ -271,7 +271,23 @@ class MockCiscoIOSXEDriver(MockDriver):
     )
 
 
+class MockArubaOSSwitchDriver(MockDriver):
+    model = "SIM-2930F"
+    initial_os_version = "WC.16.10.0010"
+    info = DriverInfo(
+        driver_id="mock.aruba.aos_switch",
+        vendor="Aruba",
+        platform="aos_switch",
+        os_family="ArubaOS-Switch",
+        description="Simulated ArubaOS-Switch (e.g. 2930F); dual image banks simulated as "
+                    "firmware rollback, no configuration rollback",
+        simulated=True,
+        capabilities=_COMMON | {C.FIRMWARE_ROLLBACK},
+    )
+
+
 MOCK_DRIVERS: tuple[type[MockDriver], ...] = (
+    MockArubaOSSwitchDriver,
     MockFortiGateDriver,
     MockArubaAOSCXDriver,
     MockCiscoIOSXEDriver,

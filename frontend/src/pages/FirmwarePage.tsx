@@ -12,11 +12,11 @@ import { api } from '../services/api';
 import type { Compatibility, FirmwareImage } from '../types/api';
 
 const PLATFORMS = [
-  { value: 'aoscx', label: 'Aruba AOS-CX' }, { value: 'fortios', label: 'Fortinet FortiOS' },
-  { value: 'iosxe', label: 'Cisco IOS-XE' },
+  { value: 'aos_switch', label: 'ArubaOS-Switch (e.g. 2930F)' }, { value: 'aoscx', label: 'Aruba AOS-CX' },
+  { value: 'fortios', label: 'Fortinet FortiOS' }, { value: 'iosxe', label: 'Cisco IOS-XE' },
 ];
-const VENDOR_OF: Record<string, string> = { aoscx: 'Aruba', fortios: 'Fortinet', iosxe: 'Cisco' };
-const OS_OF: Record<string, string> = { aoscx: 'AOS-CX', fortios: 'FortiOS', iosxe: 'IOS-XE' };
+const VENDOR_OF: Record<string, string> = { aos_switch: 'Aruba', aoscx: 'Aruba', fortios: 'Fortinet', iosxe: 'Cisco' };
+const OS_OF: Record<string, string> = { aos_switch: 'ArubaOS-Switch', aoscx: 'AOS-CX', fortios: 'FortiOS', iosxe: 'IOS-XE' };
 const fmtSize = (b: number) => (b > 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)} MiB` : `${(b / 1024).toFixed(1)} KiB`);
 
 function UploadForm() {
@@ -48,7 +48,7 @@ function UploadForm() {
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <FileInput label="Firmware image file" placeholder="Choose the vendor image" value={file} onChange={setFile} required />
           <Select label="Platform" data={PLATFORMS} value={platform} onChange={setPlatform} allowDeselect={false} />
-          <TextInput label="Version" placeholder="as reported by the device, e.g. FL.10.13.1000" value={version} onChange={(e) => setVersion(e.currentTarget.value)} required />
+          <TextInput label="Version" placeholder="as reported by the device, e.g. WC.16.11.0003" value={version} onChange={(e) => setVersion(e.currentTarget.value)} required />
           <TagsInput label="Compatible models" placeholder="type and press Enter" data={suggestions} value={compatible} onChange={setCompatible} />
           <TextInput label="Vendor SHA-256" description="Copy from the vendor download page. Required for approval." value={sha} onChange={(e) => setSha(e.currentTarget.value)} />
           <TextInput label="Minimum version to upgrade from (optional)" description="Upgrade-path rule from the release notes" value={minFrom} onChange={(e) => setMinFrom(e.currentTarget.value)} />

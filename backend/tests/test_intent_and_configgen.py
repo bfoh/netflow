@@ -116,3 +116,27 @@ def test_warnings_do_not_block_generation():
 def test_generation_is_deterministic(platform):
     i = intent()
     assert generate(i, platform).sha256 == generate(i, platform).sha256
+
+
+def test_aos_switch_rendering_groups_settings_per_vlan():
+    r = generate(intent(
+        hostname="lab-2930f",
+        vlans=[{"vlan_id": 10, "name": "users"}, {"vlan_id": 99, "name": "mgmt"}],
+        interfaces=[{"interface": "vlan99", "address": "10.255.0.21/24"}],
+        static_routes=[{"prefix": "0.0.0.0/0", "next_hop": "10.255.0.1"}]), "aos_switch")
+    assert r.ok, r.issues
+    assert r.text == (
+        'hostname "lab-2930f"\n'
+        'vlan 10\n   name "users"\n   exit\n'
+        'vlan 99\n   name "mgmt"\n   ip address 10.255.0.21 255.255.255.0\n   exit\n'
+        "ip route 0.0.0.0 0.0.0.0 10.255.0.1\n"
+    )
+    assert "aos_switch_routes_need_ip_routing" in codes(r.issues)
+
+
+def test_aos_switch_rejects_routed_ports_and_descriptions():
+    r = generate(intent(interfaces=[{"interface": "1", "address": "10.0.0.1/24"},
+                                    {"interface": "vlan5", "address": "10.5.0.1/24",
+                                     "description": "x"}]), "aos_switch")
+    assert not r.ok
+    assert codes(r.issues) >= {"feature_not_supported_by_platform"}

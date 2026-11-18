@@ -6,6 +6,7 @@ from fake_netmiko import (
     AOSCX_SHOW_VERSION,
     FORTIOS_STATUS,
     IOSXE_SHOW_VERSION,
+    FakeConnection,
     Scenario,
     factory_for,
 )
@@ -14,7 +15,7 @@ from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutExc
 
 from undm.drivers.base import ApplyMode, Credentials, DeviceTarget, ResultStatus
 from undm.drivers.ssh.base import SshCliDriver
-from undm.drivers.ssh.platforms import ArubaAOSCXSsh, CiscoIOSXESsh, FortiOSSsh
+from undm.drivers.ssh.platforms import ArubaAOSCXSsh, ArubaOSSwitchSsh, CiscoIOSXESsh, FortiOSSsh
 
 CREDS = Credentials("netops", "Example-Only-1")
 
@@ -110,7 +111,7 @@ def test_fortios_save_is_not_claimed_as_device_save(scenario):
 
 
 def test_no_rollback_or_firmware_declared():
-    for cls in (CiscoIOSXESsh, ArubaAOSCXSsh, FortiOSSsh):
+    for cls in (CiscoIOSXESsh, ArubaAOSCXSsh, ArubaOSSwitchSsh, FortiOSSsh):
         d = drv(cls)
         assert d.rollback_configuration(None).status is ResultStatus.UNSUPPORTED  # type: ignore[arg-type]
         assert d.install_firmware().status is ResultStatus.UNSUPPORTED
@@ -215,3 +216,64 @@ def test_production_real_device_blocked(scenario, mem_keyring):
         r = client.post(f"/api/projects/{pid}/deployments",
                         json={"device_ids": [did], "dry_run": True})
         assert r.status_code == 403
+
+
+# --- ArubaOS-Switch (2930F) -------------------------------------------------------
+
+def test_aos_switch_session_parameters_and_facts(scenario):
+    from fake_netmiko import AOS_SWITCH_SHOW_MODULES, AOS_SWITCH_SHOW_SYSTEM
+    scenario.outputs.update({"show system": AOS_SWITCH_SHOW_SYSTEM,
+                             "show modules": AOS_SWITCH_SHOW_MODULES})
+    d = drv(ArubaOSSwitchSsh)
+    assert d.connect().ok
+    params = scenario.calls[0][1]
+    assert params["device_type"] == "aruba_osswitch"
+    assert "secret" not in params  # recorded params exclude secrets in the fake
+    f = d.get_device_facts().data
+    assert (f.hostname, f.os_version, f.serial_number) == ("lab-2930f", "WC.16.10.0012",
+                                                          "CN00TEST01")
+    assert f.model == "2930F-24G-4SFPP JL259A"
+
+
+def test_aos_switch_passes_enable_secret(scenario):
+    seen = {}
+
+    def factory(**kwargs):
+        seen.update(kwargs)
+        return FakeConnection(scenario, **kwargs)
+
+    SshCliDriver.connection_factory = staticmethod(factory)  # restored by monkeypatch fixture
+    drv(ArubaOSSwitchSsh).connect()
+    assert seen["secret"] == CREDS.password
+
+
+def test_aos_switch_config_lines_and_verification(scenario):
+    from fake_netmiko import AOS_SWITCH_RUNNING
+    d = drv(ArubaOSSwitchSsh)
+    assert d.config_lines(AOS_SWITCH_RUNNING)[0] == 'hostname "lab-2930f"'  # header + ; dropped
+    intended = 'hostname "lab-2930f"\nvlan 10\n   name "users"\n   exit\n'
+    running = AOS_SWITCH_RUNNING + 'vlan 10\n   name "users"\n   exit\n'
+    present = d.present_lines(running)
+    assert [ln for ln in d.expected_lines(intended) if ln not in present] == []
+
+
+def test_sanitized_diagnostics_after_real_read(scenario, mem_keyring):
+    from fake_netmiko import AOS_SWITCH_SHOW_MODULES, AOS_SWITCH_SHOW_SYSTEM
+    scenario.outputs.update({"show system": AOS_SWITCH_SHOW_SYSTEM,
+                             "show modules": AOS_SWITCH_SHOW_MODULES})
+    client, _ = make_client()
+    with client:
+        pid = client.post("/api/projects", json={"name": "Diag"}).json()["id"]
+        ref = client.post(f"/api/projects/{pid}/credential-refs", json={"name": "c"}).json()
+        client.put(f"/api/credential-refs/{ref['id']}/secret",
+                   json={"username": "netops", "password": "Example-Only-1"})
+        did = client.post(f"/api/projects/{pid}/devices", json={
+            "name": "lab-2930f", "manufacturer": "Aruba", "category": "switch", "model": "2930F",
+            "os_family": "ArubaOS-Switch", "driver_id": "ssh.aruba.aos_switch",
+            "environment": "lab", "management_address": "192.0.2.21",
+            "credential_ref_id": ref["id"]}).json()["id"]
+        assert client.post(f"/api/devices/{did}/operations/get_facts").json()["status"] == "success"
+        text = client.get(f"/api/devices/{did}/diagnostics").json()["text"]
+        assert "== raw output: show system ==" in text and "WC.16.10.0012" in text
+        for leaked in ("CN00TEST01", "001122-334455", "192.0.2.21", "lab-2930f", "Example-Only-1"):
+            assert leaked not in text, leaked

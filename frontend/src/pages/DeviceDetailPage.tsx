@@ -7,6 +7,7 @@ import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
 import { fmtDate } from '../services/format';
 import { ConfigWorkbench } from '../features/configurations/ConfigWorkbench';
+import { DiagnosticsButton } from '../features/devices/DiagnosticsButton';
 import { EditDeviceModal } from '../features/devices/EditDeviceModal';
 import { IntentEditor } from '../features/devices/IntentEditor';
 import { useAction, useAudit, useDevice, useDrivers, usePolicy } from '../hooks/queries';
@@ -56,6 +57,7 @@ function Overview({ d }: { d: Device }) {
               <Row k="Retrieved" v={fmtDate(d.facts_retrieved_at)} />
             </Table.Tbody></Table>
           ) : <Text size="sm" c="dimmed">Nothing retrieved yet. Values above are not verified against the device.</Text>}
+          {facts && <Group mt="sm"><DiagnosticsButton device={d} /></Group>}
         </Card>
         <Card withBorder>
           <Title order={5} mb="xs">Status</Title>

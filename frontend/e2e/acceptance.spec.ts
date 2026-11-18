@@ -7,6 +7,7 @@ import { expect, test } from '@playwright/test';
 test('create project, add devices, generate, deploy (simulated), audit', async ({ page }) => {
   const project = `E2E ${Date.now()}`;
   const suffix = String(Date.now()).slice(-6);
+  const octet = Number(suffix.slice(-2)); // no leading zeros: "07" is not a valid IPv4 octet
 
   // 2. dashboard
   await page.goto('/');
@@ -32,8 +33,8 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
     await dialog.getByRole('button', { name: 'Add device' }).click();
     await expect(dialog).toBeHidden();
   };
-  await addDevice(/Aruba 6300M/, `sw-${suffix}`, 'access-switch', `10.200.${suffix.slice(-2)}.11`);
-  await addDevice(/FortiGate-60F/, `fw-${suffix}`, 'edge-firewall', `10.200.${suffix.slice(-2)}.1`);
+  await addDevice(/Aruba 6300M/, `sw-${suffix}`, 'access-switch', `10.200.${octet}.11`);
+  await addDevice(/FortiGate-60F/, `fw-${suffix}`, 'edge-firewall', `10.200.${octet}.1`);
 
   // 6. both visible in the inventory
   await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Network Elements').click();
@@ -49,9 +50,9 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
   await page.getByLabel('VLAN name').fill('mgmt');
   await page.getByRole('button', { name: 'Add interface' }).click();
   await page.getByLabel('Interface', { exact: true }).fill('vlan99');
-  await page.getByLabel('Address', { exact: true }).fill(`10.200.${suffix.slice(-2)}.11/24`);
+  await page.getByLabel('Address', { exact: true }).fill(`10.200.${octet}.11/24`);
   await page.getByRole('button', { name: 'Save intent' }).click();
-  await expect(page.getByText('Intent saved')).toBeVisible();
+  await expect(page.getByText('Intent saved').last()).toBeVisible();
   await page.getByRole('tab', { name: 'Configurations' }).click();
   await page.getByRole('button', { name: 'Generate configuration' }).click();
   await expect(page.getByText('Validation passed')).toBeVisible();
@@ -64,9 +65,9 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
   await page.getByRole('tab', { name: 'Intent' }).click();
   await page.getByRole('button', { name: 'Add interface' }).click();
   await page.getByLabel('Interface', { exact: true }).fill('internal1');
-  await page.getByLabel('Address', { exact: true }).fill(`10.200.${suffix.slice(-2)}.1/24`);
+  await page.getByLabel('Address', { exact: true }).fill(`10.200.${octet}.1/24`);
   await page.getByRole('button', { name: 'Save intent' }).click();
-  await expect(page.getByText('Intent saved')).toBeVisible();
+  await expect(page.getByText('Intent saved').last()).toBeVisible();
   await page.getByRole('tab', { name: 'Configurations' }).click();
   await page.getByRole('button', { name: 'Generate configuration' }).click();
   await expect(page.getByText(`set hostname "fw-${suffix}"`)).toBeVisible();

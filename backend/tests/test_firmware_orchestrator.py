@@ -147,3 +147,29 @@ def test_ssh_drivers_cannot_upgrade_firmware():
     dep = plan([tgt("r1", "192.0.2.10", "ssh.cisco.iosxe")])
     assert not orch().prepare(dep)
     assert "cannot perform firmware upgrades" in dep.targets[0].message
+
+
+def test_aos_switch_style_versions_upgrade_and_roll_back():
+    a = dev("10.0.2.1", version="WC.16.10.0010")
+    # s1 upgrades fine; s2 fails during install, so s1 must be rolled back.
+    b = dev("10.0.2.2", version="WC.16.10.0010", fail_on={Op.INSTALL_FIRMWARE})
+    image = FirmwareImageRef("WC.16.11.0003", "WC_16_11_0003.swi", "b" * 64, 1, "/tmp/none")
+    now = datetime.now(UTC)
+    dep = Deployment("f2", [tgt("s1", "10.0.2.1", "mock.aruba.aos_switch"),
+                            tgt("s2", "10.0.2.2", "mock.aruba.aos_switch")],
+                     created_by="alice", firmware=image,
+                     window_start=now - timedelta(minutes=1), window_end=now + timedelta(hours=1))
+    assert run(dep) is S.ROLLED_BACK
+    assert a.os_version == b.os_version == "WC.16.10.0010"
+
+
+
+def test_reboot_that_keeps_failing_requires_manual_recovery():
+    dev("10.0.2.3", version="WC.16.10.0010", fail_on={Op.REBOOT})
+    image = FirmwareImageRef("WC.16.11.0003", "WC_16_11_0003.swi", "b" * 64, 1, "/tmp/none")
+    now = datetime.now(UTC)
+    dep = Deployment("f3", [tgt("s3", "10.0.2.3", "mock.aruba.aos_switch")], created_by="alice",
+                     firmware=image, window_start=now - timedelta(minutes=1),
+                     window_end=now + timedelta(hours=1))
+    assert run(dep) is S.RECOVERY_REQUIRED
+    assert dep.targets[0].state is T.ROLLBACK_FAILED

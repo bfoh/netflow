@@ -123,3 +123,16 @@ device intent, duplicate IPs across the project, isolated devices. React Flow 13
 Migrations run in batch mode so they work on SQLite (the documented workstation fallback,
 which cannot ALTER columns) as well as PostgreSQL. Upgrade/downgrade was tested on a SQLite
 database containing data from the previous version.
+
+### D-021 Aruba 2930F is a separate platform: ArubaOS-Switch (2026-11-19)
+The 2930F runs ArubaOS-Switch (ProCurve lineage), not AOS-CX: different CLI, config format
+(per-VLAN contexts closed with `exit`, quoted names, masks written out) and firmware naming
+(`WC.16.x`). Added platform `aos_switch` with its own template, simulated driver and
+experimental SSH driver (Netmiko `aruba_osswitch`, behaviour checked in Netmiko's source).
+The device edit form warns when a driver's OS does not match the device's OS.
+
+### D-022 Sanitized diagnostics for sharing real output (2026-11-19)
+Real outputs are needed to validate drivers, but may identify sites and equipment. The
+diagnostics export masks IPs, MACs (incl. HP format), serials, names/contacts/locations and
+secrets with stable placeholders, from data UNDM already stored (no device contact).
+Pattern-based, so the user reviews it before sharing.
