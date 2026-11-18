@@ -43,3 +43,8 @@ a test fixture, and the 2930F model is promoted to `lab_read_only` for that firm
   (generation shows a warning). Management default gateways are not modelled yet.
 - No routed physical ports and no VLAN descriptions in the template.
 - No automatic rollback (manual recovery from the stored backup); no firmware upgrades.
+
+## Results log
+| Date | Step | Result | Notes |
+|---|---|---|---|
+| 2026-11-19 | 3 Test connection | **Pass** | SSH session established with `ssh.aruba.aos_switch`: login with stored credential, banner handling and `enable` worked. Firmware version not yet recorded. |

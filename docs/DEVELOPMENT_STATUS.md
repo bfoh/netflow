@@ -54,7 +54,8 @@ library; intent beyond the first slice; project export/import; persistent job ru
 - Production build is a single large JS chunk.
 
 ## Next milestone
-1. **Aruba 2930F lab acceptance, phase A (read-only)** — product owner runs
+1. **Aruba 2930F lab acceptance, phase A (read-only)** — step 3 (test connection) passed
+   on 2026-11-19; steps 4–8 pending — product owner runs
    `docs/vendor-support/aruba-2930f-acceptance.md` and shares the sanitized diagnostics;
    fix parser/verification against the real output and keep it as a fixture; then phase B
    (one supervised VLAN change). Firmware version of the unit still to be confirmed.
