@@ -45,7 +45,7 @@ Safe conclusions:      <what UNDM may use>
 | Q-07 | Should UNDM import existing device configurations as a project starting point (brownfield)? | Intent-from-config parsing is a large feature. |
 | Q-10 | Staging: are the four devices configured one at a time (laptop cabled to each), or all cabled together? Where does the laptop plug in? | Both Aruba switches use 192.168.1.1, so they cannot share one network segment at the same address. Decides the staging-run design. |
 | Q-11 | Exact console commands typed today on a factory-default 2930F (sanitized) | Becomes the console bootstrap. |
-| Q-12 | Black Box switch exact model and firmware version | No driver exists; needs the vendor manual. |
+| Q-12 | Black Box switch: model answered 2026-11-19 — **LIG1014A**. Still needed: firmware version and the user manual (PDF) or its CLI / firmware / configuration sections. | No driver exists; the manual could not be opened from the development environment. |
 | Q-13 | What are the per-system configuration files (source tool, format per device), and which web-interface function applies them? | Decides restore method and verification. |
 | Q-14 | Firmware versions currently installed vs target, per device; file types | Firmware procedures and upgrade-path rules. |
 | Q-15 | FortiGate 101F first login: is a password change forced, and what is done about it today? | Factory-default login handling. |

@@ -9,7 +9,7 @@ Every system has four network elements:
 | Device | Factory-default access (as stated by the product owner) |
 |---|---|
 | 1 × Fortinet FortiGate 101F | 192.168.1.99 on the management port; user `admin`, no password |
-| 1 × Black Box switch (model to be confirmed) | 192.0.2.1; user `admin`, no password |
+| 1 × Black Box LIG1014A (industrial managed Gigabit switch, 10 copper + 4 SFP) | 192.0.2.1; user `admin`, no password |
 | 2 × Aruba 2930F | no usable management IP; user `manager`, no password |
 
 For the two Aruba switches a technician connects to the **console port** and configures
@@ -47,3 +47,17 @@ through its **web interface**.
   scripts) and how the web interfaces apply them today.
 
 Open questions for the product owner are tracked in `docs/REFERENCE_ANALYSIS.md` (Q-10 on).
+
+## Black Box LIG1014A — what is known (2026-11-19)
+DOCUMENTED (vendor quick-start guide and datasheet, found by web search; the documents
+themselves could not be opened from the development environment):
+- Factory default IP 192.0.2.1; login `admin` with a blank password.
+- The quick-start guide shows a Telnet connection to the default IP and the user manual has
+  a "CLI Initialization and Configuration" section.
+- Datasheet feature list: Web, HTTPS, Telnet, SSH, SNMP v1/v2c, TFTP/FTP, Syslog, RADIUS,
+  VLAN, RMON, DHCP.
+
+UNKNOWN until the user manual is available: CLI syntax (modes, show/save commands),
+how configuration files are backed up and restored, the firmware upgrade procedure,
+console port settings, whether SSH is enabled at factory default. No driver will be
+written before these are documented (rule: no invented vendor facts).
