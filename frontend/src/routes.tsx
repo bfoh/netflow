@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router';
 
 import { AppLayout } from './components/AppLayout';
+import { RouteError } from './components/RouteError';
 import { AuditPage } from './pages/AuditPage';
 import { ConfigurationsPage } from './pages/ConfigurationsPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -17,20 +18,27 @@ export const routes: RouteObject[] = [
   {
     path: '/',
     element: <AppLayout />,
+    errorElement: <RouteError />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: 'projects', element: <ProjectsPage /> },
-      { path: 'projects/:projectId', element: <ProjectDetailPage /> },
-      { path: 'devices', element: <DevicesPage /> },
-      { path: 'devices/:deviceId', element: <DeviceDetailPage /> },
-      { path: 'topology', element: <TopologyPage /> },
-      { path: 'configurations', element: <ConfigurationsPage /> },
-      { path: 'provisioning', element: <ProvisioningPage /> },
-      { path: 'firmware', element: <FirmwarePage /> },
-      { path: 'deployments', element: <DeploymentsPage /> },
-      { path: 'deployments/:deploymentId', element: <DeploymentDetailPage /> },
-      { path: 'audit', element: <AuditPage /> },
-      { path: 'settings', element: <SettingsPage /> },
+      {
+        // Pathless layout route: a crash in one page renders RouteError inside the app shell.
+        errorElement: <RouteError />,
+        children: [
+          { index: true, element: <DashboardPage /> },
+          { path: 'projects', element: <ProjectsPage /> },
+          { path: 'projects/:projectId', element: <ProjectDetailPage /> },
+          { path: 'devices', element: <DevicesPage /> },
+          { path: 'devices/:deviceId', element: <DeviceDetailPage /> },
+          { path: 'topology', element: <TopologyPage /> },
+          { path: 'configurations', element: <ConfigurationsPage /> },
+          { path: 'provisioning', element: <ProvisioningPage /> },
+          { path: 'firmware', element: <FirmwarePage /> },
+          { path: 'deployments', element: <DeploymentsPage /> },
+          { path: 'deployments/:deploymentId', element: <DeploymentDetailPage /> },
+          { path: 'audit', element: <AuditPage /> },
+          { path: 'settings', element: <SettingsPage /> },
+        ],
+      },
     ],
   },
 ];

@@ -46,7 +46,7 @@ mid-run cancellation, timeouts; real drivers of any kind; drift detection.
 | Backend pytest (unit, contract, orchestration, API, redaction, seed) | 91 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration (`UNDM_TEST_DATABASE_URL` set) | 2 passed; `alembic check`: no pending changes |
 | ruff / mypy --strict | clean / clean (44 files) |
-| Frontend Vitest | 7 passed |
+| Frontend Vitest | 9 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E (directive 28 flow, real browser, simulated devices) | 1 passed |
 

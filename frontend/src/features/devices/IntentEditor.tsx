@@ -4,14 +4,14 @@ import { useState } from 'react';
 
 import { useAction } from '../../hooks/queries';
 import { api } from '../../services/api';
+import { normalizeIntent } from '../../services/intent';
 import type { Device, DeviceIntent } from '../../types/api';
 
-const blank = (name: string): DeviceIntent => ({ hostname: name, vlans: [], interfaces: [], static_routes: [] });
 const orNull = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
 
 /** Structured, vendor-neutral intent editor (hostname, VLANs, L3 interfaces, static routes). */
 export function IntentEditor({ device }: { device: Device }) {
-  const [intent, setIntent] = useState<DeviceIntent>(device.intent ?? blank(device.name));
+  const [intent, setIntent] = useState<DeviceIntent>(() => normalizeIntent(device.intent, device.name));
   const save = useAction((i: DeviceIntent) => api.setIntent(device.id, i), 'Intent saved');
   const update = <K extends keyof DeviceIntent>(k: K, v: DeviceIntent[K]) => setIntent({ ...intent, [k]: v });
   const patchRow = <K extends 'vlans' | 'interfaces' | 'static_routes'>(k: K, i: number, row: Partial<DeviceIntent[K][number]>) =>

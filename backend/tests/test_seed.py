@@ -15,3 +15,7 @@ def test_seed_is_idempotent_and_synthetic():
         devices = s.scalars(select(Device)).all()
     assert {d.manufacturer for d in devices} == {"Aruba", "Fortinet"}
     assert all(d.environment == "simulated" for d in devices)
+    # Intents are stored complete (every list present), like intents saved via the API.
+    for d in devices:
+        assert d.intent is not None
+        assert set(d.intent) == {"hostname", "vlans", "interfaces", "static_routes"}

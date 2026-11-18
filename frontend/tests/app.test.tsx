@@ -1,5 +1,5 @@
 import { screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Device } from '../src/types/api';
 import { mockApi, renderAt } from './render';
@@ -52,5 +52,28 @@ describe('application shell', () => {
     mockApi({});
     renderAt('/firmware');
     expect(await screen.findByText(/Firmware management is not implemented yet/)).toBeInTheDocument();
+  });
+});
+
+describe('device page', () => {
+  it('opens the intent editor when stored intent omits empty lists', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    // Shape written by the original demo seed: no "vlans" key on the firewall.
+    const fw = device({ id: 'fw', name: 'branch-fw-01', manufacturer: 'Fortinet', category: 'firewall',
+      intent: { hostname: 'branch-fw-01', interfaces: [{ interface: 'wan1', address: '198.51.100.2/30' }] } as never });
+    mockApi({ '/devices/fw': fw });
+    renderAt('/devices/fw');
+    await userEvent.click(await screen.findByRole('tab', { name: 'Intent' }));
+    expect(await screen.findByRole('button', { name: 'Add VLAN' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('wan1')).toBeInTheDocument();
+  });
+
+  it('shows the error page inside the app when a page crashes', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A device without the capabilities array makes the overview throw.
+    mockApi({ '/devices/bad': { ...device({ id: 'bad' }), capabilities: undefined, tags: undefined } });
+    renderAt('/devices/bad');
+    expect(await screen.findByText('This page hit an error')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
   });
 });

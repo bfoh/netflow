@@ -8,14 +8,22 @@ again is harmless: an existing demo project is left untouched.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
 
 from undm.config import get_settings
 from undm.db.models import Device, Project
 from undm.db.session import make_engine, make_session_factory
+from undm.domain.intent import DeviceIntent
 from undm.services import audit
 
 DEMO_PROJECT = "Demo Branch Site"
+
+
+def _intent(raw: dict[str, Any]) -> dict[str, Any]:
+    """Validate and store intent in the same complete form the API stores."""
+    return DeviceIntent.model_validate(raw).model_dump(mode="json")
 
 
 def seed(session_factory=None) -> str:  # type: ignore[no-untyped-def]
@@ -34,14 +42,14 @@ def seed(session_factory=None) -> str:  # type: ignore[no-untyped-def]
             os_family="AOS-CX", management_address="10.255.0.11", management_protocol="ssh",
             site="Example Site A", rack_location="Rack 1 / U20",
             driver_id="mock.aruba.aoscx", environment="simulated", tags=["demo"],
-            intent={
+            intent=_intent({
                 "hostname": "branch-sw-01",
                 "vlans": [{"vlan_id": 10, "name": "users"}, {"vlan_id": 20, "name": "voice"},
                           {"vlan_id": 99, "name": "mgmt"}],
                 "interfaces": [{"interface": "vlan99", "address": "10.255.0.11/24",
                                 "description": "management"}],
                 "static_routes": [{"prefix": "0.0.0.0/0", "next_hop": "10.255.0.1"}],
-            },
+            }),
         )
         firewall = Device(
             project_id=p.id, name="branch-fw-01", manufacturer="Fortinet",
@@ -49,7 +57,7 @@ def seed(session_factory=None) -> str:  # type: ignore[no-untyped-def]
             role="edge-firewall", os_family="FortiOS", management_address="10.255.0.1",
             management_protocol="https_api", site="Example Site A", rack_location="Rack 1 / U22",
             driver_id="mock.fortinet.fortios", environment="simulated", tags=["demo"],
-            intent={
+            intent=_intent({
                 "hostname": "branch-fw-01",
                 "interfaces": [
                     {"interface": "internal1", "address": "10.255.0.1/24"},
@@ -57,7 +65,7 @@ def seed(session_factory=None) -> str:  # type: ignore[no-untyped-def]
                 ],
                 "static_routes": [{"prefix": "0.0.0.0/0", "next_hop": "198.51.100.1",
                                    "egress_interface": "wan1"}],
-            },
+            }),
         )
         s.add_all([switch, firewall])
         s.flush()
