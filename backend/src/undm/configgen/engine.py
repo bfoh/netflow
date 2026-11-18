@@ -135,6 +135,13 @@ def check_platform_support(intent: DeviceIntent, platform: str) -> list[Validati
         for feature, path in required_features(intent).items()
         if feature not in tpl.features
     ]
+    if platform == "fortios" and intent.static_routes:
+        issues.append(ValidationIssue(
+            Severity.WARNING, "fortios_static_route_ids_overwrite",
+            f"FortiOS static routes are written as entries 1..{len(intent.static_routes)}; on a "
+            "real device this overwrites existing routes with the same IDs",
+            "static_routes",
+        ))
     if tpl.requires_route_egress_interface:
         issues += [
             ValidationIssue(

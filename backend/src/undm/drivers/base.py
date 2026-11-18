@@ -85,6 +85,12 @@ class ApplyMode(StrEnum):
     REPLACE = "replace"  # make the running config equal to the supplied text
 
 
+class DriverMaturity(StrEnum):
+    SIMULATION = "simulation"  # talks only to the in-memory simulated lab
+    EXPERIMENTAL = "experimental"  # real devices; not yet validated on lab equipment
+    LAB_VALIDATED = "lab_validated"  # passed acceptance tests on named models/firmware
+
+
 @dataclass(frozen=True)
 class DriverInfo:
     driver_id: str
@@ -94,6 +100,9 @@ class DriverInfo:
     description: str
     simulated: bool
     capabilities: frozenset[Capability]
+    maturity: DriverMaturity = DriverMaturity.SIMULATION
+    transport: str = "simulated"
+    notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -116,6 +125,17 @@ class ConfigurationBackup:
     device_id: str
     text: str
     reference: str  # driver-specific handle usable for rollback (checkpoint name, file, ...)
+
+
+@dataclass(frozen=True)
+class FirmwareImageRef:
+    """An approved image from the UNDM repository, as handed to a driver."""
+
+    version: str
+    filename: str
+    sha256: str
+    size_bytes: int
+    local_path: str
 
 
 @dataclass(frozen=True)
@@ -145,6 +165,16 @@ class DeviceDriver:
     @classmethod
     def missing_capabilities(cls, op: DeviceOperation) -> frozenset[Capability]:
         return REQUIRED_CAPABILITIES.get(op, frozenset()) - cls.capabilities()
+
+    # -- verification helpers ---------------------------------------------------------
+    # The orchestrator decides "already applied" and "verified" by comparing these.
+    # Real-device drivers override them to ignore indentation and lines a platform
+    # does not display (defaults, block terminators).
+    def expected_lines(self, config: str) -> list[str]:
+        return [ln.rstrip() for ln in config.splitlines() if ln.strip()]
+
+    def present_lines(self, running: str) -> set[str]:
+        return {ln.rstrip() for ln in running.splitlines() if ln.strip()}
 
     def _unsupported(self, op: DeviceOperation) -> OperationResult:
         return OperationResult.unsupported(
@@ -181,7 +211,7 @@ class DeviceDriver:
     def rollback_configuration(self, backup: ConfigurationBackup) -> OperationResult:
         return self._unsupported(DeviceOperation.ROLLBACK_CONFIGURATION)
 
-    def stage_firmware(self, image_name: str, image_sha256: str) -> OperationResult:
+    def stage_firmware(self, image: FirmwareImageRef) -> OperationResult:
         return self._unsupported(DeviceOperation.STAGE_FIRMWARE)
 
     def install_firmware(self) -> OperationResult:

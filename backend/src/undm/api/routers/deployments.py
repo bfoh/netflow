@@ -3,19 +3,22 @@ from sqlalchemy import select
 
 from undm.api.deps import ActorDep, RegistryDep, SessionDep, SettingsDep
 from undm.api.routers.projects import get_project
-from undm.api.schemas import DeploymentIn, DeploymentOut, DeploymentSummary
+from undm.api.schemas import (
+    ApproveIn,
+    DeploymentIn,
+    DeploymentOut,
+    DeploymentSummary,
+    FirmwareDeploymentIn,
+)
 from undm.db.models import DeploymentRecord
 from undm.services.deployments import DeploymentService
+from undm.services.policy import Policy
 
 router = APIRouter(tags=["deployments"])
 
 
 def _svc(session: SessionDep, registry: RegistryDep, settings: SettingsDep) -> DeploymentService:
-    return DeploymentService(
-        session, registry,
-        require_separate_approver=settings.require_separate_approver,
-        allow_production_deployments=settings.allow_production_deployments,
-    )
+    return DeploymentService(session, registry, Policy.from_settings(settings))
 
 
 @router.get("/api/deployments", response_model=list[DeploymentSummary])
@@ -42,7 +45,8 @@ def create_deployment(project_id: str, body: DeploymentIn, session: SessionDep,
                       actor: ActorDep) -> DeploymentRecord:
     get_project(session, project_id)
     return _svc(session, registry, settings).create(
-        project_id, body.device_ids, actor, dry_run=body.dry_run, apply_mode=body.apply_mode)
+        project_id, body.device_ids, actor, dry_run=body.dry_run, apply_mode=body.apply_mode,
+        config_versions=body.config_versions)
 
 
 @router.get("/api/deployments/{deployment_id}", response_model=DeploymentOut)
@@ -53,8 +57,21 @@ def read_deployment(deployment_id: str, session: SessionDep, registry: RegistryD
 
 @router.post("/api/deployments/{deployment_id}/approve", response_model=DeploymentOut)
 def approve(deployment_id: str, session: SessionDep, registry: RegistryDep,
-            settings: SettingsDep, actor: ActorDep) -> DeploymentRecord:
-    return _svc(session, registry, settings).approve(deployment_id, actor)
+            settings: SettingsDep, actor: ActorDep,
+            body: ApproveIn | None = None) -> DeploymentRecord:
+    body = body or ApproveIn()
+    return _svc(session, registry, settings).approve(
+        deployment_id, actor, body.window_start, body.window_end)
+
+
+@router.post("/api/projects/{project_id}/firmware-upgrades", response_model=DeploymentOut,
+             status_code=status.HTTP_201_CREATED, tags=["firmware"])
+def create_firmware_deployment(project_id: str, body: FirmwareDeploymentIn,
+                               session: SessionDep, registry: RegistryDep,
+                               settings: SettingsDep, actor: ActorDep) -> DeploymentRecord:
+    get_project(session, project_id)
+    return _svc(session, registry, settings).create_firmware(
+        project_id, body.device_ids, body.image_id, actor, dry_run=body.dry_run)
 
 
 @router.post("/api/deployments/{deployment_id}/execute", response_model=DeploymentOut)

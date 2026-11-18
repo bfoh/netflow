@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from undm.configgen.diff import ConfigDiff, diff_configs, missing_lines, normalize
+from undm.configgen.diff import ConfigDiff, diff_configs, normalize
 from undm.domain.lifecycle import DeploymentState, transition
 from undm.domain.operations import DeviceOperation
 from undm.drivers.base import (
@@ -31,6 +31,7 @@ from undm.drivers.base import (
     Capability,
     ConfigurationBackup,
     DeviceDriver,
+    FirmwareImageRef,
     ResultStatus,
 )
 
@@ -69,6 +70,10 @@ class DeploymentTarget:
     backup: ConfigurationBackup | None = None
     touched: bool = False  # an impacting operation was attempted on the device
     message: str = ""
+    # firmware deployments only
+    current_version: str | None = None
+    target_version: str | None = None
+    from_version: str | None = None  # version found at preflight
 
 
 @dataclass(frozen=True)
@@ -91,6 +96,11 @@ class Deployment:
     approved_by: str | None = None
     approved_at: datetime | None = None
     events: list[DeploymentEvent] = field(default_factory=list)
+    # firmware deployments only
+    firmware: FirmwareImageRef | None = None
+    min_from_version: str | None = None
+    window_start: datetime | None = None
+    window_end: datetime | None = None
 
 
 class ApprovalRequiredError(PermissionError):
@@ -276,11 +286,16 @@ class DeploymentOrchestrator:
             self._emit(dep, "backup", "ok", f"backup {t.backup.reference}", t)
         return ok
 
+    @staticmethod
+    def _missing(t: DeploymentTarget, running: str) -> list[str]:
+        present = t.driver.present_lines(running)
+        return [ln for ln in t.driver.expected_lines(t.intended_config) if ln not in present]
+
     def _needs_change(self, dep: Deployment, t: DeploymentTarget) -> bool:
         assert t.backup is not None
         if dep.apply_mode is ApplyMode.REPLACE:
             return diff_configs(t.backup.text, t.intended_config).changed
-        return bool(missing_lines(t.backup.text, t.intended_config))
+        return bool(self._missing(t, t.backup.text))
 
     def _apply_all(self, dep: Deployment) -> bool:
         for idx, t in enumerate(dep.targets):
@@ -318,7 +333,7 @@ class DeploymentOrchestrator:
                           if ln.startswith("+") and not ln.startswith("+++")]
                 problem = remaining.changed
             else:
-                absent = missing_lines(running.data, t.intended_config)
+                absent = self._missing(t, running.data)
                 problem = bool(absent)
             if problem:
                 detail = "; ".join(absent[:5]) or "running config differs from intent"

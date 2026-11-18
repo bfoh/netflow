@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
@@ -19,6 +20,7 @@ from undm.drivers.registry import DriverRegistry
 from undm.security import credentials as creds
 from undm.services import audit
 from undm.services.errors import ConflictError, ForbiddenError, ServiceError
+from undm.services.policy import Policy
 
 READ_ONLY_OPERATIONS = frozenset(
     {
@@ -58,6 +60,44 @@ def latest_config(session: Session, device_id: str, kind: str) -> ConfigVersion 
     ).first()
 
 
+MAX_IMPORT_BYTES = 2 * 1024 * 1024
+_SAFE_NAME = re.compile(r"[^A-Za-z0-9._ -]")
+
+
+def import_config(
+    session: Session, device: Device, registry: DriverRegistry, actor: str,
+    filename: str, text: str,
+) -> ConfigVersion:
+    """Store a user-supplied configuration file as an immutable, unvalidated version.
+
+    The text is normalised (BOM removed, CRLF -> LF) but otherwise kept exactly as
+    supplied. It is NOT checked against intent; it is deployed as-is if selected.
+    """
+    if len(text.encode()) > MAX_IMPORT_BYTES:
+        raise ServiceError(f"Configuration file is larger than {MAX_IMPORT_BYTES // 1024} KiB")
+    if "\x00" in text:
+        raise ServiceError("File looks binary; import a plain-text configuration file")
+    text = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    if not text.strip():
+        raise ServiceError("Configuration file is empty")
+    if not text.endswith("\n"):
+        text += "\n"
+    safe_name = _SAFE_NAME.sub("_", filename.strip())[:120] or "imported.cfg"
+    platform = registry.get(device.driver_id).info.platform if device.driver_id in registry else ""
+    version = ConfigVersion(
+        device_id=device.id, kind="imported", text=text,
+        sha256=hashlib.sha256(text.encode()).hexdigest(), platform=platform,
+        verification="user_supplied_not_validated", reference=safe_name, created_by=actor,
+    )
+    session.add(version)
+    session.flush()
+    audit.record(session, actor, "config.import", "device", device.id, details={
+        "filename": safe_name, "bytes": len(text.encode()), "lines": text.count("\n"),
+        "sha256": version.sha256,
+    })
+    return version
+
+
 def generate_config(
     session: Session, device: Device, registry: DriverRegistry, actor: str
 ) -> tuple[GenerationResult, ConfigVersion | None]:
@@ -85,13 +125,19 @@ def generate_config(
 
 
 def run_read_only_operation(
-    session: Session, device: Device, op: DeviceOperation, registry: DriverRegistry, actor: str
+    session: Session, device: Device, op: DeviceOperation, registry: DriverRegistry, actor: str,
+    policy: Policy | None = None,
 ) -> dict[str, Any]:
     if is_impacting(op) or op not in READ_ONLY_OPERATIONS:
         raise ForbiddenError(
             f"{op.value} changes device state; it is only available through an approved "
             "deployment workflow"
         )
+    if device.driver_id in registry:
+        problem = (policy or Policy()).read_problem(
+            device.name, device.environment, registry.get(device.driver_id).info.simulated)
+        if problem:
+            raise ForbiddenError(problem)
     driver = build_driver(device, registry)
     now = datetime.now(UTC)
     try:

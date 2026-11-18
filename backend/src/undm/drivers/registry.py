@@ -37,10 +37,11 @@ class DriverRegistry:
 
 
 def default_registry() -> DriverRegistry:
-    """Registry with all built-in drivers. Only simulated drivers exist so far."""
+    """Registry with all built-in drivers: simulations and experimental SSH drivers."""
     from undm.drivers.mock.drivers import MOCK_DRIVERS
+    from undm.drivers.ssh.platforms import SSH_DRIVERS
 
     registry = DriverRegistry()
-    for cls in MOCK_DRIVERS:
+    for cls in (*MOCK_DRIVERS, *SSH_DRIVERS):
         registry.register(cls)
     return registry

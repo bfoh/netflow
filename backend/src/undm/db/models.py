@@ -122,12 +122,43 @@ class ConfigVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class FirmwareImage(Base):
+    """An image file in the UNDM firmware repository (stored on disk, not in the DB)."""
+
+    __tablename__ = "firmware_images"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    vendor: Mapped[str] = mapped_column(String(80))
+    platform: Mapped[str] = mapped_column(String(40), index=True)  # driver platform key
+    version: Mapped[str] = mapped_column(String(80))
+    filename: Mapped[str] = mapped_column(String(255))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    vendor_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    integrity_verified: Mapped[bool] = mapped_column(default=False)
+    storage_path: Mapped[str] = mapped_column(String(500))
+    compatible_models: Mapped[list[Any]] = mapped_column(default=list)
+    min_from_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    release_notes: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="uploaded")  # uploaded/approved/retired
+    approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class DeploymentRecord(TimestampMixin, Base):
     __tablename__ = "deployments"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     project_id: Mapped[str] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
+    kind: Mapped[str] = mapped_column(String(20), default="configuration",
+                                      server_default="configuration")
+    firmware_image_id: Mapped[str | None] = mapped_column(
+        ForeignKey("firmware_images.id", name="fk_deployments_firmware_image_id"), nullable=True
+    )
+    window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    window_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     state: Mapped[str] = mapped_column(String(30), index=True)
     dry_run: Mapped[bool] = mapped_column(default=False)
     apply_mode: Mapped[str] = mapped_column(String(20))
@@ -154,7 +185,11 @@ class DeploymentTargetRecord(Base):
         ForeignKey("devices.id", ondelete="CASCADE"), index=True
     )
     position: Mapped[int] = mapped_column(Integer)
-    config_version_id: Mapped[str] = mapped_column(ForeignKey("config_versions.id"))
+    config_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("config_versions.id"), nullable=True
+    )
+    from_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    to_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
     backup_version_id: Mapped[str | None] = mapped_column(
         ForeignKey("config_versions.id"), nullable=True
     )
@@ -187,3 +222,32 @@ class AuditEvent(Base):
     target_id: Mapped[str] = mapped_column(String(36), index=True)
     outcome: Mapped[str] = mapped_column(String(30))
     details: Mapped[dict[str, Any]] = mapped_column(default=dict)
+
+
+class TopologyLink(Base):
+    """A designed link between two device interfaces (design intent, not proof of cabling)."""
+
+    __tablename__ = "topology_links"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    a_device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    a_interface: Mapped[str] = mapped_column(String(64))
+    b_device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    b_interface: Mapped[str] = mapped_column(String(64))
+    mode: Mapped[str] = mapped_column(String(20), default="routed")  # access/trunk/routed
+    vlans: Mapped[list[Any]] = mapped_column(default=list)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class TopologyPosition(Base):
+    """Where a device is drawn on the topology canvas. Layout only."""
+
+    __tablename__ = "topology_positions"
+    device_id: Mapped[str] = mapped_column(
+        ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True
+    )
+    x: Mapped[float] = mapped_column(default=0.0)
+    y: Mapped[float] = mapped_column(default=0.0)

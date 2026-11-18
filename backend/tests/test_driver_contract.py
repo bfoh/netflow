@@ -8,12 +8,15 @@ from undm.drivers.base import (
     ApplyMode,
     ConfigurationBackup,
     DeviceTarget,
+    FirmwareImageRef,
     ResultStatus,
 )
 from undm.drivers.registry import DriverRegistry, UnknownDriverError, default_registry
 
 REGISTRY = default_registry()
-DRIVER_IDS = [d.driver_id for d in REGISTRY.list()]
+ALL_DRIVER_IDS = [d.driver_id for d in REGISTRY.list()]
+# Behavioural contract against the simulated lab; SSH drivers: tests/test_ssh_drivers.py.
+DRIVER_IDS = [d.driver_id for d in REGISTRY.list() if d.simulated]
 
 
 def make(driver_id, addr="192.0.2.10"):
@@ -27,7 +30,8 @@ def call(driver, op):
         DeviceOperation.APPLY_CONFIGURATION:
             lambda: driver.apply_configuration("hostname x\n", ApplyMode.MERGE),
         DeviceOperation.ROLLBACK_CONFIGURATION: lambda: driver.rollback_configuration(backup),
-        DeviceOperation.STAGE_FIRMWARE: lambda: driver.stage_firmware("img", "0" * 64),
+        DeviceOperation.STAGE_FIRMWARE: lambda: driver.stage_firmware(
+            FirmwareImageRef("1.2.3", "img.bin", "0" * 64, 1, "/nonexistent")),
         DeviceOperation.INSTALL_FIRMWARE: driver.install_firmware,
         DeviceOperation.ROLLBACK_FIRMWARE: driver.rollback_firmware,
         DeviceOperation.REBOOT: driver.reboot,
@@ -36,7 +40,7 @@ def call(driver, op):
     }[op]()
 
 
-@pytest.mark.parametrize("driver_id", DRIVER_IDS)
+@pytest.mark.parametrize("driver_id", ALL_DRIVER_IDS)
 def test_info_is_complete(driver_id):
     info = REGISTRY.get(driver_id).info
     assert info.vendor and info.platform and info.os_family and info.capabilities

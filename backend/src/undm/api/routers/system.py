@@ -1,11 +1,14 @@
+from dataclasses import asdict
+
 from fastapi import APIRouter, Query
 from sqlalchemy import select
 
 from undm import __version__
-from undm.api.deps import RegistryDep, SessionDep
-from undm.api.schemas import AuditOut, DeviceModelOut, DriverOut
+from undm.api.deps import RegistryDep, SessionDep, SettingsDep
+from undm.api.schemas import AuditOut, DeviceModelOut, DriverOut, PolicyOut
 from undm.db.models import AuditEvent
 from undm.inventory.catalog import CATALOG
+from undm.services.policy import Policy
 
 router = APIRouter(tags=["system"])
 
@@ -20,9 +23,16 @@ def list_drivers(registry: RegistryDep) -> list[DriverOut]:
     return [
         DriverOut(driver_id=i.driver_id, vendor=i.vendor, platform=i.platform,
                   os_family=i.os_family, description=i.description, simulated=i.simulated,
-                  capabilities=sorted(c.value for c in i.capabilities))
+                  capabilities=sorted(c.value for c in i.capabilities),
+                  maturity=i.maturity.value, transport=i.transport, notes=list(i.notes))
         for i in registry.list()
     ]
+
+
+@router.get("/api/policy", response_model=PolicyOut)
+def policy(settings: SettingsDep) -> PolicyOut:
+    """Current real-device safety switches (read-only; set via UNDM_* settings)."""
+    return PolicyOut(**asdict(Policy.from_settings(settings)))
 
 
 @router.get("/api/device-models", response_model=list[DeviceModelOut])

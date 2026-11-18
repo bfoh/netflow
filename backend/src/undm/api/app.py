@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, sessionmaker
 
 from undm import __version__
-from undm.api.routers import deployments, devices, projects, system
+from undm.api.routers import deployments, devices, firmware, projects, system, topology
 from undm.config import Settings, get_settings
 from undm.db.session import make_engine, make_session_factory
 from undm.drivers.mock.lab import default_lab
@@ -66,7 +66,8 @@ def create_app(
             content={"error": exc.message, "details": exc.details},
         )
 
-    for r in (system.router, projects.router, devices.router, deployments.router):
+    for r in (system.router, projects.router, projects.credentials_router, devices.router,
+              deployments.router, firmware.router, topology.router):
         app.include_router(r)
     return app
 

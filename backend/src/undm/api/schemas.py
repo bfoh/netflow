@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,6 +29,16 @@ class DriverOut(BaseModel):
     description: str
     simulated: bool
     capabilities: list[str]
+    maturity: str
+    transport: str
+    notes: list[str]
+
+
+class PolicyOut(BaseModel):
+    enable_real_device_writes: bool
+    allow_production_read_only: bool
+    allow_production_deployments: bool
+    require_separate_approver: bool
 
 
 class ProjectIn(BaseModel):
@@ -57,8 +67,9 @@ class ProjectOut(ORM):
 
 class CredentialRefIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    provider: str = "env"
-    locator: str = Field(min_length=1, max_length=200)
+    provider: Literal["keyring", "env"] = "keyring"
+    # Required for "env"; generated automatically for "keyring".
+    locator: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class CredentialRefOut(ORM):
@@ -66,6 +77,14 @@ class CredentialRefOut(ORM):
     name: str
     provider: str
     locator: str
+    has_secret: bool | None = None  # None: the credential store could not be queried
+
+
+class CredentialSecretIn(BaseModel):
+    """Write-only. Never returned by any endpoint."""
+
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=512, repr=False)
 
 
 class DeviceBase(BaseModel):
@@ -189,13 +208,22 @@ class DeploymentIn(BaseModel):
     device_ids: list[str] = Field(min_length=1)
     dry_run: bool = False
     apply_mode: ApplyMode = ApplyMode.MERGE
+    # Optional device_id -> config version id. Default: latest generated, else latest imported.
+    config_versions: dict[str, str] | None = None
+
+
+class ConfigImportIn(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    text: str
 
 
 class DeploymentTargetOut(ORM):
     device_id: str
     position: int
-    config_version_id: str
+    config_version_id: str | None
     backup_version_id: str | None
+    from_version: str | None
+    to_version: str | None
     state: str
     diff: str
     message: str
@@ -213,6 +241,10 @@ class DeploymentEventOut(ORM):
 class DeploymentOut(ORM):
     id: str
     project_id: str
+    kind: str
+    firmware_image_id: str | None
+    window_start: datetime | None
+    window_end: datetime | None
     state: str
     dry_run: bool
     apply_mode: str
@@ -228,6 +260,7 @@ class DeploymentOut(ORM):
 class DeploymentSummary(ORM):
     id: str
     project_id: str
+    kind: str
     state: str
     dry_run: bool
     apply_mode: str
@@ -260,3 +293,47 @@ class OperationOut(BaseModel):
     status: str
     message: str
     data: Any = None
+
+
+class ApproveIn(BaseModel):
+    """Firmware deployments require a maintenance window (UTC or with offset)."""
+
+    window_start: datetime | None = None
+    window_end: datetime | None = None
+
+
+class FirmwareImageOut(ORM):
+    id: str
+    vendor: str
+    platform: str
+    version: str
+    filename: str
+    size_bytes: int
+    sha256: str
+    vendor_sha256: str | None
+    integrity_verified: bool
+    compatible_models: list[str]
+    min_from_version: str | None
+    release_notes: str
+    status: str
+    approved_by: str | None
+    approved_at: datetime | None
+    created_by: str
+    created_at: datetime
+
+
+class CompatibilityIn(BaseModel):
+    device_ids: list[str] = Field(min_length=1)
+
+
+class CompatibilityOut(BaseModel):
+    device_id: str
+    device_name: str
+    compatible: bool
+    issues: list[IssueOut]
+
+
+class FirmwareDeploymentIn(BaseModel):
+    device_ids: list[str] = Field(min_length=1)
+    image_id: str
+    dry_run: bool = False

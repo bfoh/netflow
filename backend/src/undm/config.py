@@ -13,8 +13,13 @@ class Settings(BaseSettings):
     require_separate_approver: bool = False
     # Simulated lab creates a factory-default device on first contact with an address.
     simulation_autocreate: bool = True
-    # Phase policy: no deployment may target a device whose environment is "production".
+    # Real-device safety switches (see undm.services.policy). All off by default.
+    enable_real_device_writes: bool = False
+    allow_production_read_only: bool = False
     allow_production_deployments: bool = False
+    # Where uploaded firmware images are stored.
+    data_dir: str = "./undm-data"
+    max_firmware_bytes: int = 4 * 1024**3
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     log_level: str = "INFO"
 

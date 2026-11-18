@@ -32,6 +32,8 @@ class SimulatedDevice:
     fail_on: set[DeviceOperation] = field(default_factory=set)
     # Lines that "silently" do not take effect on apply (simulates partial apply).
     ignored_lines: set[str] = field(default_factory=set)
+    # Device does not come back after a reboot (simulates a failed boot).
+    unreachable_after_reboot: bool = False
 
 
 class SimulatedLab:

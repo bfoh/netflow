@@ -22,6 +22,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
+        render_as_batch=True,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -36,8 +37,10 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
+        # Batch mode: SQLite cannot ALTER columns, so Alembic recreates the table there;
+        # PostgreSQL receives ordinary ALTER statements.
         context.configure(connection=connection, target_metadata=target_metadata,
-                          compare_type=True)
+                          compare_type=True, render_as_batch=True)
         with context.begin_transaction():
             context.run_migrations()
 

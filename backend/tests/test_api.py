@@ -43,8 +43,12 @@ def test_health_drivers_models(client):
     assert client.get("/api/health").json()["status"] == "ok"
     drivers = client.get("/api/drivers").json()
     assert {d["driver_id"] for d in drivers} == {
-        "mock.aruba.aoscx", "mock.fortinet.fortios", "mock.cisco.iosxe"}
-    assert all(d["simulated"] for d in drivers)
+        "mock.aruba.aoscx", "mock.fortinet.fortios", "mock.cisco.iosxe",
+        "ssh.aruba.aoscx", "ssh.fortinet.fortios", "ssh.cisco.iosxe"}
+    for d in drivers:
+        assert d["simulated"] == d["driver_id"].startswith("mock.")
+        assert d["maturity"] == ("simulation" if d["simulated"] else "experimental")
+    assert client.get("/api/policy").json()["enable_real_device_writes"] is False
     models = client.get("/api/device-models").json()
     assert all(m["support"] == "simulated_only" for m in models)
 
@@ -241,3 +245,52 @@ def test_list_all_deployments_and_config_diff(client):
     all_deps = client.get("/api/deployments").json()
     assert len(all_deps) == 1 and all_deps[0]["project_id"] == pid
     assert client.get("/api/deployments", params={"state": "succeeded"}).json() == []
+
+
+def test_import_config_and_deploy_it(client):
+    pid = project(client)
+    sw = device(client, pid, SWITCH)
+    text = "﻿hostname imported-sw\r\nvlan 30\r\n    name lab\r\n"
+    r = client.post(f"/api/devices/{sw}/configs/import",
+                    json={"filename": "../../etc/sw1 running.cfg", "text": text})
+    assert r.status_code == 201, r.text
+    v = r.json()
+    assert v["kind"] == "imported" and v["verification"] == "user_supplied_not_validated"
+    assert v["text"] == "hostname imported-sw\nvlan 30\n    name lab\n"  # BOM + CRLF normalised
+    assert "/" not in v["reference"]
+    # No generated config: the imported one is used by default.
+    dep = client.post(f"/api/projects/{pid}/deployments", json={"device_ids": [sw]}).json()
+    assert dep["targets"][0]["config_version_id"] == v["id"]
+    client.post(f"/api/deployments/{dep['id']}/approve")
+    out = client.post(f"/api/deployments/{dep['id']}/execute").json()
+    assert out["state"] == "succeeded", out["events"]
+    assert default_lab().get("10.255.0.11").hostname == "imported-sw"
+    audit = client.get("/api/audit", params={"target_id": sw}).json()
+    entry = next(a for a in audit if a["action"] == "config.import")
+    assert "text" not in entry["details"] and entry["details"]["lines"] == 3
+
+
+def test_explicit_config_version_choice(client):
+    pid = project(client)
+    sw = device(client, pid, SWITCH, SWITCH_INTENT)
+    gen = generate(client, sw)
+    imp = client.post(f"/api/devices/{sw}/configs/import",
+                      json={"filename": "a.cfg", "text": "hostname from-file\n"}).json()
+    default = client.post(f"/api/projects/{pid}/deployments", json={"device_ids": [sw]}).json()
+    assert default["targets"][0]["config_version_id"] == gen["id"]  # generated preferred
+    chosen = client.post(f"/api/projects/{pid}/deployments", json={
+        "device_ids": [sw], "config_versions": {sw: imp["id"]}}).json()
+    assert chosen["targets"][0]["config_version_id"] == imp["id"]
+    other = device(client, pid, dict(SWITCH, name="sw2", management_address="10.255.0.12"))
+    r = client.post(f"/api/projects/{pid}/deployments", json={
+        "device_ids": [other], "config_versions": {other: imp["id"]}})
+    assert r.status_code == 404  # version belongs to another device
+
+
+@pytest.mark.parametrize("text,msg", [("", "empty"), ("a\x00b", "binary"),
+                                      ("x" * (2 * 1024 * 1024 + 1), "larger")])
+def test_import_rejects_bad_files(client, text, msg):
+    pid = project(client)
+    sw = device(client, pid, SWITCH)
+    r = client.post(f"/api/devices/{sw}/configs/import", json={"filename": "f.cfg", "text": text})
+    assert r.status_code == 400 and msg in r.json()["error"]

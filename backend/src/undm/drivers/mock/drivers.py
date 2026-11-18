@@ -20,6 +20,7 @@ from undm.drivers.base import (
     DeviceDriver,
     DeviceFacts,
     DriverInfo,
+    FirmwareImageRef,
     OperationResult,
 )
 from undm.drivers.mock.lab import SimulatedDevice, default_lab
@@ -156,15 +157,15 @@ class MockDriver(DeviceDriver):
         dev.running_config = dev.checkpoints[backup.reference]
         return OperationResult.success(op, message=f"rolled back to {backup.reference}")
 
-    def stage_firmware(self, image_name: str, image_sha256: str) -> OperationResult:
+    def stage_firmware(self, image: FirmwareImageRef) -> OperationResult:
         op = Op.STAGE_FIRMWARE
         if r := self._require(op):
             return r
         dev = self._device(op)
         if isinstance(dev, OperationResult):
             return dev
-        dev.staged_firmware = image_name
-        return OperationResult.success(op, {"staged": image_name, "sha256": image_sha256})
+        dev.staged_firmware = image.version
+        return OperationResult.success(op, {"staged": image.version, "sha256": image.sha256})
 
     def install_firmware(self) -> OperationResult:
         op = Op.INSTALL_FIRMWARE
@@ -199,6 +200,9 @@ class MockDriver(DeviceDriver):
         if isinstance(dev, OperationResult):
             return dev
         dev.running_config = dev.startup_config
+        if dev.unreachable_after_reboot:
+            dev.reachable = False  # simulates a device that does not come back
+        self._dev = None  # a reboot drops the session; callers must reconnect
         return OperationResult.success(op, message="rebooted (simulated)")
 
     def provision_factory_default_device(self, bootstrap_config: str) -> OperationResult:

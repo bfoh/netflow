@@ -4,10 +4,11 @@ from fastapi import APIRouter, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from undm.api.deps import ActorDep, RegistryDep, SessionDep
+from undm.api.deps import ActorDep, RegistryDep, SessionDep, SettingsDep
 from undm.api.routers.projects import get_project
 from undm.api.schemas import (
     ConfigDiffOut,
+    ConfigImportIn,
     ConfigVersionFull,
     ConfigVersionOut,
     DeviceIn,
@@ -26,6 +27,7 @@ from undm.inventory.rules import environment_problem
 from undm.services import audit
 from undm.services import devices as svc
 from undm.services.errors import ConflictError, NotFoundError, ServiceError
+from undm.services.policy import Policy
 
 router = APIRouter(tags=["devices"])
 
@@ -146,6 +148,14 @@ def generate_config(device_id: str, session: SessionDep, registry: RegistryDep,
     )
 
 
+@router.post("/api/devices/{device_id}/configs/import", response_model=ConfigVersionFull,
+             status_code=status.HTTP_201_CREATED)
+def import_config(device_id: str, body: ConfigImportIn, session: SessionDep,
+                  registry: RegistryDep, actor: ActorDep) -> ConfigVersion:
+    d = get_device(session, device_id)
+    return svc.import_config(session, d, registry, actor, body.filename, body.text)
+
+
 @router.get("/api/devices/{device_id}/configs", response_model=list[ConfigVersionOut])
 def list_configs(device_id: str, session: SessionDep) -> list[ConfigVersion]:
     get_device(session, device_id)
@@ -176,6 +186,8 @@ def read_config(version_id: str, session: SessionDep) -> ConfigVersion:
 
 @router.post("/api/devices/{device_id}/operations/{operation}", response_model=OperationOut)
 def run_operation(device_id: str, operation: DeviceOperation, session: SessionDep,
-                  registry: RegistryDep, actor: ActorDep) -> dict[str, Any]:
+                  registry: RegistryDep, settings: SettingsDep,
+                  actor: ActorDep) -> dict[str, Any]:
     d = get_device(session, device_id)
-    return svc.run_read_only_operation(session, d, operation, registry, actor)
+    return svc.run_read_only_operation(session, d, operation, registry, actor,
+                                       Policy.from_settings(settings))
