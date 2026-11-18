@@ -80,6 +80,24 @@ export interface Driver {
   description: string;
   simulated: boolean;
   capabilities: string[];
+  maturity: 'simulation' | 'experimental' | 'lab_validated';
+  transport: string;
+  notes: string[];
+}
+
+export interface CredentialRef {
+  id: string;
+  name: string;
+  provider: 'keyring' | 'env';
+  locator: string;
+  has_secret: boolean | null;
+}
+
+export interface Policy {
+  enable_real_device_writes: boolean;
+  allow_production_read_only: boolean;
+  allow_production_deployments: boolean;
+  require_separate_approver: boolean;
 }
 
 export interface DeviceModel {
@@ -99,7 +117,7 @@ export interface Issue { severity: 'error' | 'warning'; code: string; message: s
 export interface ConfigVersion {
   id: string;
   device_id: string;
-  kind: 'generated' | 'backup';
+  kind: 'generated' | 'backup' | 'imported';
   sha256: string;
   platform: string;
   template_version: string;
@@ -120,8 +138,10 @@ export type DeploymentState =
 export interface DeploymentTarget {
   device_id: string;
   position: number;
-  config_version_id: string;
+  config_version_id: string | null;
   backup_version_id: string | null;
+  from_version: string | null;
+  to_version: string | null;
   state: string;
   diff: string;
   message: string;
@@ -139,6 +159,7 @@ export interface DeploymentEvent {
 export interface DeploymentSummary {
   id: string;
   project_id: string;
+  kind: 'configuration' | 'firmware';
   state: DeploymentState;
   dry_run: boolean;
   apply_mode: string;
@@ -148,6 +169,9 @@ export interface DeploymentSummary {
 }
 
 export interface Deployment extends DeploymentSummary {
+  firmware_image_id: string | null;
+  window_start: string | null;
+  window_end: string | null;
   approved_at: string | null;
   updated_at: string;
   targets: DeploymentTarget[];
@@ -175,3 +199,56 @@ export interface ConfigDiff {
   removed: number;
   changed: boolean;
 }
+
+export interface FirmwareImage {
+  id: string;
+  vendor: string;
+  platform: string;
+  version: string;
+  filename: string;
+  size_bytes: number;
+  sha256: string;
+  vendor_sha256: string | null;
+  integrity_verified: boolean;
+  compatible_models: string[];
+  min_from_version: string | null;
+  release_notes: string;
+  status: 'uploaded' | 'approved' | 'retired';
+  approved_by: string | null;
+  approved_at: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface Compatibility {
+  device_id: string;
+  device_name: string;
+  compatible: boolean;
+  issues: Issue[];
+}
+
+export interface TopologyNode {
+  device_id: string;
+  name: string;
+  category: string;
+  manufacturer: string;
+  model: string;
+  environment: DeviceEnvironment;
+  x: number | null;
+  y: number | null;
+}
+
+export interface TopologyLink {
+  id: string;
+  a_device_id: string;
+  a_interface: string;
+  b_device_id: string;
+  b_interface: string;
+  mode: 'access' | 'trunk' | 'routed';
+  vlans: number[];
+  notes: string;
+}
+
+export type TopologyLinkInput = Omit<TopologyLink, 'id'>;
+
+export interface Topology { nodes: TopologyNode[]; links: TopologyLink[]; issues: Issue[] }

@@ -6,7 +6,23 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
 import { fmtDate } from '../services/format';
-import { useAction, useAllDeployments, useProjectDevices, useProjects } from '../hooks/queries';
+import { useAction, useAllDeployments, useConfigs, useProjectDevices, useProjects } from '../hooks/queries';
+import type { ConfigVersion } from '../types/api';
+
+const DEFAULT_CHOICE = '__default__';
+const versionLabel = (v: ConfigVersion) =>
+  `${v.kind}${v.reference ? ` · ${v.reference}` : ''} · ${fmtDate(v.created_at)} · ${v.sha256.slice(0, 8)}`;
+
+/** Which configuration version a plan deploys to one device. */
+function ConfigChoice({ deviceId, value, onChange }: { deviceId: string; value: string; onChange: (v: string) => void }) {
+  const configs = useConfigs(deviceId);
+  const data = [
+    { value: DEFAULT_CHOICE, label: 'Latest generated (or latest imported)' },
+    ...(configs.data ?? []).map((v) => ({ value: v.id, label: versionLabel(v) })),
+  ];
+  return <Select size="xs" w={320} aria-label="Configuration to deploy" data={data} value={value}
+    onChange={(v) => onChange(v ?? DEFAULT_CHOICE)} allowDeselect={false} />;
+}
 import { api } from '../services/api';
 
 function NewPlan({ projectId, preselected }: { projectId: string; preselected: string[] }) {
@@ -14,18 +30,26 @@ function NewPlan({ projectId, preselected }: { projectId: string; preselected: s
   const [sel, setSel] = useState<string[]>(preselected);
   const [dryRun, setDryRun] = useState(false);
   const [mode, setMode] = useState('merge');
+  const [choice, setChoice] = useState<Record<string, string>>({});
   const navigate = useNavigate();
-  const create = useAction(() => api.createDeployment(projectId, { device_ids: sel, dry_run: dryRun, apply_mode: mode }),
+  const chosen = Object.fromEntries(
+    Object.entries(choice).filter(([id, v]) => sel.includes(id) && v !== DEFAULT_CHOICE));
+  const create = useAction(() => api.createDeployment(projectId, {
+    device_ids: sel, dry_run: dryRun, apply_mode: mode,
+    config_versions: Object.keys(chosen).length ? chosen : undefined,
+  }),
     (d) => `Plan created: ${d.state.replaceAll('_', ' ')}`);
 
   return (
     <Card withBorder>
       <Title order={4} mb="xs">New deployment plan</Title>
       <Text size="sm" c="dimmed" mb="md">
-        The latest generated configuration of each selected device is validated and previewed against the device.
+        For each selected device choose which configuration to deploy (default: the latest generated one, or the latest
+        imported file if nothing was generated). It is validated and previewed against the device.
         Live plans then need approval before execution; dry runs only read from devices.
       </Text>
       <QueryState isLoading={devices.isLoading} error={devices.error} />
+      <Table.ScrollContainer minWidth={760}>
       <Table verticalSpacing={4} mb="md">
         <Table.Tbody>
           {(devices.data ?? []).map((d) => (
@@ -34,10 +58,14 @@ function NewPlan({ projectId, preselected }: { projectId: string; preselected: s
                 onChange={() => setSel((s) => (s.includes(d.id) ? s.filter((x) => x !== d.id) : [...s, d.id]))} /></Table.Td>
               <Table.Td>{d.name}</Table.Td><Table.Td>{d.manufacturer} {d.model}</Table.Td>
               <Table.Td><EnvironmentBadge env={d.environment} /></Table.Td><Table.Td><StateBadge state={d.deployment_status} /></Table.Td>
+              <Table.Td>{sel.includes(d.id) && (
+                <ConfigChoice deviceId={d.id} value={choice[d.id] ?? DEFAULT_CHOICE}
+                  onChange={(v) => setChoice((c) => ({ ...c, [d.id]: v }))} />)}</Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>
       </Table>
+      </Table.ScrollContainer>
       <Group mb="md" wrap="wrap">
         <Switch label="Dry run (read-only, no approval needed)" checked={dryRun} onChange={(e) => setDryRun(e.currentTarget.checked)} />
         <Group gap="xs"><Text size="sm">Apply mode</Text>
@@ -85,7 +113,7 @@ export function DeploymentsPage() {
                   <Table.Tr key={d.id}>
                     <Table.Td><Anchor component={Link} to={`/deployments/${d.id}`} size="sm">{fmtDate(d.created_at)}</Anchor></Table.Td>
                     <Table.Td>{names.get(d.project_id) ?? '—'}</Table.Td>
-                    <Table.Td>{d.dry_run ? 'dry run' : 'live'} · {d.apply_mode}</Table.Td>
+                    <Table.Td>{d.kind === 'firmware' ? 'firmware' : `config · ${d.apply_mode}`}{d.dry_run ? ' · dry run' : ''}</Table.Td>
                     <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
                     <Table.Td><StateBadge state={d.state} /></Table.Td>
                   </Table.Tr>

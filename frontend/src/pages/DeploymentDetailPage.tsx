@@ -1,5 +1,6 @@
-import { Accordion, Alert, Anchor, Button, Card, Group, Modal, Stack, Stepper, Text, Timeline, Title } from '@mantine/core';
+import { Accordion, Alert, Anchor, Badge, Button, Card, Group, Modal, Stack, Stepper, Text, TextInput, Timeline, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { useState } from 'react';
 import { IconAlertTriangle, IconCheck, IconFlask, IconX } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router';
 
@@ -26,25 +27,49 @@ const OUTCOME: Record<string, { color: string; title: string; text: string }> = 
 };
 const TRANSIENT = new Set(['validating', 'preflight', 'backing_up', 'deploying', 'verifying', 'recovering']);
 
+/** datetime-local value (local time) for a Date. */
+const toLocalInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
 function Actions({ dep }: { dep: Deployment }) {
   const [confirm, { open, close }] = useDisclosure();
-  const approve = useAction(() => api.approveDeployment(dep.id), 'Deployment approved');
+  const [windowOpen, { open: openWindow, close: closeWindow }] = useDisclosure();
+  const [start, setStart] = useState(() => toLocalInput(new Date()));
+  const [end, setEnd] = useState(() => toLocalInput(new Date(Date.now() + 2 * 3600 * 1000)));
+  const firmware = dep.kind === 'firmware';
+  const approve = useAction(() => api.approveDeployment(dep.id, firmware
+    ? { window_start: new Date(start).toISOString(), window_end: new Date(end).toISOString() } : undefined), 'Deployment approved');
   const execute = useAction(() => api.executeDeployment(dep.id), (d) => `Execution finished: ${d.state.replaceAll('_', ' ')}`);
   const cancel = useAction(() => api.cancelDeployment(dep.id), 'Deployment cancelled');
   const canCancel = ['draft', 'awaiting_approval', 'ready'].includes(dep.state);
   return (
     <Group>
-      {dep.state === 'awaiting_approval' && <Button onClick={() => approve.mutate()} loading={approve.isPending}>Approve</Button>}
+      {dep.state === 'awaiting_approval' && <Button onClick={() => (firmware ? openWindow() : approve.mutate())} loading={approve.isPending}>Approve</Button>}
+      <Modal opened={windowOpen} onClose={closeWindow} title="Approve firmware upgrade">
+        <Stack>
+          <Text size="sm">Firmware upgrades can only run inside an approved maintenance window (maximum 24 hours). The approver must be
+            a different person from the plan's creator.</Text>
+          <TextInput type="datetime-local" label="Window start (your local time)" value={start} onChange={(e) => setStart(e.currentTarget.value)} />
+          <TextInput type="datetime-local" label="Window end (your local time)" value={end} onChange={(e) => setEnd(e.currentTarget.value)} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeWindow}>Back</Button>
+            <Button loading={approve.isPending} onClick={() => approve.mutate(undefined, { onSuccess: closeWindow })}>Approve with this window</Button>
+          </Group>
+        </Stack>
+      </Modal>
       {dep.state === 'ready' && <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={open}>{dep.dry_run ? 'Run dry run' : 'Execute deployment'}</Button>}
       {canCancel && <Button variant="default" onClick={() => cancel.mutate()} loading={cancel.isPending}>Cancel</Button>}
       <Modal opened={confirm} onClose={close} title={dep.dry_run ? 'Run dry run' : 'Execute deployment'}>
         <Stack>
           <Text size="sm">
-            {dep.dry_run
-              ? `Connects to ${dep.targets.length} device(s), checks identity and compares configurations. Nothing is changed.`
-              : `Backs up and then changes ${dep.targets.length} device(s) in ${dep.apply_mode} mode, verifies the result and rolls back where supported if anything fails.`}
+            {firmware
+              ? (dep.dry_run
+                ? `Connects to ${dep.targets.length} device(s) and reads identity and running version. Nothing is changed.`
+                : `Upgrades ${dep.targets.length} device(s) one at a time: back up configuration, stage, install, reboot, wait for the device, verify the version. Stops at the first failure.`)
+              : dep.dry_run
+                ? `Connects to ${dep.targets.length} device(s), checks identity and compares configurations. Nothing is changed.`
+                : `Backs up and then changes ${dep.targets.length} device(s) in ${dep.apply_mode} mode, verifies the result and rolls back where supported if anything fails.`}
           </Text>
-          <Alert color="violet" icon={<IconFlask size={16} />} p="xs">All targets in this build are simulated devices; no physical equipment is contacted.</Alert>
+          <Alert color="violet" icon={<IconFlask size={16} />} p="xs">Check the environment badge of every target below: simulated devices exist only in UNDM; lab devices are real equipment.</Alert>
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Back</Button>
             <Button color={dep.dry_run ? 'indigo' : 'orange'} loading={execute.isPending} onClick={() => execute.mutate(undefined, { onSettled: close })}>Confirm</Button>
@@ -62,12 +87,15 @@ export function DeploymentDetailPage() {
   if (!dep.data) return <QueryState isLoading={dep.isLoading} error={dep.error} />;
   const d = dep.data;
   const byId = new Map((devices.data ?? []).map((x) => [x.id, x]));
-  const outcome = OUTCOME[d.state];
+  const outcome = d.kind === 'firmware' && d.state === 'succeeded'
+    ? { ...OUTCOME.succeeded, text: 'Every upgraded device came back and reports the target firmware version.' }
+    : OUTCOME[d.state];
 
   return (
     <>
-      <PageHeader title={`${d.dry_run ? 'Dry run' : 'Deployment'} · ${fmtDate(d.created_at)}`}
-        description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''} · ${d.apply_mode} mode`}
+      <PageHeader title={`${d.kind === 'firmware' ? 'Firmware upgrade' : 'Configuration deployment'}${d.dry_run ? ' (dry run)' : ''} · ${fmtDate(d.created_at)}`}
+        description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
+          ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : ` · ${d.apply_mode} mode`}`}
         actions={<><StateBadge state={d.state} /><Actions dep={d} /></>} />
       {TRANSIENT.has(d.state) && <Alert color="blue" mb="md">In progress: {d.state.replaceAll('_', ' ')}…</Alert>}
       {outcome && <Alert color={outcome.color} title={outcome.title} mb="md" icon={d.state === 'succeeded' ? <IconCheck size={18} /> : <IconAlertTriangle size={18} />}>{outcome.text}</Alert>}
@@ -89,6 +117,7 @@ export function DeploymentDetailPage() {
                   <Group gap="xs">
                     <Text fw={600}>{dev?.name ?? t.device_id}</Text>
                     {dev && <EnvironmentBadge env={dev.environment} />}
+                    {t.to_version && <Badge variant="outline" color="gray">{t.from_version ?? '?'} → {t.to_version}</Badge>}
                   </Group>
                   <StateBadge state={t.state} />
                 </Group>
@@ -98,11 +127,10 @@ export function DeploymentDetailPage() {
                   {t.message && <Text size="sm" c={t.state.includes('fail') || t.state.includes('manual') ? 'red' : undefined}>{t.message}</Text>}
                   <Text size="sm">
                     <Anchor component={Link} to={`/devices/${t.device_id}`}>Device</Anchor>
-                    {' · '}configuration version <code>{t.config_version_id.slice(0, 8)}</code>
+                    {t.config_version_id && <>{' · '}configuration version <code>{t.config_version_id.slice(0, 8)}</code></>}
                     {t.backup_version_id && <> · backup <code>{t.backup_version_id.slice(0, 8)}</code></>}
                   </Text>
-                  <Text size="sm" fw={600}>Proposed change</Text>
-                  <DiffView diff={t.diff} />
+                  {d.kind === 'configuration' && <><Text size="sm" fw={600}>Proposed change</Text><DiffView diff={t.diff} /></>}
                 </Stack>
               </Accordion.Panel>
             </Accordion.Item>

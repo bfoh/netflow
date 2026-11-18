@@ -45,7 +45,7 @@ export function SettingsPage() {
                     <Table.Tr key={d.driver_id}>
                       <Table.Td><Text ff="monospace" size="sm">{d.driver_id}</Text><Text size="xs" c="dimmed">{d.description}</Text></Table.Td>
                       <Table.Td>{d.vendor} · {d.os_family}</Table.Td>
-                      <Table.Td><Badge color={d.simulated ? 'violet' : 'blue'} variant="light">{d.simulated ? 'simulated' : 'real'}</Badge></Table.Td>
+                      <Table.Td><Badge color={d.simulated ? 'violet' : 'orange'} variant="light">{d.simulated ? 'simulated' : `real · ${d.maturity}`}</Badge></Table.Td>
                       <Table.Td><Group gap={4}>{d.capabilities.map((c) => <Badge key={c} size="xs" variant="outline" color="gray">{c.replace('supports_', '')}</Badge>)}</Group></Table.Td>
                     </Table.Tr>
                   ))}

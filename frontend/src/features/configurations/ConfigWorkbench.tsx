@@ -1,5 +1,5 @@
-import { Alert, Badge, Button, Card, Code, Group, List, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
-import { IconAlertTriangle, IconInfoCircle, IconWand } from '@tabler/icons-react';
+import { Alert, Badge, Button, Card, Code, FileButton, Group, List, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { IconAlertTriangle, IconFileImport, IconInfoCircle, IconWand } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import { DiffView } from '../../components/DiffView';
@@ -9,7 +9,10 @@ import { useAction, useConfig, useConfigDiff, useConfigs } from '../../hooks/que
 import { api } from '../../services/api';
 import type { ConfigVersion, Device, Issue } from '../../types/api';
 
-const label = (v: ConfigVersion) => `${v.kind} · ${fmtDate(v.created_at)} · ${v.sha256.slice(0, 8)}`;
+const label = (v: ConfigVersion) =>
+  `${v.kind}${v.kind === 'imported' && v.reference ? ` (${v.reference})` : ''} · ${fmtDate(v.created_at)} · ${v.sha256.slice(0, 8)}`;
+
+const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
 /** Generate, preview, validate and compare configuration versions for one device. */
 export function ConfigWorkbench({ device }: { device: Device }) {
@@ -24,12 +27,22 @@ export function ConfigWorkbench({ device }: { device: Device }) {
 
   const generate = useAction(() => api.generateConfig(device.id), (r) => (r.ok ? 'Configuration generated' : 'Intent has errors; nothing generated'));
   const run = () => generate.mutate(undefined, { onSuccess: (r) => { setIssues(r.issues); if (r.version) setSelected(r.version.id); } });
+  const importFile = useAction(async (file: File) => {
+    if (file.size > MAX_IMPORT_BYTES) throw new Error('File is larger than 2 MiB');
+    return api.importConfig(device.id, file.name, await file.text());
+  }, (v) => `Imported ${v.reference}`);
+  const onFile = (file: File | null) => {
+    if (file) importFile.mutate(file, { onSuccess: (v) => { setIssues(null); setSelected(v.id); } });
+  };
 
   return (
     <Stack>
       <Group>
         <Button leftSection={<IconWand size={16} />} onClick={run} loading={generate.isPending} disabled={!device.intent}>Generate configuration</Button>
-        {!device.intent && <Text size="sm" c="dimmed">Define the device intent first.</Text>}
+        <FileButton onChange={onFile} accept=".cfg,.conf,.txt,.config,text/plain">
+          {(props) => <Button {...props} variant="default" leftSection={<IconFileImport size={16} />} loading={importFile.isPending}>Import configuration file</Button>}
+        </FileButton>
+        {!device.intent && <Text size="sm" c="dimmed">No intent defined: import a configuration file, or define the intent to generate one.</Text>}
       </Group>
       {issues && issues.length > 0 && (
         <Alert color={issues.some((i) => i.severity === 'error') ? 'red' : 'yellow'} icon={<IconAlertTriangle size={18} />} title="Validation results">
@@ -52,6 +65,11 @@ export function ConfigWorkbench({ device }: { device: Device }) {
                   {shown.data.platform && <Badge variant="light" color="gray">{shown.data.platform} template v{shown.data.template_version}</Badge>}
                   {shown.data.verification && <Badge variant="light" color="yellow">{shown.data.verification.replaceAll('_', ' ')}</Badge>}
                 </Group>
+                {shown.data.kind === 'imported' && (
+                  <Alert color="orange" variant="light" icon={<IconInfoCircle size={16} />} mb="xs" p="xs">
+                    <Text size="xs">Imported from <b>{shown.data.reference}</b>. It is deployed exactly as written and is not checked against the device intent. Review it, and compare it with the latest backup, before deploying.</Text>
+                  </Alert>
+                )}
                 {shown.data.verification === 'docs_reviewed_not_lab_verified' && (
                   <Alert color="yellow" variant="light" icon={<IconInfoCircle size={16} />} mb="xs" p="xs">
                     <Text size="xs">Template syntax follows public vendor documentation but has not been verified on lab equipment.</Text>

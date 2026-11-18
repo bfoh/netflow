@@ -77,7 +77,7 @@ export function DashboardPage() {
                     <Table.Tr key={x.id}>
                       <Table.Td><Anchor component={Link} to={`/deployments/${x.id}`} size="sm">{fmtDate(x.created_at)}</Anchor></Table.Td>
                       <Table.Td>{projectName.get(x.project_id) ?? '—'}</Table.Td>
-                      <Table.Td>{x.dry_run ? 'dry run' : 'live'}</Table.Td>
+                      <Table.Td>{x.kind === 'firmware' ? 'firmware' : 'config'}{x.dry_run ? ' · dry run' : ''}</Table.Td>
                       <Table.Td><StateBadge state={x.state} /></Table.Td>
                     </Table.Tr>
                   ))}

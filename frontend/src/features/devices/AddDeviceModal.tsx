@@ -1,8 +1,8 @@
-import { Alert, Button, Group, Modal, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
-import { IconFlask } from '@tabler/icons-react';
+import { Alert, Button, Group, Modal, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { IconAlertTriangle, IconFlask } from '@tabler/icons-react';
 import { useState } from 'react';
 
-import { useAction, useDeviceModels } from '../../hooks/queries';
+import { useAction, useCredentialRefs, useDeviceModels, useDrivers } from '../../hooks/queries';
 import { api } from '../../services/api';
 
 const PROTOCOLS = [
@@ -15,21 +15,29 @@ const empty = { name: '', role: '', management_address: '', management_protocol:
 export function AddDeviceModal({ projectId, opened, onClose }:
   { projectId: string; opened: boolean; onClose: () => void }) {
   const models = useDeviceModels();
+  const drivers = useDrivers();
+  const refs = useCredentialRefs(projectId);
   const [modelId, setModelId] = useState<string | null>(null);
+  const [kind, setKind] = useState<'simulated' | 'real'>('simulated');
+  const [credentialRef, setCredentialRef] = useState<string | null>(null);
   const [form, setForm] = useState(empty);
   const create = useAction((body: Parameters<typeof api.createDevice>[1]) => api.createDevice(projectId, body), 'Device added');
   const model = models.data?.find((m) => m.model_id === modelId);
+  const isSim = (id: string) => drivers.data?.find((d) => d.driver_id === id)?.simulated ?? id.startsWith('mock.');
+  const driverId = model?.drivers.find((id) => (kind === 'simulated' ? isSim(id) : !isSim(id)));
+  const driver = drivers.data?.find((d) => d.driver_id === driverId);
   const set = (k: keyof typeof empty) => (e: { currentTarget: { value: string } }) =>
     setForm({ ...form, [k]: e.currentTarget.value });
 
   const submit = () => {
-    if (!model) return;
+    if (!model || !driverId) return;
     create.mutate({
       ...form,
       manufacturer: model.manufacturer, product_family: model.product_family, model: model.model,
-      category: model.category, os_family: model.os_family, driver_id: model.drivers[0],
-      environment: 'simulated',
-    }, { onSuccess: () => { setForm(empty); setModelId(null); onClose(); } });
+      category: model.category, os_family: model.os_family, driver_id: driverId,
+      environment: kind === 'simulated' ? 'simulated' : 'lab',
+      credential_ref_id: kind === 'real' ? credentialRef : null,
+    }, { onSuccess: () => { setForm(empty); setModelId(null); setCredentialRef(null); onClose(); } });
   };
 
   return (
@@ -40,13 +48,27 @@ export function AddDeviceModal({ projectId, opened, onClose }:
           data={(models.data ?? []).map((m) => ({ value: m.model_id, label: `${m.manufacturer} ${m.model} (${m.category})` }))}
           value={modelId} onChange={setModelId}
         />
-        {model && (
+        <SegmentedControl value={kind} onChange={(v) => setKind(v as 'simulated' | 'real')} data={[
+          { value: 'simulated', label: 'Simulated device' }, { value: 'real', label: 'Real lab device (SSH)' }]} />
+        {model && kind === 'simulated' && (
           <Alert color="violet" icon={<IconFlask size={18} />} variant="light">
             <Text size="sm">
-              {model.manufacturer} {model.product_family} · {model.os_family} — support level: <b>{model.support.replaceAll('_', ' ')}</b>.
-              The device will use driver <code>{model.drivers[0]}</code> and is created in the <b>simulated</b> environment.
+              {model.manufacturer} {model.product_family} · {model.os_family}. Driver <code>{driverId}</code>; the device exists only
+              in the UNDM simulation lab.
             </Text>
           </Alert>
+        )}
+        {model && kind === 'real' && (
+          driverId ? (
+            <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Experimental real-device driver">
+              <Text size="sm">
+                Driver <code>{driverId}</code> connects over SSH. It has not been validated on lab equipment for any model.
+                The device is created in the <b>lab</b> environment: reading from it is allowed; changing it requires
+                <code> UNDM_ENABLE_REAL_DEVICE_WRITES=true</code> and an approved deployment. Use isolated test equipment only.
+              </Text>
+              {driver && <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{driver.notes.map((n) => <li key={n}><Text size="xs">{n}</Text></li>)}</ul>}
+            </Alert>
+          ) : <Alert color="gray">No real-device driver exists for this model.</Alert>
         )}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <TextInput label="Device name" required value={form.name} onChange={set('name')} />
@@ -56,11 +78,16 @@ export function AddDeviceModal({ projectId, opened, onClose }:
             onChange={(v) => setForm({ ...form, management_protocol: v ?? 'ssh' })} />
           <TextInput label="Site" value={form.site} onChange={set('site')} />
           <TextInput label="Rack / physical location" value={form.rack_location} onChange={set('rack_location')} />
+          {kind === 'real' && (
+            <Select label="Credential" clearable
+              placeholder={refs.data?.length ? 'Choose a credential' : 'Add one on the Credentials tab first'}
+              data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={credentialRef} onChange={setCredentialRef} />
+          )}
         </SimpleGrid>
         <Textarea label="Notes" autosize minRows={2} value={form.notes} onChange={set('notes')} />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} loading={create.isPending} disabled={!model || !form.name.trim()}>Add device</Button>
+          <Button onClick={submit} loading={create.isPending} disabled={!model || !driverId || !form.name.trim() || (kind === 'real' && !form.management_address.trim())}>Add device</Button>
         </Group>
       </Stack>
     </Modal>

@@ -3,6 +3,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { IconActivity } from '@tabler/icons-react';
 import { NavLink as RouterNavLink, Outlet, useLocation } from 'react-router';
 
+import { usePolicy } from '../hooks/queries';
 import { getActor } from '../services/api';
 import { NAV } from './nav';
 
@@ -11,6 +12,7 @@ import { NAV } from './nav';
 export function AppLayout() {
   const [opened, { toggle, close }] = useDisclosure();
   const { pathname } = useLocation();
+  const policy = usePolicy();
   const isActive = (to: string) => (to === '/' ? pathname === '/' : pathname.startsWith(to));
 
   return (
@@ -28,9 +30,15 @@ export function AppLayout() {
             <Text c="dimmed" size="sm" visibleFrom="md">Universal Network Deployment Manager</Text>
           </Group>
           <Group gap="sm" wrap="nowrap">
-            <Tooltip label="Only simulated drivers are installed. No physical device can be contacted." withArrow>
-              <Badge color="violet" variant="filled" radius="sm">Simulation mode</Badge>
-            </Tooltip>
+            {policy.data?.enable_real_device_writes ? (
+              <Tooltip label="Approved deployments may change real lab devices (UNDM_ENABLE_REAL_DEVICE_WRITES=true)." withArrow>
+                <Badge color="red" variant="filled" radius="sm">Real-device changes ON</Badge>
+              </Tooltip>
+            ) : (
+              <Tooltip label="Real devices can only be read. Simulated devices can be fully exercised." withArrow>
+                <Badge color="violet" variant="filled" radius="sm">Real-device changes off</Badge>
+              </Tooltip>
+            )}
             <Text size="sm" c="dimmed" visibleFrom="xs">acting as <b>{getActor()}</b></Text>
           </Group>
         </Group>

@@ -8,6 +8,7 @@ import { StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
 import { fmtDate } from '../services/format';
 import { AddDeviceModal } from '../features/devices/AddDeviceModal';
+import { CredentialsPanel } from '../features/devices/CredentialsPanel';
 import { DeviceTable } from '../features/devices/DeviceTable';
 import { useAction, useDeployments, useProject, useProjectDevices } from '../hooks/queries';
 import { api } from '../services/api';
@@ -54,6 +55,7 @@ export function ProjectDetailPage() {
         <Tabs.List mb="md">
           <Tabs.Tab value="devices">Network elements ({devices.data?.length ?? 0})</Tabs.Tab>
           <Tabs.Tab value="deployments">Deployments ({deployments.data?.length ?? 0})</Tabs.Tab>
+          <Tabs.Tab value="credentials">Credentials</Tabs.Tab>
           <Tabs.Tab value="settings">Project settings</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="devices">
@@ -68,7 +70,7 @@ export function ProjectDetailPage() {
                 {(deployments.data ?? []).map((d) => (
                   <Table.Tr key={d.id}>
                     <Table.Td><Anchor component={Link} to={`/deployments/${d.id}`}>{fmtDate(d.created_at)}</Anchor></Table.Td>
-                    <Table.Td>{d.dry_run ? 'dry run' : 'live'} · {d.apply_mode}</Table.Td>
+                    <Table.Td>{d.kind === 'firmware' ? 'firmware' : `config · ${d.apply_mode}`}{d.dry_run ? ' · dry run' : ''}</Table.Td>
                     <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
                     <Table.Td><StateBadge state={d.state} /></Table.Td>
                   </Table.Tr>
@@ -78,6 +80,7 @@ export function ProjectDetailPage() {
             </Table>
           </Card>
         </Tabs.Panel>
+        <Tabs.Panel value="credentials"><CredentialsPanel projectId={projectId} /></Tabs.Panel>
         <Tabs.Panel value="settings">
           <SimpleGrid cols={1}>
             <ProjectSettings key={p.updated_at} project={p} />

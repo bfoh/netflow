@@ -9,10 +9,12 @@ import { DeploymentDetailPage } from './pages/DeploymentDetailPage';
 import { DeploymentsPage } from './pages/DeploymentsPage';
 import { DeviceDetailPage } from './pages/DeviceDetailPage';
 import { DevicesPage } from './pages/DevicesPage';
-import { FirmwarePage, ProvisioningPage, TopologyPage } from './pages/PlannedPages';
+import { FirmwarePage } from './pages/FirmwarePage';
+import { ProvisioningPage } from './pages/PlannedPages';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { TopologyPage } from './pages/TopologyPage';
 
 export const routes: RouteObject[] = [
   {

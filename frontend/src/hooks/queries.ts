@@ -45,6 +45,12 @@ export const useDeployment = (id: string) =>
 export const useAudit = (target?: string, limit = 200) =>
   useQuery({ queryKey: keys.audit(target), queryFn: () => api.audit({ target_id: target, limit }) });
 export const useDrivers = () => useQuery({ queryKey: keys.drivers, queryFn: api.drivers });
+export const useFirmwareImages = () => useQuery({ queryKey: ['firmware-images'], queryFn: api.firmwareImages });
+export const useTopology = (pid: string) =>
+  useQuery({ queryKey: ['topology', pid], queryFn: () => api.topology(pid), enabled: !!pid });
+export const usePolicy = () => useQuery({ queryKey: ['policy'], queryFn: api.policy });
+export const useCredentialRefs = (pid: string) =>
+  useQuery({ queryKey: ['credential-refs', pid], queryFn: () => api.credentialRefs(pid), enabled: !!pid });
 export const useDeviceModels = () => useQuery({ queryKey: keys.models, queryFn: api.deviceModels });
 
 /** Mutation that refreshes all cached data afterwards and reports errors as notifications. */

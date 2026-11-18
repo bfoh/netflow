@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, ConfigDiff, ConfigVersion, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent,
+  AuditEvent, Compatibility, Topology, TopologyLink, TopologyLinkInput, ConfigDiff, ConfigVersion, CredentialRef, FirmwareImage, Policy, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent,
   DeviceModel, Driver, GenerateResult, OperationResult, Project,
 } from '../types/api';
 
@@ -49,10 +49,12 @@ function describe(body: unknown, status: number): string {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const isForm = body instanceof FormData;
   const res = await fetch(`/api${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', 'X-UNDM-Actor': getActor() },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: isForm ? { 'X-UNDM-Actor': getActor() }
+      : { 'Content-Type': 'application/json', 'X-UNDM-Actor': getActor() },
+    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   });
   if (res.status === 204) return undefined as T;
   const data: unknown = await res.json().catch(() => null);
@@ -66,6 +68,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   health: () => request<{ status: string; version: string }>('GET', '/health'),
   drivers: () => request<Driver[]>('GET', '/drivers'),
+  policy: () => request<Policy>('GET', '/policy'),
+  credentialRefs: (pid: string) => request<CredentialRef[]>('GET', `/projects/${pid}/credential-refs`),
+  createCredentialRef: (pid: string, body: { name: string; provider?: string; locator?: string }) =>
+    request<CredentialRef>('POST', `/projects/${pid}/credential-refs`, body),
+  setCredentialSecret: (refId: string, username: string, password: string) =>
+    request<CredentialRef>('PUT', `/credential-refs/${refId}/secret`, { username, password }),
+  deleteCredentialRef: (refId: string) => request<void>('DELETE', `/credential-refs/${refId}`),
   deviceModels: () => request<DeviceModel[]>('GET', '/device-models'),
 
   projects: () => request<Project[]>('GET', '/projects'),
@@ -85,6 +94,8 @@ export const api = {
   setIntent: (id: string, intent: DeviceIntent) =>
     request<Device>('PUT', `/devices/${id}/intent`, intent),
   generateConfig: (id: string) => request<GenerateResult>('POST', `/devices/${id}/configs/generate`),
+  importConfig: (id: string, filename: string, text: string) =>
+    request<ConfigVersion>('POST', `/devices/${id}/configs/import`, { filename, text }),
   configs: (id: string) => request<ConfigVersion[]>('GET', `/devices/${id}/configs`),
   config: (versionId: string) => request<ConfigVersion>('GET', `/configs/${versionId}`),
   configDiff: (fromVersion: string, toVersion: string) =>
@@ -95,12 +106,30 @@ export const api = {
   allDeployments: (limit = 50) => request<DeploymentSummary[]>('GET', `/deployments?limit=${limit}`),
   deployments: (pid: string) => request<DeploymentSummary[]>('GET', `/projects/${pid}/deployments`),
   deployment: (id: string) => request<Deployment>('GET', `/deployments/${id}`),
-  createDeployment: (pid: string, body: { device_ids: string[]; dry_run: boolean; apply_mode: string }) =>
+  createDeployment: (pid: string, body: {
+    device_ids: string[]; dry_run: boolean; apply_mode: string; config_versions?: Record<string, string>;
+  }) =>
     request<Deployment>('POST', `/projects/${pid}/deployments`, body),
-  approveDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/approve`),
+  approveDeployment: (id: string, window?: { window_start: string; window_end: string }) =>
+    request<Deployment>('POST', `/deployments/${id}/approve`, window),
+  firmwareImages: () => request<FirmwareImage[]>('GET', '/firmware/images'),
+  uploadFirmware: (form: FormData) => request<FirmwareImage>('POST', '/firmware/images', form),
+  approveFirmware: (id: string) => request<FirmwareImage>('POST', `/firmware/images/${id}/approve`),
+  retireFirmware: (id: string) => request<FirmwareImage>('POST', `/firmware/images/${id}/retire`),
+  deleteFirmware: (id: string) => request<void>('DELETE', `/firmware/images/${id}`),
+  firmwareCompatibility: (id: string, deviceIds: string[]) =>
+    request<Compatibility[]>('POST', `/firmware/images/${id}/compatibility`, { device_ids: deviceIds }),
+  createFirmwareDeployment: (pid: string, body: { device_ids: string[]; image_id: string; dry_run: boolean }) =>
+    request<Deployment>('POST', `/projects/${pid}/firmware-upgrades`, body),
   executeDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/execute`),
   cancelDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/cancel`),
 
+  topology: (pid: string) => request<Topology>('GET', `/projects/${pid}/topology`),
+  createLink: (pid: string, body: TopologyLinkInput) => request<TopologyLink>('POST', `/projects/${pid}/topology/links`, body),
+  updateLink: (id: string, body: TopologyLinkInput) => request<TopologyLink>('PUT', `/topology/links/${id}`, body),
+  deleteLink: (id: string) => request<void>('DELETE', `/topology/links/${id}`),
+  savePositions: (pid: string, positions: Record<string, { x: number; y: number }>) =>
+    request<Topology>('PUT', `/projects/${pid}/topology/positions`, positions),
   audit: (params: { limit?: number; target_id?: string } = {}) => {
     const q = new URLSearchParams();
     if (params.limit) q.set('limit', String(params.limit));

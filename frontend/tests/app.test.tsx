@@ -24,7 +24,7 @@ describe('application shell', () => {
       'Provisioning', 'Firmware', 'Deployments', 'Logs & Audit', 'Settings']) {
       expect(within(nav).getByText(label)).toBeInTheDocument();
     }
-    expect(screen.getByText('Simulation mode')).toBeInTheDocument();
+    expect(screen.getByText('Real-device changes off')).toBeInTheDocument();
   });
 
   it('dashboard summarises inventory and deployments', async () => {
@@ -50,8 +50,27 @@ describe('application shell', () => {
 
   it('planned modules say they are not implemented', async () => {
     mockApi({});
+    renderAt('/provisioning');
+    expect(await screen.findByText(/Provisioning is not implemented yet/)).toBeInTheDocument();
+  });
+
+  it('header shows when real-device changes are enabled', async () => {
+    mockApi({ '/policy': { enable_real_device_writes: true, allow_production_read_only: false,
+      allow_production_deployments: false, require_separate_approver: false } });
+    renderAt('/');
+    expect(await screen.findByText('Real-device changes ON')).toBeInTheDocument();
+  });
+
+  it('firmware page lists images with integrity status', async () => {
+    mockApi({ '/firmware/images': [{
+      id: 'i1', vendor: 'Aruba', platform: 'aoscx', version: '10.1.0', filename: 'cx.swi', size_bytes: 2048,
+      sha256: 'a'.repeat(64), vendor_sha256: 'a'.repeat(64), integrity_verified: true, compatible_models: ['6300M'],
+      min_from_version: null, release_notes: '', status: 'uploaded', approved_by: null, approved_at: null,
+      created_by: 'x', created_at: '2026-01-01T00:00:00Z' }] });
     renderAt('/firmware');
-    expect(await screen.findByText(/Firmware management is not implemented yet/)).toBeInTheDocument();
+    expect(await screen.findByText('cx.swi')).toBeInTheDocument();
+    expect(screen.getByText('verified')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
   });
 });
 

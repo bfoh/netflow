@@ -1,13 +1,15 @@
 import { Alert, Anchor, Badge, Button, Card, Group, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
-import { IconLock } from '@tabler/icons-react';
+import { IconAlertTriangle, IconEdit, IconLock, IconPlugConnected } from '@tabler/icons-react';
+import { useDisclosure } from '@mantine/hooks';
 import { Link, useParams } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
 import { fmtDate } from '../services/format';
 import { ConfigWorkbench } from '../features/configurations/ConfigWorkbench';
+import { EditDeviceModal } from '../features/devices/EditDeviceModal';
 import { IntentEditor } from '../features/devices/IntentEditor';
-import { useAction, useAudit, useDevice } from '../hooks/queries';
+import { useAction, useAudit, useDevice, useDrivers, usePolicy } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Device } from '../types/api';
 
@@ -31,6 +33,7 @@ function Overview({ d }: { d: Device }) {
           <Row k="Management VRF" v={d.management_vrf} />
           <Row k="Site / rack" v={`${d.site} ${d.rack_location}`} />
           <Row k="Driver" v={<code>{d.driver_id}</code>} />
+          <Row k="Credential" v={d.credential_ref_id ? 'attached' : '—'} />
           <Row k="Provisioning status" v={<StateBadge state={d.provisioning_status} />} />
           <Row k="Tags" v={d.tags.map((t) => <Badge key={t} variant="outline" mr={4}>{t}</Badge>)} />
           <Row k="Notes" v={d.notes} />
@@ -41,13 +44,15 @@ function Overview({ d }: { d: Device }) {
           <Group justify="space-between" mb="xs">
             <Title order={5}>Observed (retrieved from the device)</Title>
             <Group gap="xs">
+              <Button size="xs" variant="light" leftSection={<IconPlugConnected size={14} />} loading={op.isPending} onClick={() => op.mutate('check_reachability')}>Test connection</Button>
               <Button size="xs" variant="light" loading={op.isPending} onClick={() => op.mutate('get_facts')}>Retrieve information</Button>
               <Button size="xs" variant="light" loading={op.isPending} onClick={() => op.mutate('backup_configuration')}>Back up</Button>
             </Group>
           </Group>
           {facts ? (
             <Table verticalSpacing={4}><Table.Tbody>
-              {Object.entries(facts).map(([k, v]) => <Row key={k} k={k} v={typeof v === 'object' ? JSON.stringify(v) : String(v)} />)}
+              {Object.entries(facts).filter(([k]) => k !== 'extra').map(([k, v]) => <Row key={k} k={k} v={String(v ?? '—')} />)}
+              {facts.extra != null && <Row k="details" v={<Text size="xs" ff="monospace" style={{ whiteSpace: 'pre-wrap', maxHeight: 160, overflow: 'auto' }}>{JSON.stringify(facts.extra, null, 1)}</Text>} />}
               <Row k="Retrieved" v={fmtDate(d.facts_retrieved_at)} />
             </Table.Tbody></Table>
           ) : <Text size="sm" c="dimmed">Nothing retrieved yet. Values above are not verified against the device.</Text>}
@@ -85,15 +90,40 @@ function Activity({ deviceId }: { deviceId: string }) {
   );
 }
 
+function RealDeviceNotice({ d }: { d: Device }) {
+  const drivers = useDrivers();
+  const policy = usePolicy();
+  const driver = drivers.data?.find((x) => x.driver_id === d.driver_id);
+  if (!driver || driver.simulated) return null;
+  const writes = policy.data?.enable_real_device_writes;
+  return (
+    <Alert color={d.environment === 'production' ? 'red' : 'orange'} icon={<IconAlertTriangle size={18} />} mb="md"
+      title={`Real device · ${driver.maturity} driver`}>
+      <Text size="sm">
+        UNDM connects to this device over {driver.transport.toUpperCase()}.{' '}
+        {d.environment === 'production'
+          ? 'Production devices are blocked unless UNDM_ALLOW_PRODUCTION_READ_ONLY / UNDM_ALLOW_PRODUCTION_DEPLOYMENTS are enabled.'
+          : writes ? 'Configuration changes to lab devices are ENABLED on this server (through approved deployments only).'
+            : 'Read-only actions and dry runs are allowed. Configuration changes are disabled on this server (UNDM_ENABLE_REAL_DEVICE_WRITES).'}
+        {!d.credential_ref_id && ' No credential attached yet: use Edit device.'}
+      </Text>
+    </Alert>
+  );
+}
+
 export function DeviceDetailPage() {
   const { deviceId = '' } = useParams();
   const device = useDevice(deviceId);
+  const [editing, { open: openEdit, close: closeEdit }] = useDisclosure();
   if (!device.data) return <QueryState isLoading={device.isLoading} error={device.error} />;
   const d = device.data;
   return (
     <>
       <PageHeader title={d.name}
-        description={<Group gap="xs" component="span"><EnvironmentBadge env={d.environment} /><span>{d.manufacturer} {d.model} · <Anchor component={Link} to={`/projects/${d.project_id}`} size="sm">project</Anchor></span></Group>} />
+        description={<Group gap="xs" component="span"><EnvironmentBadge env={d.environment} /><span>{d.manufacturer} {d.model} · <Anchor component={Link} to={`/projects/${d.project_id}`} size="sm">project</Anchor></span></Group>}
+        actions={<Button variant="default" leftSection={<IconEdit size={16} />} onClick={openEdit} disabled={!!d.locked_by_deployment_id}>Edit device</Button>} />
+      <RealDeviceNotice d={d} />
+      {editing && <EditDeviceModal device={d} opened={editing} onClose={closeEdit} />}
       {d.locked_by_deployment_id && (
         <Alert color="orange" icon={<IconLock size={18} />} mb="md">
           Locked by a running deployment. <Anchor component={Link} to={`/deployments/${d.locked_by_deployment_id}`}>View deployment</Anchor>

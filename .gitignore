@@ -32,3 +32,6 @@ Thumbs.db
 # Reference material must never be committed (see docs/SECURITY_BOUNDARIES.md)
 reference-material/
 *.tndbz
+
+# Firmware repository storage (UNDM_DATA_DIR)
+undm-data/
