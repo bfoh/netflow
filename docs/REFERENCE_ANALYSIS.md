@@ -43,5 +43,12 @@ Safe conclusions:      <what UNDM may use>
 | Q-05 | Which exact models and firmware versions should the first lab phase target (e.g. one Aruba CX model + one FortiGate model)? Is a lab available? | Phase 5 planning; real drivers are built per model/firmware. |
 | Q-06 | Multi-user needs: how many engineers, separate approvers required? Single-machine or shared server? | Authentication design (M1), separate-approver default. |
 | Q-07 | Should UNDM import existing device configurations as a project starting point (brownfield)? | Intent-from-config parsing is a large feature. |
+| Q-10 | Staging: are the four devices configured one at a time (laptop cabled to each), or all cabled together? Where does the laptop plug in? | Both Aruba switches use 192.168.1.1, so they cannot share one network segment at the same address. Decides the staging-run design. |
+| Q-11 | Exact console commands typed today on a factory-default 2930F (sanitized) | Becomes the console bootstrap. |
+| Q-12 | Black Box switch exact model and firmware version | No driver exists; needs the vendor manual. |
+| Q-13 | What are the per-system configuration files (source tool, format per device), and which web-interface function applies them? | Decides restore method and verification. |
+| Q-14 | Firmware versions currently installed vs target, per device; file types | Firmware procedures and upgrade-path rules. |
+| Q-15 | FortiGate 101F first login: is a password change forced, and what is done about it today? | Factory-default login handling. |
+| Q-16 | Are spare factory-default units available for testing on an isolated bench? | Safe place to validate writes (replaces testing on a zone switch). |
 | Q-09 | Is the zone used for 2930F testing a test/verification system or a live network? | Decides whether phase B (first write) may use this unit. |
 | Q-08 | Can future screenshots be sanitized (system names, hostnames, zone numbers, user names removed) before sharing? | Directive 5 handling rules. |

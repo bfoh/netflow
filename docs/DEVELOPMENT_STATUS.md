@@ -55,6 +55,11 @@ library; intent beyond the first slice; project export/import; persistent job ru
 - `npm audit`: picomatch ReDoS advisory in build tooling, no fix released (see README).
 - Production build is a single large JS chunk.
 
+## Primary use case (restated by the product owner 2026-11-19)
+Staging four factory-default devices per system (FortiGate 101F, Black Box switch,
+2 × Aruba 2930F) from one place: see `docs/requirements/staging-use-case.md`.
+Planning is waiting on answers to Q-10…Q-16 in `REFERENCE_ANALYSIS.md`.
+
 ## Next milestone
 1. **Aruba 2930F lab acceptance, phase A (read-only)** — steps 3 (test connection) and
    4 (retrieve information, confirmed against `show system`, WC.16.10.0025) passed on 2026-11-19; steps 5–8 pending — product owner runs
