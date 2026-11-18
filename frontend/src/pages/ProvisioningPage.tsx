@@ -16,7 +16,7 @@ import { downloadText } from '../services/format';
 import type { BootstrapPreview, BootstrapProfile, BootstrapResult, Device } from '../types/api';
 
 const CONSOLE_PLATFORMS = new Set(['aos_switch']);
-const BAUD = ['115200', '57600', '38400', '19200', '9600'];
+const BAUD = ['9600', '19200', '38400', '57600', '115200'];
 const STATUS: Record<BootstrapResult['status'], { color: string; title: string }> = {
   bootstrapped: { color: 'teal', title: 'Bootstrap complete' },
   already_configured: { color: 'teal', title: 'Already bootstrapped — nothing was changed' },
@@ -33,7 +33,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
   const [port, setPort] = useState(saved?.untagged_port ?? '');
   const [address, setAddress] = useState(saved?.address ?? '192.168.1.1/24');
   const [serialPort, setSerialPort] = useState<string | null>(simulated ? 'SIMULATED' : null);
-  const [baud, setBaud] = useState('115200');
+  const [baud, setBaud] = useState('9600');
   const [preview, setPreview] = useState<BootstrapPreview | null>(null);
   const [result, setResult] = useState<BootstrapResult | null>(null);
   const [confirm, setConfirm] = useState('');
@@ -85,7 +85,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
         <Group align="flex-end">
           <Select label="Serial port" w={380} placeholder={portOptions.length ? 'Choose the console cable’s port' : 'No serial ports found'}
             data={portOptions} value={serialPort} onChange={setSerialPort} />
-          <Select label="Speed (baud)" w={130} data={BAUD} value={baud} onChange={(v) => setBaud(v ?? '115200')} disabled={simulated} allowDeselect={false} />
+          <Select label="Speed (baud)" w={130} data={BAUD} value={baud} onChange={(v) => setBaud(v ?? '9600')} disabled={simulated} allowDeselect={false} />
           <Button variant="default" leftSection={<IconRefresh size={14} />} onClick={() => void ports.refetch()} loading={ports.isFetching}>Refresh ports</Button>
         </Group>
         {!simulated && (

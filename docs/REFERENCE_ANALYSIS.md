@@ -45,11 +45,12 @@ Safe conclusions:      <what UNDM may use>
 | Q-07 | Should UNDM import existing device configurations as a project starting point (brownfield)? | Intent-from-config parsing is a large feature. |
 | Q-10 | Staging: are the four devices configured one at a time (laptop cabled to each), or all cabled together? Where does the laptop plug in? | Answered 2026-11-19: one at a time today; wants all at once. One Aruba may use 192.168.1.2 temporarily. |
 | Q-11 | Exact console commands typed today on a factory-default 2930F (sanitized) | Answered 2026-11-19: recorded in `requirements/staging-use-case.md`; implemented as the console bootstrap. |
-| Q-12 | Black Box switch: models answered 2026-11-19 — **LIG1014A**, and an **LE2700-series** model in other systems (exact model needed). Still needed: firmware version and the user manual (PDF) or its CLI / firmware / configuration sections. | No driver exists; the manual could not be opened from the development environment. |
+| Q-12 | Black Box: LIG1014A documented by search (see `vendor-support/staging-procedures-research.md`); manuals cannot be supplied by the product owner. **Open: exact LE2700-series model, and whether its defaults are 192.168.10.1 / admin / admin as its quick-start guide says.** | LE2700A is a different family from the LIG1014A. |
 | Q-13 | Configuration files: produced by another team, loaded via each vendor's web interface (answered 2026-11-19). **Still needed: a sample of each file (first lines) and the web-interface function used.** | Decides restore method and verification. |
-| Q-14 | Firmware versions currently installed vs target, per device; file types | Partly answered: FortiGate 7.2.7 → 7.6.5 (direct); Black Box v00.01.00 → v00.01.01. **Aruba from/to versions still needed.** |
+| Q-14 | Firmware: Aruba target **WC.16.10.0025** (answered 2026-11-19; arrival version not readily known); FortiGate 7.2.7 → 7.6.5 direct; Black Box v00.01.00 → v00.01.01. | UNDM reads the arrival version from the device itself. |
 | Q-15 | FortiGate 101F first login: is a password change forced, and what is done about it today? | Answered 2026-11-19: yes, a change is forced; the approved password is set (not recorded here). |
 | Q-16 | Are spare factory-default units available for testing on an isolated bench? | Answered 2026-11-19: yes. |
-| Q-17 | Console settings that work today for a factory-default 2930F in PuTTY (speed) | Default for the console bootstrap; 115200 assumed until confirmed. |
+| Q-17 | Console speed for a factory-default 2930F: **9600** (answered 2026-11-19). | Default of the console bootstrap. |
+| Q-18 | Can the staging laptop accept inbound TFTP (UDP 69) from the bench network (Windows Firewall / company policy), or is a TFTP server tool already approved? | TFTP is the transfer method documented for Aruba, FortiGate and LIG1014A. |
 | Q-09 | Is the zone used for 2930F testing a test/verification system or a live network? | Decides whether phase B (first write) may use this unit. |
 | Q-08 | Can future screenshots be sanitized (system names, hostnames, zone numbers, user names removed) before sharing? | Directive 5 handling rules. |

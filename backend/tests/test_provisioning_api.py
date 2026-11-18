@@ -159,3 +159,19 @@ def test_empty_factory_default_password_can_be_stored(client):
         assert r.status_code == 200 and r.json()["has_secret"] is True
     finally:
         keyring.set_keyring(previous)
+
+
+def test_default_console_speed_is_9600(monkeypatch):
+    sim = SimulatedArubaConsole()
+    opened = []
+    monkeypatch.setattr(prov, "open_serial", lambda port, baud: opened.append(baud) or sim)
+    monkeypatch.setattr(prov, "_tcp_reachable", lambda address, port=22, timeout=3.0: True)
+    monkeypatch.setattr(prov.ConsoleSession, "settle_time", 0)
+    monkeypatch.setattr(prov.aos_switch.time, "sleep", lambda s: None)
+    client, _ = make_client(enable_real_device_writes=True)
+    with client:
+        did = add(client, REAL_SWITCH)
+        out = client.post(f"/api/devices/{did}/provisioning/console-bootstrap", json={
+            "serial_port": "COM3", "profile": PROFILE, "confirm_device_name": "lab-sw"}).json()
+    assert out["status"] == "bootstrapped" and opened == [9600]
+    assert out["network_reachable"] is True

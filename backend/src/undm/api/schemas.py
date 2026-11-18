@@ -376,7 +376,8 @@ class BootstrapPreviewOut(BaseModel):
 
 class ConsoleBootstrapIn(BaseModel):
     serial_port: str = Field(min_length=1, max_length=64)
-    baudrate: Literal[9600, 19200, 38400, 57600, 115200] = 115200
+    # 9600 is what the product owner's team uses for factory-default 2930F consoles.
+    baudrate: Literal[9600, 19200, 38400, 57600, 115200] = 9600
     profile: BootstrapProfile | None = None
     confirm_device_name: str
     allow_configured: bool = False

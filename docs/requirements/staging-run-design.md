@@ -48,11 +48,18 @@ upgrade orchestration (simulated only); credentials in the OS store; audit.
 4. Black Box (LIG1014A, LE2700 series): after the manuals are available.
 5. The staging run itself: one screen, four devices, one report.
 
+## Transfer method
+Vendor documentation found so far (see `vendor-support/staging-procedures-research.md`)
+gives TFTP for firmware and configuration on the 2930F, the FortiGate and the LIG1014A.
+Plan: a TFTP server inside UNDM, bound to the bench adapter, serving only the files of the
+active run, read-only, stopped when the run ends. Depends on Q-18 (laptop firewall).
+
 ## Open points
 - Sample configuration files for each device (first lines are enough) to decide how
   they must be loaded and how to verify them.
-- Aruba firmware: versions the switches arrive with and the target version.
-- Black Box: user manuals; exact LE2700-series model.
+- Aruba firmware target is WC.16.10.0025; the arrival version is read from each switch.
+- Black Box: exact LE2700-series model and its real defaults (its quick-start guide says
+  192.168.10.1, admin/admin — different from the LIG1014A).
 - FortiGate: Fortinet publishes upgrade paths between releases. The team upgrades
   7.2.7 → 7.6.5 in one step today; UNDM will follow that practice and will not add
   intermediate versions on its own. Worth confirming once against Fortinet's upgrade

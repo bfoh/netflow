@@ -9,7 +9,7 @@ Procedure under test: `undm.provisioning.aos_switch` (console bootstrap). Status
 
 ## Before you start
 - [ ] Console cable from the laptop to the switch's console port; note the COM port
-      (Device Manager → Ports). Note the PuTTY settings that work for you today (speed).
+      (Device Manager → Ports). Speed: **9600** (the team's setting; UNDM's default).
 - [ ] **Close PuTTY** (and any other terminal program): only one program can use a COM port.
 - [ ] `backend\.env` contains `UNDM_ENABLE_REAL_DEVICE_WRITES=true`; backend restarted;
       the header shows "Real-device changes ON".
@@ -32,7 +32,7 @@ Procedure under test: `undm.provisioning.aos_switch` (console bootstrap). Status
   preview.
 
 ## What may differ on real hardware (unknown until this test)
-Console speed and wake-up behaviour; the banner and "Press any key" text; the default
+Console wake-up behaviour; the banner and "Press any key" text; the default
 hostname in the prompt; wording of error messages; whether SSH accepts the empty default
 password. The procedure stops at the first unexpected response and saves nothing unless
 the configuration read back matches, so a mismatch leaves the switch unsaved: restart it

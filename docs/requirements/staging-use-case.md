@@ -57,10 +57,10 @@ themselves could not be opened from the development environment):
 - Datasheet feature list: Web, HTTPS, Telnet, SSH, SNMP v1/v2c, TFTP/FTP, Syslog, RADIUS,
   VLAN, RMON, DHCP.
 
-UNKNOWN until the user manual is available: CLI syntax (modes, show/save commands),
-how configuration files are backed up and restored, the firmware upgrade procedure,
-console port settings, whether SSH is enabled at factory default. No driver will be
-written before these are documented (rule: no invented vendor facts).
+Further details found by search on 2026-11-19 (CLI modes, save/copy commands, firmware
+command, console settings) are in `docs/vendor-support/staging-procedures-research.md`.
+Still unknown: whether SSH is enabled at factory default and the exact syntax for copying
+files with a TFTP URL. The LE2700 series is a different family with different defaults.
 
 ## Answers from the product owner (2026-11-19, USER-CONFIRMED)
 - **Cabling today:** the laptop is connected to each device directly, one at a time.
@@ -81,3 +81,4 @@ written before these are documented (rule: no invented vendor facts).
   approved password. (The password itself is deliberately not recorded anywhere in this
   repository; it is entered into UNDM's credential store by the operator.)
 - **Spare factory-default units** on a bench not connected to live networks: available.
+- **Aruba firmware target:** WC.16.10.0025. **Console speed:** 9600.

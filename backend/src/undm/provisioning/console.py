@@ -91,7 +91,7 @@ class ConsoleSession:
         return "".join(self.transcript)
 
 
-def open_serial(port: str, baudrate: int = 115200, read_chunk_timeout: float = 0.2) -> Transport:
+def open_serial(port: str, baudrate: int = 9600, read_chunk_timeout: float = 0.2) -> Transport:
     """Open a COM port: 8 data bits, no parity, 1 stop bit, no hardware flow control."""
     import serial  # pyserial; imported lazily so the simulation needs no serial port
 
