@@ -10,10 +10,11 @@ industrial and lab networks. Inspired by the *capabilities* of Motorola TNDM but
 independent of it: no DIMETRA assumptions, no TNDM code, no TNDM assets.
 
 ## Non-negotiable rules
-1. **No real devices.** Do not connect to, scan, or change any real device or network
-   unless the product owner explicitly authorizes a specific lab device in writing in
-   the conversation and `docs/SECURITY_BOUNDARIES.md` is updated. Production devices
-   are out of scope for every current phase.
+1. **No real devices from the development environment.** Claude never connects to, scans
+   or changes real devices or networks. UNDM itself can reach real devices through the
+   experimental SSH drivers, controlled by the safety switches in `undm.services.policy`
+   (all off by default). Never weaken those defaults; record named lab devices in
+   `docs/SECURITY_BOUNDARIES.md`.
 2. **No invented vendor facts.** Do not invent CLI commands, API endpoints, device
    capabilities or test results. Mark anything unverified as such (templates carry a
    `verification` status). Record unknowns in `docs/REFERENCE_ANALYSIS.md`.
@@ -42,10 +43,10 @@ independent of it: no DIMETRA assumptions, no TNDM code, no TNDM assets.
 ```
 backend/            FastAPI app, package `undm` (src layout)
   src/undm/api/       routers, schemas, dependencies
-  src/undm/services/  use cases (devices, deployments, audit)
-  src/undm/orchestration/  deployment orchestrator (pure logic)
+  src/undm/services/  use cases (devices, deployments, firmware, audit, policy)
+  src/undm/orchestration/  deployment + firmware orchestrators (pure logic)
   src/undm/configgen/ intent -> config rendering, Jinja2 templates, diff
-  src/undm/drivers/   driver contract, registry, mock/ simulated lab + drivers
+  src/undm/drivers/   driver contract, registry, mock/ simulated lab + drivers, ssh/ real (experimental)
   src/undm/domain/    enums, intent model, validation, lifecycle, operation impact
   src/undm/inventory/ device model catalog, driver/environment rules
   src/undm/db/        SQLAlchemy models, sessions
@@ -80,5 +81,5 @@ Frontend (from `frontend/`):
 - Use RFC 5737 / RFC 1918 addresses and fictional names in fixtures and examples.
 
 ## Current focus
-Phase 0 + minimum Phase 1 done (plus early slices of Phases 2 and 4 in simulation).
-Next milestone: see "Next milestone" in `docs/DEVELOPMENT_STATUS.md`.
+See `docs/DEVELOPMENT_STATUS.md` ("Next milestone"). Real-device drivers are experimental
+until acceptance-tested on named lab models; keep that label until then.

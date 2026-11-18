@@ -71,3 +71,55 @@ equipment. Deployments to production devices are disabled by default
 ### D-012 Preflight checks device identity (2026-11-17)
 If an inventory record has an observed serial number, preflight refuses a device that
 reports a different one (protects against wrong IP / replaced hardware).
+
+### D-013 Credentials live in the OS credential store (2026-11-18)
+`keyring` gives Windows Credential Manager / macOS Keychain / Secret Service without extra
+infrastructure, matching the "runs on an engineer's workstation" goal. The database keeps
+only a reference. Secrets are write-only through the API. When no OS store exists (e.g. a
+headless Linux container) the API says so and the `env` provider remains available.
+
+### D-014 First real drivers: SSH CLI via Netmiko, marked experimental (2026-11-18)
+Netmiko 4.8 provides `aruba_aoscx`, `fortinet` and `cisco_xe` device types, so one generic
+SSH driver plus small platform classes cover all three initial families. Session behaviour
+was checked in Netmiko's source: AOS-CX `no page` and IOS-XE `terminal length 0` are
+session-only; FortiOS may temporarily change `config system console / set output` and
+restores it on disconnect (documented to the user). Netmiko does not implement saving for
+FortiOS; the driver reports reliance on FortiOS' default automatic save instead of claiming
+a save. Capabilities declared: SSH, backup, merge apply. Not declared: replace, rollback,
+firmware — the orchestrator therefore ends failures in manual recovery. Fact parsers are
+best-effort and tested only with synthetic output until lab validation.
+
+### D-015 Real-device safety switches (2026-11-18)
+See `undm.services.policy` and SECURITY_BOUNDARIES. Read-only access to lab devices is on;
+writes, production read-only and production deployments each need an explicit setting,
+re-checked at execution time. The header shows whether real-device changes are enabled.
+
+### D-016 Platform-aware verification hooks (2026-11-18)
+Real devices print configuration with their own indentation and hide defaults (`no shutdown`).
+Drivers expose `expected_lines()` / `present_lines()`; the orchestrator compares those.
+Simulated drivers keep exact (indentation-sensitive) comparison.
+
+### D-017 Imported configurations are deployed as-is (2026-11-18)
+User-supplied files are normalised (BOM, CRLF) and stored as immutable `imported`
+versions with `verification=user_supplied_not_validated`; they are not checked against
+intent. The UI labels them and recommends comparing with the latest backup first.
+
+### D-018 Firmware workflow (2026-11-18)
+Images must have a vendor SHA-256 that matches before approval; approved, non-retired
+images only; offline compatibility by platform + model list + minimum-version rule;
+downgrades refused. Plans require a maintenance window (≤ 24 h) and an approver who is not
+the creator, regardless of the general separate-approver setting. Devices are upgraded one
+at a time, stopping at the first failure. Real drivers declare no firmware capability:
+per-model procedures need vendor documentation and lab validation first. Vendor signature
+verification is not implemented.
+
+### D-019 Topology: graph is the truth, positions are layout (2026-11-18)
+Links connect named interfaces of two devices and carry mode (routed/access/trunk) and
+VLANs. Positions are stored separately and not audited. Validation: interface used twice,
+self links, subnet mismatch on routed links, access-link VLAN count, VLANs missing from
+device intent, duplicate IPs across the project, isolated devices. React Flow 13 (MIT).
+
+### D-020 Alembic batch mode (2026-11-18)
+Migrations run in batch mode so they work on SQLite (the documented workstation fallback,
+which cannot ALTER columns) as well as PostgreSQL. Upgrade/downgrade was tested on a SQLite
+database containing data from the previous version.

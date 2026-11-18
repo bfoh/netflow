@@ -19,7 +19,8 @@ Source of truth: `backend/src/undm/drivers/base.py`. Contract tests:
 
 | Type | Meaning |
 |---|---|
-| `DriverInfo` | `driver_id`, `vendor`, `platform` (template key), `os_family`, `description`, `simulated`, `capabilities` |
+| `DriverInfo` | `driver_id`, `vendor`, `platform` (template key), `os_family`, `description`, `simulated`, `capabilities`, `maturity` (simulation / experimental / lab_validated), `transport`, `notes` |
+| `FirmwareImageRef` | `version`, `filename`, `sha256`, `size_bytes`, `local_path` of an approved repository image |
 | `DeviceTarget` | `device_id`, `management_address`, `port` |
 | `OperationResult` | `operation`, `status` (`success`/`unsupported`/`failed`), `message`, `data`, `diagnostics` |
 | `DeviceFacts` | `hostname`, `vendor`, `model`, `os_version`, `serial_number`, `extra` |
@@ -46,7 +47,7 @@ Source of truth: `backend/src/undm/drivers/base.py`. Contract tests:
 | reboot_device | `reboot()` | impacting | `supports_reboot` | Implemented (mock) |
 | get_firmware_information | `get_firmware_information()` | read-only | — | Implemented (mock) |
 | validate_firmware_image | — | read-only | — | Planned (Phase 7) |
-| stage_firmware / install_firmware | `stage_firmware()`, `install_firmware()` | impacting | `supports_firmware_upgrade` | Mock only |
+| stage_firmware / install_firmware | `stage_firmware(image: FirmwareImageRef)`, `install_firmware()` | impacting | `supports_firmware_upgrade` | Mock only |
 | verify_firmware | — | read-only | — | Planned (Phase 7) |
 | rollback_firmware | `rollback_firmware()` | impacting | `supports_firmware_rollback` | Mock only |
 | provision_factory_default_device | `provision_factory_default_device(bootstrap)` | impacting | `supports_zero_touch_provisioning` | Mock only |
@@ -64,6 +65,21 @@ operations outside a deployment.
 `supports_configuration_replace`, `supports_candidate_configuration`,
 `supports_configuration_rollback`, `supports_zero_touch_provisioning`,
 `supports_firmware_upgrade`, `supports_firmware_rollback`, `supports_reboot`.
+
+## Verification hooks
+`expected_lines(config)` and `present_lines(running)` define how the orchestrator decides
+"already applied" and "verified". Defaults compare lines exactly (minus trailing spaces).
+The SSH drivers compare stripped lines and ignore lines a platform does not display
+(`no shutdown`, `set status up`, `end`, `next`, `exit`, `!`), and drop file headers and
+comments before sending.
+
+## Real-device drivers (experimental)
+`drivers/ssh/`: one Netmiko-based `SshCliDriver` plus `ArubaAOSCXSsh`, `FortiOSSsh`,
+`CiscoIOSXESsh`. See `docs/vendor-support/support-matrix.md` for commands and caveats.
+They require a credential, map authentication/timeout errors to clear messages, treat
+device error output (`% Invalid input`, `Command fail`, ...) as failure ("may be partially
+applied"), and redact device output before it is logged. Tests use fake connections
+(`tests/fake_netmiko.py`) with synthetic output.
 
 ## Simulated drivers (current)
 

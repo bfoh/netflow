@@ -12,7 +12,7 @@ Status values: **Done** (implemented and tested), **Partial**, **Planned** (phas
 | FR-PRJ-04 | Archive and clone projects | — | Planned (Phase 2) |
 | FR-PRJ-05 | Export/import with readable header and schema-version check | See RA-05 | Planned (Phase 2/3) |
 | FR-PRJ-06 | Project templates | — | Planned (Phase 2) |
-| FR-PRJ-07 | User-defined site hierarchy and device groups | See RA-03 | Planned (Phase 3) |
+| FR-PRJ-07 | User-defined site hierarchy and device groups | See RA-03 | Planned |
 
 ## FR-INV — Inventory
 | ID | Requirement | Acceptance criteria | Status |
@@ -22,7 +22,8 @@ Status values: **Done** (implemented and tested), **Partial**, **Planned** (phas
 | FR-INV-03 | Device model registry | `/api/device-models`; support level shown | Done (code catalog) |
 | FR-INV-04 | Environment attribute: simulated / lab / production with visible indicator | Simulated driver ⇔ simulated environment enforced; badge everywhere | Done |
 | FR-INV-05 | Searchable inventory with multi-select bulk actions | Search, vendor/category filters, read-only bulk actions | Done |
-| FR-INV-06 | Credential references (no secrets in inventory) | `credential_refs` table; env-var provider | Partial (API only, no UI) |
+| FR-INV-06 | Credential references (no secrets in inventory) | OS credential store; write-only secrets; UI on project page | Done |
+| FR-INV-08 | Edit device after creation; test connection | Edit form; reachability action | Done |
 | FR-INV-07 | Supported capabilities shown per device | From driver declaration | Done |
 
 ## FR-INT / FR-CFG — Intent and configuration
@@ -37,6 +38,7 @@ Status values: **Done** (implemented and tested), **Partial**, **Planned** (phas
 | FR-CFG-04 | Preview and compare versions (generated vs generated/backup) | Diff endpoint + UI | Done |
 | FR-CFG-05 | Template library, versioned, user parameters, secret variables resolved securely | — | Planned (Phase 2) |
 | FR-CFG-06 | Per-firmware-version template selection | — | Planned (Phase 5) |
+| FR-CFG-07 | Import configuration files and deploy them | BOM/CRLF normalised, size/binary checks, labelled unvalidated, selectable per device in a plan | Done |
 
 ## FR-DEP — Deployment
 | ID | Requirement | Acceptance criteria | Status |
@@ -59,12 +61,17 @@ Status values: **Done** (implemented and tested), **Partial**, **Planned** (phas
 | ID | Requirement | Status |
 |---|---|---|
 | FR-PRV-01 | Provisioning approaches A–D (directive 16) with status tracking | Planned (Phase 6); simulated driver operation only |
-| FR-FW-01 | Firmware inventory, integrity, compatibility, controlled upgrade | Planned (Phase 7); simulated driver operations only |
+| FR-FW-01 | Firmware repository with SHA-256 integrity vs vendor checksum, approval, retire | Done |
+| FR-FW-02 | Offline compatibility (platform, models, minimum version, no downgrade) | Done |
+| FR-FW-03 | Upgrade plans: maintenance window, second approver, backup, stage/install/reboot/wait/verify, rollback or manual recovery | Done for simulated devices |
+| FR-FW-04 | Real-device firmware procedures | Not implemented (per model, after lab validation) |
+| FR-FW-05 | Vendor signature verification | Not implemented |
 
 ## FR-TOP — Topology
 | ID | Requirement | Status |
 |---|---|---|
-| FR-TOP-01 | Graph-based topology designer with interface links and validation | Planned (Phase 3) |
+| FR-TOP-01 | Graph-based topology designer with interface links and validation | Done (first version) |
+| FR-TOP-02 | VLAN/IP planning, addressing plans, physical port inventory | Planned |
 
 ## FR-SEC / FR-AUD — Security and audit
 | ID | Requirement | Acceptance criteria | Status |
@@ -74,6 +81,8 @@ Status values: **Done** (implemented and tested), **Partial**, **Planned** (phas
 | FR-SEC-02 | User authentication | — | Planned (next milestone) |
 | FR-SEC-03 | Role-based permissions (view, generate, approve, execute, firmware, credentials, admin) | — | Planned |
 | FR-SEC-04 | Impacting operations only through deployment workflow | Direct call → 403 | Done |
+| FR-SEC-05 | Real-device safety switches (lab writes, production read/write) re-checked at execution | Tests in `test_ssh_drivers.py` | Done |
+| FR-DRV-01 | Real-device drivers for AOS-CX, FortiOS, IOS-XE (read-only + merge apply) | Fake-connection tests | Experimental, not lab-validated |
 
 ## NFR — Non-functional
 | ID | Requirement | Status |

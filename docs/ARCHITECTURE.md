@@ -38,12 +38,12 @@ Rules: `domain`, `configgen`, `orchestration` and `drivers` never import `api`,
 | 8.2 Application API | `undm.api` | Implemented; **authentication not yet** |
 | 8.3 Network intent engine | `undm.domain.intent`, `undm.domain.validation` | First slice |
 | 8.4 Configuration generation | `undm.configgen` | First slice, 3 platform templates |
-| 8.5 Driver & capability framework | `undm.drivers` | Implemented (contract + mocks) |
+| 8.5 Driver & capability framework | `undm.drivers` (`mock/`, `ssh/`) | Implemented; SSH drivers experimental |
 | 8.6 Provisioning engine | — | Planned (Phase 6); mock `provision_factory_default_device` exists |
 | 8.7 Deployment orchestrator | `undm.orchestration`, `undm.services.deployments` | Implemented (simulation) |
-| 8.8 Firmware lifecycle | — | Planned (Phase 7); mock driver operations exist |
-| 8.9 Inventory & topology | `undm.inventory`, `db.models.Device` | Inventory done; topology planned (Phase 3) |
-| 8.10 Security & audit | `undm.security`, `undm.services.audit` | Audit, redaction, credential refs; auth/RBAC planned |
+| 8.8 Firmware lifecycle | `undm.services.firmware`, `undm.orchestration.firmware`, `undm.domain.firmware` | Implemented for simulated devices |
+| 8.9 Inventory & topology | `undm.inventory`, `undm.domain.topology`, `api.routers.topology` | Inventory and first topology version done |
+| 8.10 Security & audit | `undm.security`, `undm.services.audit`, `undm.services.policy` | Audit, redaction, OS-keyring credentials, real-device policy; auth/RBAC planned |
 | 8.11 Testing & simulation | `undm.drivers.mock`, `backend/tests` | Implemented |
 
 ## The five states the architecture keeps apart (directive 3)
@@ -103,6 +103,12 @@ CANCELLED from DRAFT / AWAITING_APPROVAL / READY
 | `deployment_targets` | Device + exact config version + backup version + per-device state, diff, message |
 | `deployment_events` | Ordered event log per deployment |
 | `audit_events` | Who/what/target/when/outcome + redacted details |
+| `firmware_images` | Repository entries: version, platform, sha256, vendor checksum, compatibility, status |
+| `topology_links` | Interface-to-interface links with mode and VLANs |
+| `topology_positions` | Canvas layout only |
+
+`deployments.kind` is `configuration` or `firmware`; firmware deployments also store the
+image and the maintenance window, and their targets store from/to versions.
 
 Planned (directive 21): users, roles, sites, vendors/models as tables, interfaces,
 links, VLAN/IP allocation, templates, firmware images and compatibility, approvals as
