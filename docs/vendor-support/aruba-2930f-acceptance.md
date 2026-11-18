@@ -50,5 +50,18 @@ a test fixture, and the 2930F model is promoted to `lab_read_only` for that firm
 | 2026-11-19 | 3 Test connection | **Pass** | SSH session established with `ssh.aruba.aos_switch`: login with stored credential, banner handling and `enable` worked. |
 | 2026-11-19 | 4 Retrieve information | **Pass** — hostname, firmware and serial confirmed against the switch's `show system` by the product owner | Model 2930F-48G-4SFP, firmware WC.16.10.0025. Hostname and serial parsed (not recorded here). |
 | 2026-11-19 | 6 Sanitized diagnostics | **Received** | Real `show system` / `show modules` layout confirmed the parser. Found and fixed: serial placeholder re-masking (`<serial-1>` vs `<serial-2>`); model now split into model + product number (JL260A); ROM version captured. Output kept as fixture `backend/tests/fixtures/aruba_2930f_wc_16_10_0025/` (identifiers replaced with fictional values). |
-| — | 5 Backup vs `show running-config` | pending | |
+| 2026-11-19 | 5 Backup vs `show running-config` | **Not yet conclusive** | First comparison was against a stored reference configuration file, not live output. The backup itself has the switch's own `; <product> Configuration Editor` header and 3-space indentation, consistent with live `show running-config`. To repeat with live output (`no page`, then `show running-config`). |
 | — | 7–8 Generate + dry run | pending | |
+
+## Observations from the reference-file comparison (2026-11-19)
+Comparing the live backup with a stored reference configuration file showed (without
+identifiers): different ordering of global lines; `no lacp` under every interface in the
+file but not in the live output; `ip ssh` in the file but not live; 2- vs 3-space
+indentation; and possibly real differences (logging and SNTP lines). Implications:
+- Textual diff is too noisy for audits; a normalized comparison is needed (feature idea:
+  configuration audit — reference file vs live backup, order/indentation-insensitive).
+- Lines such as `no lacp` / `ip ssh` may not be displayed by the switch; if so, verification
+  after a merge deployment would report them missing. To be confirmed on a lab unit before
+  adding them to the platform's "not displayed" list.
+- The unit is part of a TETRA/DIMETRA zone system. Phase B (writes) requires a spare/lab
+  unit or written approval from the system owner.
