@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import keyring
 import pytest
 from api_helpers import make_client
@@ -232,7 +234,8 @@ def test_aos_switch_session_parameters_and_facts(scenario):
     f = d.get_device_facts().data
     assert (f.hostname, f.os_version, f.serial_number) == ("lab-2930f", "WC.16.10.0012",
                                                           "CN00TEST01")
-    assert f.model == "2930F-24G-4SFPP JL259A"
+    assert f.model == "2930F-24G-4SFPP"
+    assert f.extra["product_number"] == "JL259A"
 
 
 def test_aos_switch_passes_enable_secret(scenario):
@@ -277,3 +280,46 @@ def test_sanitized_diagnostics_after_real_read(scenario, mem_keyring):
         assert "== raw output: show system ==" in text and "WC.16.10.0012" in text
         for leaked in ("CN00TEST01", "001122-334455", "192.0.2.21", "lab-2930f", "Example-Only-1"):
             assert leaked not in text, leaked
+
+
+
+# --- Real-layout fixture: Aruba 2930F-48G-4SFP, WC.16.10.0025 -----------------------
+
+FIXTURE = Path(__file__).parent / "fixtures" / "aruba_2930f_wc_16_10_0025"
+
+
+def _fixture_outputs():
+    return {"show system": (FIXTURE / "show_system.txt").read_text(),
+            "show modules": (FIXTURE / "show_modules.txt").read_text()}
+
+
+def test_real_2930f_layout_is_parsed(scenario):
+    scenario.outputs.update(_fixture_outputs())
+    d = drv(ArubaOSSwitchSsh)
+    d.connect()
+    f = d.get_device_facts().data
+    assert (f.hostname, f.model, f.os_version, f.serial_number) == (
+        "lab-2930f", "2930F-48G-4SFP", "WC.16.10.0025", "SG00FAKE01")
+    assert f.extra["product_number"] == "JL260A"
+    assert f.extra["rom_version"] == "WC.16.01.0010"
+    assert f.extra["parser"].startswith("checked against real output: 2930F-48G-4SFP")
+
+
+def test_real_2930f_diagnostics_use_one_placeholder_per_value(scenario, mem_keyring):
+    scenario.outputs.update(_fixture_outputs())
+    client, _ = make_client()
+    with client:
+        pid = client.post("/api/projects", json={"name": "Real layout"}).json()["id"]
+        ref = client.post(f"/api/projects/{pid}/credential-refs", json={"name": "c"}).json()
+        client.put(f"/api/credential-refs/{ref['id']}/secret",
+                   json={"username": "netops", "password": "Example-Only-1"})
+        did = client.post(f"/api/projects/{pid}/devices", json={
+            "name": "sw-a", "manufacturer": "Aruba", "category": "switch", "model": "2930F",
+            "os_family": "ArubaOS-Switch", "driver_id": "ssh.aruba.aos_switch",
+            "environment": "lab", "management_address": "192.0.2.30",
+            "credential_ref_id": ref["id"]}).json()["id"]
+        client.post(f"/api/devices/{did}/operations/get_facts")
+        text = client.get(f"/api/devices/{did}/diagnostics").json()["text"]
+        assert "SG00FAKE01" not in text and "001122-334455" not in text and "lab-2930f" not in text
+        assert "<serial-2>" not in text and text.count("<serial-1>") == 3  # facts, system, modules
+        assert "product_number: JL260A" in text and "rom_version: WC.16.01.0010" in text

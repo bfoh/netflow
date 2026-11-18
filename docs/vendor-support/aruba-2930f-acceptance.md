@@ -49,3 +49,6 @@ a test fixture, and the 2930F model is promoted to `lab_read_only` for that firm
 |---|---|---|---|
 | 2026-11-19 | 3 Test connection | **Pass** | SSH session established with `ssh.aruba.aos_switch`: login with stored credential, banner handling and `enable` worked. |
 | 2026-11-19 | 4 Retrieve information | **Pass** — hostname, firmware and serial confirmed against the switch's `show system` by the product owner | Model 2930F-48G-4SFP, firmware WC.16.10.0025. Hostname and serial parsed (not recorded here). |
+| 2026-11-19 | 6 Sanitized diagnostics | **Received** | Real `show system` / `show modules` layout confirmed the parser. Found and fixed: serial placeholder re-masking (`<serial-1>` vs `<serial-2>`); model now split into model + product number (JL260A); ROM version captured. Output kept as fixture `backend/tests/fixtures/aruba_2930f_wc_16_10_0025/` (identifiers replaced with fictional values). |
+| — | 5 Backup vs `show running-config` | pending | |
+| — | 7–8 Generate + dry run | pending | |

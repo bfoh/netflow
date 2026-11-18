@@ -136,3 +136,9 @@ Real outputs are needed to validate drivers, but may identify sites and equipmen
 diagnostics export masks IPs, MACs (incl. HP format), serials, names/contacts/locations and
 secrets with stable placeholders, from data UNDM already stored (no device contact).
 Pattern-based, so the user reviews it before sharing.
+
+### D-023 Real output becomes fixtures with fictional identifiers (2026-11-19)
+Sanitized real output is stored under `backend/tests/fixtures/<model>_<firmware>/` with the
+exact layout and whitespace kept, and masked identifiers replaced by fictional values, so
+parsers are tested against what devices really print. Drivers state the model/firmware
+combinations their parser was checked on (`parser_validated_on`), shown in the facts.

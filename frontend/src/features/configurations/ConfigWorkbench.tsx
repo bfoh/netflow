@@ -1,10 +1,10 @@
-import { Alert, Badge, Button, Card, Code, FileButton, Group, List, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
-import { IconAlertTriangle, IconFileImport, IconInfoCircle, IconWand } from '@tabler/icons-react';
+import { Alert, Badge, Button, Card, Code, CopyButton, FileButton, Group, List, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { IconAlertTriangle, IconCopy, IconDownload, IconFileImport, IconInfoCircle, IconWand } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import { DiffView } from '../../components/DiffView';
 import { QueryState } from '../../components/Page';
-import { fmtDate } from '../../services/format';
+import { downloadText, fmtDate } from '../../services/format';
 import { useAction, useConfig, useConfigDiff, useConfigs } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { ConfigVersion, Device, Issue } from '../../types/api';
@@ -76,6 +76,13 @@ export function ConfigWorkbench({ device }: { device: Device }) {
                   </Alert>
                 )}
                 <Code block mah={420} style={{ overflow: 'auto', fontSize: 12 }}>{shown.data.text}</Code>
+                <Group gap="xs" mt="xs">
+                  <CopyButton value={shown.data.text ?? ''}>
+                    {({ copied, copy }) => <Button size="xs" variant="default" leftSection={<IconCopy size={14} />} onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>}
+                  </CopyButton>
+                  <Button size="xs" variant="default" leftSection={<IconDownload size={14} />}
+                    onClick={() => downloadText(`${device.name}-${shown.data!.kind}-${shown.data!.sha256.slice(0, 8)}.txt`, shown.data!.text ?? '')}>Download</Button>
+                </Group>
               </>
             )}
           </Card>

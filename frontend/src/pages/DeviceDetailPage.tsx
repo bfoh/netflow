@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Button, Card, Group, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
+import { Accordion, Alert, Anchor, Badge, Button, Card, Code, Group, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
 import { IconAlertTriangle, IconEdit, IconLock, IconPlugConnected } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { Link, useParams } from 'react-router';
@@ -16,6 +16,28 @@ import type { Device } from '../types/api';
 
 function Row({ k, v }: { k: string; v: React.ReactNode }) {
   return <Table.Tr><Table.Td c="dimmed" w={190}>{k}</Table.Td><Table.Td>{v || '—'}</Table.Td></Table.Tr>;
+}
+
+/** Command output exactly as the device printed it, one collapsible block per command. */
+function RawOutput({ raw }: { raw?: Record<string, string> }) {
+  if (!raw || Object.keys(raw).length === 0) return null;
+  return (
+    <Accordion variant="contained" mt="sm">
+      <Accordion.Item value="raw">
+        <Accordion.Control><Text size="sm">Raw command output ({Object.keys(raw).length})</Text></Accordion.Control>
+        <Accordion.Panel>
+          <Stack gap="xs">
+            {Object.entries(raw).map(([cmd, out]) => (
+              <div key={cmd}>
+                <Text size="xs" fw={600} ff="monospace">{cmd}</Text>
+                <Code block mah={260} style={{ overflow: 'auto', fontSize: 11 }}>{out}</Code>
+              </div>
+            ))}
+          </Stack>
+        </Accordion.Panel>
+      </Accordion.Item>
+    </Accordion>
+  );
 }
 
 function Overview({ d }: { d: Device }) {
@@ -53,10 +75,13 @@ function Overview({ d }: { d: Device }) {
           {facts ? (
             <Table verticalSpacing={4}><Table.Tbody>
               {Object.entries(facts).filter(([k]) => k !== 'extra').map(([k, v]) => <Row key={k} k={k} v={String(v ?? '—')} />)}
-              {facts.extra != null && <Row k="details" v={<Text size="xs" ff="monospace" style={{ whiteSpace: 'pre-wrap', maxHeight: 160, overflow: 'auto' }}>{JSON.stringify(facts.extra, null, 1)}</Text>} />}
+              {Object.entries((facts.extra ?? {}) as Record<string, unknown>)
+                .filter(([k, v]) => k !== 'raw_output' && v !== null && typeof v !== 'object')
+                .map(([k, v]) => <Row key={k} k={k} v={String(v)} />)}
               <Row k="Retrieved" v={fmtDate(d.facts_retrieved_at)} />
             </Table.Tbody></Table>
           ) : <Text size="sm" c="dimmed">Nothing retrieved yet. Values above are not verified against the device.</Text>}
+          {facts && <RawOutput raw={(facts.extra as { raw_output?: Record<string, string> } | undefined)?.raw_output} />}
           {facts && <Group mt="sm"><DiagnosticsButton device={d} /></Group>}
         </Card>
         <Card withBorder>

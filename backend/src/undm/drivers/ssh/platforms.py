@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from undm.domain.operations import DeviceOperation
 from undm.drivers.base import DeviceFacts, DriverInfo, DriverMaturity, OperationResult
 from undm.drivers.ssh.base import SSH_CAPABILITIES, SshCliDriver
@@ -134,6 +136,7 @@ class ArubaOSSwitchSsh(SshCliDriver):
 
     netmiko_device_type = "aruba_osswitch"
     facts_commands = ("show system", "show modules")
+    parser_validated_on = ("2930F-48G-4SFP (JL260A) WC.16.10.0025",)
     running_config_command = "show running-config"
     skip_line_patterns = (r"^\s*;", r"^Running configuration:")
     error_pattern = SshCliDriver.error_pattern + r"|Incomplete input|Ambiguous input"
@@ -163,14 +166,22 @@ class ArubaOSSwitchSsh(SshCliDriver):
         return {"secret": self._credentials.password}
 
     def parse_facts(self, outputs: dict[str, str], prompt: str) -> DeviceFacts:
+        # Layout verified against a real 2930F-48G-4SFP on WC.16.10.0025 (2026-11-19):
+        # "show system" is two-column; "show modules" has
+        # "Chassis: <model>  <product number>   Serial Number: <serial>".
         system = outputs.get("show system", "")
         modules = outputs.get("show modules", "")
+        chassis = re.search(r"Chassis:\s*(\S+)(?:[ \t]+(?!Serial)(\S+))?", modules)
         return DeviceFacts(
             hostname=self._search(r"System Name\s*:\s*(\S+)", system) or prompt.rstrip("#> "),
             vendor="Aruba",
-            model=self._search(r"Chassis:\s*(\S+(?: \S+)?)", modules) or "unknown",
+            model=chassis.group(1) if chassis else "unknown",
             os_version=self._search(r"Software revision\s*:\s*(\S+)", system) or "unknown",
             serial_number=self._search(r"Serial Number\s*:\s*(\S+)", system),
+            extra={
+                "product_number": chassis.group(2) if chassis and chassis.group(2) else None,
+                "rom_version": self._search(r"ROM Version\s*:\s*(\S+)", system),
+            },
         )
 
 

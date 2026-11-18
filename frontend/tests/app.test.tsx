@@ -96,3 +96,21 @@ describe('device page', () => {
     expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
   });
 });
+
+
+describe('observed facts', () => {
+  it('shows extra facts as rows and raw output as readable blocks', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const sw = device({ id: 'sw', name: 'lab-2930f', driver_id: 'ssh.aruba.aos_switch', environment: 'lab',
+      observed_facts: { hostname: 'lab-2930f', model: '2930F-48G-4SFP', os_version: 'WC.16.10.0025',
+        extra: { product_number: 'JL260A', rom_version: 'WC.16.01.0010',
+          raw_output: { 'show modules': 'Chassis: 2930F-48G-4SFP  JL260A' } } } });
+    mockApi({ '/devices/sw': sw });
+    renderAt('/devices/sw');
+    expect(await screen.findByText('JL260A')).toBeInTheDocument();
+    expect(screen.getByText('WC.16.01.0010')).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Raw command output (1)'));
+    expect(await screen.findByText('show modules')).toBeInTheDocument();
+    expect(screen.getByText(/Chassis: 2930F-48G-4SFP/)).toBeInTheDocument();
+  });
+});

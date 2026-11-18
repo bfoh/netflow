@@ -56,7 +56,11 @@ def sanitize(text: str, known_values: Iterable[tuple[str, str]] = (),
     for kind, value in sorted(known_values, key=lambda kv: -len(kv[1])):
         if value and len(value) >= 3:
             out = out.replace(value, m(kind, value))
-    out = _SERIAL_LABEL.sub(lambda x: x.group(1) + x.group(2) + m("serial", x.group(3)), out)
+    # Values already replaced by a placeholder (from known_values) are kept, so one value
+    # always maps to one placeholder.
+    out = _SERIAL_LABEL.sub(
+        lambda x: x.group(1) + x.group(2)
+        + (x.group(3) if x.group(3).startswith("<") else m("serial", x.group(3))), out)
     out = _NAME_LABEL.sub(
         lambda x: x.group(1) + x.group(2)
         + (x.group(3) if x.group(3).startswith("<") else m("name", x.group(3))), out)

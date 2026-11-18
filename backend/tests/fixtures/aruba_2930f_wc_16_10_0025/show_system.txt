@@ -1,0 +1,22 @@
+
+ Status and Counters - General System Information
+
+  System Name        : lab-2930f                                     
+  System Contact     : 
+  System Location    : 
+
+  MAC Age Time (sec) : 300    
+
+  Time Zone          : 0    
+  Daylight Time Rule : None                      
+
+  Software revision  : WC.16.10.0025        Base MAC Addr      : 001122-334455    
+  ROM Version        : WC.16.01.0010        Serial Number      : SG00FAKE01  
+
+  Up Time            : 27 hours             Memory   - Total   : 333,623,808 
+  CPU Util (%)       : 9                               Free    : 214,738,892 
+
+  IP Mgmt  - Pkts Rx : 7830                 Packet   - Total   : 6600        
+             Pkts Tx : 6373                 Buffers    Free    : 4282        
+                                                       Lowest  : 4269        
+                                                       Missed  : 0

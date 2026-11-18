@@ -63,6 +63,8 @@ class SshCliDriver(DeviceDriver):
     )
     # Header/comment lines in configuration files that must not be sent to the device.
     skip_line_patterns: ClassVar[tuple[str, ...]] = (r"^\s*!", r"^\s*#")
+    # Model/firmware combinations on which the facts parser was checked against real output.
+    parser_validated_on: ClassVar[tuple[str, ...]] = ()
     connect_timeout: ClassVar[int] = 15
     read_timeout: ClassVar[int] = 120
     # Replaced in tests with a fake connection factory.
@@ -163,8 +165,11 @@ class SshCliDriver(DeviceDriver):
             facts = self.parse_facts(outputs, prompt)
         except Exception as e:  # noqa: BLE001
             return self._fail(op, e)
+        validated = self.parser_validated_on
         facts.extra.update({
-            "parser": "best_effort_not_lab_verified",
+            "parser": ("checked against real output: " + "; ".join(validated)
+                       + " (best effort elsewhere)") if validated
+            else "best_effort_not_lab_verified",
             "raw_output": {k: v[:4000] for k, v in outputs.items()},
         })
         return OperationResult.success(op, facts)

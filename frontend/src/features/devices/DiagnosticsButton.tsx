@@ -4,6 +4,7 @@ import { IconDownload, IconFileReport, IconShieldCheck } from '@tabler/icons-rea
 import { useState } from 'react';
 
 import { api } from '../../services/api';
+import { downloadText } from '../../services/format';
 import type { Device } from '../../types/api';
 
 /** Shows a sanitized report of the last retrieved device information, ready to share. */
@@ -24,12 +25,7 @@ export function DiagnosticsButton({ device }: { device: Device }) {
       setBusy(false);
     }
   };
-  const download = () => {
-    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-    const a = Object.assign(document.createElement('a'), { href: url, download: `undm-diagnostics-${device.os_family || 'device'}.txt` });
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const download = () => downloadText(`undm-diagnostics-${device.os_family || 'device'}.txt`, text);
   return (
     <>
       <Button size="xs" variant="light" leftSection={<IconFileReport size={14} />} loading={busy} onClick={load}>Sanitized diagnostics</Button>

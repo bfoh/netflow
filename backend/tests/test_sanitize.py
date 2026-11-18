@@ -30,3 +30,11 @@ def test_empty_labels_do_not_swallow_next_line():
     out = sanitize(text)
     assert "System Contact     :\n  System Location    : <name-1>" in out
     assert "Building 7" not in out
+
+
+def test_known_serial_and_label_share_one_placeholder():
+    m = new_mapper()
+    a = sanitize("serial_number: SG00FAKE01", [("serial", "SG00FAKE01")], m)
+    b = sanitize("  ROM Version : WC.16.01.0010   Serial Number : SG00FAKE01  \n",
+                 [("serial", "SG00FAKE01")], m)
+    assert "<serial-1>" in a and "<serial-1>" in b and "<serial-2>" not in b

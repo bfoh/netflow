@@ -1,0 +1,4 @@
+
+ Status and Counters - Module Information
+
+  Chassis: 2930F-48G-4SFP  JL260A         Serial Number:   SG00FAKE01
