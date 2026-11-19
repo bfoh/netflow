@@ -66,6 +66,22 @@ def test_project_crud(client):
     assert client.get(f"/api/projects/{pid}").status_code == 404
 
 
+def test_timestamps_carry_their_time_zone(client):
+    """SQLite keeps no zone; the API must still say the times are UTC (browsers showed
+    zone-less times as local time, an hour off on the bench in CET)."""
+    from datetime import datetime
+
+    pid = project(client)
+    body = client.get(f"/api/projects/{pid}").json()
+    for key in ("created_at", "updated_at"):
+        value = datetime.fromisoformat(body[key])
+        assert value.utcoffset() is not None and value.utcoffset().total_seconds() == 0, body[key]
+    did = device(client, pid, SWITCH)
+    assert client.post(f"/api/devices/{did}/operations/get_facts").status_code == 200
+    seen = client.get(f"/api/devices/{did}").json()["last_connection_at"]
+    assert datetime.fromisoformat(seen).utcoffset() is not None
+
+
 def test_device_inventory_and_validation(client):
     pid = project(client)
     sw = device(client, pid, SWITCH)

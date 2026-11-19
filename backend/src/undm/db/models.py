@@ -17,10 +17,33 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    TypeDecorator,
     UniqueConstraint,
     false,
 )
+from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class UtcDateTime(TypeDecorator[datetime]):
+    """Timestamp stored and returned in UTC, always with its time zone.
+
+    SQLite keeps no zone and returns naive values; without this the API sent times
+    without a zone and browsers showed them as local time (an hour off in CET).
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+    def process_result_value(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def _now() -> datetime:
@@ -36,9 +59,9 @@ class Base(DeclarativeBase):
 
 
 class TimestampMixin:
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_now, onupdate=_now
+        UtcDateTime(), default=_now, onupdate=_now
     )
 
 
@@ -110,10 +133,10 @@ class Device(TimestampMixin, Base):
     bootstrap_profile: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
     # observed attributes (retrieved from the device)
     observed_facts: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
-    facts_retrieved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    last_connection_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    last_backup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    last_deployment_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    facts_retrieved_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
+    last_connection_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
+    last_backup_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
+    last_deployment_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     # Set while a deployment is changing this device; prevents concurrent conflicting changes.
     locked_by_deployment_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
@@ -133,7 +156,7 @@ class ConfigVersion(Base):
     verification: Mapped[str] = mapped_column(String(60), default="")
     reference: Mapped[str] = mapped_column(String(200), default="")  # driver backup handle
     created_by: Mapped[str] = mapped_column(String(120))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now)
 
 
 class FirmwareImage(Base):
@@ -155,9 +178,9 @@ class FirmwareImage(Base):
     release_notes: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default="uploaded")  # uploaded/approved/retired
     approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     created_by: Mapped[str] = mapped_column(String(120))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now)
 
 
 class DeploymentRecord(TimestampMixin, Base):
@@ -171,8 +194,8 @@ class DeploymentRecord(TimestampMixin, Base):
     firmware_image_id: Mapped[str | None] = mapped_column(
         ForeignKey("firmware_images.id", name="fk_deployments_firmware_image_id"), nullable=True
     )
-    window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    window_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    window_start: Mapped[datetime | None] = mapped_column(UtcDateTime())
+    window_end: Mapped[datetime | None] = mapped_column(UtcDateTime())
     state: Mapped[str] = mapped_column(String(30), index=True)
     dry_run: Mapped[bool] = mapped_column(default=False)
     # Firmware plans: install the approved image even where the device runs a newer one.
@@ -180,7 +203,7 @@ class DeploymentRecord(TimestampMixin, Base):
     apply_mode: Mapped[str] = mapped_column(String(20))
     created_by: Mapped[str] = mapped_column(String(120))
     approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
 
     targets: Mapped[list[DeploymentTargetRecord]] = relationship(
         cascade="all, delete-orphan", order_by="DeploymentTargetRecord.position"
@@ -229,7 +252,7 @@ class DeploymentEventRecord(Base):
         ForeignKey("deployments.id", ondelete="CASCADE"), index=True
     )
     seq: Mapped[int] = mapped_column(Integer)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    timestamp: Mapped[datetime] = mapped_column(UtcDateTime())
     device_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     stage: Mapped[str] = mapped_column(String(40))
     status: Mapped[str] = mapped_column(String(40))
@@ -239,7 +262,7 @@ class DeploymentEventRecord(Base):
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    timestamp: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now, index=True)
     actor: Mapped[str] = mapped_column(String(120))
     action: Mapped[str] = mapped_column(String(80))
     target_type: Mapped[str] = mapped_column(String(40))
@@ -263,7 +286,7 @@ class TopologyLink(Base):
     mode: Mapped[str] = mapped_column(String(20), default="routed")  # access/trunk/routed
     vlans: Mapped[list[Any]] = mapped_column(default=list)
     notes: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now)
 
 
 class TopologyPosition(Base):

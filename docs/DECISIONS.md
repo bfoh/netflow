@@ -359,3 +359,10 @@ WC.16.10.0025 (product owner). Downgrades stay refused by default; a firmware pl
 such device as a DOWNGRADE (warning), the deployment page shows a badge, and the plan's audit
 records the setting, so the approver sees it before approving. The procedure itself is the
 same as an upgrade; if a switch refuses the older image, the job stops with its answer.
+
+### D-049 Times are UTC everywhere, and shown as UTC (2026-11-19)
+The network's time is UTC+0 (product owner). The database returns every timestamp with
+its zone (`UtcDateTime`; SQLite stores none, which made the API send zone-less times that
+browsers read as local time). The interface shows times as `YYYY-MM-DD HH:MM:SS UTC`,
+whatever the PC's time zone, and the maintenance window is entered in UTC. Device logs,
+UNDM events and the audit log can be compared directly.

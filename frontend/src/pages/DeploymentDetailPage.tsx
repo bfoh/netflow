@@ -31,17 +31,19 @@ const OUTCOME: Record<string, { color: string; title: string; text: string }> = 
   cancelled: { color: 'gray', title: 'Deployment cancelled', text: 'No device was changed.' },
 };
 
-/** datetime-local value (local time) for a Date. */
-const toLocalInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+/** datetime-local value in UTC for a Date (UNDM shows and takes times in UTC, like the network). */
+const toUtcInput = (d: Date) => d.toISOString().slice(0, 16);
+/** A datetime-local value typed in UTC, as an ISO time. */
+const fromUtcInput = (v: string) => new Date(`${v}:00Z`).toISOString();
 
 function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boolean) => void }) {
   const [confirm, { open, close }] = useDisclosure();
   const [windowOpen, { open: openWindow, close: closeWindow }] = useDisclosure();
-  const [start, setStart] = useState(() => toLocalInput(new Date()));
-  const [end, setEnd] = useState(() => toLocalInput(new Date(Date.now() + 2 * 3600 * 1000)));
+  const [start, setStart] = useState(() => toUtcInput(new Date()));
+  const [end, setEnd] = useState(() => toUtcInput(new Date(Date.now() + 2 * 3600 * 1000)));
   const firmware = dep.kind === 'firmware';
   const approve = useAction(() => api.approveDeployment(dep.id, firmware
-    ? { window_start: new Date(start).toISOString(), window_end: new Date(end).toISOString() } : undefined), 'Deployment approved');
+    ? { window_start: fromUtcInput(start), window_end: fromUtcInput(end) } : undefined), 'Deployment approved');
   const execute = useAction(() => api.executeDeployment(dep.id), (d) => `Execution finished: ${d.state.replaceAll('_', ' ')}`);
   const cancel = useAction(() => api.cancelDeployment(dep.id), 'Deployment cancelled');
   const running = execute.isPending;
@@ -54,8 +56,8 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
         <Stack>
           <Text size="sm">Firmware upgrades can only run inside an approved maintenance window (maximum 24 hours). The approver must be
             a different person from the plan's creator.</Text>
-          <TextInput type="datetime-local" label="Window start (your local time)" value={start} onChange={(e) => setStart(e.currentTarget.value)} />
-          <TextInput type="datetime-local" label="Window end (your local time)" value={end} onChange={(e) => setEnd(e.currentTarget.value)} />
+          <TextInput type="datetime-local" label="Window start (UTC)" value={start} onChange={(e) => setStart(e.currentTarget.value)} />
+          <TextInput type="datetime-local" label="Window end (UTC)" value={end} onChange={(e) => setEnd(e.currentTarget.value)} />
           <Group justify="flex-end">
             <Button variant="default" onClick={closeWindow}>Back</Button>
             <Button loading={approve.isPending} onClick={() => approve.mutate(undefined, { onSuccess: closeWindow })}>Approve with this window</Button>
