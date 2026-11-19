@@ -325,3 +325,12 @@ subject is a project setting (organisation details, kept only in the UNDM databa
 that cannot be typed safely into a CLI are refused). It runs only for files that make the
 web interface HTTPS-only. This is a generic driver hook (`prepare_before_apply`); a job,
 not a new exception to the deployment lifecycle.
+
+### D-045 New 2930F prompts answered exactly (2026-11-19)
+A second screenshot of a new unit showed the full sequence after the HPE banner:
+"Configure the manager credentials :", "Username:", "Password:", "Re-enter the new
+password:". The console bootstrap now answers exactly that sequence; a different password
+question, the right questions in another order, or the username asked again stops it with
+nothing answered. A unit whose credentials were already set by hand (with the approved
+password) is logged into normally and still passes the factory-default check, which looks
+at site configuration, not at the password.

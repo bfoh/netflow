@@ -135,8 +135,8 @@ def test_parsing_helpers():
 
 
 # -- new switches: mandatory manager credentials at first login --------------------------
-# Seen on a real new 2930F (product owner, 2026-11-19): "Configure the manager credentials :"
-# then "Username:". The password prompts in the simulation are placeholders (Q-35).
+# Seen on a real new 2930F (product owner, 2026-11-19): "Configure the manager credentials :",
+# "Username:", "Password:", "Re-enter the new password:".
 
 APPROVED = Credentials("manager", "Example-Only-Approved-1")
 
@@ -171,3 +171,19 @@ def test_rejected_password_stops_without_retrying():
 def test_old_style_factory_default_switch_does_not_need_a_login():
     r = run(SimulatedArubaConsole(), creds=None)
     assert r.status is BootstrapStatus.BOOTSTRAPPED and not r.credentials_set
+
+
+def test_unexpected_password_question_is_not_answered():
+    sim = SimulatedArubaConsole(first_login_setup=True,
+                                setup_password_prompt="Enter the old password: ")
+    r = run(sim, creds=APPROVED)
+    assert r.status is BootstrapStatus.FAILED and "did not expect" in r.message
+    assert "(new password sent)" not in r.transcript and sim.username is None
+
+
+def test_questions_in_another_order_are_not_answered():
+    sim = SimulatedArubaConsole(first_login_setup=True,
+                                setup_password_prompt="Re-enter the new password: ")
+    r = run(sim, creds=APPROVED)
+    assert r.status is BootstrapStatus.FAILED and "did not expect" in r.message
+    assert sim.username is None

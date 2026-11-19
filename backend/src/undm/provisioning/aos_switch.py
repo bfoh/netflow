@@ -31,10 +31,12 @@ PROMPT = re.compile(
 ANY_KEY = re.compile(r"any key to continue\s*$", re.I)
 LOGIN = re.compile(r"(?:user ?name|login as|login)\s*:\s*$", re.I)
 PASSWORD = re.compile(r"password\s*:\s*$", re.I)
-# Seen on a new 2930F console (product owner's screenshot, 2026-11-19):
-#   "Configure the manager credentials :" then "Username:". The switch then requires a
-# password and its confirmation (wording of those two prompts not yet seen: Q-35).
+# Seen on a new 2930F console (product owner's screenshots, 2026-11-19), in this order:
+#   "Configure the manager credentials :" / "Username:" / "Password:" /
+#   "Re-enter the new password:"
 FIRST_LOGIN = re.compile(r"Configure the manager credentials", re.I)
+SETUP_PASSWORD = re.compile(r"(?:^|\n)[ \t]*Password\s*:\s*$")
+SETUP_REENTER = re.compile(r"Re-enter the new password\s*:\s*$", re.I)
 ERROR = re.compile(r"Invalid input|Incomplete input|Ambiguous input|invalid port|"
                    r"not allowed|Error:|Unable to", re.I)
 
@@ -164,8 +166,9 @@ class ArubaOSSwitchConsole:
     def _first_login_setup(self) -> str:
         """Answer a new switch's "Configure the manager credentials" request.
 
-        Sends the device's attached login: the username, then the password for exactly two
-        password prompts (new + confirmation). Anything else stops with the switch's text.
+        Sends the device's attached login and answers exactly the prompts seen on a new
+        unit, in order: "Password:", then "Re-enter the new password:". Any other prompt,
+        another order, or the username asked again stops with the switch's text.
         """
         if self.credentials is None or not self.credentials.password:
             raise ConsoleError(
@@ -174,14 +177,15 @@ class ArubaOSSwitchConsole:
                 "a non-empty password) to the device, then run the bootstrap again. Nothing "
                 "was sent.")
         self.s.write_line(self.credentials.username)
-        passwords = 0
-        for _ in range(4):
-            idx, text = self.s.read_until_any([PROMPT, LOGIN, PASSWORD],
-                                              timeout=self.login_timeout)
+        expected = [SETUP_PASSWORD, SETUP_REENTER]
+        for _ in range(6):
+            idx, text = self.s.read_until_any(
+                [PROMPT, LOGIN, SETUP_REENTER, SETUP_PASSWORD, PASSWORD, ANY_KEY],
+                timeout=self.login_timeout)
             if idx == 0:
-                if passwords < 2:
-                    raise ConsoleError("The switch reached its prompt before the password was "
-                                       "confirmed; check it on the console.")
+                if expected:
+                    raise ConsoleError("The switch reached its prompt before the new password "
+                                       "was confirmed; check it on the console.")
                 self.credentials_set = True
                 return text
             if idx == 1:
@@ -189,10 +193,15 @@ class ArubaOSSwitchConsole:
                     "The switch asked for the username again after the new password: it may "
                     "not accept the password (its rules are in the transcript). Use another "
                     "password in the device's credential.")
-            passwords += 1  # noqa: SIM113 - counts password prompts, not loop turns
-            if passwords > 2:
-                raise ConsoleError("The switch asked for the password more than twice; "
-                                   "stopped. Its text is in the transcript.")
+            if idx == 5:
+                self.s.write_line()
+                continue
+            asked = SETUP_REENTER if idx == 2 else SETUP_PASSWORD if idx == 3 else None
+            if asked is None or not expected or asked is not expected[0]:
+                raise ConsoleError(
+                    "The switch asked a password question UNDM did not expect at this point "
+                    "(see the transcript); nothing was answered.")
+            expected.pop(0)
             self.s.transcript.append("<<< (new password sent)\n")
             self.s.transport.write((self.credentials.password + "\r").encode())
         raise ConsoleError("Could not finish setting the manager credentials")

@@ -26,10 +26,12 @@ class SimulatedArubaConsole:
     extra_config: list[str] = field(default_factory=list)  # top-level site config lines
     fail_on: set[str] = field(default_factory=set)  # commands answered with an error
     silently_ignore: set[str] = field(default_factory=set)  # accepted but without effect
-    # A new unit that demands its manager credentials at first login. The first line is
-    # the text seen on a real new switch; the password prompts are placeholders (Q-35).
+    # A new unit that demands its manager credentials at first login. Prompt texts as seen
+    # on a real new 2930F (2026-11-19); the refusal message is a placeholder.
     first_login_setup: bool = False
     min_password_length: int = 1
+    setup_password_prompt: str = "Password: "  # noqa: S105 - prompt text, not a password
+    setup_confirm_prompt: str = "Re-enter the new password: "
 
     def __post_init__(self) -> None:
         self._out = bytearray()
@@ -91,12 +93,12 @@ class SimulatedArubaConsole:
             return
         if self._state == "setup_user":
             self._typed_user = line
-            self._emit("\r\n[placeholder] New password: ")
+            self._emit("\r\n" + self.setup_password_prompt)
             self._state = "setup_password"
             return
         if self._state == "setup_password":
             self._new_password = line
-            self._emit("\r\n[placeholder] Confirm password: ")
+            self._emit("\r\n" + self.setup_confirm_prompt)
             self._state = "setup_confirm"
             return
         if self._state == "setup_confirm":
