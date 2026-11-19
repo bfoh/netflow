@@ -37,6 +37,10 @@ PASSWORD = re.compile(r"password\s*:\s*$", re.I)
 FIRST_LOGIN = re.compile(r"Configure the manager credentials", re.I)
 SETUP_PASSWORD = re.compile(r"(?:^|\n)[ \t]*Password\s*:\s*$")
 SETUP_REENTER = re.compile(r"Re-enter the new password\s*:\s*$", re.I)
+# The console was left at a login prompt and the wake-up key answered it (seen
+# 2026-11-19: "Password cannot be empty. / Operation aborted. / Session Terminated,
+# unable to login."). Nothing was set; the login simply starts again.
+TERMINATED = re.compile(r"Session Terminated, unable to login\.?\s*$", re.I)
 ERROR = re.compile(r"Invalid input|Incomplete input|Ambiguous input|invalid port|"
                    r"not allowed|Error:|Unable to", re.I)
 
@@ -213,17 +217,29 @@ class ArubaOSSwitchConsole:
                 "password is set). Attach a credential to the device, or factory-reset it.")
         return self.credentials.username if what == "username" else self.credentials.password
 
-    def login(self) -> str:
-        """Reach the manager prompt (#) at top level. Returns the prompt's hostname."""
+    def _wake(self) -> None:
         self.s.write_line()  # the console auto-senses speed on the first key presses
         time.sleep(self.wake_delay)
         self.s.write_line()
+
+    def login(self) -> str:
+        """Reach the manager prompt (#) at top level. Returns the prompt's hostname."""
+        self._wake()
         text = ""
         seen = ""
-        for _ in range(8):
+        restarts = 0
+        for _ in range(10):
             idx, text = self.s.read_until_any(
-                [PROMPT, ANY_KEY, LOGIN, PASSWORD], timeout=self.login_timeout)
+                [PROMPT, ANY_KEY, LOGIN, PASSWORD, TERMINATED], timeout=self.login_timeout)
             seen += text
+            if idx == 4:  # a login left half-way was ended by the wake-up key: start over
+                restarts += 1
+                if restarts > 2:
+                    raise ConsoleError("The switch keeps ending the console session "
+                                       "('Session Terminated'); check it on the console.")
+                seen = ""
+                self._wake()
+                continue
             if idx == 0:
                 break
             if idx == 1:

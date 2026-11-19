@@ -44,3 +44,8 @@ hostname in the prompt; wording of error messages; whether SSH accepts the empty
 password. The procedure stops at the first unexpected response and saves nothing unless
 the configuration read back matches, so a mismatch leaves the switch unsaved: restart it
 (or factory-reset it with your usual method) to return to the starting state.
+
+## Results log
+| Date | Unit | Result | Notes |
+|---|---|---|---|
+| 2026-11-19 | spare 2930F, new unit | stopped, nothing changed | The console had been left at "Re-enter the new password:" from a manual try. UNDM's wake-up Enter answered it with an empty password; the switch replied "Password cannot be empty. / Operation aborted. / Session Terminated, unable to login." Fixed the same day: the bootstrap now starts the login again after that message (D-046). |

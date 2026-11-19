@@ -32,6 +32,9 @@ class SimulatedArubaConsole:
     min_password_length: int = 1
     setup_password_prompt: str = "Password: "  # noqa: S105 - prompt text, not a password
     setup_confirm_prompt: str = "Re-enter the new password: "
+    # Console left at a password prompt of an unfinished setup (as on 2026-11-19): the first
+    # key ends that session with the switch's real messages.
+    left_at_password_prompt: bool = False
 
     def __post_init__(self) -> None:
         self._out = bytearray()
@@ -73,6 +76,12 @@ class SimulatedArubaConsole:
         return f"{self.hostname}{ctx}{'#' if self._manager else '>'} "
 
     def _handle(self, line: str) -> None:
+        if self._state == "asleep" and self.left_at_password_prompt:
+            self.left_at_password_prompt = False
+            self._emit("\r\nPassword cannot be empty.\r\nOperation aborted.\r\n\r\n"
+                       "Session Terminated, unable to login.\r\n")
+            self._enters = 0
+            return
         if self._state == "asleep":
             self._enters += 1
             if self._enters >= 2:

@@ -187,3 +187,12 @@ def test_questions_in_another_order_are_not_answered():
     r = run(sim, creds=APPROVED)
     assert r.status is BootstrapStatus.FAILED and "did not expect" in r.message
     assert sim.username is None
+
+
+def test_console_left_at_a_password_prompt_starts_over():
+    """Seen on the bench: the wake-up key answered a pending password prompt."""
+    sim = SimulatedArubaConsole(first_login_setup=True, left_at_password_prompt=True)
+    r = run(sim, creds=APPROVED)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
+    assert "Session Terminated" in r.transcript and r.credentials_set
+    assert (sim.username, sim.password) == ("manager", "Example-Only-Approved-1")

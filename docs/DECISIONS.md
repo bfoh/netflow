@@ -334,3 +334,12 @@ question, the right questions in another order, or the username asked again stop
 nothing answered. A unit whose credentials were already set by hand (with the approved
 password) is logged into normally and still passes the factory-default check, which looks
 at site configuration, not at the password.
+
+### D-046 Console left half-way through a login: start again (2026-11-19, first bench run)
+On the first bench run the console was still at "Re-enter the new password:" from a manual
+try; the bootstrap's wake-up Enter answered it with an empty password and the switch ended
+the session ("Password cannot be empty. / Operation aborted. / Session Terminated, unable to
+login."). Nothing was set. The bootstrap now recognises "Session Terminated, unable to
+login." and starts the login again (at most twice), so a console left in any login state is
+handled. A serial console does not redraw a pending prompt, so it cannot be seen before a
+key is pressed; an empty answer is the least harmful key.
