@@ -96,7 +96,9 @@ function Overview({ d }: { d: Device }) {
         <Card withBorder>
           <Title order={5} mb="xs">Driver capabilities</Title>
           <Group gap={6}>{d.capabilities.map((c) => <Badge key={c} variant="light" color="gray">{c.replace('supports_', '').replaceAll('_', ' ')}</Badge>)}</Group>
-          <Text size="xs" c="dimmed" mt="xs">Capabilities of the simulation profile; not a statement about real hardware.</Text>
+          <Text size="xs" c="dimmed" mt="xs">{d.environment === 'simulated'
+            ? 'Capabilities of the simulation profile; not a statement about real hardware.'
+            : 'What the experimental driver implements; not yet acceptance-tested on this model.'}</Text>
         </Card>
       </Stack>
     </SimpleGrid>
