@@ -175,6 +175,7 @@ describe('deployment outcome', () => {
     expect(screen.queryByText(/Every upgraded device came back/)).not.toBeInTheDocument();
     expect(screen.queryByText('Deploy')).not.toBeInTheDocument();
     expect(screen.queryByText('Back up')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy events as text' })).toBeInTheDocument();
   });
 
   it('a successful real upgrade keeps the upgrade wording', async () => {

@@ -1,4 +1,4 @@
-import { Accordion, Alert, Anchor, Badge, Button, Card, Group, Modal, Stack, Stepper, Text, TextInput, Timeline, Title } from '@mantine/core';
+import { Accordion, Alert, Anchor, Badge, Button, Card, CopyButton, Group, Modal, Stack, Stepper, Text, TextInput, Timeline, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useEffect, useState } from 'react';
 import { IconAlertTriangle, IconCheck, IconFlask, IconX } from '@tabler/icons-react';
@@ -172,7 +172,12 @@ export function DeploymentDetailPage() {
         })}
       </Accordion>
 
-      <Title order={4} mb="xs">Events</Title>
+      <Group justify="space-between" mb="xs">
+        <Title order={4}>Events ({d.events.length})</Title>
+        <CopyButton value={d.events.map((e) => `${fmtDate(e.timestamp)}  ${e.stage}${e.device_id ? ` · ${byId.get(e.device_id)?.name ?? ''}` : ''} — ${e.status}: ${e.message}`).join('\n')}>
+          {({ copied, copy }) => <Button size="xs" variant="light" onClick={copy}>{copied ? 'Copied' : 'Copy events as text'}</Button>}
+        </CopyButton>
+      </Group>
       <Card withBorder>
         <Timeline bulletSize={18} lineWidth={2} active={d.events.length - 1}>
           {d.events.map((e) => (
