@@ -343,3 +343,11 @@ login."). Nothing was set. The bootstrap now recognises "Session Terminated, una
 login." and starts the login again (at most twice), so a console left in any login state is
 handled. A serial console does not redraw a pending prompt, so it cannot be seen before a
 key is pressed; an empty answer is the least harmful key.
+
+### D-047 Console reader: escape codes across reads, line codes as line breaks (2026-11-19)
+Second bench run: a serial read ended between ESC and `[24;18H`, so the code stayed in the
+text and "Password:" did not start a line. The console reader now holds back the start of
+an escape sequence cut off at the end of a read and joins it with the next read, and turns
+"next line" (ESC E) and "insert line" (ESC[nL) into line breaks, mirroring Netmiko's
+handling of Aruba/ProCurve consoles; other codes are removed. "Password:" is also matched at
+the end of the output, independent of line starts.

@@ -1,3 +1,4 @@
+import re
 from ipaddress import IPv4Interface
 
 import pytest
@@ -211,3 +212,40 @@ def test_unexpected_question_is_quoted_in_the_message():
                                 setup_password_prompt="Enter the old password: ")
     r = run(sim, creds=APPROVED)
     assert "'Enter the old password:'" in r.message
+
+
+class _Chunks:
+    """A transport returning fixed chunks, to cut escape codes like a serial port does."""
+
+    def __init__(self, *chunks: bytes) -> None:
+        self.chunks = list(chunks)
+
+    def read(self, size: int = 1) -> bytes:
+        return self.chunks.pop(0) if self.chunks else b""
+
+    def write(self, data: bytes) -> int:
+        return len(data)
+
+    def close(self) -> None:
+        pass
+
+
+def test_escape_code_cut_by_a_read_is_still_removed():
+    """Bench transcript: 'ESC' ended one read, '[24;18HPassword:' started the next."""
+    session = ConsoleSession(_Chunks(b"manager\r\n\x1b", b"[24;18HPassword: "),
+                             read_timeout=0.5, settle_time=0)
+    idx, text = session.read_until_any([re.compile(r"(?:^|\n)Password\s*:\s*$")])
+    assert idx == 0 and text == "manager\nPassword: "
+
+
+def test_line_codes_become_line_breaks():
+    assert clean("a\x1bEb") == "a\nb"
+    assert clean("a\x1b[2Lb") == "a\n\nb"
+    assert clean("x\x1b[24;1H\x1b[2Kbench#") == "xbench#"
+
+
+def test_whole_bootstrap_with_cursor_codes_and_tiny_reads():
+    sim = SimulatedArubaConsole(first_login_setup=True, cursor_codes=True, max_read=5)
+    r = run(sim, creds=APPROVED)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
+    assert "\x1b" not in r.transcript and "[24;" not in r.transcript

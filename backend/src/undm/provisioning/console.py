@@ -30,7 +30,17 @@ class ConsoleTimeoutError(ConsoleError):
     pass
 
 
+# Codes that move to a new line become real line breaks, as Netmiko does for this switch
+# family ("Aruba and ProCurve switches can use code_insert_line for <enter>").
+_INSERT_LINES = re.compile(r"\x1b\[(\d*)L")
+_NEXT_LINE = re.compile(r"\x1bE")
+# A complete escape sequence starting at a given position (to spot one cut off by a read).
+_COMPLETE = re.compile(r"\x1b(?:\[[0-9;?]*[ -/]*[@-~]|[@-Z\\-_])")
+
+
 def clean(text: str) -> str:
+    text = _INSERT_LINES.sub(lambda m: "\n" * int(m.group(1) or 1), text)
+    text = _NEXT_LINE.sub("\n", text)
     return _ANSI.sub("", text).replace("\r\n", "\n").replace("\r", "").replace("\x00", "")
 
 
@@ -41,6 +51,7 @@ class ConsoleSession:
     settle_time: float = 0.15  # wait this long after a match for trailing output
     transcript: list[str] = field(default_factory=list)
     _buffer: str = ""
+    _carry: str = ""  # the start of an escape sequence cut off by the previous read
 
     def write_line(self, text: str = "") -> None:
         # "<<<" marks what UNDM typed; keep it visually apart from the device's output.
@@ -51,7 +62,15 @@ class ConsoleSession:
     def _fill(self) -> bool:
         chunk = self.transport.read(256)
         if chunk:
-            self._buffer += clean(chunk.decode("utf-8", "replace"))
+            data = self._carry + chunk.decode("utf-8", "replace")
+            self._carry = ""
+            # A serial read can end in the middle of an escape sequence (seen on the bench:
+            # "ESC" in one read, "[24;18H" in the next). Keep that start for the next read so
+            # the whole sequence is removed; never hold back more than a short tail.
+            esc = data.rfind("\x1b")
+            if esc != -1 and len(data) - esc < 16 and not _COMPLETE.match(data, esc):
+                data, self._carry = data[:esc], data[esc:]
+            self._buffer += clean(data)
         return bool(chunk)
 
     def read_until_any(

@@ -35,8 +35,9 @@ class SimulatedArubaConsole:
     # Console left at a password prompt of an unfinished setup (as on 2026-11-19): the first
     # key ends that session with the switch's real messages.
     left_at_password_prompt: bool = False
-    # Prompts placed with VT100 cursor codes instead of new lines (HPE consoles do this).
+    # Prompts preceded by VT100 cursor codes, as seen on the bench ("ESC[24;18HPassword:").
     cursor_codes: bool = False
+    max_read: int = 0  # >0: return at most this many bytes per read (splits escape codes)
 
     def __post_init__(self) -> None:
         self._out = bytearray()
@@ -54,6 +55,8 @@ class SimulatedArubaConsole:
 
     # -- transport -----------------------------------------------------------------
     def read(self, size: int = 1) -> bytes:
+        if self.max_read:
+            size = min(size, self.max_read)
         data = bytes(self._out[:size])
         del self._out[:size]
         return data
@@ -75,7 +78,8 @@ class SimulatedArubaConsole:
 
     def _prompt(self) -> str:
         ctx = f"({self._ctx[-1]})" if self._ctx else ""
-        return f"{self.hostname}{ctx}{'#' if self._manager else '>'} "
+        codes = "\x1b[24;1H\x1b[2K" if self.cursor_codes else ""
+        return f"{codes}{self.hostname}{ctx}{'#' if self._manager else '>'} "
 
     def _handle(self, line: str) -> None:
         if self._state == "asleep" and self.left_at_password_prompt:
@@ -105,13 +109,13 @@ class SimulatedArubaConsole:
         if self._state == "setup_user":
             self._typed_user = line
             self._emit(line)  # the switch echoes the typed username
-            self._emit(("\x1b[24;1H\x1b[2K" if self.cursor_codes else "\r\n")
+            self._emit("\r\n" + ("\x1b[24;18H" if self.cursor_codes else "")
                        + self.setup_password_prompt)
             self._state = "setup_password"
             return
         if self._state == "setup_password":
             self._new_password = line
-            self._emit(("\x1b[24;1H\x1b[2K" if self.cursor_codes else "\r\n")
+            self._emit("\r\n" + ("\x1b[24;18H" if self.cursor_codes else "")
                        + self.setup_confirm_prompt)
             self._state = "setup_confirm"
             return
