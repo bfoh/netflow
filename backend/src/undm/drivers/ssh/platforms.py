@@ -113,7 +113,8 @@ class ArubaOSSwitchSsh(SshCliDriver):
 
     netmiko_device_type = "aruba_osswitch"
     facts_commands = ("show system", "show modules")
-    parser_validated_on = ("2930F-48G-4SFP (JL260A) WC.16.10.0025",)
+    parser_validated_on = ("2930F-48G-4SFP (JL260A) WC.16.10.0025",
+                           "2930F-48G-4SFP (JL260A) WC.16.11.0001")
     running_config_command = "show running-config"
     skip_line_patterns = (r"^\s*;", r"^Running configuration:")
     error_pattern = SshCliDriver.error_pattern + r"|Incomplete input|Ambiguous input"
