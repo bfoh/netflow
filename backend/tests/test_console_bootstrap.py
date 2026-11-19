@@ -132,3 +132,42 @@ def test_parsing_helpers():
                                                   IPv4Interface("192.168.1.1/24")))
     assert site_config_findings(cfg, PARAMS) == []
     assert clean("\x1b[24;1H\x1b[?25hsw# \r\n") == "sw# \n"
+
+
+# -- new switches: mandatory manager credentials at first login --------------------------
+# Seen on a real new 2930F (product owner, 2026-11-19): "Configure the manager credentials :"
+# then "Username:". The password prompts in the simulation are placeholders (Q-35).
+
+APPROVED = Credentials("manager", "Example-Only-Approved-1")
+
+
+def test_new_switch_gets_the_attached_login_then_is_bootstrapped():
+    sim = SimulatedArubaConsole(first_login_setup=True)
+    r = run(sim, creds=APPROVED)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
+    assert r.credentials_set and "manager credentials were set" in r.message
+    assert (sim.username, sim.password) == ("manager", "Example-Only-Approved-1")
+    assert "Example-Only-Approved-1" not in r.transcript
+    assert r.transcript.count("(new password sent)") == 2
+
+
+def test_new_switch_without_an_attached_login_is_left_untouched():
+    for creds in (None, Credentials("manager", "")):  # none, or the factory login
+        sim = SimulatedArubaConsole(first_login_setup=True)
+        r = run(sim, creds=creds)
+        assert r.status is BootstrapStatus.FAILED
+        assert "requires its manager credentials" in r.message and "Nothing was sent" in r.message
+        assert sim.username is None and sim.commands_received == []
+
+
+def test_rejected_password_stops_without_retrying():
+    sim = SimulatedArubaConsole(first_login_setup=True, min_password_length=40)
+    r = run(sim, creds=APPROVED)
+    assert r.status is BootstrapStatus.FAILED and "asked for the username again" in r.message
+    assert sim.username is None and sim.commands_received == []
+    assert "Example-Only-Approved-1" not in r.transcript
+
+
+def test_old_style_factory_default_switch_does_not_need_a_login():
+    r = run(SimulatedArubaConsole(), creds=None)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED and not r.credentials_set

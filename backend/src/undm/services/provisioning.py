@@ -87,9 +87,16 @@ def preview(device: Device, registry: DriverRegistry, policy: Policy,
             "No console bootstrap procedure exists for this device's platform yet."]}
     params = _params(device, profile)
     info = registry.get(device.driver_id).info
+    login = device.credential_ref.name if device.credential_ref is not None else None
     notes = [
         "Sent over the console cable after reaching the manager prompt; the switch must be "
         "in factory-default state (no password, no site configuration).",
+        ("If the switch is new and asks to 'Configure the manager credentials', UNDM sets "
+         f"the device's attached login '{login}' (user and password; the password is never "
+         "shown) and answers only the username and the two password prompts."
+         if login else
+         "New switches ask to 'Configure the manager credentials' before anything else: "
+         "attach the approved login to the device first, or the bootstrap stops there."),
         f"Port {params.untagged_port} leaves the default VLAN and becomes the untagged member "
         f"of VLAN {params.vlan_id}.",
         "The configuration is saved with 'write memory' only after it has been read back "
@@ -196,12 +203,16 @@ def run_console_bootstrap(
                      "serial_port": serial_port, "profile": stored_profile,
                      "commands_sent": result.commands_sent, "findings": result.findings,
                      "verified": result.verified, "saved": result.saved,
-                     "message": result.message, "allow_configured": allow_configured})
+                     "message": result.message, "allow_configured": allow_configured,
+                     "first_login_credentials_set": result.credentials_set,
+                     "credential": device.credential_ref.name if device.credential_ref
+                     else None})
     known = [("hostname", device.name), ("ip", address)]
     return {
         "status": result.status.value, "message": result.message,
         "commands_sent": result.commands_sent, "findings": result.findings,
         "verified": result.verified, "saved": result.saved, "transcript": result.transcript,
+        "credentials_set": result.credentials_set,
         "sanitized_transcript": sanitize(result.transcript, known),
         "network_reachable": reachable, "network_hint": hint,
     }

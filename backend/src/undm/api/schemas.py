@@ -421,5 +421,6 @@ class ConsoleBootstrapOut(BaseModel):
     saved: bool
     transcript: str
     sanitized_transcript: str
+    credentials_set: bool = False  # a new switch's first-login credentials were set
     network_reachable: bool | None
     network_hint: str

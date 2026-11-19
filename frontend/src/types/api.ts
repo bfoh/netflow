@@ -295,6 +295,8 @@ export interface BootstrapResult {
   saved: boolean;
   transcript: string;
   sanitized_transcript: string;
+  /** A new switch's mandatory first-login credentials were set to the device's login. */
+  credentials_set?: boolean;
   network_reachable: boolean | null;
   network_hint: string;
 }

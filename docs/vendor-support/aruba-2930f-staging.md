@@ -22,7 +22,7 @@ same layout.
 ## Sequence for one 2930F
 | # | Step | Mechanism | Status |
 |---|---|---|---|
-| 1 | Factory default → 192.168.1.1 (or 192.168.1.2 temporarily) on VLAN 222, OOBM port | console bootstrap | built; bench run pending (`aruba-2930f-console-bootstrap.md`) |
+| 1 | Factory default → (new units: manager credentials set to the approved login) → 192.168.1.1 (or 192.168.1.2 temporarily) on VLAN 222, OOBM port | console bootstrap | built; bench run pending (`aruba-2930f-console-bootstrap.md`) |
 | 2 | Firmware → WC.16.10.0025 | firmware job, TFTP | built (experimental); bench run pending (`aruba-2930f-firmware.md`) |
 | 3 | HTTPS certificate on the switch (the file's own caution) | by hand for now (commands below); UNDM can do it once the questions are known (Q-34) | team practice recorded |
 | 4 | Load the complete file into the startup configuration, restart, reconnect at the address the file sets **with the login after loading** (approved password), check the serial number and the hostname, compare the running configuration | configuration job, replace mode, TFTP (`copy tftp startup-config <pc> <file> unix`) | **built (experimental)**, bench run pending (below) |
@@ -36,8 +36,21 @@ crypto pki enroll-self-signed certificate-name <certificate-name>
 web-management ssl
 save
 ```
+The questions the switch asks (screenshot from a running unit, 2026-11-19), in this order,
+in the configuration context (`(config)#`):
+
+| Question as shown | Field |
+|---|---|
+| `Enter Common Name(CN) :` | common name |
+| `Enter Org Unit(OU) :` | organisational unit |
+| `Enter Org Name(O) :` | organisation |
+| `Enter Locality(L) :` | locality |
+| `Enter State(ST) :` | state (left empty by the team) |
+| `Enter Country(C) :` | two-letter country code |
+
 The organisation's values are entered on the switch only; they are not kept in this
-repository. To let UNDM run this step, we need the switch's exact questions (Q-34).
+repository. Still missing before UNDM can run this step: what the switch prints or asks
+after `crypto pki enroll-self-signed certificate-name <name>` (Q-34).
 
 Order matters: the file switches the TFTP client off, so firmware (step 2) must come first.
 Both switch roles end at 192.168.1.1: after step 4 only one of them may be connected to the
@@ -47,14 +60,15 @@ different switch answering at that address.
 ## Bench checklist — step 4 (spare 2930F only)
 Before: steps 1–3 done; `UNDM_ENABLE_REAL_DEVICE_WRITES=true`; inbound UDP 69 allowed on the
 laptop; laptop on 192.168.1.x on the switch's OOBM port; the other switch disconnected; in the
-project's **Credentials**: one for the factory login (manager, empty password — attached to
-the device) and one with the **approved password** (manager + approved password).
+project's **Credentials**: the **approved login** (manager + approved password). On new units
+it is already the device's login from the bootstrap; on a unit that still had the factory
+login (manager, no password), choose the approved login under **Login after loading**.
 
 | # | Step | Expected |
 |---|---|---|
 | 1 | Device page → Retrieve information | model and serial read; this serial is checked again after the restart |
 | 2 | Configurations → import the team's file | "Complete ArubaOS-Switch configuration (JL260A, 52 ports …)"; the notes above |
-| 3 | Deployments → new plan → choose the file (mode switches to Replace) → **Login after loading**: the approved-password credential → Validate → Approve → Execute | "fetched the file (… bytes) into its startup configuration and is restarting" (plus "it will answer at 192.168.1.1" if the switch was on .2), "device reachable again (…, same serial number)", "back after loading: hostname …; N of M lines of the file appear in the running configuration" |
+| 3 | Deployments → new plan → choose the file (mode switches to Replace) → (only if the device still has the factory login: **Login after loading** = approved login) → Validate → Approve → Execute | "fetched the file (… bytes) into its startup configuration and is restarting" (plus "it will answer at 192.168.1.1" if the switch was on .2), "device reachable again (…, same serial number)", "back after loading: hostname …; N of M lines of the file appear in the running configuration" |
 | 4 | Device page | management address now the one the file set, credential now the approved one (audit: "device.address_changed", "device.credential_changed") |
 | 5 | Browser: `https://192.168.1.1` | the web interface opens over HTTPS (the certificate from step 3 survived the load) |
 

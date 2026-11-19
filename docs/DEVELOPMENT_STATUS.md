@@ -27,7 +27,7 @@ manager, topology._
 | Live progress | The deployment page refreshes every 2 s while a job runs and shows the device's last output when a step fails |
 | Topology | Canvas (React Flow), interface links with mode/VLANs, saved layout, auto-arrange, validation (interface reuse, self links, subnet mismatch, VLANs, duplicate IPs, isolated devices) |
 | Audit & logging | All significant actions, redacted details and device output |
-| Console bootstrap (provisioning) | ArubaOS-Switch over a serial console from the PC running UNDM: per-device settings (VLAN, port, address), command preview, factory-default check, stop on first error, read-back before `write memory`, idempotent re-run, transcript (raw + sanitized). **Tested against a simulated console only; not yet run on hardware** |
+| Console bootstrap (provisioning) | ArubaOS-Switch over a serial console from the PC running UNDM: new units' mandatory first-login credentials set to the device's attached login (D-043); per-device settings (VLAN, port, address), command preview, factory-default check, stop on first error, read-back before `write memory`, idempotent re-run, transcript (raw + sanitized). **Tested against a simulated console only; not yet run on hardware** |
 | Sanitized diagnostics | Shareable report of last retrieved device output with IPs, MACs, serials, names and secrets masked |
 | Migrations | Three Alembic revisions; batch mode; tested on SQLite with existing data and on PostgreSQL |
 
@@ -51,7 +51,7 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 311 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 316 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (73 files) |
@@ -74,8 +74,8 @@ library; intent beyond the first slice; project export/import; persistent job ru
 Staging four factory-default devices per system (FortiGate 101F, Black Box switch,
 2 × Aruba 2930F) from one place: `docs/requirements/staging-use-case.md`, design and
 build order in `docs/requirements/staging-run-design.md`. Still needed from the product
-owner: the 2930F certificate questions as shown on a spare switch (Q-34) and Black Box
-command output from a spare unit (Q-28). Bench runs owed: 2930F
+owner: the 2930F screen after `crypto pki enroll-self-signed` (Q-34), the password prompts on a
+new unit (Q-35), and Black Box command output from a spare unit (Q-28). Bench runs owed: 2930F
 console bootstrap and firmware; FortiGate 101F staging.
 
 ## Next milestone

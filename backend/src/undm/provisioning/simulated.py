@@ -26,6 +26,10 @@ class SimulatedArubaConsole:
     extra_config: list[str] = field(default_factory=list)  # top-level site config lines
     fail_on: set[str] = field(default_factory=set)  # commands answered with an error
     silently_ignore: set[str] = field(default_factory=set)  # accepted but without effect
+    # A new unit that demands its manager credentials at first login. The first line is
+    # the text seen on a real new switch; the password prompts are placeholders (Q-35).
+    first_login_setup: bool = False
+    min_password_length: int = 1
 
     def __post_init__(self) -> None:
         self._out = bytearray()
@@ -74,12 +78,36 @@ class SimulatedArubaConsole:
                 self._state = "anykey"
             return
         if self._state == "anykey":
+            if self.first_login_setup and self.username is None:
+                self._emit("\r\nConfigure the manager credentials :\r\nUsername: ")
+                self._state = "setup_user"
+                return
             if self.username is not None:
                 self._emit("\r\nUsername: ")
                 self._state = "username"
             else:
                 self._state = "cli"
                 self._emit("\r\n" + self._prompt())
+            return
+        if self._state == "setup_user":
+            self._typed_user = line
+            self._emit("\r\n[placeholder] New password: ")
+            self._state = "setup_password"
+            return
+        if self._state == "setup_password":
+            self._new_password = line
+            self._emit("\r\n[placeholder] Confirm password: ")
+            self._state = "setup_confirm"
+            return
+        if self._state == "setup_confirm":
+            if line == self._new_password and len(line) >= self.min_password_length:
+                self.username, self.password = self._typed_user, line
+                self._state = "cli"
+                self._emit("\r\n" + self._prompt())
+            else:
+                self._emit("\r\n[placeholder] Password not accepted\r\n"
+                           "Configure the manager credentials :\r\nUsername: ")
+                self._state = "setup_user"
             return
         if self._state == "username":
             self._typed_user = line

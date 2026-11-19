@@ -14,6 +14,12 @@ Procedure under test: `undm.provisioning.aos_switch` (console bootstrap). Status
 - [ ] `backend\.env` contains `UNDM_ENABLE_REAL_DEVICE_WRITES=true`; backend restarted;
       the header shows "Real-device changes ON".
 - [ ] In UNDM the switch exists as a **real lab device** (driver `ssh.aruba.aos_switch`).
+- [ ] **New units** ask "Configure the manager credentials :" / "Username:" on the console
+      and require a password and its confirmation before anything else (seen 2026-11-19).
+      Attach the **approved login** (user `manager` + approved password) to the device in
+      UNDM before the bootstrap: UNDM sets exactly that login, answering only the username
+      and the two password prompts, and uses it from then on. Without it the bootstrap stops
+      at that point and sends nothing.
 
 ## Steps
 | # | Step | Expected |

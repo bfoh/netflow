@@ -300,3 +300,15 @@ in again for a change without restart, as proof that the new login works — and
 device is verified, makes it the device's credential (audited `device.credential_changed`).
 Without it, the job stops after the restart with "Authentication failed", which the file
 check now points out. Generic, not vendor-specific.
+
+### D-043 New 2930F units: first-login credentials set by the console bootstrap (2026-11-19)
+A new 2930F shows "Configure the manager credentials :" and "Username:" on the console and
+requires a password and its confirmation before anything else (product owner's screenshot).
+The console bootstrap — still the single lifecycle exception of D-025, with its preview,
+typed confirmation and write switch — now recognises that exact text and sets the device's
+attached login: the username, then the password for exactly two password prompts. With no
+login attached, or an empty password, it stops before sending anything. A request for the
+username again (password refused) or a third password prompt stops it with the switch's
+text. The password is never written to the transcript, the result or the audit, which
+records only that first-login credentials were set and with which credential. Afterwards the
+device's login is the approved one, so later jobs use it from the start.

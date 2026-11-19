@@ -175,3 +175,42 @@ def test_default_console_speed_is_9600(monkeypatch):
             "serial_port": "COM3", "profile": PROFILE, "confirm_device_name": "lab-sw"}).json()
     assert out["status"] == "bootstrapped" and opened == [9600]
     assert out["network_reachable"] is True
+
+
+def test_new_switch_first_login_sets_the_attached_login(monkeypatch):
+    """New 2930F units ask 'Configure the manager credentials' first (seen 2026-11-19)."""
+    import keyring
+    from memory_keyring import MemoryKeyring
+
+    previous = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    sim = SimulatedArubaConsole(first_login_setup=True)
+    monkeypatch.setattr(prov, "open_serial", lambda port, baud: sim)
+    monkeypatch.setattr(prov, "_tcp_reachable", lambda address, port=22, timeout=3.0: True)
+    monkeypatch.setattr(prov.ConsoleSession, "settle_time", 0)
+    monkeypatch.setattr(prov.aos_switch.time, "sleep", lambda s: None)
+    try:
+        client, _ = make_client(enable_real_device_writes=True)
+        with client:
+            pid = client.post("/api/projects", json={"name": "New units"}).json()["id"]
+            ref = client.post(f"/api/projects/{pid}/credential-refs",
+                              json={"name": "approved login"}).json()
+            client.put(f"/api/credential-refs/{ref['id']}/secret",
+                       json={"username": "manager", "password": "Example-Only-Approved-1"})
+            did = client.post(f"/api/projects/{pid}/devices", json=dict(
+                REAL_SWITCH, credential_ref_id=ref["id"])).json()["id"]
+            notes = client.post(f"/api/devices/{did}/provisioning/console-bootstrap/preview",
+                                json={"profile": PROFILE}).json()["notes"]
+            assert any("'approved login'" in n and "Configure the manager credentials" in n
+                       for n in notes)
+            out = run(client, did, confirm_device_name="lab-sw", serial_port="COM7").json()
+            assert out["status"] == "bootstrapped", out["message"]
+            assert out["credentials_set"] is True
+            assert (sim.username, sim.password) == ("manager", "Example-Only-Approved-1")
+            audit = client.get("/api/audit?limit=20").json()
+            entry = next(a for a in audit if a["action"] == "provisioning.console_bootstrap")
+            assert entry["details"]["first_login_credentials_set"] is True
+            assert entry["details"]["credential"] == "approved login"
+            assert "Example-Only-Approved-1" not in repr(out) + repr(audit)
+    finally:
+        keyring.set_keyring(previous)

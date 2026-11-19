@@ -31,6 +31,10 @@ PROMPT = re.compile(
 ANY_KEY = re.compile(r"any key to continue\s*$", re.I)
 LOGIN = re.compile(r"(?:user ?name|login as|login)\s*:\s*$", re.I)
 PASSWORD = re.compile(r"password\s*:\s*$", re.I)
+# Seen on a new 2930F console (product owner's screenshot, 2026-11-19):
+#   "Configure the manager credentials :" then "Username:". The switch then requires a
+# password and its confirmation (wording of those two prompts not yet seen: Q-35).
+FIRST_LOGIN = re.compile(r"Configure the manager credentials", re.I)
 ERROR = re.compile(r"Invalid input|Incomplete input|Ambiguous input|invalid port|"
                    r"not allowed|Error:|Unable to", re.I)
 
@@ -84,6 +88,7 @@ class BootstrapResult:
     verified: bool = False
     saved: bool = False
     transcript: str = ""
+    credentials_set: bool = False  # a new switch's first-login credentials were set
 
 
 def _expand_ports(spec: str) -> set[str]:
@@ -153,6 +158,44 @@ class ArubaOSSwitchConsole:
         self.credentials = credentials
         self.wake_delay = wake_delay
         self.login_timeout = login_timeout
+        # True once a new switch's mandatory first-login credentials were set by UNDM.
+        self.credentials_set = False
+
+    def _first_login_setup(self) -> str:
+        """Answer a new switch's "Configure the manager credentials" request.
+
+        Sends the device's attached login: the username, then the password for exactly two
+        password prompts (new + confirmation). Anything else stops with the switch's text.
+        """
+        if self.credentials is None or not self.credentials.password:
+            raise ConsoleError(
+                "This switch is new and requires its manager credentials to be set first "
+                "('Configure the manager credentials'). Attach the approved login (user and "
+                "a non-empty password) to the device, then run the bootstrap again. Nothing "
+                "was sent.")
+        self.s.write_line(self.credentials.username)
+        passwords = 0
+        for _ in range(4):
+            idx, text = self.s.read_until_any([PROMPT, LOGIN, PASSWORD],
+                                              timeout=self.login_timeout)
+            if idx == 0:
+                if passwords < 2:
+                    raise ConsoleError("The switch reached its prompt before the password was "
+                                       "confirmed; check it on the console.")
+                self.credentials_set = True
+                return text
+            if idx == 1:
+                raise ConsoleError(
+                    "The switch asked for the username again after the new password: it may "
+                    "not accept the password (its rules are in the transcript). Use another "
+                    "password in the device's credential.")
+            passwords += 1  # noqa: SIM113 - counts password prompts, not loop turns
+            if passwords > 2:
+                raise ConsoleError("The switch asked for the password more than twice; "
+                                   "stopped. Its text is in the transcript.")
+            self.s.transcript.append("<<< (new password sent)\n")
+            self.s.transport.write((self.credentials.password + "\r").encode())
+        raise ConsoleError("Could not finish setting the manager credentials")
 
     def _credential(self, what: str) -> str:
         if self.credentials is None:
@@ -167,13 +210,18 @@ class ArubaOSSwitchConsole:
         time.sleep(self.wake_delay)
         self.s.write_line()
         text = ""
+        seen = ""
         for _ in range(8):
             idx, text = self.s.read_until_any(
                 [PROMPT, ANY_KEY, LOGIN, PASSWORD], timeout=self.login_timeout)
+            seen += text
             if idx == 0:
                 break
             if idx == 1:
                 self.s.write_line()
+            elif idx == 2 and FIRST_LOGIN.search(seen) and not self.credentials_set:
+                text = self._first_login_setup()
+                break
             elif idx == 2:
                 self.s.write_line(self._credential("username"))
             else:
@@ -219,8 +267,13 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
     sent: list[str] = []
 
     def done(status: BootstrapStatus, message: str, **kw: object) -> BootstrapResult:
+        if console.credentials_set:
+            message += (". The switch was new: its manager credentials were set to the "
+                        "device's attached login")
         return BootstrapResult(status, message, commands_sent=sent,
-                               transcript=s.transcript_text, **kw)  # type: ignore[arg-type]
+                               transcript=s.transcript_text,
+                               credentials_set=console.credentials_set,
+                               **kw)  # type: ignore[arg-type]
 
     try:
         console.login()

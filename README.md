@@ -151,7 +151,8 @@ and a warning about the base64 password. Loading it onto a real switch is not bu
 see `docs/vendor-support/blackbox-staging.md`.
 
 ## Console bootstrap (Aruba 2930F and other ArubaOS-Switch models)
-For a factory-default switch with no management address: **Provisioning** → choose the
+New units ask to set the manager credentials on first login: attach the approved login to the
+device first and the bootstrap sets it. For a factory-default switch with no management address: **Provisioning** → choose the
 switch → enter the management VLAN, port and address → **Preview commands** → choose the
 console cable's COM port → **Run console bootstrap**. Simulated devices use the
 `SIMULATED` console port, so you can try the workflow without hardware. Real switches
