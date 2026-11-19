@@ -312,3 +312,16 @@ username again (password refused) or a third password prompt stops it with the s
 text. The password is never written to the transcript, the result or the audit, which
 records only that first-login credentials were set and with which credential. Afterwards the
 device's login is the approved one, so later jobs use it from the start.
+
+### D-044 2930F HTTPS certificate created inside the load job (2026-11-19)
+The team's 2930F files make the web interface HTTPS-only and say a certificate must exist
+before loading. From the team's commands and screenshots of a running unit, the load job
+now starts with: `configure`; `crypto pki identity-profile <profile> subject`, answering
+exactly the six questions shown (`Enter Common Name(CN) :` … `Enter Country(C) :`) with the
+project's certificate subject; `crypto pki enroll-self-signed certificate-name <name>`
+(silent, or "already exists" — both accepted, so re-runs are safe); `web-management ssl`;
+`end`; `write memory`. Unknown questions or errors stop the job before the file is sent. The
+subject is a project setting (organisation details, kept only in the UNDM database; values
+that cannot be typed safely into a CLI are refused). It runs only for files that make the
+web interface HTTPS-only. This is a generic driver hook (`prepare_before_apply`); a job,
+not a new exception to the deployment lifecycle.

@@ -275,3 +275,73 @@ def test_api_unknown_login_after_loading_is_refused_at_planning(api):
         "device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]},
         "credentials_after": {did: "no-such-credential"}})
     assert r.status_code == 409 and "credential not found" in r.json()["error"]
+
+
+# -- HTTPS certificate before loading (team commands, questions from a real unit) ---------
+SUBJECT = {"common_name": "lab-cn", "org_unit": "Example Unit", "org_name": "Example Org",
+           "locality": "Example City", "state": "", "country": "XX",
+           "profile_name": "Profile", "certificate_name": "certificate"}
+
+
+def test_certificate_is_created_with_the_teams_commands(rig):
+    r = rig.driver.prepare_before_apply(sample(), ApplyMode.REPLACE,
+                                        {"certificate_subject": SUBJECT})
+    assert r is not None and r.ok, (r.message, r.diagnostics)
+    assert "certificate 'certificate' created" in r.message
+    assert rig.switch.keys == ["lab-cn", "Example Unit", "Example Org", "Example City", "", "XX"]
+    assert rig.switch.subject["Country(C)"] == "XX" and rig.switch.subject["State(ST)"] == ""
+    assert rig.switch.certificates == {"certificate"} and rig.switch.web_ssl
+    assert rig.switch.saves == 1
+    sent = [c for c in rig.switch.commands if not c.startswith("show")]
+    assert sent == ["configure", "crypto pki identity-profile Profile subject",
+                    "crypto pki enroll-self-signed certificate-name certificate",
+                    "web-management ssl", "end", "write memory"]
+
+
+def test_existing_certificate_is_fine(rig):
+    rig.switch.certificates.add("certificate")
+    rig.switch.subject = {"x": "y"}
+    r = rig.driver.prepare_before_apply(sample(), ApplyMode.REPLACE,
+                                        {"certificate_subject": SUBJECT})
+    assert r is not None and r.ok and "already existed" in r.message
+
+
+def test_no_subject_means_a_warning_and_nothing_sent(rig):
+    r = rig.driver.prepare_before_apply(sample(), ApplyMode.REPLACE, {})
+    assert r is not None and r.ok and "no certificate subject" in r.message
+    assert "Create it by hand" in r.data["warnings"][0]
+    assert not [c for c in rig.switch.commands if not c.startswith("show")]
+
+
+def test_certificate_step_only_when_the_file_needs_it(rig):
+    plain = sample().replace("no web-management\n", "")
+    assert rig.driver.prepare_before_apply(plain, ApplyMode.REPLACE,
+                                           {"certificate_subject": SUBJECT}) is None
+    assert rig.driver.prepare_before_apply(sample(), ApplyMode.MERGE,
+                                           {"certificate_subject": SUBJECT}) is None
+
+
+def test_rejected_certificate_command_stops_before_the_file(rig):
+    rig.switch.reject.add("web-management ssl")
+    r = rig.driver.prepare_before_apply(sample(), ApplyMode.REPLACE,
+                                        {"certificate_subject": SUBJECT})
+    assert r is not None and r.status is ResultStatus.FAILED
+    assert "rejected 'web-management ssl'" in r.message and "not sent" in r.message
+    assert "write memory" not in rig.switch.commands
+
+
+def test_api_certificate_is_created_before_the_file_is_loaded(api):
+    client, pid, did, switch, hub = api
+    r = client.patch(f"/api/projects/{pid}", json={"certificate_subject": SUBJECT})
+    assert r.status_code == 200 and r.json()["certificate_subject"]["common_name"] == "lab-cn"
+    bad = client.patch(f"/api/projects/{pid}",
+                       json={"certificate_subject": {**SUBJECT, "org_name": 'has"quote'}})
+    assert bad.status_code == 422
+    out = _load(client, pid, did, sample())
+    messages = [e["message"] for e in out["events"]]
+    assert out["state"] == "succeeded", messages
+    cert = next(i for i, m in enumerate(messages) if "HTTPS certificate 'certificate'" in m)
+    fetched = next(i for i, m in enumerate(messages) if "fetched the file" in m)
+    assert cert < fetched and switch.certificates == {"certificate"}
+    copy_at = next(i for i, c in enumerate(switch.commands) if c.startswith("copy tftp"))
+    assert switch.commands.index("web-management ssl") < copy_at

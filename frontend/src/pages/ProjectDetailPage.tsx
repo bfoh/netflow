@@ -12,7 +12,7 @@ import { CredentialsPanel } from '../features/devices/CredentialsPanel';
 import { DeviceTable } from '../features/devices/DeviceTable';
 import { useAction, useDeployments, useProject, useProjectDevices } from '../hooks/queries';
 import { api } from '../services/api';
-import type { Project } from '../types/api';
+import type { CertificateSubject, Project } from '../types/api';
 
 function ProjectSettings({ project }: { project: Project }) {
   const [form, setForm] = useState(project);
@@ -32,6 +32,48 @@ function ProjectSettings({ project }: { project: Project }) {
             Delete project
           </Button>
           <Button loading={save.isPending} onClick={() => save.mutate({ name: form.name, site: form.site, purpose: form.purpose, description: form.description })}>Save</Button>
+        </Group>
+      </Stack>
+    </Card>
+  );
+}
+
+const EMPTY_SUBJECT: CertificateSubject = {
+  common_name: '', org_unit: '', org_name: '', locality: '', state: '', country: '',
+  profile_name: 'Profile', certificate_name: 'certificate',
+};
+
+/** Answers UNDM gives to the 2930F's certificate questions before loading an HTTPS-only file. */
+function CertificateSettings({ project }: { project: Project }) {
+  const [form, setForm] = useState<CertificateSubject>(project.certificate_subject ?? EMPTY_SUBJECT);
+  const save = useAction((subject: CertificateSubject | null) =>
+    api.updateProject(project.id, { certificate_subject: subject }), 'Certificate subject saved');
+  const field = (key: keyof CertificateSubject, label: string, extra: Record<string, unknown> = {}) => (
+    <TextInput label={label} value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.currentTarget.value })} {...extra} />
+  );
+  return (
+    <Card withBorder maw={640}>
+      <Stack>
+        <Title order={5}>HTTPS certificate (Aruba 2930F)</Title>
+        <Text size="sm" c="dimmed">
+          Before loading a 2930F file that makes the web interface HTTPS-only, UNDM creates the self-signed certificate with
+          your team's commands and answers the switch's questions with these values. They are stored only in this UNDM
+          database. Leave empty to create the certificate by hand.
+        </Text>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          {field('common_name', 'Common Name (CN)', { required: true })}
+          {field('org_unit', 'Org Unit (OU)')}
+          {field('org_name', 'Org Name (O)')}
+          {field('locality', 'Locality (L)')}
+          {field('state', 'State (ST)')}
+          {field('country', 'Country (C)', { description: 'Two letters, or empty', maxLength: 2 })}
+          {field('profile_name', 'Identity profile name')}
+          {field('certificate_name', 'Certificate name')}
+        </SimpleGrid>
+        <Group justify="space-between">
+          <Button variant="subtle" color="red" disabled={!project.certificate_subject} loading={save.isPending}
+            onClick={() => save.mutate(null)}>Remove</Button>
+          <Button loading={save.isPending} disabled={!form.common_name.trim()} onClick={() => save.mutate(form)}>Save certificate subject</Button>
         </Group>
       </Stack>
     </Card>
@@ -84,6 +126,7 @@ export function ProjectDetailPage() {
         <Tabs.Panel value="settings">
           <SimpleGrid cols={1}>
             <ProjectSettings key={p.updated_at} project={p} />
+            <CertificateSettings key={`cert-${p.updated_at}`} project={p} />
             <Title order={6} c="dimmed">Created {fmtDate(p.created_at)} · updated {fmtDate(p.updated_at)}</Title>
           </SimpleGrid>
         </Tabs.Panel>

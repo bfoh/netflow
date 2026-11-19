@@ -23,6 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 
 from undm.configgen.diff import ConfigDiff, diff_configs, normalize
 from undm.domain.lifecycle import DeploymentState, transition
@@ -87,6 +88,8 @@ class DeploymentTarget:
     observed_serial: str | None = None
     # Login valid once the configuration is applied (the file changes the password).
     credentials_after: Credentials | None = field(default=None, repr=False)
+    # Project settings a driver may need before applying (e.g. certificate_subject).
+    settings: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -387,7 +390,12 @@ class DeploymentOrchestrator:
                 result = OperationResult.failed(DeviceOperation.APPLY_CONFIGURATION, str(e))
             else:
                 t.touched = True
-                result = t.driver.apply_configuration(to_send, dep.apply_mode)
+                prep = t.driver.prepare_before_apply(to_send, dep.apply_mode, t.settings)
+                if prep is not None and prep.ok:
+                    self._emit(dep, "deploy", "ok", prep.message or "prepared", t)
+                    self._emit_warnings(dep, t, "deploy", prep)
+                result = (prep if prep is not None and not prep.ok
+                          else t.driver.apply_configuration(to_send, dep.apply_mode))
                 if result.ok:
                     self._emit_warnings(dep, t, "deploy", result)
                     restarting = isinstance(result.data, dict) and result.data.get("restarting")

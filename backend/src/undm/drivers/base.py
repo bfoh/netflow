@@ -238,6 +238,14 @@ class DeviceDriver:
             raise ValueError(f"Driver {self.info.driver_id} cannot insert secret values")
         return config
 
+    def prepare_before_apply(self, config: str, mode: ApplyMode,
+                             settings: Mapping[str, Any]) -> OperationResult | None:
+        """Steps a file needs on the device before it is applied (None = nothing to do).
+
+        ``settings`` are the project's device settings (e.g. ``certificate_subject``).
+        A failed result stops the job before the file is sent."""
+        return None
+
     def verify_configuration(self, intended: str, mode: ApplyMode) -> OperationResult | None:
         """Driver-specific verification after apply; None = use the generic read-back check.
 

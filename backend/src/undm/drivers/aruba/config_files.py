@@ -174,7 +174,9 @@ def inspect_aos_switch_file(text: str) -> ConfigFileReport:
                      "on the switch"
                      + (" (the file's own comments say to create it before loading)"
                         if any(ln.startswith(";") and "certificate" in ln.lower()
-                               for ln in f.lines) else "") + ".")
+                               for ln in f.lines) else "")
+                     + ". UNDM creates it before loading when the project has a certificate "
+                       "subject (Project settings).")
     if "no tftp client" in stmts:
         notes.append("The file switches off the switch's TFTP client: once it is active, the "
                      "switch can no longer fetch firmware or files by TFTP. Upgrade the "

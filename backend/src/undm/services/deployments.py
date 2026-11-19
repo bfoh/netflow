@@ -133,6 +133,9 @@ class DeploymentService:
                                   text, expected_serial=serial)
             dt.state = TargetState(t.state)
             dt.checkpoint_label = label
+            project = device.project
+            if project is not None and project.certificate_subject:
+                dt.settings["certificate_subject"] = dict(project.certificate_subject)
             dt.from_version, dt.target_version = t.from_version, t.to_version
             targets.append(dt)
         dep = Deployment(

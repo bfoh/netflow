@@ -43,6 +43,24 @@ class PolicyOut(BaseModel):
     require_separate_approver: bool
 
 
+_CLI_TEXT = r'^[^"?\\\x00-\x1f\x7f]*$'  # typed into a switch CLI: no quotes, '?', '\\'
+
+
+class CertificateSubject(BaseModel):
+    """Answers to the switch's certificate questions (team practice on the 2930F)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    common_name: str = Field(min_length=1, max_length=64, pattern=_CLI_TEXT)
+    org_unit: str = Field(default="", max_length=64, pattern=_CLI_TEXT)
+    org_name: str = Field(default="", max_length=64, pattern=_CLI_TEXT)
+    locality: str = Field(default="", max_length=64, pattern=_CLI_TEXT)
+    state: str = Field(default="", max_length=64, pattern=_CLI_TEXT)
+    country: str = Field(default="", pattern=r"^([A-Za-z]{2})?$")
+    profile_name: str = Field(default="Profile", pattern=r"^[A-Za-z0-9_.-]{1,32}$")
+    certificate_name: str = Field(default="certificate", pattern=r"^[A-Za-z0-9_.-]{1,32}$")
+
+
 class ProjectIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = ""
@@ -55,6 +73,7 @@ class ProjectPatch(BaseModel):
     description: str | None = None
     site: str | None = None
     purpose: str | None = None
+    certificate_subject: CertificateSubject | None = None  # explicit null clears it
 
 
 class ProjectOut(ORM):
@@ -63,6 +82,7 @@ class ProjectOut(ORM):
     description: str
     site: str
     purpose: str
+    certificate_subject: CertificateSubject | None = None
     created_at: datetime
     updated_at: datetime
 

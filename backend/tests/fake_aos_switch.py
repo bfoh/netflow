@@ -11,12 +11,12 @@ exercised end to end.
 from __future__ import annotations
 
 import io
+import re
 from dataclasses import dataclass, field
 
 import tftpy
 from fake_netmiko import AOS_SWITCH_RUNNING
 
-PROMPT = "lab-2930f# "
 IMAGE_HEADER = b"SYNTHETIC IMAGE "  # followed by the version and a newline
 
 
@@ -48,6 +48,14 @@ class FakeArubaSwitch:
     password: str = ""  # manager password the switch accepts (factory default: none)
     # Password a loaded file sets (the team's files carry the approved password).
     password_after_load: str | None = None
+    # HTTPS certificate commands (questions as on a real unit's screen, 2026-11-19).
+    certificates: set[str] = field(default_factory=set)
+    subject: dict[str, str] = field(default_factory=dict)
+    web_ssl: bool = False
+    saves: int = 0
+    reject: set[str] = field(default_factory=set)  # commands answered "Invalid input"
+    _config: bool = False
+    _subject_left: list[str] = field(default_factory=list)
     # Observations.
     commands: list[str] = field(default_factory=list)
     keys: list[str] = field(default_factory=list)
@@ -101,10 +109,47 @@ class FakeArubaSwitch:
             getattr(self, f"_answer_{handler}")(text)
             return
         if not text:
-            self._out += PROMPT
+            self._out += self._prompt()
             return
         self.commands.append(text)
         self._out += text + "\r\n"
+        if text in self.reject:
+            self._out += "Invalid input: " + text + "\r\n" + self._prompt()
+            return
+        if text == "configure":
+            self._config = True
+            self._out += self._prompt()
+            return
+        if text == "end":
+            self._config = False
+            self._out += self._prompt()
+            return
+        if text == "write memory":
+            self.saves += 1
+            self.startup_config = self.running_config
+            self._out += self._prompt()
+            return
+        if text == "web-management ssl" and self._config:
+            self.web_ssl = True
+            self._out += self._prompt()
+            return
+        m = re.match(r"crypto pki identity-profile (\S+) subject$", text)
+        if m and self._config:
+            self._subject_left = ["Common Name(CN)", "Org Unit(OU)", "Org Name(O)",
+                                  "Locality(L)", "State(ST)", "Country(C)"]
+            self.subject = {}
+            self._ask("subject", f"Enter {self._subject_left[0]} : ")
+            return
+        m = re.match(r"crypto pki enroll-self-signed certificate-name (\S+)$", text)
+        if m and self._config:
+            if m.group(1) in self.certificates:
+                self._out += f'Certificate "{m.group(1)}" already exists.\r\n'
+            elif self.subject:
+                self.certificates.add(m.group(1))
+            else:
+                self._out += "Identity profile not configured.\r\n"  # synthetic wording
+            self._out += self._prompt()
+            return
         if text.startswith("copy tftp flash "):
             self._copy_args = text.split()[3:]
             self._ask("copy", self.copy_question)
@@ -121,7 +166,7 @@ class FakeArubaSwitch:
                 self._ask("boot", "This will reboot the system from the primary image. "
                                   "Continue (y/n)? ")
         else:
-            self._out += "Invalid input: " + text + "\r\n" + PROMPT
+            self._out += "Invalid input: " + text + "\r\n" + self._prompt()
 
     def read(self) -> str:
         if self._closed:
@@ -139,7 +184,7 @@ class FakeArubaSwitch:
 
     def _answer_copy(self, key: str) -> None:
         if key != "y":
-            self._out += "\r\n" + PROMPT
+            self._out += "\r\n" + self._prompt()
             return
         server, name, _bank = self._copy_args
         port = self.tftp_port() if callable(self.tftp_port) else self.tftp_port
@@ -152,18 +197,28 @@ class FakeArubaSwitch:
             else:
                 client.download(name, buf, timeout=2)
         except Exception as e:  # noqa: BLE001 - shown like a switch would show a failure
-            self._out += f"\r\nTFTP download failed: {type(e).__name__}\r\n" + PROMPT
+            self._out += f"\r\nTFTP download failed: {type(e).__name__}\r\n" + self._prompt()
             return
         data = buf.getvalue()
         self._out += f"\r\n{len(data) // 1024:05d}K\r\n"
         if data.startswith(IMAGE_HEADER) and not self.skip_flash_write:
             self.primary = data[len(IMAGE_HEADER):].split(b"\n", 1)[0].decode()
             self._out += "Validating and Writing System Software to the Filesystem ...\r\n"
-        self._out += PROMPT
+        self._out += self._prompt()
+
+    def _prompt(self) -> str:
+        return f"{self.hostname}{'(config)' if self._config else ''}# "
+
+    def _answer_subject(self, key: str) -> None:
+        self.subject[self._subject_left.pop(0)] = key
+        if self._subject_left:
+            self._ask("subject", f"\r\nEnter {self._subject_left[0]} : ")
+        else:
+            self._out += "\r\n" + self._prompt()
 
     def _answer_config(self, key: str) -> None:
         if key != "y":
-            self._out += "\r\n" + PROMPT
+            self._out += "\r\n" + self._prompt()
             return
         self._fetch_startup(restart=True)
 
@@ -174,7 +229,7 @@ class FakeArubaSwitch:
         try:
             tftpy.TftpClient(server, port, {}).download(name, buf, timeout=2)
         except Exception as e:  # noqa: BLE001
-            self._out += f"\r\nTFTP download failed: {type(e).__name__}\r\n" + PROMPT
+            self._out += f"\r\nTFTP download failed: {type(e).__name__}\r\n" + self._prompt()
             return
         self.startup_config = buf.getvalue().decode()
         if restart:
@@ -182,7 +237,7 @@ class FakeArubaSwitch:
             self._restart_into_startup()
             self._closing = True
         else:
-            self._out += "\r\nDownload complete.\r\n" + PROMPT
+            self._out += "\r\nDownload complete.\r\n" + self._prompt()
             self.unsaved_changes = True  # the running configuration no longer matches
 
     def _restart_into_startup(self) -> None:
@@ -210,7 +265,7 @@ class FakeArubaSwitch:
 
     def _answer_boot(self, key: str) -> None:
         if key != "y" or self.reboot_mode == "refuse":
-            self._out += "\r\n" + PROMPT
+            self._out += "\r\n" + self._prompt()
             return
         self.running = self.primary
         self._restart_into_startup()

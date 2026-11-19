@@ -40,6 +40,9 @@ class Project(TimestampMixin, Base):
     description: Mapped[str] = mapped_column(Text, default="")
     site: Mapped[str] = mapped_column(String(200), default="")
     purpose: Mapped[str] = mapped_column(String(200), default="")
+    # Subject for self-signed HTTPS certificates created on the project's devices before a
+    # file that needs one is loaded (organisation details; kept only in this database).
+    certificate_subject: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
 
     devices: Mapped[list[Device]] = relationship(
         back_populates="project", cascade="all, delete-orphan"

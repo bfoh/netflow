@@ -10,8 +10,21 @@ export interface Project {
   description: string;
   site: string;
   purpose: string;
+  /** Answers to the switch's certificate questions (2930F); organisation details. */
+  certificate_subject?: CertificateSubject | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface CertificateSubject {
+  common_name: string;
+  org_unit: string;
+  org_name: string;
+  locality: string;
+  state: string;
+  country: string;
+  profile_name: string;
+  certificate_name: string;
 }
 
 export interface VlanIntent { vlan_id: number; name?: string | null }

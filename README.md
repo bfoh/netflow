@@ -137,8 +137,9 @@ run on a FortiGate: do the first run on a spare unit with
 ## Aruba 2930F complete configuration files (experimental)
 Import the team's file on the switch (Configurations tab): UNDM shows the address it will
 have after loading, who may manage it, and points to check. A plan with that file runs in
-Replace mode: the switch fetches the file by TFTP into its startup configuration and
-restarts; UNDM follows an address change, checks the serial number and the hostname. The
+Replace mode: UNDM first creates the HTTPS certificate your files require (enter the subject
+once under Project settings → HTTPS certificate), then the switch fetches the file by TFTP
+into its startup configuration and restarts; UNDM follows an address change, checks the serial number and the hostname. The
 team's files set the approved password: choose it under **Login after loading** in the plan
 (a credential with user `manager` and the approved password). Do the
 firmware upgrade first (the file switches the switch's TFTP client off). First run on a spare

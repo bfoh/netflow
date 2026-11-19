@@ -54,7 +54,7 @@ def update_project(
     project_id: str, body: ProjectPatch, session: SessionDep, actor: ActorDep
 ) -> Project:
     p = get_project(session, project_id)
-    changes = body.model_dump(exclude_unset=True)
+    changes = body.model_dump(mode="json", exclude_unset=True)
     for k, v in changes.items():
         setattr(p, k, v)
     try:

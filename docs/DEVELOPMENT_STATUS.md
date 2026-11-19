@@ -21,6 +21,7 @@ manager, topology._
 | Database check | Startup comparison of the database with the migrations; banner with the exact command; clear database errors |
 | 2930F complete files | Team files recognised at import (address after loading, authorized managers, HTTPS-only and certificate caution, TFTP client switched off, bare password lines, duplicate VLANs, secrets counted); loaded by TFTP into the startup configuration with restart, address followed, serial and hostname checked, device address updated. **Fake switch only; not yet run on hardware** |
 | Identity after restarts | Serial number re-checked after every restart (firmware, restore, load); a different unit at the address fails the job |
+| 2930F HTTPS certificate | Created inside the load job before an HTTPS-only file, with the team's commands and the project's certificate subject (Project settings); already-existing certificate accepted. **Fake switch only** |
 | Login after loading | A plan can name the credential valid once a file is applied (the 2930F files set the approved password); used after the restart and kept for the device once verified (audited) |
 | Black Box files | LIG1014A (CLI text) and LE2700A (XML) configuration files recognised at import (complete file → replace; where the switch answers after loading; access settings; base64 "encrypted" password and SNMP exposure flagged; hostile XML refused); both models in the catalog with a **simulated** driver only |
 | Supplied-file recognition | FortiOS files are classified offline at import (full backup vs CLI script), with structure check, what the file will change about access, and a count of secrets (never the values). A file cannot be applied in a way that does not fit its kind |
@@ -51,7 +52,7 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 316 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 322 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (73 files) |
@@ -74,8 +75,8 @@ library; intent beyond the first slice; project export/import; persistent job ru
 Staging four factory-default devices per system (FortiGate 101F, Black Box switch,
 2 × Aruba 2930F) from one place: `docs/requirements/staging-use-case.md`, design and
 build order in `docs/requirements/staging-run-design.md`. Still needed from the product
-owner: the 2930F screen after `crypto pki enroll-self-signed` (Q-34), the password prompts on a
-new unit (Q-35), and Black Box command output from a spare unit (Q-28). Bench runs owed: 2930F
+owner: the password prompts on a new 2930F (Q-35) and Black Box command output from a
+spare unit (Q-28). Bench runs owed: 2930F
 console bootstrap and firmware; FortiGate 101F staging.
 
 ## Next milestone
@@ -83,8 +84,8 @@ console bootstrap and firmware; FortiGate 101F staging.
    (`vendor-support/aruba-2930f-*.md`); FortiGate 101F firmware, base, site, revisions
    (`vendor-support/fortigate-101f-bench.md`). Correct wording and waiting times against what
    the units really print (Q-25); keep the output as fixtures.
-2. **2930F complete-file load**: built (experimental), with the login after loading; bench
-   run with `vendor-support/aruba-2930f-staging.md`. Certificate step inside UNDM after Q-34.
+2. **2930F complete-file load**: built (experimental), with the certificate step and the login
+   after loading; bench run with `vendor-support/aruba-2930f-staging.md`.
 3. Black Box LIG1014A and LE2700A: real load procedure once the switch's own command output
    (Q-28) or the web upload details (Q-27, Q-29) are available; file recognition and a
    simulated driver exist for both.

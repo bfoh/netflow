@@ -7,9 +7,10 @@ import hashlib
 import os
 import re
 import tempfile
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from undm.domain.operations import DeviceOperation
 from undm.domain.versions import compare
@@ -158,6 +159,78 @@ class ArubaOSSwitchSsh(SshCliDriver):
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
         return inspect_aos_switch_file(text)
+
+    # -- HTTPS certificate before a file that needs one (EXPERIMENTAL) --------------------
+    # The team's commands and the switch's questions (screenshots, 2026-11-19):
+    #   configure
+    #   crypto pki identity-profile <profile> subject   -> six questions, answered below
+    #   crypto pki enroll-self-signed certificate-name <name>
+    #       (silent, or 'Certificate "<name>" already exists.')
+    #   web-management ssl
+    # then the configuration is saved ('write memory').
+    _SUBJECT_QUESTIONS: ClassVar[tuple[tuple[str, str], ...]] = (
+        (r"Enter Common Name\(CN\)\s*:", "common_name"),
+        (r"Enter Org Unit\(OU\)\s*:", "org_unit"),
+        (r"Enter Org Name\(O\)\s*:", "org_name"),
+        (r"Enter Locality\(L\)\s*:", "locality"),
+        (r"Enter State\(ST\)\s*:", "state"),
+        (r"Enter Country\(C\)\s*:", "country"),
+    )
+
+    def prepare_before_apply(self, config: str, mode: ApplyMode,
+                             settings: Mapping[str, Any]) -> OperationResult | None:
+        if mode is not ApplyMode.REPLACE:
+            return None
+        statements = {ln.strip() for ln in config.splitlines()}
+        if not {"web-management ssl", "no web-management"} <= statements:
+            return None  # the file does not make the web interface HTTPS-only
+        op = DeviceOperation.APPLY_CONFIGURATION
+        subject = settings.get("certificate_subject")
+        if not subject:
+            return OperationResult.success(
+                op, {"warnings": [
+                    "The file makes the web interface HTTPS-only, but this project has no "
+                    "certificate subject (Project settings), so UNDM did not create a "
+                    "certificate. Create it by hand before loading if the switch has none."]},
+                "no HTTPS certificate created (no certificate subject set)")
+        if r := self._need(op):
+            return r
+        name = str(subject.get("certificate_name") or "certificate")
+        profile = str(subject.get("profile_name") or "Profile")
+        answers = [(q, str(subject.get(key) or "")) for q, key in self._SUBJECT_QUESTIONS]
+        steps = [("configure", []),
+                 (f"crypto pki identity-profile {profile} subject", answers),
+                 (f"crypto pki enroll-self-signed certificate-name {name}", []),
+                 ("web-management ssl", []),
+                 ("end", []),
+                 ("write memory", [])]
+        outputs = []
+        existed = False
+        for command, questions in steps:
+            talk = self._dialogue(command, questions, timeout=120, idle_timeout=30)
+            outputs.append(talk.output)
+            diagnostics: dict[str, object] = {"device_output": talk.tail}
+            if talk.ended != "prompt":
+                return OperationResult.failed(
+                    op, f"Certificate step: no prompt after '{command}' ({talk.detail}). The "
+                        "switch may be asking something UNDM does not answer; its text is "
+                        "below. The file was not sent.", diagnostics)
+            if questions and len(talk.replies) != len(questions):
+                return OperationResult.failed(
+                    op, f"Certificate step: the switch asked {len(talk.replies)} of the "
+                        f"{len(questions)} expected subject questions; stopped before sending "
+                        "the file.", diagnostics)
+            if re.search(r"already exists", talk.output, re.I):
+                existed = True
+            elif re.search(self.error_pattern, talk.output):
+                return OperationResult.failed(
+                    op, f"Certificate step: the switch rejected '{command}' (below). The file "
+                        "was not sent.", diagnostics)
+        return OperationResult.success(
+            op, {"certificate": name, "existed": existed},
+            f"HTTPS certificate '{name}' "
+            + ("already existed" if existed else "created (self-signed)")
+            + "; web management set to SSL and saved")
 
     # -- complete configuration file (EXPERIMENTAL) ---------------------------------------
     #   copy tftp startup-config <server> <file> unix   (from the manual of a sibling model)
