@@ -35,7 +35,10 @@ PASSWORD = re.compile(r"password\s*:\s*$", re.I)
 #   "Configure the manager credentials :" / "Username:" / "Password:" /
 #   "Re-enter the new password:"
 FIRST_LOGIN = re.compile(r"Configure the manager credentials", re.I)
-SETUP_PASSWORD = re.compile(r"(?:^|\n)[ \t]*Password\s*:\s*$")
+# Case-sensitive "Password:" anywhere at the end: the console may position the cursor with
+# control codes instead of a new line, so the prompt can follow the echoed username on the
+# same line once those codes are removed. "Re-enter the new password:" is checked first.
+SETUP_PASSWORD = re.compile(r"Password\s*:\s*$")
 SETUP_REENTER = re.compile(r"Re-enter the new password\s*:\s*$", re.I)
 # The console was left at a login prompt and the wake-up key answered it (seen
 # 2026-11-19: "Password cannot be empty. / Operation aborted. / Session Terminated,
@@ -202,9 +205,10 @@ class ArubaOSSwitchConsole:
                 continue
             asked = SETUP_REENTER if idx == 2 else SETUP_PASSWORD if idx == 3 else None
             if asked is None or not expected or asked is not expected[0]:
+                question = text.strip().splitlines()[-1][-80:] if text.strip() else "?"
                 raise ConsoleError(
-                    "The switch asked a password question UNDM did not expect at this point "
-                    "(see the transcript); nothing was answered.")
+                    f"The switch asked a password question UNDM did not expect at this point "
+                    f"('{question}'); nothing was answered.")
             expected.pop(0)
             self.s.transcript.append("<<< (new password sent)\n")
             self.s.transport.write((self.credentials.password + "\r").encode())

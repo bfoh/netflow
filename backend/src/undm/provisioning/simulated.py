@@ -35,6 +35,8 @@ class SimulatedArubaConsole:
     # Console left at a password prompt of an unfinished setup (as on 2026-11-19): the first
     # key ends that session with the switch's real messages.
     left_at_password_prompt: bool = False
+    # Prompts placed with VT100 cursor codes instead of new lines (HPE consoles do this).
+    cursor_codes: bool = False
 
     def __post_init__(self) -> None:
         self._out = bytearray()
@@ -102,12 +104,15 @@ class SimulatedArubaConsole:
             return
         if self._state == "setup_user":
             self._typed_user = line
-            self._emit("\r\n" + self.setup_password_prompt)
+            self._emit(line)  # the switch echoes the typed username
+            self._emit(("\x1b[24;1H\x1b[2K" if self.cursor_codes else "\r\n")
+                       + self.setup_password_prompt)
             self._state = "setup_password"
             return
         if self._state == "setup_password":
             self._new_password = line
-            self._emit("\r\n" + self.setup_confirm_prompt)
+            self._emit(("\x1b[24;1H\x1b[2K" if self.cursor_codes else "\r\n")
+                       + self.setup_confirm_prompt)
             self._state = "setup_confirm"
             return
         if self._state == "setup_confirm":

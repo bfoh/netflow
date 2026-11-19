@@ -196,3 +196,18 @@ def test_console_left_at_a_password_prompt_starts_over():
     assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
     assert "Session Terminated" in r.transcript and r.credentials_set
     assert (sim.username, sim.password) == ("manager", "Example-Only-Approved-1")
+
+
+def test_prompts_placed_with_cursor_codes_are_recognised():
+    """Second bench run: the 'Password:' prompt did not start on a new line."""
+    sim = SimulatedArubaConsole(first_login_setup=True, cursor_codes=True)
+    r = run(sim, creds=APPROVED)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
+    assert r.credentials_set and r.transcript.count("(new password sent)") == 2
+
+
+def test_unexpected_question_is_quoted_in_the_message():
+    sim = SimulatedArubaConsole(first_login_setup=True,
+                                setup_password_prompt="Enter the old password: ")
+    r = run(sim, creds=APPROVED)
+    assert "'Enter the old password:'" in r.message
