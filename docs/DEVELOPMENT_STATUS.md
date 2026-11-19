@@ -1,6 +1,6 @@
 # Development Status
 
-_Last updated: 2026-11-19 — FortiGate 101F staging procedures (firmware, base restore,
+_Last updated: 2026-11-19 — first complete 2930F console bootstrap on hardware; FortiGate 101F staging procedures (firmware, base restore,
 site script with the tunnel key from the credential store, revisions; experimental, bench
 run pending); startup database check; on top of the TFTP server, 2930F firmware, console
 bootstrap, the 2930F platform, configuration import, SSH drivers, credentials, firmware
@@ -29,7 +29,7 @@ manager, topology._
 | Live progress | The deployment page refreshes every 2 s while a job runs and shows the device's last output when a step fails |
 | Topology | Canvas (React Flow), interface links with mode/VLANs, saved layout, auto-arrange, validation (interface reuse, self links, subnet mismatch, VLANs, duplicate IPs, isolated devices) |
 | Audit & logging | All significant actions, redacted details and device output |
-| Console bootstrap (provisioning) | ArubaOS-Switch over a serial console from the PC running UNDM: new units' mandatory first-login credentials set to the device's attached login (D-043); per-device settings (VLAN, port, address), command preview, factory-default check, stop on first error, read-back before `write memory`, idempotent re-run, transcript (raw + sanitized). **Tested against a simulated console only; not yet run on hardware** |
+| Console bootstrap (provisioning) | ArubaOS-Switch over a serial console from the PC running UNDM: new units' mandatory first-login credentials set to the device's attached login (D-043); per-device settings (VLAN, port, address), command preview, factory-default check, stop on first error, read-back before `write memory`, idempotent re-run, transcript (raw + sanitized). Experimental: **one complete run on hardware** (spare 2930F JL260A, WC.16.11.0001, new unit, 2026-11-19: credentials set, VLAN/address verified and saved); re-run and network check on that unit pending |
 | Sanitized diagnostics | Shareable report of last retrieved device output with IPs, MACs, serials, names and secrets masked |
 | Migrations | Three Alembic revisions; batch mode; tested on SQLite with existing data and on PostgreSQL |
 
@@ -76,9 +76,9 @@ library; intent beyond the first slice; project export/import; persistent job ru
 Staging four factory-default devices per system (FortiGate 101F, Black Box switch,
 2 × Aruba 2930F) from one place: `docs/requirements/staging-use-case.md`, design and
 build order in `docs/requirements/staging-run-design.md`. Still needed from the product
-owner: the password prompts on a new 2930F (Q-35) and Black Box command output from a
-spare unit (Q-28). Bench runs owed: 2930F
-console bootstrap and firmware; FortiGate 101F staging.
+owner: Black Box command output from a spare unit (Q-28). Bench runs: 2930F console
+bootstrap done once on a new unit (2026-11-19); owed: its re-run and network check, 2930F
+firmware (approved downgrade WC.16.11.0001 → WC.16.10.0025), file load; FortiGate 101F staging.
 
 ## Next milestone
 1. **Bench runs** (product owner): 2930F console bootstrap and firmware

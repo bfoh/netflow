@@ -64,6 +64,7 @@ driver has passed acceptance tests for the exact model and firmware.
 | Date | Device | Firmware | Status | Allowed operations |
 |---|---|---|---|---|
 | 2026-11-19 | Aruba 2930F-48G-4SFP (ArubaOS-Switch), named by the product owner | WC.16.10.0025 | lab/spare status to be confirmed by the product owner | Phase A read-only (`docs/vendor-support/aruba-2930f-acceptance.md`); writes only in phase B after phase A is accepted |
+| 2026-11-19 | Aruba JL260A 2930F-48G-4SFP, spare **new** unit on an isolated bench (product owner) | WC.16.11.0001 as shipped | spare, factory default, not part of any running system | Console bootstrap; firmware to the approved WC.16.10.0025 (approved downgrade); complete-file load. Serial number not recorded here |
 
 Real-device output shared with the developer must go through **Sanitized diagnostics**
 (or equivalent manual masking) and be reviewed by the product owner first.
