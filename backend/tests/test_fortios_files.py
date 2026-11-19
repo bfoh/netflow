@@ -171,10 +171,22 @@ def test_other_text_is_not_mistaken_for_fortios():
 
 def test_drivers_say_what_they_cannot_apply_yet():
     assert MockArubaAOSCXDriver.inspect_config_file(SCRIPT) is None  # not its file format
-    assert "not implemented yet" in FortiOSSsh.inspect_config_file(BACKUP).blocked_reason
-    assert "multi-VDOM" in FortiOSSsh.inspect_config_file(SCRIPT).blocked_reason
+    assert FortiOSSsh.inspect_config_file(BACKUP).blocked_reason == ""  # restored by TFTP
+    assert FortiOSSsh.inspect_config_file(SCRIPT).blocked_reason == ""  # multi-VDOM script ok
+    multi_line = ('config vpn certificate local\n  edit "c"\n    set certificate "-----BEGIN\n'
+                  'xyz\n-----END"\n  next\nend\n')
+    assert "several lines" in FortiOSSsh.inspect_config_file(multi_line).blocked_reason
     assert MockFortiGateDriver.inspect_config_file(SCRIPT).blocked_reason == ""
     assert "simulated" in MockFortiGateDriver.inspect_config_file(BACKUP).blocked_reason
+
+
+def test_secret_slots_are_listed_without_values():
+    r = inspect_fortios_file(SCRIPT)
+    assert [(s.slot_id, s.setting, s.line) for s in r.secret_slots] == [
+        ("vdom > root > vpn ipsec phase1-interface > example-tunnel > psksecret",
+         "psksecret", 29)]
+    assert "example-only-not-a-secret" not in repr(r)
+    assert inspect_fortios_file(BACKUP).secret_slots == ()  # encrypted values are not slots
 
 
 @pytest.fixture
@@ -240,3 +252,32 @@ def test_generated_and_other_vendor_files_have_no_report(client):
     did = client.post(f"/api/projects/{pid}/devices", json=SWITCH).json()["id"]
     v = _import(client, did, "sw.cfg", "hostname sw1\nvlan 10\n")
     assert v["inspection"] is None
+
+
+def test_simulated_fortigate_runs_the_site_flow_without_ever_holding_the_key(client):
+    """The plan/approve/run flow with a secret mapping can be rehearsed in simulation."""
+    import keyring
+    from memory_keyring import MemoryKeyring
+
+    from undm.drivers.mock.lab import default_lab
+
+    previous = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    try:
+        pid, did = _device(client)
+        ref = client.post(f"/api/projects/{pid}/credential-refs", json={"name": "psk"}).json()
+        client.put(f"/api/credential-refs/{ref['id']}/secret",
+                   json={"username": "psk", "password": "Example-Only-Psk-77"})
+        site = _import(client, did, "site-example.cfg", SCRIPT)
+        slot = site["inspection"]["secret_slots"][0]["slot_id"]
+        dep = client.post(f"/api/projects/{pid}/deployments", json={
+            "device_ids": [did], "apply_mode": "merge", "config_versions": {did: site["id"]},
+            "secrets": {did: {slot: ref["id"]}}}).json()
+        client.post(f"/api/deployments/{dep['id']}/approve")
+        out = client.post(f"/api/deployments/{dep['id']}/execute").json()
+        assert out["state"] == "succeeded", [e["message"] for e in out["events"]]
+        running = default_lab().get("10.255.0.1").running_config
+        assert "set psksecret ENC <simulated>" in running
+        assert "Example-Only-Psk-77" not in running
+    finally:
+        keyring.set_keyring(previous)

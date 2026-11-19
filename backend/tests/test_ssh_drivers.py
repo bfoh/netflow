@@ -118,11 +118,12 @@ def test_no_rollback_declared_and_firmware_only_where_implemented():
         d = drv(cls)
         assert d.rollback_configuration(None).status is ResultStatus.UNSUPPORTED  # type: ignore[arg-type]
         assert d.rollback_firmware().status is ResultStatus.UNSUPPORTED
-    for cls in (CiscoIOSXESsh, ArubaAOSCXSsh, FortiOSSsh):
+    for cls in (CiscoIOSXESsh, ArubaAOSCXSsh):
         assert drv(cls).install_firmware().status is ResultStatus.UNSUPPORTED
         assert drv(cls).stage_firmware(None).status is ResultStatus.UNSUPPORTED  # type: ignore[arg-type]
-    # The 2930F procedure exists (experimental); see test_aos_switch_firmware.py.
-    assert not drv(ArubaOSSwitchSsh).missing_capabilities(DeviceOperation.INSTALL_FIRMWARE)
+    # Experimental procedures exist for the 2930F and FortiOS (see their own test files).
+    for cls in (ArubaOSSwitchSsh, FortiOSSsh):
+        assert not drv(cls).missing_capabilities(DeviceOperation.INSTALL_FIRMWARE)
 
 
 def test_verification_ignores_indentation_and_hidden_defaults():

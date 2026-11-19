@@ -22,12 +22,19 @@ name, and a switch that looks factory default (no password prompt, no site confi
 unless the operator explicitly overrides that check. It is meant for spare or new units on
 an isolated bench.
 
-File transfer: while a real-device firmware job runs, UNDM listens on UDP 69 (TFTP). TFTP
+File transfer: while a real-device job needs it (firmware; FortiGate full-backup restore), UNDM listens on UDP 69 (TFTP). TFTP
 has no authentication or encryption, so the server is deliberately narrow: read-only, only
 files published for that job, each only to the address of the device it is for, and it is
 stopped when the job ends. Use it on the isolated bench network only. Settings:
 `UNDM_TFTP_HOST` (default all adapters; set the bench adapter's address to restrict it) and
 `UNDM_TFTP_PORT`.
+
+A FortiGate full backup is written to a private temporary file only for the moment of the
+transfer, under a neutral name, and deleted straight after.
+
+Secret values for supplied files (e.g. a tunnel pre-shared key) are kept only in the
+credential store. A plan stores the credential reference; the value is read at execution,
+inserted into the copy sent to the device, and masked in every message (D-036).
 
 Supplied configuration files (for example FortiGate backups and site scripts) contain
 passwords, keys and addressing. They are stored in UNDM's database on the PC running UNDM;

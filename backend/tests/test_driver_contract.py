@@ -37,6 +37,7 @@ def call(driver, op):
         DeviceOperation.REBOOT: driver.reboot,
         DeviceOperation.PROVISION_FACTORY_DEFAULT:
             lambda: driver.provision_factory_default_device("hostname x\n"),
+        DeviceOperation.CREATE_CHECKPOINT: lambda: driver.create_checkpoint("x"),
     }[op]()
 
 

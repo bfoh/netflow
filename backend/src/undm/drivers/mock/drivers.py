@@ -10,6 +10,7 @@ after verification against vendor documentation and lab equipment.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import ClassVar
 
@@ -25,7 +26,11 @@ from undm.drivers.base import (
     FirmwareImageRef,
     OperationResult,
 )
-from undm.drivers.fortinet.config_files import inspect_fortios_file
+from undm.drivers.fortinet.config_files import (
+    insert_secret_values,
+    inspect_fortios_file,
+    is_secret_setting,
+)
 from undm.drivers.mock.lab import SimulatedDevice, default_lab
 
 Op = DeviceOperation
@@ -250,6 +255,14 @@ class MockFortiGateDriver(MockDriver):
                 "The simulated FortiGate cannot restore a full backup; only CLI scripts can be "
                 "applied in simulation."))
         return report
+
+    def prepare_for_device(self, config: str, secrets: Mapping[str, str]) -> str:
+        # Checked like a real unit, but the simulation never holds the value: it keeps an
+        # encrypted-looking placeholder, as a FortiGate displays secrets.
+        return insert_secret_values(config, secrets, mask="<simulated>")
+
+    def expected_lines(self, config: str) -> list[str]:
+        return [ln for ln in super().expected_lines(config) if not is_secret_setting(ln)]
 
 
 class MockArubaAOSCXDriver(MockDriver):

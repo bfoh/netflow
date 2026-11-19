@@ -1,10 +1,10 @@
 # Development Status
 
-_Last updated: 2026-11-18 — built-in TFTP server and the first real-device firmware
-procedure (Aruba 2930F, experimental, bench run pending); FortiGate two-file method studied
-and both file kinds recognised offline; on top of console bootstrap, the 2930F platform,
-sanitized diagnostics, configuration import, SSH drivers, credentials, firmware manager,
-topology. (Earlier entries dated 2026-11-19 were written on 2026-11-18.)_
+_Last updated: 2026-11-19 — FortiGate 101F staging procedures (firmware, base restore,
+site script with the tunnel key from the credential store, revisions; experimental, bench
+run pending); startup database check; on top of the TFTP server, 2930F firmware, console
+bootstrap, the 2930F platform, configuration import, SSH drivers, credentials, firmware
+manager, topology._
 
 ## What works (implemented and tested)
 | Area | Details |
@@ -17,6 +17,8 @@ topology. (Earlier entries dated 2026-11-19 were written on 2026-11-18.)_
 | Deployments | Lifecycle with directive-15 states; dry runs; approval; preflight with identity check; backup; verification by read-back (platform-aware for SSH drivers); rollback or manual recovery; device locks; crash recovery on restart |
 | Firmware | Repository with SHA-256 vs vendor checksum, approval/retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery. Simulated devices, plus **one experimental real procedure: Aruba 2930F** (switch pulls the image from UNDM by TFTP into primary flash, restarts, version verified) behind `UNDM_ENABLE_REAL_DEVICE_FIRMWARE`. **Tested against a fake switch only; not yet run on hardware** |
 | File transfer | Built-in TFTP server: read-only, per-job, per-device allowlist, transfer records; tested with an independent client |
+| FortiGate 101F staging | Firmware by TFTP; base file restored by TFTP (replace mode, checked by hostname/VDOM/version, wrong-model backups refused); site script statement by statement (multi-VDOM, hostname change, error-looking reply stops the run); tunnel key inserted from the credential store, never stored or shown; revision named after each file. **Tested against a fake FortiGate only; not yet run on hardware** |
+| Database check | Startup comparison of the database with the migrations; banner with the exact command; clear database errors |
 | Supplied-file recognition | FortiOS files are classified offline at import (full backup vs CLI script), with structure check, what the file will change about access, and a count of secrets (never the values). A file cannot be applied in a way that does not fit its kind |
 | Live progress | The deployment page refreshes every 2 s while a job runs and shows the device's last output when a step fails |
 | Topology | Canvas (React Flow), interface links with mode/VLANs, saved layout, auto-arrange, validation (interface reuse, self links, subnet mismatch, VLANs, duplicate IPs, isolated devices) |
@@ -29,26 +31,26 @@ topology. (Earlier entries dated 2026-11-19 were written on 2026-11-18.)_
 - Simulated drivers: all three families, full feature set including firmware.
 - SSH drivers: **experimental** — tested only against fake connections with synthetic
   output; no real device has been contacted. Parsers may not match real output.
-- Real-device firmware: only the Aruba 2930F procedure exists, experimental; every other
-  real model is reported incompatible. The switch's exact questions are unverified.
+- Real-device firmware: Aruba 2930F and FortiGate procedures exist, experimental; every
+  other real model is reported incompatible. The devices' exact wording is unverified (Q-25).
 - Templates: docs-reviewed, not lab-verified.
 
 ## Not implemented
 Authentication and RBAC (attribution header only — keep the backend on localhost);
 provisioning for FortiGate and Black Box, zero-touch provisioning; the staging run
-across all four devices; full-configuration push to real devices; FortiGate first login,
-base restore, site-script runner, revisions and firmware; Black Box drivers; vendor signature verification;
+across all four devices; full-configuration push to the 2930F; FortiGate first login (by
+hand, Q-24); Black Box drivers; vendor signature verification;
 replace mode and rollback for real devices; addressing plans and site hierarchy; template
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-18)
+## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 249 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
-| Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes |
+| Backend pytest | 279 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
-| ruff / mypy --strict | clean / clean (67 files) |
+| ruff / mypy --strict | clean / clean (69 files) |
 | Frontend Vitest | 14 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
@@ -73,15 +75,13 @@ answers to Q-19…Q-22 (FortiGate order, credentials, expected messages) in
 `REFERENCE_ANALYSIS.md`. Bench runs still owed: console bootstrap and firmware on a spare 2930F.
 
 ## Next milestone
-1. **Bench runs on a spare 2930F** (product owner): console bootstrap
-   (`vendor-support/aruba-2930f-console-bootstrap.md`), then firmware over TFTP
-   (`vendor-support/aruba-2930f-firmware.md`). Fix the dialogue wording and waiting times
-   against what the switch really prints; keep the output as fixtures.
-2. **2930F full-configuration push** over TFTP, with the address/password change that the
-   final configuration brings.
-3. **FortiGate 101F**, once Q-19…Q-22 are answered: first-login password change, base
-   restore, firmware, site-script runner (statement by statement), named revisions.
-4. Black Box LIG1014A, then LE2700A (web-managed; investigate).
-5. The one-screen staging run across the four devices.
-6. Authentication and roles; persistent job runner (long jobs still run inside the HTTP
-   request; the page now shows live progress while it waits).
+1. **Bench runs** (product owner): 2930F console bootstrap and firmware
+   (`vendor-support/aruba-2930f-*.md`); FortiGate 101F firmware, base, site, revisions
+   (`vendor-support/fortigate-101f-bench.md`). Correct wording and waiting times against what
+   the units really print (Q-25); keep the output as fixtures.
+2. **2930F full-configuration push** with the address/password change the final file brings
+   (needs a sample 2930F file).
+3. Black Box LIG1014A, then LE2700A (web-managed; investigate).
+4. The one-screen staging run across the four devices.
+5. FortiGate first login inside UNDM, if agreed (Q-24).
+6. Authentication and roles; persistent job runner.

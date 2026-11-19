@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 from contextlib import ExitStack
 from datetime import UTC, datetime
+from pathlib import PurePath
 from typing import Any
 
 from sqlalchemy import CursorResult, select, update
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from undm.db.models import (
     ConfigVersion,
+    CredentialRef,
     DeploymentEventRecord,
     DeploymentRecord,
     DeploymentTargetRecord,
@@ -41,6 +43,7 @@ from undm.orchestration.deployment import (
     TargetState,
 )
 from undm.orchestration.firmware import FirmwareOrchestrator
+from undm.security import credentials as creds
 from undm.services import audit
 from undm.services.devices import build_driver, inspect_config, latest_config
 from undm.services.errors import ConflictError, ForbiddenError, NotFoundError
@@ -105,8 +108,10 @@ class DeploymentService:
             return FirmwareOrchestrator(
                 sink=sink, reboot_wait_attempts=attempts, reboot_wait_delay_s=delay,
                 require_separate_approver=self.firmware_separate_approver)
+        attempts, delay = self.firmware_reboot_wait
         return DeploymentOrchestrator(
-            sink=sink, require_separate_approver=self.require_separate_approver
+            sink=sink, require_separate_approver=self.require_separate_approver,
+            restart_wait_attempts=attempts, restart_wait_delay_s=delay,
         )
 
     def _to_domain(self, rec: DeploymentRecord) -> Deployment:
@@ -115,14 +120,19 @@ class DeploymentService:
             device = self.s.get(Device, t.device_id)
             assert device is not None
             text = ""
+            label: str | None = None
             if t.config_version_id:
                 cfg = self.s.get(ConfigVersion, t.config_version_id)
                 assert cfg is not None
                 text = cfg.text
+                if cfg.kind == "imported" and cfg.reference:
+                    # Named after the file, as the team names FortiGate revisions.
+                    label = PurePath(cfg.reference).stem[:60] or None
             serial = (device.observed_facts or {}).get("serial_number")
             dt = DeploymentTarget(device.id, device.name, build_driver(device, self.registry),
                                   text, expected_serial=serial)
             dt.state = TargetState(t.state)
+            dt.checkpoint_label = label
             dt.from_version, dt.target_version = t.from_version, t.to_version
             targets.append(dt)
         dep = Deployment(
@@ -192,6 +202,7 @@ class DeploymentService:
         self, project_id: str, device_ids: list[str], actor: str,
         *, dry_run: bool, apply_mode: ApplyMode,
         config_versions: dict[str, str] | None = None,
+        secrets: dict[str, dict[str, str]] | None = None,
     ) -> DeploymentRecord:
         if not device_ids:
             raise ConflictError("Select at least one device")
@@ -212,13 +223,18 @@ class DeploymentService:
             cfg = self._choose_config(device, (config_versions or {}).get(did))
             if not dry_run:
                 self._check_file_can_be_applied(device, cfg, apply_mode)
+            refs = (secrets or {}).get(did) or None
+            if refs:
+                self._check_secrets(device, cfg, refs)
             rec.targets.append(DeploymentTargetRecord(
                 device_id=did, position=pos, config_version_id=cfg.id,
-                state=TargetState.PENDING.value,
+                state=TargetState.PENDING.value, secret_refs=refs,
             ))
         unknown = set(config_versions or {}) - set(device_ids)
         if unknown:
             raise ConflictError("Configuration chosen for a device that is not in the plan")
+        if set(secrets or {}) - set(device_ids):
+            raise ConflictError("Secret values chosen for a device that is not in the plan")
         self.s.flush()
         dep = self._to_domain(rec)
         self._orchestrator(rec).prepare(dep)
@@ -248,6 +264,36 @@ class DeploymentService:
             raise ConflictError(
                 f"{what}; it can only be applied in {report.apply_mode.value} mode, not "
                 f"{apply_mode.value} mode")
+
+    def _secret_values(self, device: Device, refs: dict[str, str]) -> dict[str, str]:
+        """Read the values for a target's secret slots from the credential store."""
+        values: dict[str, str] = {}
+        for slot_id, ref_id in refs.items():
+            ref = self.s.get(CredentialRef, ref_id)
+            if ref is None or ref.project_id != device.project_id:
+                raise ConflictError(f"{device.name}: credential for '{slot_id}' not found")
+            try:
+                values[slot_id] = creds.resolve(ref.provider, ref.locator).password
+            except creds.CredentialResolutionError as e:
+                raise ConflictError(f"{device.name}: credential '{ref.name}': {e}") from e
+            if not values[slot_id]:
+                raise ConflictError(f"{device.name}: credential '{ref.name}' has an empty "
+                                    "secret; store the value to send first")
+        return values
+
+    def _check_secrets(self, device: Device, cfg: ConfigVersion, refs: dict[str, str]) -> None:
+        """The slots exist in the chosen file and the values can be sent (checked, not kept)."""
+        report = inspect_config(self.s, cfg, self.registry)
+        known = {slot.slot_id for slot in (report.secret_slots if report else ())}
+        unknown = sorted(set(refs) - known)
+        if unknown:
+            raise ConflictError(f"{device.name}: the chosen file has no secret setting "
+                                f"{', '.join(unknown)}")
+        driver = build_driver(device, self.registry)
+        try:
+            driver.prepare_for_device(cfg.text, self._secret_values(device, refs))
+        except ValueError as e:
+            raise ConflictError(f"{device.name}: {e}") from e
 
     def _choose_config(self, device: Device, version_id: str | None) -> ConfigVersion:
         """Explicit version if given; else latest generated; else latest imported."""
@@ -346,8 +392,18 @@ class DeploymentService:
             if problem:
                 raise ForbiddenError(problem)
         dep = self._to_domain(rec)
-        needs_files = (rec.kind == "firmware" and not rec.dry_run
-                       and any(not t.driver.info.simulated for t in dep.targets))
+        if not rec.dry_run:
+            by_id = {t.device_id: t for t in dep.targets}
+            for tr in rec.targets:
+                if tr.secret_refs:
+                    device = self.s.get(Device, tr.device_id)
+                    assert device is not None
+                    by_id[tr.device_id].secret_values = self._secret_values(
+                        device, dict(tr.secret_refs))
+        mode = ApplyMode(rec.apply_mode)
+        needs_files = not rec.dry_run and any(
+            not t.driver.info.simulated and t.driver.needs_file_server(rec.kind, mode)
+            for t in dep.targets)
         with ExitStack() as stack:
             if needs_files:
                 if self.transfer_hub is None:

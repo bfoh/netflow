@@ -23,10 +23,10 @@ configuration from one laptop in one sitting. See `staging-use-case.md` for the 
 ## Sequence
 | Step | Aruba ×2 | FortiGate | Black Box |
 |---|---|---|---|
-| 1 Reach | **Console bootstrap** (built; simulated-tested) → SSH | default address, first-login password change (to build) | default address (to build; manual needed) |
+| 1 Reach | **Console bootstrap** (built; simulated-tested) → SSH | default address; first-login password change by hand in the browser (Q-24) | default address (to build; manual needed) |
 | 2 Identify | read model, serial, firmware (built, accepted on a 2930F) | to validate on a spare | to build |
-| 3 Firmware | **built (experimental)**: switch pulls the image by TFTP, restarts, version verified; bench run pending | to build; 7.2.7 → 7.6.5 directly as practised | to build; v00.01.00 → v00.01.01 |
-| 4 Configuration | full file push (to build); today only "add lines" exists | **two files**: base (full backup, restored) then site script (statement by statement), a named revision after each (to build; files recognised offline today) | to build |
+| 3 Firmware | **built (experimental)**: switch pulls the image by TFTP, restarts, version verified; bench run pending | **built (experimental)**: 7.2.7 → 7.6.5 directly by TFTP; bench run pending | to build; v00.01.00 → v00.01.01 |
+| 4 Configuration | full file push (to build); today only "add lines" exists | **built (experimental)**: base restored by TFTP after the firmware, then the site script statement by statement with the tunnel key from the credential store, a revision after each | to build |
 | 5 Verify + report | read back, compare with the file, one report per system | same | same |
 
 Firmware normally precedes configuration: configuration files are tied to a firmware
@@ -46,8 +46,8 @@ upgrade orchestration (simulated only); credentials in the OS store; audit.
    (`docs/vendor-support/aruba-2930f-console-bootstrap.md`).
 2. 2930F: firmware install over TFTP — **built, bench run pending**
    (`docs/vendor-support/aruba-2930f-firmware.md`); then full-configuration push the same way.
-3. FortiGate 101F: first-login handling, base restore, firmware, site script, revisions
-   (file recognition built; the rest after Q-19…Q-22).
+3. FortiGate 101F: firmware, base restore, site script, key, revisions — **built, bench run
+   pending** (`docs/vendor-support/fortigate-101f-bench.md`); first login by hand (Q-24).
 4. Black Box LIG1014A (CLI + TFTP per its manual), then LE2700A (web-managed; to investigate).
 5. The staging run itself: one screen, four devices, one report.
 

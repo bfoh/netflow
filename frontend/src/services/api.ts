@@ -45,6 +45,7 @@ function describe(body: unknown, status: number): string {
     }
     if (typeof b.detail === 'string') return b.detail;
   }
+  if (status >= 500) return `No usable answer from the backend (${status}). Is it running on port 8000?`;
   return `Request failed (${status})`;
 }
 
@@ -66,7 +67,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  health: () => request<{ status: string; version: string }>('GET', '/health'),
+  health: () => request<{ status: string; version: string; problem?: string | null }>('GET', '/health'),
   drivers: () => request<Driver[]>('GET', '/drivers'),
   policy: () => request<Policy>('GET', '/policy'),
   credentialRefs: (pid: string) => request<CredentialRef[]>('GET', `/projects/${pid}/credential-refs`),
@@ -109,6 +110,7 @@ export const api = {
   deployment: (id: string) => request<Deployment>('GET', `/deployments/${id}`),
   createDeployment: (pid: string, body: {
     device_ids: string[]; dry_run: boolean; apply_mode: string; config_versions?: Record<string, string>;
+    secrets?: Record<string, Record<string, string>>;
   }) =>
     request<Deployment>('POST', `/projects/${pid}/deployments`, body),
   approveDeployment: (id: string, window?: { window_start: string; window_end: string }) =>

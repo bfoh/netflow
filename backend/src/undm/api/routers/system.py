@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from sqlalchemy import select
 
 from undm import __version__
@@ -14,8 +14,10 @@ router = APIRouter(tags=["system"])
 
 
 @router.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "version": __version__}
+def health(request: Request) -> dict[str, str | None]:
+    problem = getattr(request.app.state, "database_problem", None)
+    return {"status": "database_upgrade_needed" if problem else "ok", "version": __version__,
+            "problem": problem}
 
 
 @router.get("/api/drivers", response_model=list[DriverOut])

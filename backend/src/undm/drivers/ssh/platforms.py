@@ -3,22 +3,21 @@
 from __future__ import annotations
 
 import re
-from dataclasses import replace
 from pathlib import Path
 from typing import ClassVar
 
 from undm.domain.operations import DeviceOperation
 from undm.domain.versions import compare
 from undm.drivers.base import (
+    ApplyMode,
     Capability,
-    ConfigFileReport,
     DeviceFacts,
     DriverInfo,
     DriverMaturity,
     FirmwareImageRef,
     OperationResult,
 )
-from undm.drivers.fortinet.config_files import inspect_fortios_file
+from undm.drivers.fortinet.fortios_ssh import FortiOSSsh
 from undm.drivers.ssh.base import SSH_CAPABILITIES, SshCliDriver
 
 
@@ -92,67 +91,6 @@ class CiscoIOSXESsh(SshCliDriver):
         )
 
 
-class FortiOSSsh(SshCliDriver):
-    netmiko_device_type = "fortinet"
-    facts_commands = ("get system status",)
-    running_config_command = "show"
-    info = DriverInfo(
-        driver_id="ssh.fortinet.fortios",
-        vendor="Fortinet",
-        platform="fortios",
-        os_family="FortiOS",
-        description="FortiOS over SSH CLI (Netmiko 'fortinet'). Experimental, not lab-validated.",
-        simulated=False,
-        capabilities=SSH_CAPABILITIES,
-        maturity=DriverMaturity.EXPERIMENTAL,
-        transport="ssh",
-        notes=(
-            "If console paging ('set output more') is on, Netmiko temporarily sets "
-            "'config system console / set output standard' for the session and restores it on "
-            "disconnect: a read-only session still makes this temporary change.",
-            "Multi-VDOM devices are not supported yet.",
-            "FortiOS commits each block on 'end'; saving relies on the default "
-            "'cfg-save automatic' (not checked on the device).",
-            "No automatic rollback: failures end in manual recovery from the stored backup.",
-        ),
-    )
-
-    @classmethod
-    def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
-        report = inspect_fortios_file(text)
-        if report.file_type == "full_backup":
-            return replace(report, blocked_reason=(
-                "Restoring a full backup on a real FortiGate is not implemented yet. Sending "
-                "it line by line would be wrong, so UNDM refuses to."))
-        if report.file_type == "cli_script" and report.facts.get("vdom_mode") == "multi-vdom":
-            return replace(report, blocked_reason=(
-                "Running a multi-VDOM CLI script on a real FortiGate is not implemented yet "
-                "(this driver cannot follow 'config global' / 'config vdom' or a hostname "
-                "change during the run)."))
-        return report
-
-    def parse_facts(self, outputs: dict[str, str], prompt: str) -> DeviceFacts:
-        text = outputs.get("get system status", "")
-        version_line = self._search(r"^Version\s*:\s*(.+)$", text) or ""
-        model, _, version = version_line.partition(" ")
-        return DeviceFacts(
-            hostname=self._search(r"^Hostname\s*:\s*(\S+)", text) or prompt.rstrip("#$ "),
-            vendor="Fortinet",
-            model=model or "unknown",
-            os_version=version.split(",")[0] if version else "unknown",
-            serial_number=self._search(r"^Serial-Number\s*:\s*(\S+)", text),
-            extra={"vdom_mode": self._search(r"^Virtual domain configuration\s*:\s*(\S+)", text)},
-        )
-
-    def save_configuration(self) -> OperationResult:
-        op = DeviceOperation.SAVE_CONFIGURATION
-        if r := self._need(op):
-            return r
-        return OperationResult.success(
-            op, message="FortiOS commits on 'end' (assumes default cfg-save automatic; "
-                        "not checked)")
-
-
 class ArubaOSSwitchSsh(SshCliDriver):
     """ArubaOS-Switch (formerly ProCurve), e.g. Aruba 2930F.
 
@@ -194,6 +132,10 @@ class ArubaOSSwitchSsh(SshCliDriver):
     def _connect_kwargs(self) -> dict[str, object]:
         assert self._credentials is not None
         return {"secret": self._credentials.password}
+
+    @classmethod
+    def needs_file_server(cls, kind: str, mode: ApplyMode | None = None) -> bool:
+        return kind == "firmware"  # the switch pulls the image by TFTP
 
     def parse_facts(self, outputs: dict[str, str], prompt: str) -> DeviceFacts:
         # Layout verified against a real 2930F-48G-4SFP on WC.16.10.0025 (2026-11-19):
@@ -268,7 +210,7 @@ class ArubaOSSwitchSsh(SshCliDriver):
             timeout=self.transfer_timeout, idle_timeout=self.question_timeout,
             # Once the switch has asked for the file, silence is normal: it validates the
             # image and writes it to flash before the prompt returns.
-            patient=lambda: files.last_transfer(name, client) is not None)
+            patient=lambda _output: files.last_transfer(name, client) is not None)
         diagnostics: dict[str, object] = {"device_output": talk.tail}
         transfer = self._settled_transfer(name)
         if transfer is None:

@@ -213,3 +213,45 @@ statement at a time and stop at the first unexpected reply, which is stricter th
 `docs/vendor-support/fortigate-101f-staging.md`.
 
 _Note: entries above dated 2026-11-19 were written on 2026-11-18._
+
+### D-034 FortiGate order and credentials (2026-11-19)
+Answers from the product owner: the base file is restored **after** the firmware upgrade
+(7.2.7 → 7.6.5, then base); the base file is edited by the team to carry the approved admin
+password, so one stored credential is valid throughout; when the site file is pasted, the
+only error is the one for the first `end`; afterwards the CEN tunnel's pre-shared key is set
+to an approved value. UNDM follows this order with three approved jobs (firmware, base
+restore, site script) and saves a revision named after each file. The first login (forced
+password change) stays a manual browser step for now: automating it would need a second
+exception to the deployment lifecycle (CLAUDE.md allows only console bootstrap), which needs
+the product owner's agreement.
+
+### D-035 How a FortiGate CLI script is run (2026-11-19)
+One statement at a time over SSH, reading the reply to each. A reply that looks like an
+error stops the run at that line (lines before it stay applied; the rest are not sent); a
+bare `end` before the first block may fail without stopping; any other message is recorded
+as a warning and the run continues; a question stops the run (never answered). This is
+stricter than pasting, which carries on after errors. Verification: every statement
+accepted, the hostname the file sets is in place, and a read-back count (FortiOS hides
+default values, so a line-by-line comparison would be wrong).
+
+### D-036 Secret values in supplied files come from the credential store (2026-11-19)
+A file's clear-text secret settings (for example a tunnel `psksecret` placeholder) are
+listed as slots. A plan may map each slot to a credential reference; only the reference is
+stored. The value is read at execution and inserted into the copy sent to the device; it is
+masked in every message and never stored, logged or returned. Values containing `"`, `\`
+or `?` (CLI help) are refused for now. The simulated FortiGate checks the mapping the same
+way but only ever holds `ENC <simulated>`.
+
+### D-037 Generic driver hooks instead of vendor branches (2026-11-19)
+New, vendor-neutral contract points: `needs_file_server(kind, mode)` (TFTP session for any
+job that needs it), an apply result flagged `restarting` (the orchestrator waits for the
+device), `verify_configuration` (driver-specific verification, e.g. facts after a full
+restore), `create_checkpoint` with capability `supports_configuration_checkpoint` (named
+restore point after verification; a failure is a warning), and `prepare_for_device` (secret
+insertion). The manual-recovery message now keeps the cause of the failure.
+
+### D-038 The backend checks its database at startup (2026-11-19)
+After an update the database may be behind the code (seen on 2026-11-19: a missing column
+showed only as "Request failed (500)"). The backend now compares the database revision with
+its migrations at startup, reports it in `/api/health`, the UI shows a banner with the exact
+command, and database errors say so instead of a generic 500.

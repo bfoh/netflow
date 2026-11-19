@@ -206,6 +206,12 @@ class ConfigVersionOut(ORM):
     created_at: datetime
 
 
+class SecretSlotOut(ORM):
+    slot_id: str
+    setting: str
+    line: int
+
+
 class ConfigFileReportOut(ORM):
     """What an imported file is, worked out offline (never contains secret values)."""
 
@@ -216,6 +222,7 @@ class ConfigFileReportOut(ORM):
     notes: list[str]
     problems: list[str]
     blocked_reason: str
+    secret_slots: list[SecretSlotOut] = []
 
 
 class ConfigVersionFull(ConfigVersionOut):
@@ -239,6 +246,9 @@ class DeploymentIn(BaseModel):
     apply_mode: ApplyMode = ApplyMode.MERGE
     # Optional device_id -> config version id. Default: latest generated, else latest imported.
     config_versions: dict[str, str] | None = None
+    # Optional device_id -> {secret slot id -> credential reference id}: values to put into
+    # marked settings of a supplied file (e.g. a tunnel pre-shared key) when it is sent.
+    secrets: dict[str, dict[str, str]] | None = None
 
 
 class ConfigImportIn(BaseModel):
@@ -250,6 +260,7 @@ class DeploymentTargetOut(ORM):
     device_id: str
     position: int
     config_version_id: str | None
+    secret_refs: dict[str, str] | None = None
     backup_version_id: str | None
     from_version: str | None
     to_version: str | None

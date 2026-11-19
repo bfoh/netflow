@@ -50,25 +50,26 @@ well-formed (every block closed) and classifies them as above.
 - **Confidentiality**: imported files are kept in UNDM's database on the staging PC. The
   file report never shows secret values; audit entries carry only name, size and hash.
 
-## Planned sequence for one FortiGate
+## Sequence for one FortiGate (order confirmed 2026-11-19, D-034)
 | # | Step | Mechanism | Status |
 |---|---|---|---|
-| 1 | Reach the factory-default unit at 192.168.1.99, complete the forced password change | SSH dialogue | to build |
-| 2 | Read model, serial, firmware; refuse anything but the expected model | SSH | driver exists (experimental; single-VDOM only) |
-| 3 | Restore the base file; wait for the restart; reconnect; confirm multi-VDOM mode | TFTP restore | to build |
-| 4 | Save revision `<base file name>` | CLI | to build, command to verify |
-| 5 | Upgrade 7.2.7 → 7.6.5 directly (D-028); wait; verify version | TFTP image restore | to build |
-| 6 | Run the site script statement by statement; stop on the first unexpected reply | SSH | to build |
-| 7 | Save revision `<site file name>`; take a backup; report | CLI | to build |
+| 1 | Factory-default unit at 192.168.1.99: forced password change to the approved one | browser, by hand | manual for now (Q-24) |
+| 2 | Read model, serial, firmware | SSH | built (experimental) |
+| 3 | Upgrade 7.2.7 → 7.6.5 directly (D-028); wait; verify the version | firmware job, TFTP | **built (experimental)** |
+| 4 | Restore the base file (it carries the approved admin password); wait; reconnect; check hostname, multi-VDOM, version; refuse a backup from another model | configuration job, replace mode, TFTP | **built (experimental)** |
+| 5 | Save revision `<base file name>` | after verification | **built**, command unverified |
+| 6 | Site script statement by statement, CEN tunnel key from the credential store; stop at the first error-looking reply | configuration job, merge mode | **built (experimental)** |
+| 7 | Save revision `<site file name>` | after verification | **built**, command unverified |
 
-Steps 3 and 5 may be swapped depending on the answer to Q-19.
+Bench checklist: `fortigate-101f-bench.md`.
 
 ## Built so far
-- Offline recognition of both file kinds at import, with the notes above shown next to the
-  file; a full backup can no longer be sent line by line, a script with unclosed blocks is
-  refused, and real-FortiGate deployment of these files is blocked with an explanation
-  until the mechanisms above exist.
-- FortiGate-101F in the model catalog (simulated only).
+- Offline recognition of both file kinds at import; a full backup can only be restored, a
+  script only sent statement by statement; a script with unclosed blocks is refused.
+- Steps 2–7 above as experimental procedures, tested end to end against a fake FortiGate
+  (synthetic wording, real TFTP transfers). Not yet run on a FortiGate.
+- The simulated FortiGate can rehearse the site-file plan, including the key mapping
+  (it only ever holds `ENC <simulated>`).
 
 ## Sources (public documentation; extracts via search, not verified on a unit)
 - Fortinet administration guide, "Configuration backups":

@@ -30,6 +30,7 @@ class DeviceOperation(StrEnum):
     REBOOT = "reboot"
     PROVISION_FACTORY_DEFAULT = "provision_factory_default"
     SET_CREDENTIALS = "set_credentials"
+    CREATE_CHECKPOINT = "create_checkpoint"
 
 
 IMPACT: dict[DeviceOperation, Impact] = {
@@ -47,6 +48,7 @@ IMPACT: dict[DeviceOperation, Impact] = {
     DeviceOperation.REBOOT: Impact.IMPACTING,
     DeviceOperation.PROVISION_FACTORY_DEFAULT: Impact.IMPACTING,
     DeviceOperation.SET_CREDENTIALS: Impact.IMPACTING,
+    DeviceOperation.CREATE_CHECKPOINT: Impact.IMPACTING,
 }
 
 

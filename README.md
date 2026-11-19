@@ -83,7 +83,9 @@ cd backend
 cd ..\frontend
 npm ci
 ```
-Then start the backend and frontend as usual. `alembic upgrade head` keeps your data.
+Then start the backend and frontend as usual. `alembic upgrade head` keeps your data and does
+nothing when the database is already current; if the app shows **Database upgrade needed**,
+this is the step that was missed.
 
 ## Using real lab devices (experimental)
 Use **isolated lab equipment only**. Read `docs/SECURITY_BOUNDARIES.md` first.
@@ -103,9 +105,9 @@ For the Aruba 2930F follow `docs/vendor-support/aruba-2930f-acceptance.md`.
 5. Production devices are blocked entirely unless `UNDM_ALLOW_PRODUCTION_READ_ONLY` /
    `UNDM_ALLOW_PRODUCTION_DEPLOYMENTS` are set — do not do this during testing.
 
-What the SSH drivers do not do yet: replace mode, automatic rollback (failures end in
-"manual recovery required" with the stored backup), multi-VDOM FortiGates, and firmware
-on anything except the Aruba 2930F (below).
+What the SSH drivers do not do yet: automatic rollback (failures end in "manual recovery
+required" with the stored backup), and firmware or full-file restore on anything except the
+Aruba 2930F and the FortiGate (below; both experimental).
 
 ## Firmware on a real Aruba 2930F (experimental)
 The switch pulls the image from this PC over TFTP, UNDM checks `show flash`, restarts the
@@ -119,13 +121,18 @@ UNDM_ENABLE_REAL_DEVICE_FIRMWARE=true
 UNDM_FIRMWARE_REQUIRE_SEPARATE_APPROVER=false
 ```
 Windows must allow inbound UDP 69 (TFTP) to Python on the bench network, and no other
-TFTP program may be running. The TFTP server only runs during a firmware job.
+TFTP program may be running. The TFTP server only runs during a job that needs it.
 
-## FortiGate configuration files
-Import the base file and the site file on a FortiGate device (Configurations → Import
-configuration file). UNDM tells you what each file is (full backup or CLI script), what it
-will change about access to the firewall, and whether it contains secrets. Applying them
-to a real FortiGate is not built yet — see `docs/vendor-support/fortigate-101f-staging.md`.
+## FortiGate 101F staging (experimental)
+Your team's order, each step an approved job: firmware 7.2.7 → 7.6.5 (Firmware page), then
+the **base** file (restored by TFTP; the unit restarts), then the **site** file (sent
+statement by statement), with a revision named after each file. Import both files on the
+device (Configurations → Import configuration file); UNDM tells you what each is. In a new
+deployment plan, choosing the base file switches to Replace and the site file to Merge; for
+the site file choose the credential that holds the approved tunnel key under **Value for
+psksecret**. The first login (forced password change) is still done in the browser. Not yet
+run on a FortiGate: do the first run on a spare unit with
+`docs/vendor-support/fortigate-101f-bench.md`.
 
 ## Console bootstrap (Aruba 2930F and other ArubaOS-Switch models)
 For a factory-default switch with no management address: **Provisioning** → choose the

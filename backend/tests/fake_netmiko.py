@@ -54,7 +54,12 @@ class FakeConnection:
 
     @property
     def base_prompt(self) -> str:
+        if hasattr(self.s.device, "hostname"):
+            return str(self.s.device.hostname)
         return self.s.prompt.rstrip("#> ")
+
+    def set_base_prompt(self) -> str:
+        return self.base_prompt
 
     def send_command(self, command: str, read_timeout: int = 0) -> str:
         self.s.calls.append(("send_command", command))
@@ -65,6 +70,8 @@ class FakeConnection:
         return self.s.outputs.get(command, "")
 
     def find_prompt(self) -> str:
+        if hasattr(self.s.device, "prompt_text"):
+            return self.s.device.prompt_text().strip()
         return self.s.prompt
 
     # Raw channel, used for commands that ask questions.
@@ -104,7 +111,10 @@ def factory_for(scenario: Scenario):
         if scenario.connect_error is not None:
             raise scenario.connect_error
         if scenario.device is not None:
-            scenario.device.accept_connection()
+            if hasattr(scenario.device, "prompt_text"):  # checks the password it is given
+                scenario.device.accept_connection(str(kwargs.get("password", "")))
+            else:
+                scenario.device.accept_connection()
         return FakeConnection(scenario, **kwargs)
     return factory
 

@@ -14,7 +14,6 @@ creator.
 
 from __future__ import annotations
 
-import time
 from datetime import UTC, datetime
 
 from undm.domain.lifecycle import DeploymentState
@@ -39,9 +38,9 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                  reboot_wait_delay_s: float = 20.0,
                  require_separate_approver: bool = True) -> None:
         # A second approver is the default; a bench policy may relax it explicitly.
-        super().__init__(sink, require_separate_approver=require_separate_approver)
-        self.reboot_wait_attempts = reboot_wait_attempts
-        self.reboot_wait_delay_s = reboot_wait_delay_s
+        super().__init__(sink, require_separate_approver=require_separate_approver,
+                         restart_wait_attempts=reboot_wait_attempts,
+                         restart_wait_delay_s=reboot_wait_delay_s)
 
     # -- validate + preview -----------------------------------------------------------
     def _validate(self, dep: Deployment) -> bool:
@@ -183,21 +182,6 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
     def _needs_upgrade(self, dep: Deployment, t: DeploymentTarget) -> bool:
         assert dep.firmware is not None and t.current_version is not None
         return compare(t.current_version, dep.firmware.version) != 0
-
-    def _wait_until_available(self, dep: Deployment, t: DeploymentTarget) -> OperationResult:
-        last = OperationResult.failed(DeviceOperation.CHECK_REACHABILITY, "not attempted")
-        for attempt in range(1, self.reboot_wait_attempts + 1):
-            if not t.driver.info.simulated:
-                time.sleep(self.reboot_wait_delay_s)
-            t.driver.disconnect()
-            last = t.driver.connect()
-            if last.ok:
-                self._emit(dep, "deploy", "ok", f"device reachable again (attempt {attempt})", t)
-                return last
-        return OperationResult.failed(
-            DeviceOperation.CHECK_REACHABILITY,
-            f"device not reachable after reboot ({self.reboot_wait_attempts} attempts): "
-            f"{last.message}")
 
     @staticmethod
     def _step(dep: Deployment, t: DeploymentTarget, name: str) -> OperationResult:

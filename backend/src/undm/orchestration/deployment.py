@@ -18,6 +18,7 @@ Safety rules enforced here:
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -32,6 +33,7 @@ from undm.drivers.base import (
     ConfigurationBackup,
     DeviceDriver,
     FirmwareImageRef,
+    OperationResult,
     ResultStatus,
 )
 
@@ -74,6 +76,11 @@ class DeploymentTarget:
     current_version: str | None = None
     target_version: str | None = None
     from_version: str | None = None  # version found at preflight
+    # Values for secret slots of a supplied file (slot id -> value). Inserted only into the
+    # copy sent to the device; never stored, logged or shown.
+    secret_values: dict[str, str] = field(default_factory=dict, repr=False)
+    # Name of a restore point to keep on the device after verification (if supported).
+    checkpoint_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -112,10 +119,37 @@ EventSink = Callable[[Deployment, DeploymentEvent], None]
 
 class DeploymentOrchestrator:
     def __init__(
-        self, sink: EventSink | None = None, *, require_separate_approver: bool = False
+        self, sink: EventSink | None = None, *, require_separate_approver: bool = False,
+        restart_wait_attempts: int = 30, restart_wait_delay_s: float = 20.0,
     ) -> None:
         self._sink = sink
         self.require_separate_approver = require_separate_approver
+        # A device that restarts by itself (e.g. after a full restore) is polled this often.
+        self.restart_wait_attempts = restart_wait_attempts
+        self.restart_wait_delay_s = restart_wait_delay_s
+
+    def _wait_until_available(self, dep: Deployment, t: DeploymentTarget) -> OperationResult:
+        last = OperationResult.failed(DeviceOperation.CHECK_REACHABILITY, "not attempted")
+        for attempt in range(1, self.restart_wait_attempts + 1):
+            if not t.driver.info.simulated:
+                time.sleep(self.restart_wait_delay_s)
+            t.driver.disconnect()
+            last = t.driver.connect()
+            if last.ok:
+                self._emit(dep, "deploy", "ok", f"device reachable again (attempt {attempt})", t)
+                return last
+        return OperationResult.failed(
+            DeviceOperation.CHECK_REACHABILITY,
+            f"device not reachable after its restart ({self.restart_wait_attempts} attempts): "
+            f"{last.message}")
+
+    def _emit_warnings(self, dep: Deployment, t: DeploymentTarget, stage: str,
+                       result: OperationResult) -> None:
+        warnings = result.data.get("warnings") if isinstance(result.data, dict) else None
+        for w in list(warnings or [])[:25]:
+            self._emit(dep, stage, "warning", str(w), t)
+        if warnings and len(warnings) > 25:
+            self._emit(dep, stage, "warning", f"... and {len(warnings) - 25} more", t)
 
     # -- bookkeeping ----------------------------------------------------------------
     def _emit(
@@ -329,10 +363,25 @@ class DeploymentOrchestrator:
                 t.state = TargetState.NO_CHANGE
                 self._emit(dep, "deploy", "ok", "already in desired state; not changed", t)
                 continue
-            t.touched = True
-            result = t.driver.apply_configuration(t.intended_config, dep.apply_mode)
-            if result.ok:
-                result = t.driver.save_configuration()
+            try:
+                to_send = t.driver.prepare_for_device(t.intended_config, t.secret_values)
+            except ValueError as e:
+                result = OperationResult.failed(DeviceOperation.APPLY_CONFIGURATION, str(e))
+            else:
+                t.touched = True
+                result = t.driver.apply_configuration(to_send, dep.apply_mode)
+                if result.ok:
+                    self._emit_warnings(dep, t, "deploy", result)
+                    if isinstance(result.data, dict) and result.data.get("restarting"):
+                        self._emit(dep, "deploy", "ok", result.message or "device restarting", t)
+                        back = self._wait_until_available(dep, t)
+                        result = back if not back.ok else result
+                if result.ok:
+                    applied_message = result.message
+                    result = t.driver.save_configuration()
+                    if result.ok and applied_message:
+                        result = OperationResult.success(result.operation, result.data,
+                                                         applied_message)
             if not result.ok:
                 self._fail_target(dep, t, "deploy", TargetState.APPLY_FAILED, result.message)
                 for rest in dep.targets[idx + 1:]:
@@ -347,6 +396,17 @@ class DeploymentOrchestrator:
         ok = True
         for t in dep.targets:
             if t.state is TargetState.NO_CHANGE:
+                continue
+            custom = t.driver.verify_configuration(t.intended_config, dep.apply_mode)
+            if custom is not None:
+                if custom.ok:
+                    t.state = TargetState.VERIFIED
+                    self._emit(dep, "verify", "ok", custom.message or "verified", t)
+                    self._emit_warnings(dep, t, "verify", custom)
+                    self._checkpoint(dep, t)
+                else:
+                    ok = self._fail_target(dep, t, "verify", TargetState.VERIFY_FAILED,
+                                           custom.message)
                 continue
             running = t.driver.get_running_configuration()
             if not running.ok:
@@ -369,7 +429,23 @@ class DeploymentOrchestrator:
             else:
                 t.state = TargetState.VERIFIED
                 self._emit(dep, "verify", "ok", "running configuration matches intent", t)
+                self._checkpoint(dep, t)
         return ok
+
+    def _checkpoint(self, dep: Deployment, t: DeploymentTarget) -> None:
+        """Keep a named restore point after a verified change, where the device supports it.
+
+        A failure here does not undo a verified change; it is reported as a warning."""
+        if not t.checkpoint_label or t.driver.missing_capabilities(
+                DeviceOperation.CREATE_CHECKPOINT):
+            return
+        result = t.driver.create_checkpoint(t.checkpoint_label)
+        if result.ok:
+            self._emit(dep, "verify", "ok", result.message or f"saved '{t.checkpoint_label}'", t)
+        else:
+            self._emit(dep, "verify", "warning",
+                       f"configuration verified, but the named restore point "
+                       f"'{t.checkpoint_label}' was not confirmed: {result.message}", t)
 
     def _recover(self, dep: Deployment) -> DeploymentState:
         self._move(dep, S.RECOVERING)
@@ -385,8 +461,9 @@ class DeploymentOrchestrator:
                 self._emit(dep, "recover", "ok", result.message or "rolled back", t)
             elif result.status is ResultStatus.UNSUPPORTED:
                 all_ok = False
+                cause = f"{t.message}. " if t.message else ""  # keep why it failed
                 t.state = TargetState.MANUAL_RECOVERY_REQUIRED
-                t.message = (f"automatic rollback unsupported; restore backup "
+                t.message = (f"{cause}Automatic rollback unsupported; restore backup "
                              f"{t.backup.reference} manually")
                 self._emit(dep, "recover", "error", t.message, t)
             else:

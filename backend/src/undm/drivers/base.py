@@ -7,6 +7,7 @@ so the orchestrator can reason about capability gaps explicitly.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -28,6 +29,8 @@ class Capability(StrEnum):
     CONFIGURATION_REPLACE = "supports_configuration_replace"
     CANDIDATE_CONFIGURATION = "supports_candidate_configuration"
     CONFIGURATION_ROLLBACK = "supports_configuration_rollback"
+    # A named restore point kept on the device (e.g. a FortiGate configuration revision).
+    CONFIGURATION_CHECKPOINT = "supports_configuration_checkpoint"
     # lifecycle
     ZERO_TOUCH_PROVISIONING = "supports_zero_touch_provisioning"
     FIRMWARE_UPGRADE = "supports_firmware_upgrade"
@@ -44,6 +47,7 @@ REQUIRED_CAPABILITIES: dict[DeviceOperation, frozenset[Capability]] = {
     DeviceOperation.INSTALL_FIRMWARE: frozenset({Capability.FIRMWARE_UPGRADE}),
     DeviceOperation.ROLLBACK_FIRMWARE: frozenset({Capability.FIRMWARE_ROLLBACK}),
     DeviceOperation.REBOOT: frozenset({Capability.REBOOT}),
+    DeviceOperation.CREATE_CHECKPOINT: frozenset({Capability.CONFIGURATION_CHECKPOINT}),
     DeviceOperation.PROVISION_FACTORY_DEFAULT: frozenset({Capability.ZERO_TOUCH_PROVISIONING}),
 }
 
@@ -150,6 +154,19 @@ class DeviceFacts:
 
 
 @dataclass(frozen=True)
+class SecretSlot:
+    """A setting in a supplied file whose value UNDM can replace from the credential store.
+
+    Only the location is described; the value in the file is never copied here.
+    """
+
+    # Stable within the file, e.g. "vdom > root > vpn ipsec phase1-interface > t1 > psksecret".
+    slot_id: str
+    setting: str
+    line: int
+
+
+@dataclass(frozen=True)
 class ConfigFileReport:
     """What a supplied configuration file is, worked out offline from its own content."""
 
@@ -162,6 +179,7 @@ class ConfigFileReport:
     problems: tuple[str, ...] = ()  # reasons not to apply the file as it is
     # Set by a driver that cannot apply this kind of file (yet).
     blocked_reason: str = ""
+    secret_slots: tuple[SecretSlot, ...] = ()
 
 
 class TransferInfo(Protocol):
@@ -205,6 +223,27 @@ class DeviceDriver:
     @classmethod
     def missing_capabilities(cls, op: DeviceOperation) -> frozenset[Capability]:
         return REQUIRED_CAPABILITIES.get(op, frozenset()) - cls.capabilities()
+
+    @classmethod
+    def needs_file_server(cls, kind: str, mode: ApplyMode | None = None) -> bool:
+        """True if a job of this kind ("configuration" / "firmware") makes the device fetch
+        a file from UNDM, so the service must provide ``file_server`` for the job."""
+        return False
+
+    def prepare_for_device(self, config: str, secrets: Mapping[str, str]) -> str:
+        """The text actually sent: ``secrets`` (slot id -> value, see ``SecretSlot``) put
+        into the marked settings. Raises ValueError if a slot or value cannot be used.
+        The stored configuration is never changed; only the copy sent to the device."""
+        if secrets:
+            raise ValueError(f"Driver {self.info.driver_id} cannot insert secret values")
+        return config
+
+    def verify_configuration(self, intended: str, mode: ApplyMode) -> OperationResult | None:
+        """Driver-specific verification after apply; None = use the generic read-back check.
+
+        For drivers whose platform cannot be verified by comparing lines (for example a
+        restored full backup that the device converts to its own release)."""
+        return None
 
     # -- verification helpers ---------------------------------------------------------
     # The orchestrator decides "already applied" and "verified" by comparing these.
@@ -265,3 +304,7 @@ class DeviceDriver:
 
     def provision_factory_default_device(self, bootstrap_config: str) -> OperationResult:
         return self._unsupported(DeviceOperation.PROVISION_FACTORY_DEFAULT)
+
+    def create_checkpoint(self, label: str) -> OperationResult:
+        """Keep a named restore point of the current configuration on the device."""
+        return self._unsupported(DeviceOperation.CREATE_CHECKPOINT)

@@ -55,7 +55,7 @@ backend/            FastAPI app, package `undm` (src layout)
   src/undm/orchestration/  deployment + firmware orchestrators (pure logic)
   src/undm/configgen/ intent -> config rendering, Jinja2 templates, diff
   src/undm/drivers/   driver contract, registry, mock/ simulated lab + drivers, ssh/ real (experimental),
-                      fortinet/ offline FortiOS file recognition
+                      fortinet/ FortiOS file recognition + SSH procedures (experimental)
   src/undm/provisioning/  serial console sessions, console bootstrap procedures, simulated console
   src/undm/transfer/  built-in TFTP server (read-only, per job, per device) and its hub
   src/undm/domain/    enums, intent model, validation, lifecycle, operation impact

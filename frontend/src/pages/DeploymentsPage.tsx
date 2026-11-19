@@ -1,12 +1,12 @@
 import { Alert, Anchor, Button, Card, Checkbox, Group, SegmentedControl, Select, Stack, Switch, Table, Text, Title } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
 import { fmtDate } from '../services/format';
-import { useAction, useAllDeployments, useConfigs, useProjectDevices, useProjects } from '../hooks/queries';
+import { useAction, useAllDeployments, useConfig, useConfigs, useCredentialRefs, useProjectDevices, useProjects } from '../hooks/queries';
 import type { ConfigVersion } from '../types/api';
 
 const DEFAULT_CHOICE = '__default__';
@@ -25,18 +25,58 @@ function ConfigChoice({ deviceId, value, onChange }: { deviceId: string; value: 
 }
 import { api } from '../services/api';
 
+/**
+ * What the chosen file needs: the apply mode its kind requires, and a credential for each
+ * secret setting (e.g. a tunnel pre-shared key). Values never pass through the browser.
+ */
+function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode }: {
+  projectId: string; versionId: string; secrets: Record<string, string>;
+  onSecrets: (s: Record<string, string>) => void; onMode: (m: string) => void;
+}) {
+  const version = useConfig(versionId);
+  const refs = useCredentialRefs(projectId);
+  const report = version.data?.inspection;
+  const mode = report?.apply_mode;
+  useEffect(() => { if (mode) onMode(mode); }, [mode, onMode]);
+  if (!report) return null;
+  return (
+    <Stack gap={4} mt={4}>
+      <Text size="xs" c={report.blocked_reason || report.problems.length ? 'red' : 'dimmed'}>
+        {report.summary}{mode ? ` → ${mode} mode` : ''}{report.blocked_reason ? `. ${report.blocked_reason}` : ''}
+      </Text>
+      {(report.secret_slots ?? []).map((slot) => (
+        <Select key={slot.slot_id} size="xs" w={320} clearable
+          label={`Value for ${slot.setting} (line ${slot.line})`}
+          description={secrets[slot.slot_id] ? 'Sent from the credential store; never shown or stored with the plan.' : 'Not set: the value written in the file is sent.'}
+          placeholder={refs.data?.length ? 'Choose a credential' : 'Add one on the project Credentials tab'}
+          data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
+          value={secrets[slot.slot_id] ?? null}
+          onChange={(v) => {
+            const next = { ...secrets };
+            if (v) next[slot.slot_id] = v; else delete next[slot.slot_id];
+            onSecrets(next);
+          }} />
+      ))}
+    </Stack>
+  );
+}
+
 function NewPlan({ projectId, preselected }: { projectId: string; preselected: string[] }) {
   const devices = useProjectDevices(projectId);
   const [sel, setSel] = useState<string[]>(preselected);
   const [dryRun, setDryRun] = useState(false);
   const [mode, setMode] = useState('merge');
   const [choice, setChoice] = useState<Record<string, string>>({});
+  const [secrets, setSecrets] = useState<Record<string, Record<string, string>>>({});
   const navigate = useNavigate();
   const chosen = Object.fromEntries(
     Object.entries(choice).filter(([id, v]) => sel.includes(id) && v !== DEFAULT_CHOICE));
+  const chosenSecrets = Object.fromEntries(
+    Object.entries(secrets).filter(([id, s]) => id in chosen && Object.keys(s).length));
   const create = useAction(() => api.createDeployment(projectId, {
     device_ids: sel, dry_run: dryRun, apply_mode: mode,
     config_versions: Object.keys(chosen).length ? chosen : undefined,
+    secrets: Object.keys(chosenSecrets).length ? chosenSecrets : undefined,
   }),
     (d) => `Plan created: ${d.state.replaceAll('_', ' ')}`);
 
@@ -59,8 +99,14 @@ function NewPlan({ projectId, preselected }: { projectId: string; preselected: s
               <Table.Td>{d.name}</Table.Td><Table.Td>{d.manufacturer} {d.model}</Table.Td>
               <Table.Td><EnvironmentBadge env={d.environment} /></Table.Td><Table.Td><StateBadge state={d.deployment_status} /></Table.Td>
               <Table.Td>{sel.includes(d.id) && (
-                <ConfigChoice deviceId={d.id} value={choice[d.id] ?? DEFAULT_CHOICE}
-                  onChange={(v) => setChoice((c) => ({ ...c, [d.id]: v }))} />)}</Table.Td>
+                <>
+                  <ConfigChoice deviceId={d.id} value={choice[d.id] ?? DEFAULT_CHOICE}
+                    onChange={(v) => { setChoice((c) => ({ ...c, [d.id]: v })); setSecrets((s) => ({ ...s, [d.id]: {} })); }} />
+                  {choice[d.id] && choice[d.id] !== DEFAULT_CHOICE && (
+                    <FileNeeds projectId={projectId} versionId={choice[d.id]} secrets={secrets[d.id] ?? {}}
+                      onSecrets={(v) => setSecrets((s) => ({ ...s, [d.id]: v }))} onMode={setMode} />
+                  )}
+                </>)}</Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>
@@ -73,7 +119,8 @@ function NewPlan({ projectId, preselected }: { projectId: string; preselected: s
       </Group>
       {mode === 'replace' && (
         <Alert color="yellow" icon={<IconInfoCircle size={16} />} mb="md">
-          Replace makes the running configuration equal to the generated one, removing everything else. Drivers that cannot replace are rejected at validation.
+          Replace makes the running configuration equal to the chosen one, removing everything else. For a FortiGate full backup this is
+          a restore: the unit fetches the file over TFTP and restarts. Drivers that cannot replace are rejected at validation.
         </Alert>
       )}
       <Button disabled={sel.length === 0} loading={create.isPending}

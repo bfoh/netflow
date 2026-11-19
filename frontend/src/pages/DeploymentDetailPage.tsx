@@ -137,6 +137,9 @@ export function DeploymentDetailPage() {
               <Accordion.Panel>
                 <Stack gap="xs">
                   {t.message && <Text size="sm" c={t.state.includes('fail') || t.state.includes('manual') ? 'red' : undefined}>{t.message}</Text>}
+                  {t.secret_refs && Object.keys(t.secret_refs).length > 0 && (
+                    <Text size="xs" c="dimmed">{Object.keys(t.secret_refs).length} secret setting(s) filled from the credential store when sent (values are never shown).</Text>
+                  )}
                   <Text size="sm">
                     <Anchor component={Link} to={`/devices/${t.device_id}`}>Device</Anchor>
                     {t.config_version_id && <>{' · '}configuration version <code>{t.config_version_id.slice(0, 8)}</code></>}

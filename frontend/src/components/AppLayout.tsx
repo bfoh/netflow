@@ -1,9 +1,9 @@
-import { AppShell, Badge, Burger, Group, NavLink, Text, Tooltip } from '@mantine/core';
+import { Alert, AppShell, Badge, Burger, Group, NavLink, Text, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconActivity } from '@tabler/icons-react';
+import { IconActivity, IconDatabaseExclamation } from '@tabler/icons-react';
 import { NavLink as RouterNavLink, Outlet, useLocation } from 'react-router';
 
-import { usePolicy } from '../hooks/queries';
+import { useHealth, usePolicy } from '../hooks/queries';
 import { getActor } from '../services/api';
 import { NAV } from './nav';
 
@@ -13,6 +13,7 @@ export function AppLayout() {
   const [opened, { toggle, close }] = useDisclosure();
   const { pathname } = useLocation();
   const policy = usePolicy();
+  const health = useHealth();
   const isActive = (to: string) => (to === '/' ? pathname === '/' : pathname.startsWith(to));
 
   return (
@@ -60,6 +61,11 @@ export function AppLayout() {
       </AppShell.Navbar>
 
       <AppShell.Main>
+        {health.data?.problem && (
+          <Alert color="red" icon={<IconDatabaseExclamation size={18} />} mb="md" title="Database upgrade needed">
+            {health.data.problem}
+          </Alert>
+        )}
         <Outlet />
       </AppShell.Main>
     </AppShell>

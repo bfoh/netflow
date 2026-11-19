@@ -140,7 +140,11 @@ export interface ConfigInspection {
   notes: string[];
   problems: string[];
   blocked_reason: string;
+  secret_slots?: SecretSlot[];
 }
+
+/** A setting in a supplied file whose value can come from the credential store when sent. */
+export interface SecretSlot { slot_id: string; setting: string; line: number }
 
 export interface GenerateResult { ok: boolean; issues: Issue[]; version: ConfigVersion | null }
 
@@ -153,6 +157,8 @@ export interface DeploymentTarget {
   device_id: string;
   position: number;
   config_version_id: string | null;
+  /** Secret slot id -> credential reference id (never a value). */
+  secret_refs?: Record<string, string> | null;
   backup_version_id: string | null;
   from_version: string | null;
   to_version: string | null;

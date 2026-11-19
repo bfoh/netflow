@@ -108,7 +108,8 @@ class SshCliDriver(DeviceDriver):
 
     def _dialogue(self, command: str, answers: list[tuple[str, str]], *, timeout: float,
                   idle_timeout: float = 60.0,
-                  patient: Callable[[], bool] | None = None) -> Dialogue:
+                  patient: Callable[[str], bool] | None = None,
+                  clear: bool = True, poll: float | None = None) -> Dialogue:
         """Run a command that asks questions and report how the exchange ended.
 
         ``answers`` is an ordered list of (question regex, reply). When the output ends
@@ -116,10 +117,12 @@ class SshCliDriver(DeviceDriver):
         ("prompt"), when the device closes the session ("closed"), or when it goes
         quiet ("timeout"). An unknown question is never answered: the device then goes
         quiet and the caller gets its text back, after ``idle_timeout`` rather than
-        after the whole ``timeout``. ``patient`` may report that silence is expected
-        (for example while the device writes a file it has received).
+        after the whole ``timeout``. ``patient(output so far)`` may report that silence
+        is expected (for example while the device writes a file it has received).
 
         Never raises for device behaviour; the caller decides what each ending means.
+        ``clear=False`` skips discarding unread output first (for back-to-back statements
+        that each ended at the prompt); ``poll`` overrides the pause between reads.
         """
         conn = self._conn
         enter = str(getattr(conn, "RETURN", "\n"))
@@ -127,7 +130,8 @@ class SshCliDriver(DeviceDriver):
         questions = [(re.compile(f"(?:{q})\\s*$"), a) for q, a in answers]
         output, replies, answered = "", [], 0
         try:
-            conn.clear_buffer()
+            if clear:
+                conn.clear_buffer()
             conn.write_channel(command + enter)
             start = last_data = time.monotonic()
             while True:
@@ -147,10 +151,10 @@ class SshCliDriver(DeviceDriver):
                 if now - start > timeout:
                     return Dialogue(output, replies, "timeout",
                                     f"not finished after {timeout:.0f} s")
-                if now - last_data > idle_timeout and not (patient and patient()):
+                if now - last_data > idle_timeout and not (patient and patient(output)):
                     return Dialogue(output, replies, "timeout",
                                     f"no output for {idle_timeout:.0f} s")
-                time.sleep(self.poll_interval)
+                time.sleep(self.poll_interval if poll is None else poll)
         except Exception as e:  # noqa: BLE001 - a closed session is an ending, not a crash
             return Dialogue(output, replies, "closed",
                             f"{type(e).__name__}: {redact_text(str(e))[:200]}")

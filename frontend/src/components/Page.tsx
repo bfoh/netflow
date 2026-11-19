@@ -20,7 +20,7 @@ export function QueryState({ isLoading, error }: { isLoading: boolean; error: Er
   if (error) {
     return (
       <Alert color="red" icon={<IconAlertTriangle size={18} />} title="Could not load data">
-        {error.message}. Is the backend running on port 8000?
+        {error.message}
       </Alert>
     );
   }

@@ -198,6 +198,9 @@ class DeploymentTargetRecord(Base):
     state: Mapped[str] = mapped_column(String(40))
     diff: Mapped[str] = mapped_column(Text, default="")
     message: Mapped[str] = mapped_column(Text, default="")
+    # Secret slot id -> credential reference id, for settings of a supplied file whose
+    # value comes from the credential store at execution. References only, never values.
+    secret_refs: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
 
 
 class DeploymentEventRecord(Base):

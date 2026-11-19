@@ -87,7 +87,7 @@ export function ConfigWorkbench({ device }: { device: Device }) {
               <>
                 <Group gap="xs" mb="xs">
                   <Badge variant="light">{shown.data.kind}</Badge>
-                  {shown.data.platform && <Badge variant="light" color="gray">{shown.data.platform} template v{shown.data.template_version}</Badge>}
+                  {shown.data.platform && <Badge variant="light" color="gray">{shown.data.template_version ? `${shown.data.platform} template v${shown.data.template_version}` : shown.data.platform}</Badge>}
                   {shown.data.verification && <Badge variant="light" color="yellow">{shown.data.verification.replaceAll('_', ' ')}</Badge>}
                 </Group>
                 {shown.data.kind === 'imported' && (

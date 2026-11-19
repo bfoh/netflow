@@ -11,13 +11,13 @@ public documentation and Netmiko's source, tested only against fake connections.
 | ArubaOS-Switch (2930F) | `mock.aruba.aos_switch` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✔ (simulated dual image banks, with rollback) |
 | ArubaOS-Switch (2930F) | `ssh.aruba.aos_switch` | **experimental**; read-only operations **lab-accepted** on 2930F-48G-4SFP (JL260A) WC.16.10.0025 | ✔ (`show system`, `show modules`, `show running-config`) ⁵ | ✔ merge, save `write memory` | ✘ | ✘ manual | **experimental, not run on hardware**: TFTP pull into primary flash, restart, verify (`aruba-2930f-firmware.md`); no automatic rollback |
 | Fortinet FortiOS | `mock.fortinet.fortios` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✔ (simulated, no rollback) |
-| Fortinet FortiOS | `ssh.fortinet.fortios` | **experimental** | ✔ (`get system status`, `show`) ¹ | ✔ merge; FortiOS commits on `end` ² | ✘ | ✘ manual | ✘ |
+| Fortinet FortiOS | `ssh.fortinet.fortios` | **experimental**, not run on hardware | ✔ (`get system status`, `show`) ¹ | ✔ merge: script statement by statement (multi-VDOM, hostname change, secret slots) ² | ✔ full backup restored by TFTP (`execute restore config tftp`), checked by facts | ✘ manual | **experimental**: TFTP (`execute restore image tftp`), unit restarts itself, version verified; revisions after file deployments (`execute backup config flash`, unverified) |
 | Cisco IOS-XE | `mock.cisco.iosxe` | simulation | ✔ | ✔ merge | ✔ | ✔ | ✔ (simulated, no rollback) |
 | Cisco IOS-XE | `ssh.cisco.iosxe` | **experimental** | ✔ (`show version`, `show running-config`) ³ | ✔ merge, save `write mem` | ✘ | ✘ manual | ✘ |
 
 ¹ If console paging (`set output more`) is enabled, Netmiko temporarily sets
 `config system console / set output standard` and restores it on disconnect.
-Multi-VDOM devices are not supported.
+Multi-VDOM units: `execute` commands are issued inside `config global` (community guidance).
 ² Relies on the default `cfg-save automatic`; not checked on the device.
 ³ Requires a privilege-15 login; enable-password prompts are not handled.
 ⁵ Netmiko `aruba_osswitch`: passes the "Press any key" banner, runs `enable` (the login
@@ -29,7 +29,7 @@ Checklist: `aruba-2930f-acceptance.md`.
 | Family | Procedure | Status |
 |---|---|---|
 | ArubaOS-Switch (2930F) | Serial console: out-of-band management VLAN, one untagged port, address, `write memory` | Simulated-tested; **hardware validation pending** (`aruba-2930f-console-bootstrap.md`) |
-| FortiOS (FortiGate 101F) | Default address + forced first-login password change; base restore; site script; revisions | Not built. Supplied files are recognised offline (`fortigate-101f-staging.md`) |
+| FortiOS (FortiGate 101F) | Forced first-login password change | By hand in the browser (Q-24). Firmware, base restore, site script and revisions: built, experimental (`fortigate-101f-bench.md`) |
 | Black Box LIG1014A / LE2700 series | Default address | Not built; manuals needed |
 
 ## Templates (generation)
