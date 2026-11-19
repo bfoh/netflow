@@ -81,6 +81,9 @@ class DeploymentTarget:
     secret_values: dict[str, str] = field(default_factory=dict, repr=False)
     # Name of a restore point to keep on the device after verification (if supported).
     checkpoint_label: str | None = None
+    # Serial number the device reported at preflight; re-checked after any restart so a
+    # different unit answering at the same address is never taken for this one.
+    observed_serial: str | None = None
 
 
 @dataclass(frozen=True)
@@ -136,7 +139,17 @@ class DeploymentOrchestrator:
             t.driver.disconnect()
             last = t.driver.connect()
             if last.ok:
-                self._emit(dep, "deploy", "ok", f"device reachable again (attempt {attempt})", t)
+                facts = t.driver.get_device_facts() if t.observed_serial else None
+                seen = facts.data.serial_number if facts is not None and facts.ok else None
+                if seen and seen != t.observed_serial:
+                    return OperationResult.failed(
+                        DeviceOperation.CHECK_REACHABILITY,
+                        f"a different device answers at {t.driver.target.management_address} "
+                        f"after the restart (serial {seen}, expected {t.observed_serial}). "
+                        "Make sure only this unit uses that address, then check it on the "
+                        "console.")
+                self._emit(dep, "deploy", "ok", f"device reachable again (attempt {attempt}"
+                           + (", same serial number" if seen else "") + ")", t)
                 return last
         return OperationResult.failed(
             DeviceOperation.CHECK_REACHABILITY,
@@ -296,6 +309,8 @@ class DeploymentOrchestrator:
                     f"{facts.data.serial_number}",
                 )
                 continue
+            if facts.ok:
+                t.observed_serial = facts.data.serial_number
             running = t.driver.get_running_configuration()
             if not running.ok:
                 ok = self._fail_target(dep, t, "preflight", TargetState.PREFLIGHT_FAILED,

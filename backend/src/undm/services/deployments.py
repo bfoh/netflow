@@ -465,6 +465,15 @@ class DeploymentService:
                 device.last_connection_at = now
             if rec.dry_run:
                 continue
+            reached = t.driver.target.management_address
+            if (reached != device.management_address
+                    and t.state in (TargetState.VERIFIED, TargetState.VERIFY_FAILED)):
+                # The loaded file moved the device to another address, and it was reached
+                # there after its restart (identity checked): keep UNDM pointing at it.
+                audit.record(self.s, actor, "device.address_changed", "device", device.id,
+                             details={"from": device.management_address, "to": reached,
+                                      "deployment": rec.id})
+                device.management_address = reached
             if t.backup is not None:
                 device.last_backup_at = now
             if rec.kind == "firmware":

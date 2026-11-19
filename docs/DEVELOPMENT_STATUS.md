@@ -19,6 +19,8 @@ manager, topology._
 | File transfer | Built-in TFTP server: read-only, per-job, per-device allowlist, transfer records; tested with an independent client |
 | FortiGate 101F staging | Firmware by TFTP; base file restored by TFTP (replace mode, checked by hostname/VDOM/version, wrong-model backups refused); site script statement by statement (multi-VDOM, hostname change, error-looking reply stops the run); tunnel key inserted from the credential store, never stored or shown; revision named after each file. **Tested against a fake FortiGate only; not yet run on hardware** |
 | Database check | Startup comparison of the database with the migrations; banner with the exact command; clear database errors |
+| 2930F complete files | Team files recognised at import (address after loading, authorized managers, HTTPS-only and certificate caution, TFTP client switched off, bare password lines, duplicate VLANs, secrets counted); loaded by TFTP into the startup configuration with restart, address followed, serial and hostname checked, device address updated. **Fake switch only; not yet run on hardware** |
+| Identity after restarts | Serial number re-checked after every restart (firmware, restore, load); a different unit at the address fails the job |
 | Black Box files | LIG1014A (CLI text) and LE2700A (XML) configuration files recognised at import (complete file → replace; where the switch answers after loading; access settings; base64 "encrypted" password and SNMP exposure flagged; hostile XML refused); both models in the catalog with a **simulated** driver only |
 | Supplied-file recognition | FortiOS files are classified offline at import (full backup vs CLI script), with structure check, what the file will change about access, and a count of secrets (never the values). A file cannot be applied in a way that does not fit its kind |
 | Live progress | The deployment page refreshes every 2 s while a job runs and shows the device's last output when a step fails |
@@ -48,10 +50,10 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 299 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 308 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
-| ruff / mypy --strict | clean / clean (71 files) |
+| ruff / mypy --strict | clean / clean (73 files) |
 | Frontend Vitest | 14 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
@@ -71,8 +73,8 @@ library; intent beyond the first slice; project export/import; persistent job ru
 Staging four factory-default devices per system (FortiGate 101F, Black Box switch,
 2 × Aruba 2930F) from one place: `docs/requirements/staging-use-case.md`, design and
 build order in `docs/requirements/staging-run-design.md`. Still needed from the product
-owner: a sample 2930F configuration file per role; Black Box command output from a spare
-unit (Q-28) and the LE2700A questions (Q-29, Q-30). Bench runs owed: 2930F
+owner: 2930F login after loading and HTTPS certificate practice (Q-31, Q-32), the duplicate
+VLAN in the LTE file (Q-33), and Black Box command output from a spare unit (Q-28). Bench runs owed: 2930F
 console bootstrap and firmware; FortiGate 101F staging.
 
 ## Next milestone
@@ -80,8 +82,8 @@ console bootstrap and firmware; FortiGate 101F staging.
    (`vendor-support/aruba-2930f-*.md`); FortiGate 101F firmware, base, site, revisions
    (`vendor-support/fortigate-101f-bench.md`). Correct wording and waiting times against what
    the units really print (Q-25); keep the output as fixtures.
-2. **2930F full-configuration push** with the address/password change the final file brings
-   (needs a sample 2930F file).
+2. **2930F complete-file load**: built (experimental); bench run with
+   `vendor-support/aruba-2930f-staging.md` after Q-31/Q-32.
 3. Black Box LIG1014A and LE2700A: real load procedure once the switch's own command output
    (Q-28) or the web upload details (Q-27, Q-29) are available; file recognition and a
    simulated driver exist for both.

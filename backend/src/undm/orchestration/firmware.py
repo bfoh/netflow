@@ -163,6 +163,8 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                     f"identity mismatch: inventory serial {t.expected_serial}, device reports "
                     f"{facts.data.serial_number}")
                 continue
+            if facts.ok:
+                t.observed_serial = facts.data.serial_number
             info = self._read_version(t)
             if not info.ok:
                 ok = self._fail_target(dep, t, "preflight", TargetState.PREFLIGHT_FAILED,

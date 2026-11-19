@@ -39,6 +39,12 @@ class FakeArubaSwitch:
     skip_flash_write: bool = False
     reboot_mode: str = "close"  # close | silent | refuse
     down_for_connects: int = 1  # connection attempts that fail after a restart
+    # Complete configuration files ('copy tftp startup-config').
+    hostname: str = "lab-2930f"
+    running_config: str = AOS_SWITCH_RUNNING
+    startup_config: str | None = None
+    config_load_mode: str = "reboot"  # reboot: asks, then restarts | prompt: back to prompt
+    serial_after_restart: str | None = None  # another unit answering after the restart
     # Observations.
     commands: list[str] = field(default_factory=list)
     keys: list[str] = field(default_factory=list)
@@ -59,7 +65,7 @@ class FakeArubaSwitch:
         self.commands.append(command)
         if command == "show system":
             return (" Status and Counters - General System Information\n\n"
-                    "  System Name        : lab-2930f\n\n"
+                    f"  System Name        : {self.hostname}\n\n"
                     f"  Software revision  : {self.running}        "
                     "Base MAC Addr      : 001122-334455\n"
                     f"  ROM Version        : WC.16.01.0010        Serial Number      : "
@@ -75,7 +81,7 @@ class FakeArubaSwitch:
                     "Boot ROM Version   : WC.16.01.0010\n"
                     "Default Boot Image : Primary\n")
         if command == "show running-config":
-            return AOS_SWITCH_RUNNING
+            return self.running_config
         return ""
 
     # -- raw channel ------------------------------------------------------------------
@@ -96,6 +102,12 @@ class FakeArubaSwitch:
         if text.startswith("copy tftp flash "):
             self._copy_args = text.split()[3:]
             self._ask("copy", self.copy_question)
+        elif text.startswith("copy tftp startup-config "):
+            self._copy_args = text.split()[3:5]
+            if self.config_load_mode == "reboot":
+                self._ask("config", "Device will be rebooted, do you want to continue [y/n]? ")
+            else:
+                self._fetch_startup(restart=False)
         elif text == "boot system flash primary":
             if self.unsaved_changes:
                 self._ask("save", "Do you want to save current configuration [y/n/^C]? ")
@@ -143,8 +155,45 @@ class FakeArubaSwitch:
             self._out += "Validating and Writing System Software to the Filesystem ...\r\n"
         self._out += PROMPT
 
+    def _answer_config(self, key: str) -> None:
+        if key != "y":
+            self._out += "\r\n" + PROMPT
+            return
+        self._fetch_startup(restart=True)
+
+    def _fetch_startup(self, restart: bool) -> None:
+        server, name = self._copy_args
+        port = self.tftp_port() if callable(self.tftp_port) else self.tftp_port
+        buf = io.BytesIO()
+        try:
+            tftpy.TftpClient(server, port, {}).download(name, buf, timeout=2)
+        except Exception as e:  # noqa: BLE001
+            self._out += f"\r\nTFTP download failed: {type(e).__name__}\r\n" + PROMPT
+            return
+        self.startup_config = buf.getvalue().decode()
+        if restart:
+            self._out += "\r\nRebooting the System...\r\n"
+            self._restart_into_startup()
+            self._closing = True
+        else:
+            self._out += "\r\nDownload complete.\r\n" + PROMPT
+            self.unsaved_changes = True  # the running configuration no longer matches
+
+    def _restart_into_startup(self) -> None:
+        self.restarts += 1
+        self._down = self.down_for_connects
+        if self.startup_config is not None:
+            self.running_config = self.startup_config
+            for line in self.startup_config.splitlines():
+                if line.startswith("hostname "):
+                    self.hostname = line.split(None, 1)[1].strip('"')
+        if self.serial_after_restart:
+            self.serial = self.serial_after_restart
+
     def _answer_save(self, key: str) -> None:
         self.saved_on_reboot = key == "y"
+        if key == "y":  # saving copies the running configuration over the startup file
+            self.startup_config = self.running_config
         self._ask("boot", "\r\nThis will reboot the system from the primary image. "
                           "Continue (y/n)? ")
 
@@ -154,9 +203,8 @@ class FakeArubaSwitch:
         if key != "y" or self.reboot_mode == "refuse":
             self._out += "\r\n" + PROMPT
             return
-        self.restarts += 1
         self.running = self.primary
-        self._down = self.down_for_connects
+        self._restart_into_startup()
         if self.reboot_mode == "close":
             self._out += "\r\nRebooting the System...\r\n"
             self._closing = True

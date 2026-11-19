@@ -29,8 +29,11 @@ stopped when the job ends. Use it on the isolated bench network only. Settings:
 `UNDM_TFTP_HOST` (default all adapters; set the bench adapter's address to restrict it) and
 `UNDM_TFTP_PORT`.
 
-A FortiGate full backup is written to a private temporary file only for the moment of the
-transfer, under a neutral name, and deleted straight after.
+A FortiGate full backup or a complete 2930F file is written to a private temporary file only
+for the moment of the transfer, under a neutral name, and deleted straight after.
+
+When a loaded file moves a device to another address, UNDM follows it only after the serial
+number matches the one read before the change, and records the address change in the audit.
 
 Secret values for supplied files (e.g. a tunnel pre-shared key) are kept only in the
 credential store. A plan stores the credential reference; the value is read at execution,

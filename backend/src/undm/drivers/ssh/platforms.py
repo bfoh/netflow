@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import os
 import re
+import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import ClassVar
 
 from undm.domain.operations import DeviceOperation
 from undm.domain.versions import compare
+from undm.drivers.aruba.config_files import (
+    address_after_loading,
+    inspect_aos_switch_file,
+)
+from undm.drivers.aruba.config_files import parse as parse_aos_switch_file
 from undm.drivers.base import (
     ApplyMode,
     Capability,
+    ConfigFileReport,
     DeviceFacts,
     DriverInfo,
     DriverMaturity,
@@ -113,7 +124,8 @@ class ArubaOSSwitchSsh(SshCliDriver):
         description="ArubaOS-Switch (e.g. 2930F) over SSH CLI (Netmiko 'aruba_osswitch'). "
                     "Experimental, not lab-validated.",
         simulated=False,
-        capabilities=SSH_CAPABILITIES | {Capability.FIRMWARE_UPGRADE, Capability.REBOOT},
+        capabilities=SSH_CAPABILITIES | {Capability.FIRMWARE_UPGRADE, Capability.REBOOT,
+                                         Capability.CONFIGURATION_REPLACE},
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
         notes=(
@@ -126,6 +138,11 @@ class ArubaOSSwitchSsh(SshCliDriver):
             "Firmware: the switch pulls the image from UNDM by TFTP into the primary flash, "
             "then reboots into it ('boot system flash primary'). Not yet run on hardware; "
             "no automatic firmware rollback.",
+            "Complete configuration files (replace mode): the switch pulls the file by TFTP "
+            "into its startup configuration ('copy tftp startup-config ... unix') and restarts; "
+            "UNDM follows an address change made by the file, checks the serial number after "
+            "the restart, and never saves the old running configuration over the new file. "
+            "Not yet run on hardware.",
         ),
     )
 
@@ -135,7 +152,119 @@ class ArubaOSSwitchSsh(SshCliDriver):
 
     @classmethod
     def needs_file_server(cls, kind: str, mode: ApplyMode | None = None) -> bool:
-        return kind == "firmware"  # the switch pulls the image by TFTP
+        # The switch pulls the image, or a complete configuration file, by TFTP.
+        return kind == "firmware" or (kind == "configuration" and mode is ApplyMode.REPLACE)
+
+    @classmethod
+    def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
+        return inspect_aos_switch_file(text)
+
+    # -- complete configuration file (EXPERIMENTAL) ---------------------------------------
+    #   copy tftp startup-config <server> <file> unix   (from the manual of a sibling model)
+    # then the switch restarts into the new startup configuration (by itself, or after
+    # 'boot system flash primary', where any "save current configuration" question is
+    # answered "n" so the file just loaded is not overwritten).
+    def apply_configuration(self, config: str, mode: ApplyMode) -> OperationResult:
+        if mode is not ApplyMode.REPLACE:
+            return super().apply_configuration(config, mode)
+        op = DeviceOperation.APPLY_CONFIGURATION
+        if r := self._need(op):
+            return r
+        report = inspect_aos_switch_file(config)
+        if report.file_type != "full_config":
+            return OperationResult.failed(
+                op, "Replace mode needs a complete ArubaOS-Switch configuration file")
+        facts = self.get_device_facts()
+        wanted = report.facts.get("product_number")
+        have = facts.data.extra.get("product_number") if facts.ok else None
+        if wanted and have and wanted.upper() != str(have).upper():
+            return OperationResult.failed(
+                op, f"The file was written for a {wanted}; this switch is a {have}. Loading "
+                    "it here is refused.")
+        files = self.file_server
+        if files is None:
+            return OperationResult.failed(op, "No file server is available for this job")
+        client = self.target.management_address
+        after = address_after_loading(config, client)
+        name = f"undm-{hashlib.sha256(config.encode()).hexdigest()[:10]}.cfg"
+        fd, tmp = tempfile.mkstemp(prefix="undm-config-", suffix=".cfg")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+                f.write(config)
+            server_ip = files.offer(Path(tmp), name, client)
+            talk = self._dialogue(
+                f"copy tftp startup-config {server_ip} {name} unix", [(self._YES_NO, "y")],
+                timeout=self.transfer_timeout, idle_timeout=self.question_timeout,
+                patient=lambda out: files.last_transfer(name, client) is not None
+                and not re.search(r"\?\s*$", out))
+            transfer = self._settled_transfer(name)
+        except Exception as e:  # noqa: BLE001
+            return self._fail(op, e)
+        finally:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+        diagnostics: dict[str, object] = {"device_output": talk.tail}
+        if transfer is None:
+            return OperationResult.failed(
+                op, "The switch did not request the file from UNDM's TFTP server "
+                    f"({talk.detail or 'it returned to the prompt'}). Its output is below.",
+                diagnostics)
+        if not transfer.completed:
+            return OperationResult.failed(
+                op, f"Transfer incomplete ({transfer.bytes_sent} of {transfer.size} bytes). "
+                    "The switch was not restarted.", diagnostics)
+        if talk.ended == "timeout":
+            return OperationResult.failed(
+                op, f"The switch fetched the file but did not finish ({talk.detail}); it may "
+                    "be waiting for an answer UNDM does not give. Check it on the console.",
+                diagnostics)
+        if talk.ended == "prompt":
+            if re.search(self.error_pattern, talk.output):
+                return OperationResult.failed(
+                    op, "The switch fetched the file but reported an error (below). It was "
+                        "not restarted.", diagnostics)
+            restart = self.reboot()  # answers "n" to any save question
+            if not restart.ok:
+                return OperationResult.failed(
+                    op, f"The file is in the startup configuration, but the restart failed: "
+                        f"{restart.message}", {**diagnostics, **restart.diagnostics})
+        else:
+            self._conn = None  # the switch closed the session to restart
+        moved = ""
+        if after and after != client:
+            self.target = replace(self.target, management_address=after)
+            moved = f"; it will answer at {after} (address set by the file)"
+        return OperationResult.success(
+            op, {"restarting": True, "address_after": after or client},
+            f"the switch fetched the file ({transfer.bytes_sent} bytes) into its startup "
+            f"configuration and is restarting{moved}")
+
+    def verify_configuration(self, intended: str, mode: ApplyMode) -> OperationResult | None:
+        if mode is not ApplyMode.REPLACE:
+            return None  # merge: the generic line check
+        op = DeviceOperation.GET_FACTS
+        facts = self.get_device_facts()
+        if not facts.ok:
+            return OperationResult.failed(op, f"Could not read the switch: {facts.message}")
+        wanted = parse_aos_switch_file(intended).hostname
+        if wanted and facts.data.hostname != wanted:
+            return OperationResult.failed(
+                op, f"After loading, the hostname is {facts.data.hostname}; the file sets "
+                    f"{wanted}")
+        running = self.get_running_configuration()
+        if not running.ok:
+            return OperationResult.success(
+                op, message=f"back after loading: hostname {facts.data.hostname}; read-back "
+                            f"not available ({running.message})")
+        expected = [ln for ln in self.expected_lines(intended) if not ln.startswith(";")]
+        present = self.present_lines(str(running.data))
+        missing = [ln for ln in expected if ln not in present]
+        return OperationResult.success(
+            op, {"warnings": [f"not shown in the running configuration: {ln}"
+                              for ln in missing[:10]]},
+            f"back after loading: hostname {facts.data.hostname}; "
+            f"{len(expected) - len(missing)} of {len(expected)} lines of the file appear in "
+            "the running configuration")
 
     def parse_facts(self, outputs: dict[str, str], prompt: str) -> DeviceFacts:
         # Layout verified against a real 2930F-48G-4SFP on WC.16.10.0025 (2026-11-19):

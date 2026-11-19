@@ -276,3 +276,17 @@ document type or entity declaration, so no new dependency is needed and entity-b
 are excluded. The LIG1014A web upload lets the user pick running and/or startup
 configuration; the real loading procedure for either model still waits for the switch's
 own command output (Q-28) or the web upload details (Q-27, Q-29).
+
+### D-041 2930F complete files loaded by TFTP into the startup configuration (2026-11-19)
+The team's 2930F files are complete configurations written by the switch itself. UNDM loads
+one as a whole: `copy tftp startup-config <pc> <file> unix` (syntax from the manual of a
+sibling model; unverified on the 2930F), then the switch restarts — by itself, or after
+`boot system flash primary`, where a "save current configuration" question is always
+answered "n" so the old running configuration never overwrites the new file. A file for
+another product number is refused. If the file sets an address in the same subnet as the
+one UNDM used (e.g. temporary 192.168.1.2 → 192.168.1.1), UNDM reconnects there and, once
+the switch is verified, updates the device's address (audited). Verification: hostname as
+in the file, plus a count of the file's lines in the running configuration (missing ones
+listed as warnings). New general rule: after **any** restart (firmware, FortiGate restore,
+2930F load) the serial number is compared with the one read at preflight; a different unit
+answering at the address fails the job instead of being verified by mistake.

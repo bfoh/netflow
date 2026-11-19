@@ -134,6 +134,14 @@ psksecret**. The first login (forced password change) is still done in the brows
 run on a FortiGate: do the first run on a spare unit with
 `docs/vendor-support/fortigate-101f-bench.md`.
 
+## Aruba 2930F complete configuration files (experimental)
+Import the team's file on the switch (Configurations tab): UNDM shows the address it will
+have after loading, who may manage it, and points to check. A plan with that file runs in
+Replace mode: the switch fetches the file by TFTP into its startup configuration and
+restarts; UNDM follows an address change, checks the serial number and the hostname. Do the
+firmware upgrade first (the file switches the switch's TFTP client off). First run on a spare
+switch: `docs/vendor-support/aruba-2930f-staging.md`.
+
 ## Black Box configuration files
 Add the switch with model **LIG1014A** or **LE2700A** (simulated for now) and import the
 team's file (CLI text for the LIG1014A, XML for the LE2700A) on its Configurations tab: UNDM shows where the switch answers after loading, its access rules,

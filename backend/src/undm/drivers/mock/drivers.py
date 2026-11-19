@@ -15,6 +15,7 @@ from dataclasses import replace
 from typing import ClassVar
 
 from undm.domain.operations import DeviceOperation
+from undm.drivers.aruba.config_files import inspect_aos_switch_file
 from undm.drivers.base import (
     ApplyMode,
     Capability,
@@ -326,8 +327,12 @@ class MockArubaOSSwitchDriver(MockDriver):
         description="Simulated ArubaOS-Switch (e.g. 2930F); dual image banks simulated as "
                     "firmware rollback, no configuration rollback",
         simulated=True,
-        capabilities=_COMMON | {C.FIRMWARE_ROLLBACK},
+        capabilities=_COMMON | {C.FIRMWARE_ROLLBACK, C.CONFIGURATION_REPLACE},
     )
+
+    @classmethod
+    def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
+        return inspect_aos_switch_file(text)
 
 
 MOCK_DRIVERS: tuple[type[MockDriver], ...] = (

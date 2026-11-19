@@ -27,7 +27,7 @@ v00.01.00 → v00.01.01 is also done through the web interface. Two models, two 
 | Kind | A **complete** configuration as an XML export: `<configuration>` with `<platform>` (product id, version), `<global>` and `<switch>` sections; every value in a `val` attribute, with the allowed syntax in a comment above it |
 | Ports | 28 ports; 1–9 and 16 enabled, the rest disabled |
 | Management after loading | **One static address only, the site address on VLAN 168**, untagged on port 16, tagged on trunk port 9 (port 10 is a member but disabled). The address the switch had before loading is gone |
-| Access | SSH on, HTTPS on (no redirect from HTTP); logins local for console, SSH and web; telnet login method `none` (meaning not stated, Q-30) |
+| Access | SSH on, HTTPS on (no redirect from HTTP); logins local for console, SSH and web; telnet login method `none` = telnet off (product owner, Q-30) |
 | Accounts | **No administrator accounts or passwords** in the file |
 | SNMP | v2c on, with the well-known default community names and a read-write group accepted from any address |
 | Other | Syslog, NTP, SNMP trap destination, port names, VLANs, ring and Modbus/EtherNet-IP sections |
