@@ -13,7 +13,7 @@ Two different actors must be distinguished:
 | Environment | Read-only (connect, facts, backup, dry runs) | Configuration changes | Firmware |
 |---|---|---|---|
 | Simulated | always | always (through approved deployments) | simulated upgrades |
-| Lab (real) | allowed | only with `UNDM_ENABLE_REAL_DEVICE_WRITES=true`, through approved deployments | only with the write switch **and** `UNDM_ENABLE_REAL_DEVICE_FIRMWARE=true`, approved plan, maintenance window; one procedure exists (Aruba 2930F, experimental, not yet run on hardware) |
+| Lab (real) | allowed | only with `UNDM_ENABLE_REAL_DEVICE_WRITES=true`, through approved deployments | only with the write switch **and** `UNDM_ENABLE_REAL_DEVICE_FIRMWARE=true`, approved plan, maintenance window; one procedure exists (Aruba 2930F, experimental, one successful run on a spare unit 2026-11-19) |
 | Production (real) | only with `UNDM_ALLOW_PRODUCTION_READ_ONLY=true` | only with writes enabled **and** `UNDM_ALLOW_PRODUCTION_DEPLOYMENTS=true` | not implemented |
 
 Console bootstrap (Provisioning Center) writes to a device over a serial cable. For real

@@ -1,6 +1,6 @@
 # Development Status
 
-_Last updated: 2026-11-19 — first complete 2930F console bootstrap on hardware; FortiGate 101F staging procedures (firmware, base restore,
+_Last updated: 2026-11-19 — first 2930F console bootstrap and firmware downgrade on hardware; FortiGate 101F staging procedures (firmware, base restore,
 site script with the tunnel key from the credential store, revisions; experimental, bench
 run pending); startup database check; on top of the TFTP server, 2930F firmware, console
 bootstrap, the 2930F platform, configuration import, SSH drivers, credentials, firmware
@@ -15,7 +15,7 @@ manager, topology._
 | Intent & generation | Hostname, VLANs, L3 interfaces, static routes → AOS-CX / FortiOS / IOS-XE templates; validation; platform support checks |
 | Configuration import | Upload a file per device; normalised, versioned, labelled unvalidated; selectable per device in deployment plans |
 | Deployments | Lifecycle with directive-15 states; dry runs; approval; preflight with identity check; backup; verification by read-back (platform-aware for SSH drivers); rollback or manual recovery; device locks; crash recovery on restart |
-| Firmware | Repository with SHA-256 vs vendor checksum, approval/retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery. Simulated devices, plus **one experimental real procedure: Aruba 2930F** (switch pulls the image from UNDM by TFTP into primary flash, restarts, version verified) behind `UNDM_ENABLE_REAL_DEVICE_FIRMWARE`. **Tested against a fake switch only; not yet run on hardware** |
+| Firmware | Repository with SHA-256 vs vendor checksum, approval/retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery. Simulated devices, plus **one experimental real procedure: Aruba 2930F** (switch pulls the image from UNDM by TFTP into primary flash, restarts, version verified) behind `UNDM_ENABLE_REAL_DEVICE_FIRMWARE`. Experimental: **one successful run on hardware** (2026-11-19, spare JL260A, approved downgrade WC.16.11.0001 → WC.16.10.0025, verified) |
 | File transfer | Built-in TFTP server: read-only, per-job, per-device allowlist, transfer records; tested with an independent client |
 | FortiGate 101F staging | Firmware by TFTP; base file restored by TFTP (replace mode, checked by hostname/VDOM/version, wrong-model backups refused); site script statement by statement (multi-VDOM, hostname change, error-looking reply stops the run); tunnel key inserted from the credential store, never stored or shown; revision named after each file. **Tested against a fake FortiGate only; not yet run on hardware** |
 | Database check | Startup comparison of the database with the migrations; banner with the exact command; clear database errors |
@@ -57,7 +57,7 @@ library; intent beyond the first slice; project export/import; persistent job ru
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (73 files) |
-| Frontend Vitest | 14 passed |
+| Frontend Vitest | 16 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
 
@@ -77,8 +77,8 @@ Staging four factory-default devices per system (FortiGate 101F, Black Box switc
 2 × Aruba 2930F) from one place: `docs/requirements/staging-use-case.md`, design and
 build order in `docs/requirements/staging-run-design.md`. Still needed from the product
 owner: Black Box command output from a spare unit (Q-28). Bench runs: 2930F console
-bootstrap done once on a new unit (2026-11-19); owed: its re-run and network check, 2930F
-firmware (approved downgrade WC.16.11.0001 → WC.16.10.0025), file load; FortiGate 101F staging.
+bootstrap, SSH check and firmware (approved downgrade WC.16.11.0001 → WC.16.10.0025) done
+once on a new unit (2026-11-19); owed: bootstrap re-run, file load; FortiGate 101F staging.
 
 ## Next milestone
 1. **Bench runs** (product owner): 2930F console bootstrap and firmware

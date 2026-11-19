@@ -1,8 +1,9 @@
 # Aruba 2930F — firmware over SSH + TFTP, bench validation
 
 Procedure under test: `ArubaOSSwitchSsh.stage_firmware / reboot` with UNDM's built-in TFTP
-server. Status: **experimental — tested only against a fake switch** (synthetic wording)
-that downloads from the real TFTP server. This checklist is its first run on hardware.
+server. Status: **experimental — one successful run on hardware** (2026-11-19, spare JL260A,
+approved downgrade; see the results log). Before that only against a fake switch that downloads
+from the real TFTP server.
 
 Commands UNDM sends (from public write-ups of the ArubaOS-Switch CLI, see
 `staging-procedures-research.md`; the switch's exact questions are not verified):
@@ -65,4 +66,4 @@ Any other question is **not answered**: the job stops and shows the switch's tex
 ## Results log
 | Date | Unit | From → to | Result | Notes |
 |---|---|---|---|---|
-| | | | | |
+| 2026-11-19 | spare 2930F-48G-4SFP (JL260A), new unit, after the console bootstrap | WC.16.11.0001 → WC.16.10.0025 (approved downgrade, allowed by the plan) | **succeeded**, target verified | Dry run first (preflight: reachable, identity ok, running WC.16.11.0001; nothing changed). Real plan approved with a 2-hour window, executed: backup, TFTP transfer, restart, same serial after the restart, running WC.16.10.0025. Event wording and durations still to be copied in from the job's event list. |
