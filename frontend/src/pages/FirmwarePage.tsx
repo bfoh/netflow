@@ -22,7 +22,7 @@ const fmtSize = (b: number) => (b > 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)} M
 function UploadForm() {
   const models = useDeviceModels();
   const [file, setFile] = useState<File | null>(null);
-  const [platform, setPlatform] = useState<string | null>('aoscx');
+  const [platform, setPlatform] = useState<string | null>('aos_switch');
   const [version, setVersion] = useState('');
   const [compatible, setCompatible] = useState<string[]>([]);
   const [sha, setSha] = useState('');
@@ -40,6 +40,8 @@ function UploadForm() {
     form.append('release_notes', notes);
     return api.uploadFirmware(form);
   }, (img) => `Uploaded ${img.filename}${img.integrity_verified ? ' (checksum verified)' : ''}`);
+  const missing = [!file && 'the image file', !version.trim() && 'the version',
+    compatible.length === 0 && 'at least one compatible model (type it, then press Enter)'].filter(Boolean);
   const suggestions = (models.data ?? []).filter((m) => m.os_family === OS_OF[platform ?? '']).map((m) => m.model);
 
   return (
@@ -59,7 +61,8 @@ function UploadForm() {
             onClick={() => upload.mutate(undefined, { onSuccess: () => { setFile(null); setVersion(''); setSha(''); setMinFrom(''); setNotes(''); } })}>
             Upload to repository
           </Button>
-          <Text size="xs" c="dimmed">Only upload images obtained from the vendor. The file is stored in the backend's data folder.</Text>
+          <Text size="xs" c="dimmed">{missing.length ? `Still needed: ${missing.join(', ')}.`
+            : "Only upload images obtained from the vendor. The file is stored in the backend's data folder."}</Text>
         </Group>
       </Stack>
     </Card>

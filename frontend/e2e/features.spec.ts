@@ -67,6 +67,8 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   const image = Buffer.from(`SYNTHETIC E2E IMAGE ${id}\n`.repeat(100));
   await nav(page, 'Firmware');
   await page.locator('input[type=file]').setInputFiles({ name: `cx-${id}.swi`, mimeType: 'application/octet-stream', buffer: image });
+  await page.getByRole('combobox', { name: 'Platform' }).click();
+  await page.getByRole('option', { name: 'Aruba AOS-CX' }).click();
   await page.getByRole('textbox', { name: 'Version', exact: true }).fill('10.2.0');
   await page.getByRole('combobox', { name: 'Compatible models' }).fill('6300M');
   await page.getByRole('combobox', { name: 'Compatible models' }).press('Enter');
