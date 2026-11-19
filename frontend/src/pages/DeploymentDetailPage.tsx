@@ -103,7 +103,7 @@ export function DeploymentDetailPage() {
       <PageHeader title={`${d.kind === 'firmware' ? 'Firmware upgrade' : 'Configuration deployment'}${d.dry_run ? ' (dry run)' : ''} · ${fmtDate(d.created_at)}`}
         description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
           ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : ` · ${d.apply_mode} mode`}`}
-        actions={<><StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
+        actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
       {working && (
         <Alert color="blue" mb="md" title={`In progress: ${RUNNING_STATES.has(d.state) ? d.state.replaceAll('_', ' ') : 'starting'}…`}>
           Keep this page open; the events below update as each step finishes.

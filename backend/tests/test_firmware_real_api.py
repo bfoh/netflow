@@ -187,3 +187,26 @@ def test_tftp_port_in_use_is_explained_before_anything_is_touched(bench, monkeyp
         assert state == "ready"  # can be run again once the port is free
     finally:
         taken.close()
+
+
+def test_approved_older_version_needs_the_plan_option(bench):
+    """New units ship with WC.16.11.0001; the project's approved version is older."""
+    b = bench(enable_real_device_writes=True, enable_real_device_firmware=True)
+    b.switch.running = b.switch.primary = "WC.16.11.0001"
+    refused = b.plan().json()
+    assert refused["state"] == "failed"
+    assert any("downgrades are refused unless the plan allows" in e["message"]
+               for e in refused["events"])
+    dep = b.client.post(
+        f"/api/projects/{b.pid}/firmware-upgrades", headers=ALICE,
+        json={"device_ids": [b.did], "image_id": b.image_id, "allow_downgrade": True}).json()
+    assert dep["state"] == "awaiting_approval" and dep["allow_downgrade"] is True
+    assert any("DOWNGRADE to the approved version" in e["message"] for e in dep["events"])
+    b.approve(dep["id"])
+    out = b.execute(dep["id"]).json()
+    assert out["state"] == "succeeded", [e["message"] for e in out["events"]]
+    assert b.switch.running == TARGET
+    audit = b.client.get("/api/audit?limit=50").json()
+    created = next(a for a in audit if a["action"] == "firmware_deployment.create"
+                   and a["details"]["allow_downgrade"])
+    assert created["details"]["version"] == TARGET

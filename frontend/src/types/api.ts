@@ -197,6 +197,8 @@ export interface DeploymentSummary {
   kind: 'configuration' | 'firmware';
   state: DeploymentState;
   dry_run: boolean;
+  /** Firmware plans: install the approved image even where a device runs a newer one. */
+  allow_downgrade?: boolean;
   apply_mode: string;
   created_by: string;
   approved_by: string | null;

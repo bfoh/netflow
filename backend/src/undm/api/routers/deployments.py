@@ -81,7 +81,8 @@ def create_firmware_deployment(project_id: str, body: FirmwareDeploymentIn,
                                actor: ActorDep) -> DeploymentRecord:
     get_project(session, project_id)
     return svc.create_firmware(
-        project_id, body.device_ids, body.image_id, actor, dry_run=body.dry_run)
+        project_id, body.device_ids, body.image_id, actor, dry_run=body.dry_run,
+        allow_downgrade=body.allow_downgrade)
 
 
 @router.post("/api/deployments/{deployment_id}/execute", response_model=DeploymentOut)

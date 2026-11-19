@@ -111,11 +111,12 @@ function Planner({ images }: { images: FirmwareImage[] }) {
   const [imageId, setImageId] = useState<string | null>(null);
   const [sel, setSel] = useState<string[]>([]);
   const [dryRun, setDryRun] = useState(false);
+  const [allowDowngrade, setAllowDowngrade] = useState(false);
   const [results, setResults] = useState<Compatibility[] | null>(null);
   const devices = useProjectDevices(projectId ?? '');
   const navigate = useNavigate();
   const check = useAction(() => api.firmwareCompatibility(imageId!, sel));
-  const create = useAction(() => api.createFirmwareDeployment(projectId!, { device_ids: sel, image_id: imageId!, dry_run: dryRun }),
+  const create = useAction(() => api.createFirmwareDeployment(projectId!, { device_ids: sel, image_id: imageId!, dry_run: dryRun, allow_downgrade: allowDowngrade }),
     (d) => `Upgrade plan created: ${d.state.replaceAll('_', ' ')}`);
   const approved = images.filter((i) => i.status === 'approved');
   const allOk = !!results && results.length === sel.length && results.every((r) => r.compatible);
@@ -156,6 +157,9 @@ function Planner({ images }: { images: FirmwareImage[] }) {
             <Button variant="default" disabled={!imageId || sel.length === 0} loading={check.isPending}
               onClick={() => check.mutate(undefined, { onSuccess: setResults })}>Check compatibility (offline)</Button>
             <Switch label="Dry run (read versions only, no approval)" checked={dryRun} onChange={(e) => setDryRun(e.currentTarget.checked)} />
+            <Checkbox label="Install the approved version even on devices that run a newer one (downgrade)"
+              description="For a project that requires an older approved release, e.g. new units shipping with a newer one."
+              checked={allowDowngrade} onChange={(e) => setAllowDowngrade(e.currentTarget.checked)} />
             <Button disabled={!allOk} loading={create.isPending}
               onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(`/deployments/${d.id}`) })}>Create upgrade plan</Button>
           </Group>

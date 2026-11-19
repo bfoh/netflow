@@ -351,3 +351,11 @@ an escape sequence cut off at the end of a read and joins it with the next read,
 "next line" (ESC E) and "insert line" (ESC[nL) into line breaks, mirroring Netmiko's
 handling of Aruba/ProCurve consoles; other codes are removed. "Password:" is also matched at
 the end of the output, independent of line starts.
+
+### D-048 Approved older firmware: an explicit plan option (2026-11-19)
+New 2930F units ship with WC.16.11.0001 while the project's approved release is the older
+WC.16.10.0025 (product owner). Downgrades stay refused by default; a firmware plan may set
+"install the approved version even on devices that run a newer one". The preview marks each
+such device as a DOWNGRADE (warning), the deployment page shows a badge, and the plan's audit
+records the setting, so the approver sees it before approving. The procedure itself is the
+same as an upgrade; if a switch refuses the older image, the job stops with its answer.

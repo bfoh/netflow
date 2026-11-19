@@ -115,6 +115,8 @@ class Deployment:
     # firmware deployments only
     firmware: FirmwareImageRef | None = None
     min_from_version: str | None = None
+    # Install the approved image even where the device runs a newer version (project rule).
+    allow_downgrade: bool = False
     window_start: datetime | None = None
     window_end: datetime | None = None
 

@@ -76,7 +76,10 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
         if order is None:
             return f"cannot compare running version {current!r} with {target!r}"
         if order > 0:
-            return f"running version {current} is newer than {target}; downgrades are refused"
+            if dep.allow_downgrade:
+                return None  # the plan explicitly installs the approved older version
+            return (f"running version {current} is newer than {target}; downgrades are "
+                    "refused unless the plan allows installing the approved older version")
         if dep.min_from_version:
             base = compare(current, dep.min_from_version)
             if base is None:
@@ -115,9 +118,12 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                     continue
                 t.state = TargetState.PREVIEWED
                 same = compare(t.current_version, dep.firmware.version) == 0
-                self._emit(dep, "preview", "ok",
+                older = compare(t.current_version, dep.firmware.version) == 1
+                self._emit(dep, "preview", "warning" if older else "ok",
                            f"{t.current_version} -> {dep.firmware.version}"
-                           + (" (already running target; will be skipped)" if same else ""), t)
+                           + (" (already running target; will be skipped)" if same else "")
+                           + (" (DOWNGRADE to the approved version, allowed by the plan)"
+                              if older else ""), t)
             finally:
                 t.driver.disconnect()
         return ok

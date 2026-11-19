@@ -311,6 +311,7 @@ class DeploymentOut(ORM):
     window_end: datetime | None
     state: str
     dry_run: bool
+    allow_downgrade: bool = False
     apply_mode: str
     created_by: str
     approved_by: str | None
@@ -327,6 +328,7 @@ class DeploymentSummary(ORM):
     kind: str
     state: str
     dry_run: bool
+    allow_downgrade: bool = False
     apply_mode: str
     created_by: str
     approved_by: str | None
@@ -401,6 +403,8 @@ class FirmwareDeploymentIn(BaseModel):
     device_ids: list[str] = Field(min_length=1)
     image_id: str
     dry_run: bool = False
+    # Install the approved image even where a device runs a newer version.
+    allow_downgrade: bool = False
 
 
 class DiagnosticsOut(BaseModel):

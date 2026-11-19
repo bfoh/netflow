@@ -40,7 +40,7 @@ Any other question is **not answered**: the job stops and shows the switch's tex
 |---|---|---|
 | 1 | Firmware → upload the image: vendor Aruba, platform `aos_switch`, version `WC.16.10.0025`, compatible models `2930F` (or the exact model string shown under Observed facts), vendor SHA-256 | "integrity verified" |
 | 2 | Approve the image | status approved |
-| 3 | Upgrade planning → select the switch → **dry run** | plan shows `from <current> → WC.16.10.0025`; nothing changed |
+| 3 | Upgrade planning → select the switch → **dry run** (new units ship with WC.16.11.0001, newer than the approved WC.16.10.0025: tick **Install the approved version even on devices that run a newer one**) | plan shows `from <current> → WC.16.10.0025` (marked DOWNGRADE if older); nothing changed |
 | 4 | Create the real plan → approve with a maintenance window | state ready |
 | 5 | Execute | page shows "In progress"; events appear step by step |
 | 6 | Watch the events | `stage: … bytes transferred`, `reboot: restart … started`, `device reachable again`, `running WC.16.10.0025`, state **succeeded** |

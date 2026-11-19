@@ -10,7 +10,16 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    false,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -166,6 +175,8 @@ class DeploymentRecord(TimestampMixin, Base):
     window_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     state: Mapped[str] = mapped_column(String(30), index=True)
     dry_run: Mapped[bool] = mapped_column(default=False)
+    # Firmware plans: install the approved image even where the device runs a newer one.
+    allow_downgrade: Mapped[bool] = mapped_column(default=False, server_default=false())
     apply_mode: Mapped[str] = mapped_column(String(20))
     created_by: Mapped[str] = mapped_column(String(120))
     approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
