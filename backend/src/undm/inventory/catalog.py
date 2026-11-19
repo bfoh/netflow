@@ -49,6 +49,12 @@ CATALOG: tuple[DeviceModel, ...] = (
                 notes="Runs ArubaOS-Switch (not AOS-CX). Read-only acceptance passed 2026-11-19 "
                       "on 2930F-48G-4SFP (JL260A) WC.16.10.0025: connect, facts, backup. "
                       "Configuration changes not yet validated."),
+    DeviceModel("blackbox-lig1014a", "Black Box", "Industrial managed switch", "LIG1014A",
+                DeviceCategory.SWITCH, "Black Box managed switch", ("mock.blackbox.switch",),
+                SupportLevel.SIMULATED_ONLY,
+                notes="Staging target. Configuration files are recognised offline; no "
+                      "real-device driver yet (access method and load command to confirm on "
+                      "a spare unit)."),
     DeviceModel("fortinet-fg-60f", "Fortinet", "FortiGate", "FortiGate-60F",
                 DeviceCategory.FIREWALL, "FortiOS", _FORTIOS, SupportLevel.SIMULATED_ONLY),
     DeviceModel("fortinet-fg-100f", "Fortinet", "FortiGate", "FortiGate-100F",

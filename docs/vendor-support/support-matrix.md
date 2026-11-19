@@ -30,7 +30,7 @@ Checklist: `aruba-2930f-acceptance.md`.
 |---|---|---|
 | ArubaOS-Switch (2930F) | Serial console: out-of-band management VLAN, one untagged port, address, `write memory` | Simulated-tested; **hardware validation pending** (`aruba-2930f-console-bootstrap.md`) |
 | FortiOS (FortiGate 101F) | Forced first-login password change | By hand in the browser (Q-24). Firmware, base restore, site script and revisions: built, experimental (`fortigate-101f-bench.md`) |
-| Black Box LIG1014A / LE2700 series | Default address | Not built; manuals needed |
+| Black Box LIG1014A / LE2700 series | Default address | Not built. LIG1014A configuration files are recognised offline and a simulated driver exists (`blackbox-staging.md`); real procedure after Q-26…Q-28 |
 
 ## Templates (generation)
 | Template | Intent features rendered | Verification |

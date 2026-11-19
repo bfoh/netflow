@@ -134,6 +134,12 @@ psksecret**. The first login (forced password change) is still done in the brows
 run on a FortiGate: do the first run on a spare unit with
 `docs/vendor-support/fortigate-101f-bench.md`.
 
+## Black Box configuration files
+Add the switch with model **LIG1014A** (simulated for now) and import the team's file on its
+Configurations tab: UNDM shows where the switch answers after loading, its access rules,
+and a warning about the base64 password. Loading it onto a real switch is not built yet —
+see `docs/vendor-support/blackbox-staging.md`.
+
 ## Console bootstrap (Aruba 2930F and other ArubaOS-Switch models)
 For a factory-default switch with no management address: **Provisioning** → choose the
 switch → enter the management VLAN, port and address → **Preview commands** → choose the

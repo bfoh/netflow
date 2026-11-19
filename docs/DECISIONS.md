@@ -255,3 +255,13 @@ After an update the database may be behind the code (seen on 2026-11-19: a missi
 showed only as "Request failed (500)"). The backend now compares the database revision with
 its migrations at startup, reports it in `/api/health`, the UI shows a banner with the exact
 command, and database errors say so instead of a generic 500.
+
+### D-039 Black Box files: recognised and simulated first (2026-11-19)
+The product owner supplied a Black Box configuration file (loaded today as a file in the
+web interface). It is a complete configuration in the switch's CLI syntax, so it is applied
+as a whole (replace) — never line by line. UNDM recognises it at import and reports where
+the switch answers after loading, its access restrictions, and that the admin password's
+"encrypted" value in the sample is only base64 (readable by anyone with the file). The
+LIG1014A is in the catalog with a simulated driver only. A real procedure waits for the
+answers to Q-26…Q-28: the CLI `copy` syntax with a TFTP URL is not confirmed, and the web
+upload is undocumented, so neither is built on guesswork.

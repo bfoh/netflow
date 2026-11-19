@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from undm.configgen.engine import GenerationResult, generate
+from undm.configgen.engine import GenerationResult, UnknownPlatformError, generate
 from undm.db.models import ConfigVersion, Device
 from undm.domain.intent import DeviceIntent
 from undm.domain.operations import DeviceOperation, is_impacting
@@ -117,7 +117,12 @@ def generate_config(
         raise ConflictError("Device has no configuration intent")
     intent = DeviceIntent.model_validate(device.intent)
     platform = registry.get(device.driver_id).info.platform
-    result = generate(intent, platform)
+    try:
+        result = generate(intent, platform)
+    except UnknownPlatformError:
+        raise ConflictError(
+            f"No configuration template exists for {platform}; import a configuration "
+            "file for this device instead") from None
     version = None
     if result.ok:
         assert result.text is not None and result.sha256 is not None

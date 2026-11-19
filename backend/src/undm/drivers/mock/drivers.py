@@ -26,6 +26,7 @@ from undm.drivers.base import (
     FirmwareImageRef,
     OperationResult,
 )
+from undm.drivers.blackbox.config_files import inspect_blackbox_file
 from undm.drivers.fortinet.config_files import (
     insert_secret_values,
     inspect_fortios_file,
@@ -265,6 +266,24 @@ class MockFortiGateDriver(MockDriver):
         return [ln for ln in super().expected_lines(config) if not is_secret_setting(ln)]
 
 
+class MockBlackBoxSwitchDriver(MockDriver):
+    model = "SIM-BB"
+    initial_os_version = "sim-00.01.00"
+    info = DriverInfo(
+        driver_id="mock.blackbox.switch",
+        vendor="Black Box",
+        platform="blackbox",
+        os_family="Black Box managed switch",
+        description="Simulated Black Box managed switch (proves the workflow only)",
+        simulated=True,
+        capabilities=_COMMON | {C.CONFIGURATION_REPLACE},
+    )
+
+    @classmethod
+    def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
+        return inspect_blackbox_file(text)
+
+
 class MockArubaAOSCXDriver(MockDriver):
     model = "SIM-CX"
     initial_os_version = "sim-10.0.0"
@@ -314,6 +333,7 @@ class MockArubaOSSwitchDriver(MockDriver):
 MOCK_DRIVERS: tuple[type[MockDriver], ...] = (
     MockArubaOSSwitchDriver,
     MockFortiGateDriver,
+    MockBlackBoxSwitchDriver,
     MockArubaAOSCXDriver,
     MockCiscoIOSXEDriver,
 )

@@ -37,7 +37,9 @@ credential store. A plan stores the credential reference; the value is read at e
 inserted into the copy sent to the device, and masked in every message (D-036).
 
 Supplied configuration files (for example FortiGate backups and site scripts) contain
-passwords, keys and addressing. They are stored in UNDM's database on the PC running UNDM;
+passwords, keys and addressing. In the Black Box sample the admin password marked
+"encrypted" is only base64-encoded, i.e. readable by anyone with the file: handle such files
+as containing the password in clear text. They are stored in UNDM's database on the PC running UNDM;
 protect that PC and the database file accordingly. File reports and audit entries never
 contain secret values.
 

@@ -19,6 +19,7 @@ manager, topology._
 | File transfer | Built-in TFTP server: read-only, per-job, per-device allowlist, transfer records; tested with an independent client |
 | FortiGate 101F staging | Firmware by TFTP; base file restored by TFTP (replace mode, checked by hostname/VDOM/version, wrong-model backups refused); site script statement by statement (multi-VDOM, hostname change, error-looking reply stops the run); tunnel key inserted from the credential store, never stored or shown; revision named after each file. **Tested against a fake FortiGate only; not yet run on hardware** |
 | Database check | Startup comparison of the database with the migrations; banner with the exact command; clear database errors |
+| Black Box files | LIG1014A configuration files recognised at import (complete file → replace; where the switch answers after loading; access restrictions; base64 "encrypted" password flagged); LIG1014A in the catalog with a **simulated** driver only |
 | Supplied-file recognition | FortiOS files are classified offline at import (full backup vs CLI script), with structure check, what the file will change about access, and a count of secrets (never the values). A file cannot be applied in a way that does not fit its kind |
 | Live progress | The deployment page refreshes every 2 s while a job runs and shows the device's last output when a step fails |
 | Topology | Canvas (React Flow), interface links with mode/VLANs, saved layout, auto-arrange, validation (interface reuse, self links, subnet mismatch, VLANs, duplicate IPs, isolated devices) |
@@ -47,10 +48,10 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 279 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 296 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
-| ruff / mypy --strict | clean / clean (69 files) |
+| ruff / mypy --strict | clean / clean (71 files) |
 | Frontend Vitest | 14 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
@@ -70,9 +71,9 @@ library; intent beyond the first slice; project export/import; persistent job ru
 Staging four factory-default devices per system (FortiGate 101F, Black Box switch,
 2 × Aruba 2930F) from one place: `docs/requirements/staging-use-case.md`, design and
 build order in `docs/requirements/staging-run-design.md`. Still needed from the product
-owner: sample configuration files, Aruba firmware versions, Black Box manuals and the
-answers to Q-19…Q-22 (FortiGate order, credentials, expected messages) in
-`REFERENCE_ANALYSIS.md`. Bench runs still owed: console bootstrap and firmware on a spare 2930F.
+owner: a sample 2930F configuration file per role, and answers to Q-26…Q-28 (Black Box
+model, web upload behaviour, SSH and `copy` syntax on a spare unit). Bench runs owed: 2930F
+console bootstrap and firmware; FortiGate 101F staging.
 
 ## Next milestone
 1. **Bench runs** (product owner): 2930F console bootstrap and firmware
@@ -81,7 +82,8 @@ answers to Q-19…Q-22 (FortiGate order, credentials, expected messages) in
    the units really print (Q-25); keep the output as fixtures.
 2. **2930F full-configuration push** with the address/password change the final file brings
    (needs a sample 2930F file).
-3. Black Box LIG1014A, then LE2700A (web-managed; investigate).
+3. Black Box LIG1014A: real load procedure once Q-26…Q-28 are answered (file recognition
+   and a simulated driver exist); then LE2700A.
 4. The one-screen staging run across the four devices.
 5. FortiGate first login inside UNDM, if agreed (Q-24).
 6. Authentication and roles; persistent job runner.
