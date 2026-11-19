@@ -31,6 +31,7 @@ from undm.drivers.base import (
     ApplyMode,
     Capability,
     ConfigurationBackup,
+    Credentials,
     DeviceDriver,
     FirmwareImageRef,
     OperationResult,
@@ -84,6 +85,8 @@ class DeploymentTarget:
     # Serial number the device reported at preflight; re-checked after any restart so a
     # different unit answering at the same address is never taken for this one.
     observed_serial: str | None = None
+    # Login valid once the configuration is applied (the file changes the password).
+    credentials_after: Credentials | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -387,10 +390,23 @@ class DeploymentOrchestrator:
                 result = t.driver.apply_configuration(to_send, dep.apply_mode)
                 if result.ok:
                     self._emit_warnings(dep, t, "deploy", result)
-                    if isinstance(result.data, dict) and result.data.get("restarting"):
+                    restarting = isinstance(result.data, dict) and result.data.get("restarting")
+                    if t.credentials_after is not None:
+                        t.driver.use_credentials(t.credentials_after)
+                        self._emit(dep, "deploy", "ok", "from now on logging in with the "
+                                   "credential chosen for after loading", t)
+                    if restarting:
                         self._emit(dep, "deploy", "ok", result.message or "device restarting", t)
                         back = self._wait_until_available(dep, t)
                         result = back if not back.ok else result
+                    elif t.credentials_after is not None:
+                        t.driver.disconnect()  # prove the new login works
+                        back = t.driver.connect()
+                        if not back.ok:
+                            result = OperationResult.failed(
+                                DeviceOperation.APPLY_CONFIGURATION,
+                                f"the configuration was applied, but the login chosen for "
+                                f"after loading does not work: {back.message}")
                 if result.ok:
                     applied_message = result.message
                     result = t.driver.save_configuration()

@@ -182,10 +182,13 @@ def inspect_aos_switch_file(text: str) -> ConfigFileReport:
     if "ip ssh filetransfer" in stmts:
         notes.append("SSH file transfer (SCP/SFTP) is switched on.")
     bare = [ln for ln in stmts if re.fullmatch(r"password (manager|operator)", ln)]
-    if bare:
-        notes.append("The file contains " + " and ".join(f"'{ln}'" for ln in bare)
-                     + " without a value. How the switch treats these lines when the file is "
-                       "loaded is not documented in our material (check the login afterwards).")
+    logins = [ln for ln in stmts if re.match(r"password (manager|operator)\b", ln)]
+    if logins:
+        notes.append("The file sets the switch's login ('password manager' / 'password "
+                     "operator'"
+                     + (", here without a value" if bare and len(bare) == len(logins) else "")
+                     + "). In the plan choose the login valid after loading, so UNDM can log "
+                       "in after the restart.")
 
     # -- consistency checks (reported, not blocking: the file is loaded this way today) ----
     for vid, count in Counter(f.vlan_order).items():

@@ -249,6 +249,9 @@ class DeploymentIn(BaseModel):
     # Optional device_id -> {secret slot id -> credential reference id}: values to put into
     # marked settings of a supplied file (e.g. a tunnel pre-shared key) when it is sent.
     secrets: dict[str, dict[str, str]] | None = None
+    # Optional device_id -> credential reference id valid once the file is applied (for
+    # files that change the login, e.g. the 2930F files set the approved password).
+    credentials_after: dict[str, str] | None = None
 
 
 class ConfigImportIn(BaseModel):
@@ -261,6 +264,7 @@ class DeploymentTargetOut(ORM):
     position: int
     config_version_id: str | None
     secret_refs: dict[str, str] | None = None
+    credential_after_ref_id: str | None = None
     backup_version_id: str | None
     from_version: str | None
     to_version: str | None

@@ -290,3 +290,13 @@ in the file, plus a count of the file's lines in the running configuration (miss
 listed as warnings). New general rule: after **any** restart (firmware, FortiGate restore,
 2930F load) the serial number is compared with the one read at preflight; a different unit
 answering at the address fails the job instead of being verified by mistake.
+
+### D-042 A loaded file may change the login (2026-11-19)
+The team's 2930F file sets the approved manager password, while the switch is reached
+before loading with the factory login (manager, no password). A configuration plan may
+therefore name, per device, a **login after loading** (a credential reference, stored as a
+reference only). After the apply, UNDM logs in with it — after the restart, or by logging
+in again for a change without restart, as proof that the new login works — and, once the
+device is verified, makes it the device's credential (audited `device.credential_changed`).
+Without it, the job stops after the restart with "Authentication failed", which the file
+check now points out. Generic, not vendor-specific.

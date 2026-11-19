@@ -138,7 +138,9 @@ run on a FortiGate: do the first run on a spare unit with
 Import the team's file on the switch (Configurations tab): UNDM shows the address it will
 have after loading, who may manage it, and points to check. A plan with that file runs in
 Replace mode: the switch fetches the file by TFTP into its startup configuration and
-restarts; UNDM follows an address change, checks the serial number and the hostname. Do the
+restarts; UNDM follows an address change, checks the serial number and the hostname. The
+team's files set the approved password: choose it under **Login after loading** in the plan
+(a credential with user `manager` and the approved password). Do the
 firmware upgrade first (the file switches the switch's TFTP client off). First run on a spare
 switch: `docs/vendor-support/aruba-2930f-staging.md`.
 

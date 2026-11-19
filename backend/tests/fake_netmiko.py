@@ -111,7 +111,7 @@ def factory_for(scenario: Scenario):
         if scenario.connect_error is not None:
             raise scenario.connect_error
         if scenario.device is not None:
-            if hasattr(scenario.device, "prompt_text"):  # checks the password it is given
+            if hasattr(scenario.device, "password"):  # checks the password it is given
                 scenario.device.accept_connection(str(kwargs.get("password", "")))
             else:
                 scenario.device.accept_connection()

@@ -45,6 +45,9 @@ class FakeArubaSwitch:
     startup_config: str | None = None
     config_load_mode: str = "reboot"  # reboot: asks, then restarts | prompt: back to prompt
     serial_after_restart: str | None = None  # another unit answering after the restart
+    password: str = ""  # manager password the switch accepts (factory default: none)
+    # Password a loaded file sets (the team's files carry the approved password).
+    password_after_load: str | None = None
     # Observations.
     commands: list[str] = field(default_factory=list)
     keys: list[str] = field(default_factory=list)
@@ -55,10 +58,13 @@ class FakeArubaSwitch:
     _down: int = 0
 
     # -- what a new SSH session sees --------------------------------------------------
-    def accept_connection(self) -> None:
+    def accept_connection(self, password: str | None = None) -> None:
         if self._down > 0:
             self._down -= 1
             raise OSError("connection timed out (switch restarting)")
+        if password is not None and password != self.password:
+            from netmiko.exceptions import NetmikoAuthenticationException
+            raise NetmikoAuthenticationException("Authentication failed")
         self._closed, self._out, self._pending = False, "", ""
 
     def show(self, command: str) -> str:
@@ -189,6 +195,9 @@ class FakeArubaSwitch:
                     self.hostname = line.split(None, 1)[1].strip('"')
         if self.serial_after_restart:
             self.serial = self.serial_after_restart
+        if (self.password_after_load is not None and self.startup_config
+                and "password manager" in self.startup_config):
+            self.password = self.password_after_load
 
     def _answer_save(self, key: str) -> None:
         self.saved_on_reboot = key == "y"

@@ -32,7 +32,7 @@ from undm.domain.lifecycle import (
     DeploymentState,
     interrupted_outcome,
 )
-from undm.drivers.base import ApplyMode
+from undm.drivers.base import ApplyMode, Credentials
 from undm.drivers.registry import DriverRegistry
 from undm.orchestration.deployment import (
     ApprovalRequiredError,
@@ -203,6 +203,7 @@ class DeploymentService:
         *, dry_run: bool, apply_mode: ApplyMode,
         config_versions: dict[str, str] | None = None,
         secrets: dict[str, dict[str, str]] | None = None,
+        credentials_after: dict[str, str] | None = None,
     ) -> DeploymentRecord:
         if not device_ids:
             raise ConflictError("Select at least one device")
@@ -226,15 +227,21 @@ class DeploymentService:
             refs = (secrets or {}).get(did) or None
             if refs:
                 self._check_secrets(device, cfg, refs)
+            after = (credentials_after or {}).get(did) or None
+            if after:
+                self._credentials_for(device, after)  # exists, belongs here, has a secret
             rec.targets.append(DeploymentTargetRecord(
                 device_id=did, position=pos, config_version_id=cfg.id,
                 state=TargetState.PENDING.value, secret_refs=refs,
+                credential_after_ref_id=after,
             ))
         unknown = set(config_versions or {}) - set(device_ids)
         if unknown:
             raise ConflictError("Configuration chosen for a device that is not in the plan")
         if set(secrets or {}) - set(device_ids):
             raise ConflictError("Secret values chosen for a device that is not in the plan")
+        if set(credentials_after or {}) - set(device_ids):
+            raise ConflictError("Login after loading chosen for a device that is not in the plan")
         self.s.flush()
         dep = self._to_domain(rec)
         self._orchestrator(rec).prepare(dep)
@@ -264,6 +271,15 @@ class DeploymentService:
             raise ConflictError(
                 f"{what}; it can only be applied in {report.apply_mode.value} mode, not "
                 f"{apply_mode.value} mode")
+
+    def _credentials_for(self, device: Device, ref_id: str) -> Credentials:
+        ref = self.s.get(CredentialRef, ref_id)
+        if ref is None or ref.project_id != device.project_id:
+            raise ConflictError(f"{device.name}: login after loading: credential not found")
+        try:
+            return creds.resolve(ref.provider, ref.locator)
+        except creds.CredentialResolutionError as e:
+            raise ConflictError(f"{device.name}: credential '{ref.name}': {e}") from e
 
     def _secret_values(self, device: Device, refs: dict[str, str]) -> dict[str, str]:
         """Read the values for a target's secret slots from the credential store."""
@@ -395,11 +411,14 @@ class DeploymentService:
         if not rec.dry_run:
             by_id = {t.device_id: t for t in dep.targets}
             for tr in rec.targets:
+                device = self.s.get(Device, tr.device_id)
+                assert device is not None
                 if tr.secret_refs:
-                    device = self.s.get(Device, tr.device_id)
-                    assert device is not None
                     by_id[tr.device_id].secret_values = self._secret_values(
                         device, dict(tr.secret_refs))
+                if tr.credential_after_ref_id:
+                    by_id[tr.device_id].credentials_after = self._credentials_for(
+                        device, tr.credential_after_ref_id)
         mode = ApplyMode(rec.apply_mode)
         needs_files = not rec.dry_run and any(
             not t.driver.info.simulated and t.driver.needs_file_server(rec.kind, mode)
@@ -474,6 +493,14 @@ class DeploymentService:
                              details={"from": device.management_address, "to": reached,
                                       "deployment": rec.id})
                 device.management_address = reached
+            after = tr.credential_after_ref_id
+            if (after and after != device.credential_ref_id
+                    and t.state in (TargetState.VERIFIED, TargetState.VERIFY_FAILED)):
+                # The device was reached with the login chosen for after loading: keep it.
+                audit.record(self.s, actor, "device.credential_changed", "device", device.id,
+                             details={"from": device.credential_ref_id,
+                                      "to": after, "deployment": rec.id})
+                device.credential_ref_id = after
             if t.backup is not None:
                 device.last_backup_at = now
             if rec.kind == "firmware":

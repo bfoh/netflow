@@ -81,7 +81,8 @@ def test_complete_file_is_described_without_secrets_or_comments():
     assert "192.168.1.1 / 255.255.255.0 (manager, all methods)" in notes
     assert "HTTPS-only" in notes and "comments say to create it before loading" in notes
     assert "switches off the switch's TFTP client" in notes
-    assert "'password manager' and 'password operator' without a value" in notes
+    assert "sets the switch's login" in notes and "here without a value" in notes
+    assert "choose the login valid after loading" in notes
     assert "1 SNMP community string(s)" in notes
     assert "Example staging file" not in notes  # comment lines are never quoted
 
@@ -232,3 +233,45 @@ def test_api_another_switch_answering_after_the_restart_is_not_accepted(api):
     assert out["state"] == "recovery_required", [e["message"] for e in out["events"]]
     assert "a different device answers" in out["targets"][0]["message"]
     assert client.get(f"/api/devices/{did}").json()["management_address"] == "127.0.0.1"
+
+
+def test_api_login_after_loading_is_used_and_kept(api):
+    """The team's files set the approved manager password (product owner, 2026-11-19)."""
+    client, pid, did, switch, hub = api
+    switch.password_after_load = "Example-Only-Approved-1"
+    after = client.post(f"/api/projects/{pid}/credential-refs", json={"name": "approved"}).json()
+    client.put(f"/api/credential-refs/{after['id']}/secret",
+               json={"username": "manager", "password": "Example-Only-Approved-1"})
+    v = client.post(f"/api/devices/{did}/configs/import",
+                    json={"filename": "oobm-switch.pcc", "text": sample()}).json()
+    dep = client.post(f"/api/projects/{pid}/deployments", json={
+        "device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]},
+        "credentials_after": {did: after["id"]}}).json()
+    assert dep["targets"][0]["credential_after_ref_id"] == after["id"]
+    client.post(f"/api/deployments/{dep['id']}/approve")
+    out = client.post(f"/api/deployments/{dep['id']}/execute").json()
+    events = " | ".join(e["message"] for e in out["events"])
+    assert out["state"] == "succeeded", events
+    assert "logging in with the credential chosen for after loading" in events
+    assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == after["id"]
+    audit = client.get("/api/audit?limit=50").json()
+    assert any(a["action"] == "device.credential_changed" for a in audit)
+    assert "Example-Only-Approved-1" not in repr(audit) + repr(out)
+
+
+def test_api_without_the_login_after_loading_the_failure_says_why(api):
+    client, pid, did, switch, hub = api
+    switch.password_after_load = "Example-Only-Approved-1"
+    out = _load(client, pid, did, sample())
+    assert out["state"] == "recovery_required"
+    assert "Authentication failed" in out["targets"][0]["message"]
+
+
+def test_api_unknown_login_after_loading_is_refused_at_planning(api):
+    client, pid, did, switch, hub = api
+    v = client.post(f"/api/devices/{did}/configs/import",
+                    json={"filename": "oobm-switch.pcc", "text": sample()}).json()
+    r = client.post(f"/api/projects/{pid}/deployments", json={
+        "device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]},
+        "credentials_after": {did: "no-such-credential"}})
+    assert r.status_code == 409 and "credential not found" in r.json()["error"]

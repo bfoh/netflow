@@ -305,6 +305,10 @@ class DeviceDriver:
     def provision_factory_default_device(self, bootstrap_config: str) -> OperationResult:
         return self._unsupported(DeviceOperation.PROVISION_FACTORY_DEFAULT)
 
+    def use_credentials(self, credentials: Credentials) -> None:
+        """Log in with these from the next connection on (a loaded file changed the login)."""
+        self._credentials = credentials
+
     def create_checkpoint(self, label: str) -> OperationResult:
         """Keep a named restore point of the current configuration on the device."""
         return self._unsupported(DeviceOperation.CREATE_CHECKPOINT)

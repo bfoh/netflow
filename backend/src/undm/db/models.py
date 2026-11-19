@@ -201,6 +201,11 @@ class DeploymentTargetRecord(Base):
     # Secret slot id -> credential reference id, for settings of a supplied file whose
     # value comes from the credential store at execution. References only, never values.
     secret_refs: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
+    # Credential valid once this configuration is applied (the file changes the login).
+    credential_after_ref_id: Mapped[str | None] = mapped_column(
+        ForeignKey("credential_refs.id", ondelete="SET NULL",
+                   name="fk_deployment_targets_credential_after_ref_id"), nullable=True
+    )
 
 
 class DeploymentEventRecord(Base):

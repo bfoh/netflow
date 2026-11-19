@@ -110,7 +110,7 @@ export const api = {
   deployment: (id: string) => request<Deployment>('GET', `/deployments/${id}`),
   createDeployment: (pid: string, body: {
     device_ids: string[]; dry_run: boolean; apply_mode: string; config_versions?: Record<string, string>;
-    secrets?: Record<string, Record<string, string>>;
+    secrets?: Record<string, Record<string, string>>; credentials_after?: Record<string, string>;
   }) =>
     request<Deployment>('POST', `/projects/${pid}/deployments`, body),
   approveDeployment: (id: string, window?: { window_start: string; window_end: string }) =>

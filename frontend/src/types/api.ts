@@ -159,6 +159,8 @@ export interface DeploymentTarget {
   config_version_id: string | null;
   /** Secret slot id -> credential reference id (never a value). */
   secret_refs?: Record<string, string> | null;
+  /** Credential valid once the file is applied (the file changes the login). */
+  credential_after_ref_id?: string | null;
   backup_version_id: string | null;
   from_version: string | null;
   to_version: string | null;

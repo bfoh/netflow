@@ -137,6 +137,9 @@ export function DeploymentDetailPage() {
               <Accordion.Panel>
                 <Stack gap="xs">
                   {t.message && <Text size="sm" c={t.state.includes('fail') || t.state.includes('manual') ? 'red' : undefined}>{t.message}</Text>}
+                  {t.credential_after_ref_id && (
+                    <Text size="xs" c="dimmed">After loading, UNDM logs in with the credential chosen for this file and keeps it for the device.</Text>
+                  )}
                   {t.secret_refs && Object.keys(t.secret_refs).length > 0 && (
                     <Text size="xs" c="dimmed">{Object.keys(t.secret_refs).length} secret setting(s) filled from the credential store when sent (values are never shown).</Text>
                   )}

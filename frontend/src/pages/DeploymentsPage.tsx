@@ -29,9 +29,10 @@ import { api } from '../services/api';
  * What the chosen file needs: the apply mode its kind requires, and a credential for each
  * secret setting (e.g. a tunnel pre-shared key). Values never pass through the browser.
  */
-function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode }: {
+function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode, loginAfter, onLoginAfter }: {
   projectId: string; versionId: string; secrets: Record<string, string>;
   onSecrets: (s: Record<string, string>) => void; onMode: (m: string) => void;
+  loginAfter: string | null; onLoginAfter: (v: string | null) => void;
 }) {
   const version = useConfig(versionId);
   const refs = useCredentialRefs(projectId);
@@ -57,6 +58,15 @@ function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode }: {
             onSecrets(next);
           }} />
       ))}
+      {report.apply_mode === 'replace' && (
+        <Select size="xs" w={320} clearable label="Login after loading (optional)"
+          description={loginAfter
+            ? 'UNDM logs in with this after the restart and keeps it for the device.'
+            : 'Choose it if the file changes the login (the 2930F files set the approved password).'}
+          placeholder={refs.data?.length ? 'Same login as now' : 'Add one on the project Credentials tab'}
+          data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
+          value={loginAfter} onChange={onLoginAfter} />
+      )}
     </Stack>
   );
 }
@@ -68,15 +78,18 @@ function NewPlan({ projectId, preselected }: { projectId: string; preselected: s
   const [mode, setMode] = useState('merge');
   const [choice, setChoice] = useState<Record<string, string>>({});
   const [secrets, setSecrets] = useState<Record<string, Record<string, string>>>({});
+  const [loginAfter, setLoginAfter] = useState<Record<string, string>>({});
   const navigate = useNavigate();
   const chosen = Object.fromEntries(
     Object.entries(choice).filter(([id, v]) => sel.includes(id) && v !== DEFAULT_CHOICE));
+  const chosenLogins = Object.fromEntries(Object.entries(loginAfter).filter(([id]) => id in chosen));
   const chosenSecrets = Object.fromEntries(
     Object.entries(secrets).filter(([id, s]) => id in chosen && Object.keys(s).length));
   const create = useAction(() => api.createDeployment(projectId, {
     device_ids: sel, dry_run: dryRun, apply_mode: mode,
     config_versions: Object.keys(chosen).length ? chosen : undefined,
     secrets: Object.keys(chosenSecrets).length ? chosenSecrets : undefined,
+    credentials_after: Object.keys(chosenLogins).length ? chosenLogins : undefined,
   }),
     (d) => `Plan created: ${d.state.replaceAll('_', ' ')}`);
 
@@ -101,10 +114,20 @@ function NewPlan({ projectId, preselected }: { projectId: string; preselected: s
               <Table.Td>{sel.includes(d.id) && (
                 <>
                   <ConfigChoice deviceId={d.id} value={choice[d.id] ?? DEFAULT_CHOICE}
-                    onChange={(v) => { setChoice((c) => ({ ...c, [d.id]: v })); setSecrets((s) => ({ ...s, [d.id]: {} })); }} />
+                    onChange={(v) => {
+                      setChoice((c) => ({ ...c, [d.id]: v }));
+                      setSecrets((s) => ({ ...s, [d.id]: {} }));
+                      setLoginAfter((l) => { const n = { ...l }; delete n[d.id]; return n; });
+                    }} />
                   {choice[d.id] && choice[d.id] !== DEFAULT_CHOICE && (
                     <FileNeeds projectId={projectId} versionId={choice[d.id]} secrets={secrets[d.id] ?? {}}
-                      onSecrets={(v) => setSecrets((s) => ({ ...s, [d.id]: v }))} onMode={setMode} />
+                      onSecrets={(v) => setSecrets((s) => ({ ...s, [d.id]: v }))} onMode={setMode}
+                      loginAfter={loginAfter[d.id] ?? null}
+                      onLoginAfter={(v) => setLoginAfter((l) => {
+                        const n = { ...l };
+                        if (v) n[d.id] = v; else delete n[d.id];
+                        return n;
+                      })} />
                   )}
                 </>)}</Table.Td>
             </Table.Tr>
@@ -119,8 +142,8 @@ function NewPlan({ projectId, preselected }: { projectId: string; preselected: s
       </Group>
       {mode === 'replace' && (
         <Alert color="yellow" icon={<IconInfoCircle size={16} />} mb="md">
-          Replace makes the running configuration equal to the chosen one, removing everything else. For a FortiGate full backup this is
-          a restore: the unit fetches the file over TFTP and restarts. Drivers that cannot replace are rejected at validation.
+          Replace makes the running configuration equal to the chosen one, removing everything else. For a FortiGate full backup or a
+          complete 2930F file, the device fetches the file over TFTP and restarts. Drivers that cannot replace are rejected at validation.
         </Alert>
       )}
       <Button disabled={sel.length === 0} loading={create.isPending}

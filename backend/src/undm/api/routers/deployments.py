@@ -57,7 +57,8 @@ def create_deployment(project_id: str, body: DeploymentIn, session: SessionDep,
     get_project(session, project_id)
     return svc.create(
         project_id, body.device_ids, actor, dry_run=body.dry_run, apply_mode=body.apply_mode,
-        config_versions=body.config_versions, secrets=body.secrets)
+        config_versions=body.config_versions, secrets=body.secrets,
+        credentials_after=body.credentials_after)
 
 
 @router.get("/api/deployments/{deployment_id}", response_model=DeploymentOut)
