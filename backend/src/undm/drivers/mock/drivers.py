@@ -26,7 +26,7 @@ from undm.drivers.base import (
     FirmwareImageRef,
     OperationResult,
 )
-from undm.drivers.blackbox.config_files import inspect_blackbox_file
+from undm.drivers.blackbox.config_files import inspect_blackbox_config
 from undm.drivers.fortinet.config_files import (
     insert_secret_values,
     inspect_fortios_file,
@@ -281,7 +281,7 @@ class MockBlackBoxSwitchDriver(MockDriver):
 
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
-        return inspect_blackbox_file(text)
+        return inspect_blackbox_config(text)
 
 
 class MockArubaAOSCXDriver(MockDriver):

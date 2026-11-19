@@ -265,3 +265,14 @@ the switch answers after loading, its access restrictions, and that the admin pa
 LIG1014A is in the catalog with a simulated driver only. A real procedure waits for the
 answers to Q-26…Q-28: the CLI `copy` syntax with a TFTP URL is not confirmed, and the web
 upload is undocumented, so neither is built on guesswork.
+
+### D-040 LE2700A files: XML, recognised and simulated (2026-11-19)
+The product owner confirmed the CLI-syntax file is for the LIG1014A and supplied the LE2700A
+format: an XML export of the whole configuration. UNDM recognises it at import (complete
+file → replace; the single management address after loading and the ports that carry it;
+access settings; no accounts in the file; SNMP exposure) and adds the LE2700A to the catalog
+with the simulated driver. XML is parsed with the standard library after refusing any
+document type or entity declaration, so no new dependency is needed and entity-based attacks
+are excluded. The LIG1014A web upload lets the user pick running and/or startup
+configuration; the real loading procedure for either model still waits for the switch's
+own command output (Q-28) or the web upload details (Q-27, Q-29).

@@ -129,3 +129,124 @@ def test_simulated_lig1014a_imports_and_loads_the_file_as_a_whole(client):
     client.put(f"/api/devices/{did}/intent", json={"hostname": "lab-bbsw01"})
     gen = client.post(f"/api/devices/{did}/configs/generate")
     assert gen.status_code == 409 and "import a configuration file" in gen.json()["error"]
+
+
+# -- LE2700A: XML export -------------------------------------------------------------------
+# SYNTHETIC, in the layout of the XML files the team loads on the LE2700A; fictional
+# names, RFC 5737 addresses, the well-known default community names.
+XML_SAMPLE = """<?xml version="1.0"?>
+<configuration>
+  <!-- Example config version: v1 -->
+  <platform>Platform identification
+    <!-- Syntax: val="10" -->
+    <pid val="10"></pid>
+    <version val="1"></version>
+  </platform>
+  <global>Global configuration
+    <ip>IP settings
+      <dhcp_client val="disabled"></dhcp_client>
+      <addr val="198.51.100.20"></addr>
+      <mask val="255.255.255.0"></mask>
+      <router val="198.51.100.254"></router>
+      <vid val="168"></vid>
+    </ip>
+    <system>System settings
+      <name val="lab-le-sw01"></name>
+    </system>
+    <snmp>Simple Network Management Protocol
+      <mode val="enabled"></mode>
+      <version val="2c"></version>
+      <read_community val="x"></read_community>
+      <community_table>
+        <entry community="public" source_ip="0.0.0.0" source_mask="0.0.0.0"></entry>
+        <entry community="private" source_ip="0.0.0.0" source_mask="0.0.0.0"></entry>
+      </community_table>
+      <group_table>
+        <entry security_model="v2c" security_name="public" group_name="default_ro_group"></entry>
+        <entry security_model="v2c" security_name="private" group_name="default_rw_group"></entry>
+      </group_table>
+    </snmp>
+    <https>HTTPS
+      <mode val="enabled"></mode>
+      <redirect val="disabled"></redirect>
+    </https>
+    <auth>Authentication settings
+      <client_table>
+        <entry client="telnet" method="none" fallback="disabled"></entry>
+        <entry client="ssh" method="local" fallback="disabled"></entry>
+      </client_table>
+    </auth>
+    <ssh>Secure Shell
+      <mode val="enabled"></mode>
+    </ssh>
+  </global>
+  <switch>Switch configuration
+    <port>
+      <port_table>
+        <entry port="1-9,16" state="enabled"></entry>
+        <entry port="10-15" state="disabled"></entry>
+      </port_table>
+    </port>
+    <vlan>
+      <port_table>
+        <entry port="1-8" pvid="1002" tx_tag="untag_all"></entry>
+        <entry port="9" pvid="168" tx_tag="tag_all"></entry>
+        <entry port="16" pvid="168" tx_tag="untag_all"></entry>
+      </port_table>
+      <vlan_table>
+        <entry vid="168" vlan_name="mgmt" port="9,10,16"></entry>
+        <entry vid="1002" vlan_name="users" port="1-9"></entry>
+      </vlan_table>
+    </vlan>
+  </switch>
+</configuration>
+"""
+
+
+def test_le2700a_xml_export_is_recognised():
+    from undm.drivers.blackbox.config_files import inspect_blackbox_config
+
+    r = inspect_blackbox_config(XML_SAMPLE)
+    assert r.file_type == "full_config" and r.apply_mode is ApplyMode.REPLACE
+    assert r.facts["format"] == "xml" and r.facts["hostname"] == "lab-le-sw01"
+    assert r.facts["ports"] == "16" and r.facts["ports_enabled"] == "10"
+    notes = " ".join(r.notes)
+    assert ("answers only at 198.51.100.20 / 255.255.255.0 on VLAN 168 (untagged on port 16; "
+            "tagged on port 9, 10 (disabled))") in notes
+    assert "The address it had before is gone" in notes
+    assert "SSH enabled" in notes and "telnet: none" in notes
+    assert "no administrator accounts or passwords" in notes
+    assert "read-write community is accepted from any address" in notes
+    assert "well-known default community names" in notes
+    assert r.facts["secrets"] == "3"  # two communities + read_community; values never shown
+    assert "private" not in " ".join([r.summary, *r.facts.values()])
+
+
+def test_hostile_or_foreign_xml_is_not_processed():
+    from undm.drivers.blackbox.config_files import inspect_blackbox_config
+
+    bomb = ('<?xml version="1.0"?><!DOCTYPE c [<!ENTITY a "aaaa">]>'
+            "<configuration>&a;</configuration>")
+    r = inspect_blackbox_config(bomb)
+    assert r.file_type == "unknown" and "not processed" in r.problems[0]
+    assert inspect_blackbox_config("<?xml version='1.0'?><configuration>").file_type == "unknown"
+    other = inspect_blackbox_config("<?xml version='1.0'?><note><to>x</to></note>")
+    assert other.file_type == "unknown" and "Expected <configuration>" in other.problems[0]
+
+
+def test_simulated_le2700a_loads_the_xml_file_as_a_whole(client):
+    models = {m["model_id"]: m for m in client.get("/api/device-models").json()}
+    assert models["blackbox-le2700a"]["drivers"] == ["mock.blackbox.switch"]
+    pid = client.post("/api/projects", json={"name": "LE"}).json()["id"]
+    did = client.post(f"/api/projects/{pid}/devices", json={
+        "name": "lab-le-sw01", "manufacturer": "Black Box", "category": "switch",
+        "model": "LE2700A", "driver_id": "mock.blackbox.switch",
+        "management_address": "192.0.2.30"}).json()["id"]
+    v = client.post(f"/api/devices/{did}/configs/import",
+                    json={"filename": "site-le.xml", "text": XML_SAMPLE}).json()
+    assert v["inspection"]["facts"]["format"] == "xml"
+    dep = client.post(f"/api/projects/{pid}/deployments", json={
+        "device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]}}).json()
+    client.post(f"/api/deployments/{dep['id']}/approve")
+    out = client.post(f"/api/deployments/{dep['id']}/execute").json()
+    assert out["state"] == "succeeded", [e["message"] for e in out["events"]]

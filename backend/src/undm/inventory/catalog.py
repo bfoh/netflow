@@ -55,6 +55,12 @@ CATALOG: tuple[DeviceModel, ...] = (
                 notes="Staging target. Configuration files are recognised offline; no "
                       "real-device driver yet (access method and load command to confirm on "
                       "a spare unit)."),
+    DeviceModel("blackbox-le2700a", "Black Box", "LE2700 series", "LE2700A",
+                DeviceCategory.SWITCH, "Black Box managed switch", ("mock.blackbox.switch",),
+                SupportLevel.SIMULATED_ONLY,
+                notes="Staging target in some systems. Configuration files are XML exports "
+                      "(a different format from the LIG1014A), recognised offline; no "
+                      "real-device driver yet."),
     DeviceModel("fortinet-fg-60f", "Fortinet", "FortiGate", "FortiGate-60F",
                 DeviceCategory.FIREWALL, "FortiOS", _FORTIOS, SupportLevel.SIMULATED_ONLY),
     DeviceModel("fortinet-fg-100f", "Fortinet", "FortiGate", "FortiGate-100F",
