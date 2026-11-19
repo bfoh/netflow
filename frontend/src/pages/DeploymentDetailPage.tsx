@@ -18,6 +18,11 @@ const STEP_OF: Record<string, number> = {
   deploying: 4, verifying: 5, recovering: 5, succeeded: 7, rolled_back: 7, recovery_required: 7,
   failed: 7, cancelled: 7,
 };
+// A dry run is not approved and goes from preflight straight to its end: no backup, change or verification.
+const DRY_STEPS = ['Validate & preview', 'Preflight (read only)', 'Complete'];
+const DRY_STEP_OF: Record<string, number> = {
+  draft: 0, validating: 0, ready: 1, preflight: 1, succeeded: 3, failed: 3, cancelled: 3,
+};
 const OUTCOME: Record<string, { color: string; title: string; text: string }> = {
   succeeded: { color: 'teal', title: 'Deployment succeeded', text: 'Every changed device was verified against its intended configuration.' },
   failed: { color: 'red', title: 'Deployment failed before any change', text: 'No device was changed. See events for the reason.' },
@@ -93,9 +98,20 @@ export function DeploymentDetailPage() {
     succeeded: 'Every upgraded device came back and reports the target firmware version.',
     rolled_back: 'The upgrade did not complete. Every device that was touched runs its previous version; read each target\'s message below before trying again.',
   };
-  const outcome = d.kind === 'firmware' && firmwareText[d.state]
-    ? { ...OUTCOME[d.state], title: d.state === 'rolled_back' ? 'Upgrade did not complete' : OUTCOME[d.state].title, text: firmwareText[d.state] }
-    : OUTCOME[d.state];
+  const dryText: Record<string, { title: string; text: string }> = {
+    succeeded: { title: 'Dry run succeeded', text: d.kind === 'firmware'
+      ? 'Every device was reached, its identity checked and its running version read. Nothing was changed: run a real plan to upgrade.'
+      : 'Every device was reached, its identity checked and its configuration compared. Nothing was changed.' },
+    failed: { title: 'Dry run failed', text: 'No device was changed. See events for the reason.' },
+    cancelled: { title: 'Dry run cancelled', text: 'No device was changed.' },
+  };
+  const outcome = d.dry_run && dryText[d.state] && OUTCOME[d.state]
+    ? { ...OUTCOME[d.state], ...dryText[d.state] }
+    : d.kind === 'firmware' && firmwareText[d.state]
+      ? { ...OUTCOME[d.state], title: d.state === 'rolled_back' ? 'Upgrade did not complete' : OUTCOME[d.state].title, text: firmwareText[d.state] }
+      : OUTCOME[d.state];
+  const steps = d.dry_run ? DRY_STEPS : STEPS;
+  const stepOf = d.dry_run ? DRY_STEP_OF : STEP_OF;
   const working = running || RUNNING_STATES.has(d.state);
 
   return (
@@ -112,9 +128,9 @@ export function DeploymentDetailPage() {
       )}
       {!working && outcome && <Alert color={outcome.color} title={outcome.title} mb="md" icon={d.state === 'succeeded' ? <IconCheck size={18} /> : <IconAlertTriangle size={18} />}>{outcome.text}</Alert>}
       <Card withBorder mb="md">
-        <Stepper active={STEP_OF[d.state] ?? 0} size="xs" allowNextStepsSelect={false}
+        <Stepper active={stepOf[d.state] ?? 0} size="xs" allowNextStepsSelect={false}
           color={['failed', 'recovery_required', 'rolled_back'].includes(d.state) ? 'red' : undefined}>
-          {STEPS.map((s) => <Stepper.Step key={s} label={s} />)}
+          {steps.map((s) => <Stepper.Step key={s} label={s} />)}
         </Stepper>
       </Card>
 

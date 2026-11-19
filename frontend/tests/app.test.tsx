@@ -154,3 +154,34 @@ describe('intent editor hostname safety', () => {
     expect(screen.getByText('This intent renames the device')).toBeInTheDocument();
   });
 });
+
+describe('deployment outcome', () => {
+  const plan = (over: Record<string, unknown>) => ({
+    id: 'dep1', project_id: 'p1', kind: 'firmware', state: 'succeeded', dry_run: true, allow_downgrade: true,
+    apply_mode: 'merge', created_by: 'tester', approved_by: null, created_at: '', firmware_image_id: 'i1',
+    window_start: null, window_end: null, approved_at: null, updated_at: '',
+    targets: [{ device_id: 'd1', position: 0, config_version_id: null, backup_version_id: null,
+      from_version: 'WC.16.11.0001', to_version: 'WC.16.10.0025', state: 'preflight_passed', diff: '', message: '' }],
+    events: [{ seq: 1, timestamp: '', device_id: null, stage: 'lifecycle', status: 'succeeded',
+      message: 'dry run complete; no device was changed' }],
+    ...over,
+  });
+
+  it('a successful dry run says nothing was changed and shows no deploy steps', async () => {
+    mockApi({ '/deployments/dep1': plan({}), '/projects/p1/devices': [device({})] });
+    renderAt('/deployments/dep1');
+    expect(await screen.findByText('Dry run succeeded')).toBeInTheDocument();
+    expect(screen.getByText(/Nothing was changed/)).toBeInTheDocument();
+    expect(screen.queryByText(/Every upgraded device came back/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Deploy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Back up')).not.toBeInTheDocument();
+  });
+
+  it('a successful real upgrade keeps the upgrade wording', async () => {
+    mockApi({ '/deployments/dep1': plan({ dry_run: false, approved_by: 'approver' }), '/projects/p1/devices': [device({})] });
+    renderAt('/deployments/dep1');
+    expect(await screen.findByText('Deployment succeeded')).toBeInTheDocument();
+    expect(screen.getByText(/Every upgraded device came back/)).toBeInTheDocument();
+    expect(screen.getByText('Deploy')).toBeInTheDocument();
+  });
+});
