@@ -40,8 +40,15 @@ export const useConfigDiff = (from: string | null, to: string | null) =>
   });
 export const useDeployments = (pid: string) =>
   useQuery({ queryKey: keys.deployments(pid), queryFn: () => api.deployments(pid), enabled: !!pid });
-export const useDeployment = (id: string) =>
-  useQuery({ queryKey: keys.deployment(id), queryFn: () => api.deployment(id) });
+/** States in which the server is working on a deployment right now. */
+export const RUNNING_STATES = new Set(['validating', 'preflight', 'backing_up', 'deploying', 'verifying', 'recovering']);
+/** Refreshes every two seconds while the deployment runs (`live` covers the moment before the first step is stored). */
+export const useDeployment = (id: string, live = false) =>
+  useQuery({
+    queryKey: keys.deployment(id),
+    queryFn: () => api.deployment(id),
+    refetchInterval: (query) => (live || RUNNING_STATES.has(query.state.data?.state ?? '') ? 2000 : false),
+  });
 export const useAudit = (target?: string, limit = 200) =>
   useQuery({ queryKey: keys.audit(target), queryFn: () => api.audit({ target_id: target, limit }) });
 export const useDrivers = () => useQuery({ queryKey: keys.drivers, queryFn: api.drivers });

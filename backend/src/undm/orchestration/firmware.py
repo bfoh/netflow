@@ -36,9 +36,10 @@ MAX_WINDOW_HOURS = 24
 
 class FirmwareOrchestrator(DeploymentOrchestrator):
     def __init__(self, sink: EventSink | None = None, *, reboot_wait_attempts: int = 30,
-                 reboot_wait_delay_s: float = 20.0) -> None:
-        # Firmware always requires a second person to approve.
-        super().__init__(sink, require_separate_approver=True)
+                 reboot_wait_delay_s: float = 20.0,
+                 require_separate_approver: bool = True) -> None:
+        # A second approver is the default; a bench policy may relax it explicitly.
+        super().__init__(sink, require_separate_approver=require_separate_approver)
         self.reboot_wait_attempts = reboot_wait_attempts
         self.reboot_wait_delay_s = reboot_wait_delay_s
 
@@ -230,6 +231,12 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                 name, result = failed
                 self._fail_target(dep, t, "deploy", TargetState.APPLY_FAILED,
                                   f"{name} failed: {result.message}")
+                # What the device last printed (redacted by the driver) is the evidence a
+                # technician needs, e.g. a question that was deliberately left unanswered.
+                shown = str(result.diagnostics.get("device_output") or "").strip()
+                if shown:
+                    self._emit(dep, "deploy", "warning",
+                               f"device output (last lines): {shown[-600:]}", t)
                 for rest in dep.targets[idx + 1:]:
                     rest.state = TargetState.SKIPPED
                     self._emit(dep, "deploy", "skipped", "not attempted after failure", rest)
@@ -280,7 +287,9 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
             conn = t.driver.connect()
             if conn.ok and self._read_version(t).ok and t.current_version == t.from_version:
                 t.state = TargetState.ROLLED_BACK
-                t.message = f"still running the original version {t.from_version}; nothing to undo"
+                t.message = (f"still running the original version {t.from_version}; nothing to "
+                             "undo. If the new image was already copied to the device it is "
+                             "still stored there and may start at the next restart")
                 self._emit(dep, "recover", "ok", t.message, t)
                 continue
             if t.driver.missing_capabilities(DeviceOperation.ROLLBACK_FIRMWARE):

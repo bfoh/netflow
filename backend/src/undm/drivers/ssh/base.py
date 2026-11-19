@@ -21,8 +21,10 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import re
+import time
 from collections.abc import Callable
-from typing import Any, ClassVar
+from dataclasses import dataclass
+from typing import Any, ClassVar, Literal
 
 from undm.domain.operations import DeviceOperation
 from undm.drivers.base import (
@@ -32,6 +34,7 @@ from undm.drivers.base import (
     DeviceDriver,
     DeviceFacts,
     OperationResult,
+    TransferInfo,
 )
 from undm.security.redaction import redact_text
 
@@ -44,6 +47,21 @@ SSH_CAPABILITIES = frozenset(
 
 # Lines that carry no configuration or are never displayed in running config.
 _ALWAYS_IGNORED = {"!", "end", "exit", "next", "no shutdown", "set status up"}
+
+
+@dataclass(frozen=True)
+class Dialogue:
+    """How an interactive command ended, with everything the device printed."""
+
+    output: str
+    replies: list[str]
+    ended: Literal["prompt", "closed", "timeout"]
+    detail: str = ""
+
+    @property
+    def tail(self) -> str:
+        """The end of the device output, safe to show (secrets redacted)."""
+        return redact_text(self.output)[-1500:]
 
 
 def _default_factory(**kwargs: Any) -> Any:
@@ -67,6 +85,7 @@ class SshCliDriver(DeviceDriver):
     parser_validated_on: ClassVar[tuple[str, ...]] = ()
     connect_timeout: ClassVar[int] = 15
     read_timeout: ClassVar[int] = 120
+    poll_interval: ClassVar[float] = 0.2  # pause between reads while a dialogue is quiet
     # Replaced in tests with a fake connection factory.
     connection_factory: ClassVar[Callable[..., Any]] = staticmethod(_default_factory)
 
@@ -82,6 +101,75 @@ class SshCliDriver(DeviceDriver):
 
     def _send(self, command: str) -> str:
         return str(self._conn.send_command(command, read_timeout=self.read_timeout))
+
+    def _prompt_pattern(self) -> str:
+        base = re.escape(str(getattr(self._conn, "base_prompt", "") or ""))
+        return (base + r"[^\n]*[#>]\s*$") if base else r"[#>]\s*$"
+
+    def _dialogue(self, command: str, answers: list[tuple[str, str]], *, timeout: float,
+                  idle_timeout: float = 60.0,
+                  patient: Callable[[], bool] | None = None) -> Dialogue:
+        """Run a command that asks questions and report how the exchange ended.
+
+        ``answers`` is an ordered list of (question regex, reply). When the output ends
+        with a known question the reply is sent. The exchange ends at the prompt
+        ("prompt"), when the device closes the session ("closed"), or when it goes
+        quiet ("timeout"). An unknown question is never answered: the device then goes
+        quiet and the caller gets its text back, after ``idle_timeout`` rather than
+        after the whole ``timeout``. ``patient`` may report that silence is expected
+        (for example while the device writes a file it has received).
+
+        Never raises for device behaviour; the caller decides what each ending means.
+        """
+        conn = self._conn
+        enter = str(getattr(conn, "RETURN", "\n"))
+        prompt = re.compile(self._prompt_pattern())
+        questions = [(re.compile(f"(?:{q})\\s*$"), a) for q, a in answers]
+        output, replies, answered = "", [], 0
+        try:
+            conn.clear_buffer()
+            conn.write_channel(command + enter)
+            start = last_data = time.monotonic()
+            while True:
+                chunk = str(conn.read_channel() or "")
+                now = time.monotonic()
+                if chunk:
+                    output, last_data = output + chunk, now
+                    pending = output[answered:]
+                    reply = next((a for q, a in questions if q.search(pending)), None)
+                    if reply is not None:
+                        conn.write_channel(reply + enter)
+                        replies.append(reply)
+                        answered = len(output)
+                    elif prompt.search(pending):
+                        return Dialogue(output, replies, "prompt")
+                    continue
+                if now - start > timeout:
+                    return Dialogue(output, replies, "timeout",
+                                    f"not finished after {timeout:.0f} s")
+                if now - last_data > idle_timeout and not (patient and patient()):
+                    return Dialogue(output, replies, "timeout",
+                                    f"no output for {idle_timeout:.0f} s")
+                time.sleep(self.poll_interval)
+        except Exception as e:  # noqa: BLE001 - a closed session is an ending, not a crash
+            return Dialogue(output, replies, "closed",
+                            f"{type(e).__name__}: {redact_text(str(e))[:200]}")
+
+    def _settled_transfer(self, name: str, wait: float = 5.0) -> TransferInfo | None:
+        """The device's latest fetch of ``name``, once the server has finished recording it.
+
+        The device can return to its prompt a moment before the server has processed
+        the final acknowledgement, so an unfinished record is given a short grace period.
+        """
+        assert self.file_server is not None
+        client = self.target.management_address
+        deadline = time.monotonic() + wait
+        while True:
+            record = self.file_server.last_transfer(name, client)
+            if record is None or record.completed or record.error \
+                    or time.monotonic() >= deadline:
+                return record
+            time.sleep(0.05)
 
     def _fail(self, op: DeviceOperation, err: Exception) -> OperationResult:
         # Exception text may echo device output; redact before it reaches logs/audit.

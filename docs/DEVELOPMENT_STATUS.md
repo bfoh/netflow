@@ -1,8 +1,10 @@
 # Development Status
 
-_Last updated: 2026-11-19 — console bootstrap for ArubaOS-Switch (Provisioning Center),
-staging use case and design recorded; on top of the 2930F platform, sanitized diagnostics,
-configuration import, experimental SSH drivers, credentials, firmware manager, topology._
+_Last updated: 2026-11-18 — built-in TFTP server and the first real-device firmware
+procedure (Aruba 2930F, experimental, bench run pending); FortiGate two-file method studied
+and both file kinds recognised offline; on top of console bootstrap, the 2930F platform,
+sanitized diagnostics, configuration import, SSH drivers, credentials, firmware manager,
+topology. (Earlier entries dated 2026-11-19 were written on 2026-11-18.)_
 
 ## What works (implemented and tested)
 | Area | Details |
@@ -13,7 +15,10 @@ configuration import, experimental SSH drivers, credentials, firmware manager, t
 | Intent & generation | Hostname, VLANs, L3 interfaces, static routes → AOS-CX / FortiOS / IOS-XE templates; validation; platform support checks |
 | Configuration import | Upload a file per device; normalised, versioned, labelled unvalidated; selectable per device in deployment plans |
 | Deployments | Lifecycle with directive-15 states; dry runs; approval; preflight with identity check; backup; verification by read-back (platform-aware for SSH drivers); rollback or manual recovery; device locks; crash recovery on restart |
-| Firmware | Repository with SHA-256 vs vendor checksum, approval/retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery — **simulated devices only** |
+| Firmware | Repository with SHA-256 vs vendor checksum, approval/retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery. Simulated devices, plus **one experimental real procedure: Aruba 2930F** (switch pulls the image from UNDM by TFTP into primary flash, restarts, version verified) behind `UNDM_ENABLE_REAL_DEVICE_FIRMWARE`. **Tested against a fake switch only; not yet run on hardware** |
+| File transfer | Built-in TFTP server: read-only, per-job, per-device allowlist, transfer records; tested with an independent client |
+| Supplied-file recognition | FortiOS files are classified offline at import (full backup vs CLI script), with structure check, what the file will change about access, and a count of secrets (never the values). A file cannot be applied in a way that does not fit its kind |
+| Live progress | The deployment page refreshes every 2 s while a job runs and shows the device's last output when a step fails |
 | Topology | Canvas (React Flow), interface links with mode/VLANs, saved layout, auto-arrange, validation (interface reuse, self links, subnet mismatch, VLANs, duplicate IPs, isolated devices) |
 | Audit & logging | All significant actions, redacted details and device output |
 | Console bootstrap (provisioning) | ArubaOS-Switch over a serial console from the PC running UNDM: per-device settings (VLAN, port, address), command preview, factory-default check, stop on first error, read-back before `write memory`, idempotent re-run, transcript (raw + sanitized). **Tested against a simulated console only; not yet run on hardware** |
@@ -24,24 +29,26 @@ configuration import, experimental SSH drivers, credentials, firmware manager, t
 - Simulated drivers: all three families, full feature set including firmware.
 - SSH drivers: **experimental** — tested only against fake connections with synthetic
   output; no real device has been contacted. Parsers may not match real output.
-- No real-device firmware procedure exists; real devices are reported incompatible.
+- Real-device firmware: only the Aruba 2930F procedure exists, experimental; every other
+  real model is reported incompatible. The switch's exact questions are unverified.
 - Templates: docs-reviewed, not lab-verified.
 
 ## Not implemented
 Authentication and RBAC (attribution header only — keep the backend on localhost);
 provisioning for FortiGate and Black Box, zero-touch provisioning; the staging run
-across all four devices; full-configuration push to real devices; real-device firmware; vendor signature verification;
+across all four devices; full-configuration push to real devices; FortiGate first login,
+base restore, site-script runner, revisions and firmware; Black Box drivers; vendor signature verification;
 replace mode and rollback for real devices; addressing plans and site hierarchy; template
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-19)
+## Test results (2026-11-18)
 | Suite | Result |
 |---|---|
-| Backend pytest | 199 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 249 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
-| ruff / mypy --strict | clean / clean (62 files) |
+| ruff / mypy --strict | clean / clean (67 files) |
 | Frontend Vitest | 14 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
@@ -62,13 +69,19 @@ Staging four factory-default devices per system (FortiGate 101F, Black Box switc
 2 × Aruba 2930F) from one place: `docs/requirements/staging-use-case.md`, design and
 build order in `docs/requirements/staging-run-design.md`. Still needed from the product
 owner: sample configuration files, Aruba firmware versions, Black Box manuals and the
-exact LE2700-series model (Q-12, Q-13, Q-14, Q-17 in `REFERENCE_ANALYSIS.md`).
+answers to Q-19…Q-22 (FortiGate order, credentials, expected messages) in
+`REFERENCE_ANALYSIS.md`. Bench runs still owed: console bootstrap and firmware on a spare 2930F.
 
 ## Next milestone
-1. **Aruba 2930F lab acceptance, phase A (read-only)** — steps 3 (test connection) and
-   4 (retrieve information, confirmed against `show system`, WC.16.10.0025) passed on 2026-11-19; steps 5–8 pending — product owner runs
-   `docs/vendor-support/aruba-2930f-acceptance.md` and shares the sanitized diagnostics;
-   fix parser/verification against the real output and keep it as a fixture; then phase B
-   (one supervised VLAN change). Firmware version of the unit still to be confirmed.
-2. Authentication and roles (M1).
-3. Persistent job runner so long real-device deployments do not block the HTTP request.
+1. **Bench runs on a spare 2930F** (product owner): console bootstrap
+   (`vendor-support/aruba-2930f-console-bootstrap.md`), then firmware over TFTP
+   (`vendor-support/aruba-2930f-firmware.md`). Fix the dialogue wording and waiting times
+   against what the switch really prints; keep the output as fixtures.
+2. **2930F full-configuration push** over TFTP, with the address/password change that the
+   final configuration brings.
+3. **FortiGate 101F**, once Q-19…Q-22 are answered: first-login password change, base
+   restore, firmware, site-script runner (statement by statement), named revisions.
+4. Black Box LIG1014A, then LE2700A (web-managed; investigate).
+5. The one-screen staging run across the four devices.
+6. Authentication and roles; persistent job runner (long jobs still run inside the HTTP
+   request; the page now shows live progress while it waits).

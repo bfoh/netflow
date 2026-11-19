@@ -26,6 +26,7 @@ from undm.drivers.registry import DriverRegistry, default_registry
 from undm.logging_setup import configure_logging
 from undm.services.deployments import recover_interrupted_deployments
 from undm.services.errors import ServiceError
+from undm.transfer.hub import TransferHub
 
 
 def create_app(
@@ -60,6 +61,7 @@ def create_app(
         make_engine(settings.database_url)
     )
     app.state.registry = registry or default_registry()
+    app.state.transfer_hub = TransferHub(settings.tftp_host, settings.tftp_port)
     default_lab().autocreate = settings.simulation_autocreate
 
     app.add_middleware(

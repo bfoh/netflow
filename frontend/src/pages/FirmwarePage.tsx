@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { PageHeader, QueryState } from '../components/Page';
-import { useAction, useDeviceModels, useFirmwareImages, useProjectDevices, useProjects } from '../hooks/queries';
+import { useAction, useDeviceModels, useFirmwareImages, usePolicy, useProjectDevices, useProjects } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Compatibility, FirmwareImage } from '../types/api';
 
@@ -167,13 +167,19 @@ function Planner({ images }: { images: FirmwareImage[] }) {
 
 export function FirmwarePage() {
   const images = useFirmwareImages();
+  const policy = usePolicy();
+  const realFirmware = !!policy.data?.enable_real_device_writes && !!policy.data?.enable_real_device_firmware;
   return (
     <>
       <PageHeader title="Firmware Manager" description="Approved image repository, offline compatibility checks and controlled upgrade plans." />
-      <Alert color="orange" icon={<IconAlertTriangle size={18} />} mb="md" title="Simulated devices only">
-        Firmware upgrades run against simulated devices. The experimental SSH drivers have no firmware procedure: each real
-        model needs its vendor-documented upgrade steps implemented and validated on lab equipment first, so real devices
-        are reported as incompatible.
+      <Alert color="orange" icon={<IconAlertTriangle size={18} />} mb="md"
+        title={realFirmware ? 'Firmware changes to real lab devices are ENABLED' : 'Real devices: dry runs only'}>
+        Simulated devices can be upgraded freely. One real-device procedure exists and is <b>experimental, not yet run on
+        hardware</b>: Aruba 2930F (ArubaOS-Switch), where the switch pulls the image from this PC over TFTP and restarts into it.
+        Use it only on a spare unit on an isolated bench. {realFirmware
+          ? 'Both safety switches are on for this server.'
+          : 'Real upgrades stay blocked until both UNDM_ENABLE_REAL_DEVICE_WRITES and UNDM_ENABLE_REAL_DEVICE_FIRMWARE are set; dry runs (read the running version, change nothing) are allowed.'}{' '}
+        Other real models are reported as incompatible until their procedure is implemented.
       </Alert>
       <QueryState isLoading={images.isLoading} error={images.error} />
       <Tabs defaultValue="repo" keepMounted={false}>

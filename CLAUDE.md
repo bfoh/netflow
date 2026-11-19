@@ -13,7 +13,7 @@ independent of it: no DIMETRA assumptions, no TNDM code, no TNDM assets.
 1. **No real devices from the development environment.** Claude never connects to, scans
    or changes real devices or networks. UNDM itself can reach real devices through the
    experimental SSH drivers, controlled by the safety switches in `undm.services.policy`
-   (all off by default). Never weaken those defaults; record named lab devices in
+   (all off by default; firmware has its own switch). Never weaken those defaults; record named lab devices in
    `docs/SECURITY_BOUNDARIES.md`.
 2. **No invented vendor facts.** Do not invent CLI commands, API endpoints, device
    capabilities or test results. Mark anything unverified as such (templates carry a
@@ -40,6 +40,11 @@ independent of it: no DIMETRA assumptions, no TNDM code, no TNDM assets.
   its own safeguards (preview, typed confirmation, write switch, factory-default check,
   read-back before save, audit) — see DECISIONS D-025. Do not add other exceptions.
 - Unsupported operations return `OperationResult.unsupported(...)`; they do not raise.
+- Device dialogues answer only listed questions (`SshCliDriver._dialogue`); an unknown
+  question ends the step with the device's text. Success needs independent evidence (D-031).
+- A supplied configuration file is applied only in the way its kind requires
+  (`inspect_config_file`, D-032). Real customer files are never committed; tests use
+  synthetic files.
 - Declared (user-entered) device data and observed (retrieved) data stay separate.
 
 ## Repository layout
@@ -49,8 +54,10 @@ backend/            FastAPI app, package `undm` (src layout)
   src/undm/services/  use cases (devices, deployments, firmware, audit, policy)
   src/undm/orchestration/  deployment + firmware orchestrators (pure logic)
   src/undm/configgen/ intent -> config rendering, Jinja2 templates, diff
-  src/undm/drivers/   driver contract, registry, mock/ simulated lab + drivers, ssh/ real (experimental)
+  src/undm/drivers/   driver contract, registry, mock/ simulated lab + drivers, ssh/ real (experimental),
+                      fortinet/ offline FortiOS file recognition
   src/undm/provisioning/  serial console sessions, console bootstrap procedures, simulated console
+  src/undm/transfer/  built-in TFTP server (read-only, per job, per device) and its hub
   src/undm/domain/    enums, intent model, validation, lifecycle, operation impact
   src/undm/inventory/ device model catalog, driver/environment rules
   src/undm/db/        SQLAlchemy models, sessions
@@ -87,7 +94,8 @@ Frontend (from `frontend/`):
 ## Primary use case
 Staging four factory-default devices per system (FortiGate 101F, a Black Box switch,
 two Aruba 2930F) from one laptop: `docs/requirements/staging-use-case.md` and
-`docs/requirements/staging-run-design.md`. Prioritise work that serves it.
+`docs/requirements/staging-run-design.md`; FortiGate two-file method in
+`docs/vendor-support/fortigate-101f-staging.md`. Prioritise work that serves it.
 
 ## Current focus
 See `docs/DEVELOPMENT_STATUS.md` ("Next milestone"). Real-device drivers are experimental

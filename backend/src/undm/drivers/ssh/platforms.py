@@ -3,9 +3,22 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
+from pathlib import Path
+from typing import ClassVar
 
 from undm.domain.operations import DeviceOperation
-from undm.drivers.base import DeviceFacts, DriverInfo, DriverMaturity, OperationResult
+from undm.domain.versions import compare
+from undm.drivers.base import (
+    Capability,
+    ConfigFileReport,
+    DeviceFacts,
+    DriverInfo,
+    DriverMaturity,
+    FirmwareImageRef,
+    OperationResult,
+)
+from undm.drivers.fortinet.config_files import inspect_fortios_file
 from undm.drivers.ssh.base import SSH_CAPABILITIES, SshCliDriver
 
 
@@ -104,6 +117,20 @@ class FortiOSSsh(SshCliDriver):
         ),
     )
 
+    @classmethod
+    def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
+        report = inspect_fortios_file(text)
+        if report.file_type == "full_backup":
+            return replace(report, blocked_reason=(
+                "Restoring a full backup on a real FortiGate is not implemented yet. Sending "
+                "it line by line would be wrong, so UNDM refuses to."))
+        if report.file_type == "cli_script" and report.facts.get("vdom_mode") == "multi-vdom":
+            return replace(report, blocked_reason=(
+                "Running a multi-VDOM CLI script on a real FortiGate is not implemented yet "
+                "(this driver cannot follow 'config global' / 'config vdom' or a hostname "
+                "change during the run)."))
+        return report
+
     def parse_facts(self, outputs: dict[str, str], prompt: str) -> DeviceFacts:
         text = outputs.get("get system status", "")
         version_line = self._search(r"^Version\s*:\s*(.+)$", text) or ""
@@ -148,7 +175,7 @@ class ArubaOSSwitchSsh(SshCliDriver):
         description="ArubaOS-Switch (e.g. 2930F) over SSH CLI (Netmiko 'aruba_osswitch'). "
                     "Experimental, not lab-validated.",
         simulated=False,
-        capabilities=SSH_CAPABILITIES,
+        capabilities=SSH_CAPABILITIES | {Capability.FIRMWARE_UPGRADE, Capability.REBOOT},
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
         notes=(
@@ -158,6 +185,9 @@ class ArubaOSSwitchSsh(SshCliDriver):
             "On logout Netmiko answers 'no' to the save prompt; saving uses 'write memory' "
             "only as part of a deployment.",
             "No automatic rollback: failures end in manual recovery from the stored backup.",
+            "Firmware: the switch pulls the image from UNDM by TFTP into the primary flash, "
+            "then reboots into it ('boot system flash primary'). Not yet run on hardware; "
+            "no automatic firmware rollback.",
         ),
     )
 
@@ -183,6 +213,120 @@ class ArubaOSSwitchSsh(SshCliDriver):
                 "rom_version": self._search(r"ROM Version\s*:\s*(\S+)", system),
             },
         )
+
+
+    # -- firmware (EXPERIMENTAL) ------------------------------------------------------
+    # Commands as described in public write-ups of the ArubaOS-Switch CLI; the exact
+    # wording of the switch's questions is NOT verified on hardware:
+    #   copy tftp flash <server> <file> primary   -> image into the primary flash bank
+    #   show flash                                -> version now held in primary
+    #   boot system flash primary                 -> restart into it
+    # The procedure only continues when UNDM's own TFTP server saw the switch fetch the
+    # whole file AND "show flash" shows the expected version. An unknown question is
+    # never answered; it ends the step with the switch's text.
+    _YES_NO = r"\[y/n\]\??|\(y/n\)\??"
+    _SAVE_QUESTION = r"save[^\n]*(?:\[y/n[^\]]*\]|\(y/n\))\??"
+    transfer_timeout: ClassVar[float] = 2400.0   # whole copy, including the flash write
+    question_timeout: ClassVar[float] = 60.0     # silence before the transfer starts
+    reboot_quiet_timeout: ClassVar[float] = 20.0  # silence after the reboot is confirmed
+
+    def get_firmware_information(self) -> OperationResult:
+        op = DeviceOperation.GET_FIRMWARE_INFORMATION
+        if r := self._need(op):
+            return r
+        try:
+            system = self._send("show system")
+            flash = self._send("show flash")
+        except Exception as e:  # noqa: BLE001
+            return self._fail(op, e)
+        running = self._search(r"Software revision\s*:\s*(\S+)", system)
+        if not running:
+            return OperationResult.failed(op, "Could not read the running software revision")
+        return OperationResult.success(op, {
+            "running": running,
+            "primary": self._search(r"Primary Image\s*:\s*\d+\s+\S+\s+(\S+)", flash),
+            "secondary": self._search(r"Secondary Image\s*:\s*\d+\s+\S+\s+(\S+)", flash),
+            "default_boot": self._search(r"Default Boot(?: Image)?\s*:\s*(\S+)", flash),
+            "raw": {"show flash": flash[:2000]},
+        })
+
+    def stage_firmware(self, image: FirmwareImageRef) -> OperationResult:
+        op = DeviceOperation.STAGE_FIRMWARE
+        if r := self._need(op):
+            return r
+        files = self.file_server
+        if files is None:
+            return OperationResult.failed(op, "No file server is available for this job")
+        name = re.sub(r"[^A-Za-z0-9._-]", "_", image.filename)
+        client = self.target.management_address
+        try:
+            server_ip = files.offer(Path(image.local_path), name, client)
+        except Exception as e:  # noqa: BLE001
+            return self._fail(op, e)
+        talk = self._dialogue(
+            f"copy tftp flash {server_ip} {name} primary", [(self._YES_NO, "y")],
+            timeout=self.transfer_timeout, idle_timeout=self.question_timeout,
+            # Once the switch has asked for the file, silence is normal: it validates the
+            # image and writes it to flash before the prompt returns.
+            patient=lambda: files.last_transfer(name, client) is not None)
+        diagnostics: dict[str, object] = {"device_output": talk.tail}
+        transfer = self._settled_transfer(name)
+        if transfer is None:
+            return OperationResult.failed(
+                op, "The switch did not request the image from UNDM's TFTP server "
+                    f"({talk.detail or 'it returned to the prompt'}). Check the switch output "
+                    "below, this PC's firewall (inbound UDP 69) and the cabling/addresses.",
+                diagnostics)
+        if not transfer.completed:
+            return OperationResult.failed(
+                op, f"Transfer incomplete ({transfer.bytes_sent} of {transfer.size} bytes"
+                    f"{': ' + transfer.error if transfer.error else ''}). The switch was not "
+                    "restarted; check 'show flash' before doing anything else.", diagnostics)
+        if talk.ended != "prompt":
+            return OperationResult.failed(
+                op, "The image was transferred, but the switch did not return to its prompt "
+                    f"({talk.detail}). It may still be writing to flash: do not power it off; "
+                    "check 'show flash' on the console.", diagnostics)
+        info = self.get_firmware_information()
+        primary = str(info.data.get("primary") or "") if info.ok else ""
+        if not primary or compare(primary, image.version) != 0:
+            return OperationResult.failed(
+                op, "The image was transferred, but 'show flash' reports primary = "
+                    f"{primary or 'unknown'} instead of {image.version}. The switch was not "
+                    "restarted.",
+                {**diagnostics, "show_flash": info.data.get("raw") if info.ok else info.message})
+        return OperationResult.success(
+            op, {"primary": primary, "bytes": transfer.bytes_sent},
+            f"{primary} is in the primary flash ({transfer.bytes_sent} bytes transferred)")
+
+    def install_firmware(self) -> OperationResult:
+        return OperationResult.success(
+            DeviceOperation.INSTALL_FIRMWARE,
+            message="nothing to do: the image is activated by restarting into primary")
+
+    def reboot(self) -> OperationResult:
+        op = DeviceOperation.REBOOT
+        if r := self._need(op):
+            return r
+        # Unsaved changes are not saved by a firmware job: answer "n" to a save question.
+        talk = self._dialogue(
+            "boot system flash primary", [(self._SAVE_QUESTION, "n"), (self._YES_NO, "y")],
+            timeout=90, idle_timeout=self.reboot_quiet_timeout)
+        diagnostics: dict[str, object] = {"device_output": talk.tail}
+        if talk.ended == "prompt":
+            self.disconnect()
+            return OperationResult.failed(
+                op, "The switch returned to its prompt instead of restarting", diagnostics)
+        confirmed = "y" in talk.replies
+        if talk.ended == "timeout" and not confirmed:
+            self.disconnect()
+            return OperationResult.failed(
+                op, "The switch did not ask the expected question; nothing was confirmed "
+                    f"({talk.detail})", diagnostics)
+        self._conn = None  # the session is gone or about to go; do not reuse it
+        how = "the switch closed the session" if talk.ended == "closed" else "no further output"
+        return OperationResult.success(
+            op, message=f"restart into the primary image started ({how})")
 
 
 SSH_DRIVERS: tuple[type[SshCliDriver], ...] = (

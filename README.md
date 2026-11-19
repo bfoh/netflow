@@ -104,7 +104,28 @@ For the Aruba 2930F follow `docs/vendor-support/aruba-2930f-acceptance.md`.
    `UNDM_ALLOW_PRODUCTION_DEPLOYMENTS` are set — do not do this during testing.
 
 What the SSH drivers do not do yet: replace mode, automatic rollback (failures end in
-"manual recovery required" with the stored backup), firmware upgrades, multi-VDOM FortiGates.
+"manual recovery required" with the stored backup), multi-VDOM FortiGates, and firmware
+on anything except the Aruba 2930F (below).
+
+## Firmware on a real Aruba 2930F (experimental)
+The switch pulls the image from this PC over TFTP, UNDM checks `show flash`, restarts the
+switch into the new image and verifies the running version. Not yet run on hardware: do the
+first run on a spare switch with `docs/vendor-support/aruba-2930f-firmware.md`.
+Add to `backend\.env` and restart the backend:
+```
+UNDM_ENABLE_REAL_DEVICE_WRITES=true
+UNDM_ENABLE_REAL_DEVICE_FIRMWARE=true
+# only if one person stages alone on an isolated bench:
+UNDM_FIRMWARE_REQUIRE_SEPARATE_APPROVER=false
+```
+Windows must allow inbound UDP 69 (TFTP) to Python on the bench network, and no other
+TFTP program may be running. The TFTP server only runs during a firmware job.
+
+## FortiGate configuration files
+Import the base file and the site file on a FortiGate device (Configurations → Import
+configuration file). UNDM tells you what each file is (full backup or CLI script), what it
+will change about access to the firewall, and whether it contains secrets. Applying them
+to a real FortiGate is not built yet — see `docs/vendor-support/fortigate-101f-staging.md`.
 
 ## Console bootstrap (Aruba 2930F and other ArubaOS-Switch models)
 For a factory-default switch with no management address: **Provisioning** → choose the

@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, ClassVar
+from pathlib import Path
+from typing import Any, ClassVar, Protocol
 
 from undm.domain.operations import DeviceOperation
 
@@ -148,10 +149,44 @@ class DeviceFacts:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class ConfigFileReport:
+    """What a supplied configuration file is, worked out offline from its own content."""
+
+    file_type: str  # "full_backup" | "cli_script" | "unknown"
+    summary: str
+    # The only way this kind of file can sensibly be applied (None = not applicable).
+    apply_mode: ApplyMode | None
+    facts: dict[str, str] = field(default_factory=dict)
+    notes: tuple[str, ...] = ()  # what a technician should know before applying it
+    problems: tuple[str, ...] = ()  # reasons not to apply the file as it is
+    # Set by a driver that cannot apply this kind of file (yet).
+    blocked_reason: str = ""
+
+
+class TransferInfo(Protocol):
+    size: int
+    bytes_sent: int
+    completed: bool
+    error: str
+
+
+class FileServer(Protocol):
+    """Lets a driver make one file available for its device to pull (e.g. over TFTP)."""
+
+    def offer(self, path: Path, name: str, client_ip: str) -> str:
+        """Publish the file for that device; returns the server address to give it."""
+        ...
+
+    def last_transfer(self, name: str, client_ip: str) -> TransferInfo | None: ...
+
+
 class DeviceDriver:
     """Base class; subclasses override only what they actually support."""
 
     info: ClassVar[DriverInfo]
+    # Set by the service for jobs in which devices pull files from UNDM.
+    file_server: FileServer | None = None
 
     def __init__(self, target: DeviceTarget, credentials: Credentials | None = None) -> None:
         self.target = target
@@ -161,6 +196,11 @@ class DeviceDriver:
     @classmethod
     def capabilities(cls) -> frozenset[Capability]:
         return cls.info.capabilities
+
+    @classmethod
+    def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
+        """Describe a supplied configuration file offline; None if the driver cannot tell."""
+        return None
 
     @classmethod
     def missing_capabilities(cls, op: DeviceOperation) -> frozenset[Capability]:

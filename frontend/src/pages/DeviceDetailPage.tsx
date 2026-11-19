@@ -140,6 +140,9 @@ function RealDeviceNotice({ d }: { d: Device }) {
           ? 'Production devices are blocked unless UNDM_ALLOW_PRODUCTION_READ_ONLY / UNDM_ALLOW_PRODUCTION_DEPLOYMENTS are enabled.'
           : writes ? 'Configuration changes to lab devices are ENABLED on this server (through approved deployments only).'
             : 'Read-only actions and dry runs are allowed. Configuration changes are disabled on this server (UNDM_ENABLE_REAL_DEVICE_WRITES).'}
+        {d.environment !== 'production' && driver.capabilities.includes('supports_firmware_upgrade') && (policy.data?.enable_real_device_firmware && writes
+          ? ' Firmware upgrades of lab devices are ENABLED (approved plan and maintenance window required).'
+          : ' Firmware upgrades of real devices are disabled (they need UNDM_ENABLE_REAL_DEVICE_FIRMWARE as well as the write switch).')}
         {!d.credential_ref_id && ' No credential attached yet: use Edit device.'}
       </Text>
     </Alert>

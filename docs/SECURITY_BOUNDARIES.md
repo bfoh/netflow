@@ -13,7 +13,7 @@ Two different actors must be distinguished:
 | Environment | Read-only (connect, facts, backup, dry runs) | Configuration changes | Firmware |
 |---|---|---|---|
 | Simulated | always | always (through approved deployments) | simulated upgrades |
-| Lab (real) | allowed | only with `UNDM_ENABLE_REAL_DEVICE_WRITES=true`, through approved deployments | **not implemented** (drivers declare no firmware capability) |
+| Lab (real) | allowed | only with `UNDM_ENABLE_REAL_DEVICE_WRITES=true`, through approved deployments | only with the write switch **and** `UNDM_ENABLE_REAL_DEVICE_FIRMWARE=true`, approved plan, maintenance window; one procedure exists (Aruba 2930F, experimental, not yet run on hardware) |
 | Production (real) | only with `UNDM_ALLOW_PRODUCTION_READ_ONLY=true` | only with writes enabled **and** `UNDM_ALLOW_PRODUCTION_DEPLOYMENTS=true` | not implemented |
 
 Console bootstrap (Provisioning Center) writes to a device over a serial cable. For real
@@ -21,6 +21,18 @@ devices it needs `UNDM_ENABLE_REAL_DEVICE_WRITES=true`, a typed confirmation of 
 name, and a switch that looks factory default (no password prompt, no site configuration)
 unless the operator explicitly overrides that check. It is meant for spare or new units on
 an isolated bench.
+
+File transfer: while a real-device firmware job runs, UNDM listens on UDP 69 (TFTP). TFTP
+has no authentication or encryption, so the server is deliberately narrow: read-only, only
+files published for that job, each only to the address of the device it is for, and it is
+stopped when the job ends. Use it on the isolated bench network only. Settings:
+`UNDM_TFTP_HOST` (default all adapters; set the bench adapter's address to restrict it) and
+`UNDM_TFTP_PORT`.
+
+Supplied configuration files (for example FortiGate backups and site scripts) contain
+passwords, keys and addressing. They are stored in UNDM's database on the PC running UNDM;
+protect that PC and the database file accordingly. File reports and audit entries never
+contain secret values.
 
 Rules are re-checked when a deployment executes, not only when it is planned. A device's
 environment cannot be `simulated` with a real driver or vice versa.

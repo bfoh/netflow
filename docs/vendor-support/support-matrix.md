@@ -9,7 +9,7 @@ public documentation and Netmiko's source, tested only against fake connections.
 | Aruba AOS-CX | `mock.aruba.aoscx` | simulation | ✔ | ✔ merge | ✔ | ✔ | ✔ (simulated, with rollback) |
 | Aruba AOS-CX | `ssh.aruba.aoscx` | **experimental** | ✔ (`show version`, `show system`, `show running-config`) | ✔ merge, save `copy running-config startup-config` | ✘ | ✘ manual | ✘ |
 | ArubaOS-Switch (2930F) | `mock.aruba.aos_switch` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✔ (simulated dual image banks, with rollback) |
-| ArubaOS-Switch (2930F) | `ssh.aruba.aos_switch` | **experimental**; read-only operations **lab-accepted** on 2930F-48G-4SFP (JL260A) WC.16.10.0025 | ✔ (`show system`, `show modules`, `show running-config`) ⁵ | ✔ merge, save `write memory` | ✘ | ✘ manual | ✘ |
+| ArubaOS-Switch (2930F) | `ssh.aruba.aos_switch` | **experimental**; read-only operations **lab-accepted** on 2930F-48G-4SFP (JL260A) WC.16.10.0025 | ✔ (`show system`, `show modules`, `show running-config`) ⁵ | ✔ merge, save `write memory` | ✘ | ✘ manual | **experimental, not run on hardware**: TFTP pull into primary flash, restart, verify (`aruba-2930f-firmware.md`); no automatic rollback |
 | Fortinet FortiOS | `mock.fortinet.fortios` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✔ (simulated, no rollback) |
 | Fortinet FortiOS | `ssh.fortinet.fortios` | **experimental** | ✔ (`get system status`, `show`) ¹ | ✔ merge; FortiOS commits on `end` ² | ✘ | ✘ manual | ✘ |
 | Cisco IOS-XE | `mock.cisco.iosxe` | simulation | ✔ | ✔ merge | ✔ | ✔ | ✔ (simulated, no rollback) |
@@ -29,7 +29,7 @@ Checklist: `aruba-2930f-acceptance.md`.
 | Family | Procedure | Status |
 |---|---|---|
 | ArubaOS-Switch (2930F) | Serial console: out-of-band management VLAN, one untagged port, address, `write memory` | Simulated-tested; **hardware validation pending** (`aruba-2930f-console-bootstrap.md`) |
-| FortiOS (FortiGate 101F) | Default address + forced first-login password change | Not built |
+| FortiOS (FortiGate 101F) | Default address + forced first-login password change; base restore; site script; revisions | Not built. Supplied files are recognised offline (`fortigate-101f-staging.md`) |
 | Black Box LIG1014A / LE2700 series | Default address | Not built; manuals needed |
 
 ## Templates (generation)

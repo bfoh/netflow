@@ -53,6 +53,11 @@ CATALOG: tuple[DeviceModel, ...] = (
                 DeviceCategory.FIREWALL, "FortiOS", _FORTIOS, SupportLevel.SIMULATED_ONLY),
     DeviceModel("fortinet-fg-100f", "Fortinet", "FortiGate", "FortiGate-100F",
                 DeviceCategory.FIREWALL, "FortiOS", _FORTIOS, SupportLevel.SIMULATED_ONLY),
+    DeviceModel("fortinet-fg-101f", "Fortinet", "FortiGate", "FortiGate-101F",
+                DeviceCategory.FIREWALL, "FortiOS", _FORTIOS, SupportLevel.SIMULATED_ONLY,
+                notes="Staging target. Supplied files are recognised offline (full backup vs "
+                      "CLI script); restore, multi-VDOM scripts and firmware are not "
+                      "implemented for real units yet."),
     DeviceModel("cisco-c9300", "Cisco", "Catalyst 9300", "C9300-24T", DeviceCategory.SWITCH,
                 "IOS-XE", ("mock.cisco.iosxe", "ssh.cisco.iosxe"), SupportLevel.SIMULATED_ONLY),
     DeviceModel("cisco-isr4331", "Cisco", "ISR 4000", "ISR4331", DeviceCategory.ROUTER,

@@ -25,12 +25,14 @@ configuration from one laptop in one sitting. See `staging-use-case.md` for the 
 |---|---|---|---|
 | 1 Reach | **Console bootstrap** (built; simulated-tested) → SSH | default address, first-login password change (to build) | default address (to build; manual needed) |
 | 2 Identify | read model, serial, firmware (built, accepted on a 2930F) | to validate on a spare | to build |
-| 3 Firmware | to build (vendor procedure, per model) | to build; 7.2.7 → 7.6.5 directly as practised | to build; v00.01.00 → v00.01.01 |
-| 4 Configuration | full file push (to build); today only "add lines" exists | restore from file (to build) | to build |
+| 3 Firmware | **built (experimental)**: switch pulls the image by TFTP, restarts, version verified; bench run pending | to build; 7.2.7 → 7.6.5 directly as practised | to build; v00.01.00 → v00.01.01 |
+| 4 Configuration | full file push (to build); today only "add lines" exists | **two files**: base (full backup, restored) then site script (statement by statement), a named revision after each (to build; files recognised offline today) | to build |
 | 5 Verify + report | read back, compare with the file, one report per system | same | same |
 
-Firmware always precedes configuration: configuration files are tied to a firmware
-release. After the final configuration loads, addresses and passwords change, so the
+Firmware normally precedes configuration: configuration files are tied to a firmware
+release. FortiGate is the exception to check: its base file was written on 7.2.7 and its
+site script for 7.6.5, so the likely order is base → firmware → site script (Q-19;
+`vendor-support/fortigate-101f-staging.md`). After the final configuration loads, addresses and passwords change, so the
 last verification uses the console or the final management address.
 
 ## What exists today
@@ -42,17 +44,19 @@ upgrade orchestration (simulated only); credentials in the OS store; audit.
 ## Build order
 1. Bench-validate the console bootstrap on a spare 2930F
    (`docs/vendor-support/aruba-2930f-console-bootstrap.md`).
-2. 2930F: full-configuration push and firmware install, using the vendor-documented
-   file transfer for WC.16.x, validated on the spare.
-3. FortiGate 101F: first-login handling, firmware, configuration restore.
-4. Black Box (LIG1014A, LE2700 series): after the manuals are available.
+2. 2930F: firmware install over TFTP — **built, bench run pending**
+   (`docs/vendor-support/aruba-2930f-firmware.md`); then full-configuration push the same way.
+3. FortiGate 101F: first-login handling, base restore, firmware, site script, revisions
+   (file recognition built; the rest after Q-19…Q-22).
+4. Black Box LIG1014A (CLI + TFTP per its manual), then LE2700A (web-managed; to investigate).
 5. The staging run itself: one screen, four devices, one report.
 
 ## Transfer method
 Vendor documentation found so far (see `vendor-support/staging-procedures-research.md`)
 gives TFTP for firmware and configuration on the 2930F, the FortiGate and the LIG1014A.
-Plan: a TFTP server inside UNDM, bound to the bench adapter, serving only the files of the
-active run, read-only, stopped when the run ends. Depends on Q-18 (laptop firewall).
+Built: a TFTP server inside UNDM, serving only the files of the active job, each only to
+its device, read-only, stopped when the job ends (D-029). Needs inbound UDP 69 on the
+laptop (Q-18). If the bench test fails, another method is chosen.
 
 ## Open points
 - Sample configuration files for each device (first lines are enough) to decide how

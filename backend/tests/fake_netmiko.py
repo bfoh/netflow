@@ -39,6 +39,8 @@ class Scenario:
     connect_error: Exception | None = None
     calls: list[tuple[str, object]] = field(default_factory=list)
     saved: int = 0
+    # Optional stateful device (see fake_aos_switch.py) behind the connection.
+    device: object | None = None
 
 
 class FakeConnection:
@@ -48,14 +50,33 @@ class FakeConnection:
         scenario.calls.append(("connect", {k: v for k, v in kwargs.items()
                                           if k not in ("password", "secret")}))
 
+    RETURN = "\n"
+
+    @property
+    def base_prompt(self) -> str:
+        return self.s.prompt.rstrip("#> ")
+
     def send_command(self, command: str, read_timeout: int = 0) -> str:
         self.s.calls.append(("send_command", command))
+        if self.s.device is not None:
+            return self.s.device.show(command)
         if command in ("show running-config", "show"):
             return self.s.running
         return self.s.outputs.get(command, "")
 
     def find_prompt(self) -> str:
         return self.s.prompt
+
+    # Raw channel, used for commands that ask questions.
+    def clear_buffer(self) -> str:
+        return self.s.device.read()
+
+    def write_channel(self, data: str) -> None:
+        self.s.calls.append(("write_channel", data))
+        self.s.device.write(data)
+
+    def read_channel(self) -> str:
+        return self.s.device.read()
 
     def send_config_set(self, lines, error_pattern: str = "", read_timeout: int = 0) -> str:
         self.s.calls.append(("send_config_set", list(lines)))
@@ -82,6 +103,8 @@ def factory_for(scenario: Scenario):
     def factory(**kwargs: object) -> FakeConnection:
         if scenario.connect_error is not None:
             raise scenario.connect_error
+        if scenario.device is not None:
+            scenario.device.accept_connection()
         return FakeConnection(scenario, **kwargs)
     return factory
 

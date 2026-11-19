@@ -96,6 +96,7 @@ export interface CredentialRef {
 
 export interface Policy {
   enable_real_device_writes: boolean;
+  enable_real_device_firmware: boolean;
   allow_production_read_only: boolean;
   allow_production_deployments: boolean;
   require_separate_approver: boolean;
@@ -127,6 +128,18 @@ export interface ConfigVersion {
   created_by: string;
   created_at: string;
   text?: string;
+  inspection?: ConfigInspection | null;
+}
+
+/** What an imported file is, worked out offline by the device's driver. Never contains secret values. */
+export interface ConfigInspection {
+  file_type: 'full_backup' | 'cli_script' | 'unknown';
+  summary: string;
+  apply_mode: 'merge' | 'replace' | null;
+  facts: Record<string, string>;
+  notes: string[];
+  problems: string[];
+  blocked_reason: string;
 }
 
 export interface GenerateResult { ok: boolean; issues: Issue[]; version: ConfigVersion | null }

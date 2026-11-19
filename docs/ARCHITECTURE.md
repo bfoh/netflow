@@ -30,6 +30,13 @@ Rules: `domain`, `configgen`, `orchestration` and `drivers` never import `api`,
 `db` or FastAPI. Vendor-specific code exists only in `drivers/` and
 `configgen/templates/`.
 
+Also at the driver level: `provisioning/` (serial console procedures) and `transfer/`
+(TFTP server and hub). A service opens a transfer session for a job that needs devices to
+pull files and hands it to the drivers as `file_server` (a small protocol in
+`drivers/base.py`), so drivers do not know how files are served. Drivers may also describe
+a supplied configuration file offline (`inspect_config_file`); the deployment service uses
+that description, never the vendor name, to refuse applying a file the wrong way.
+
 ## Mapping to directive section 8
 
 | Directive subsystem | Package | Status |

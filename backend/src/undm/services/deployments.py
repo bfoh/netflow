@@ -9,6 +9,7 @@ dies mid-deployment leaves a transient state behind that
 from __future__ import annotations
 
 import hashlib
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from typing import Any
 
@@ -41,10 +42,12 @@ from undm.orchestration.deployment import (
 )
 from undm.orchestration.firmware import FirmwareOrchestrator
 from undm.services import audit
-from undm.services.devices import build_driver, latest_config
+from undm.services.devices import build_driver, inspect_config, latest_config
 from undm.services.errors import ConflictError, ForbiddenError, NotFoundError
 from undm.services.firmware import FirmwareRepository, device_compatibility
 from undm.services.policy import Policy
+from undm.transfer.hub import TransferHub
+from undm.transfer.tftp import TftpServerError
 
 S = DeploymentState
 
@@ -61,17 +64,24 @@ _NOT_CONNECTED = frozenset({TargetState.PENDING, TargetState.PREVIEWED,
 
 class DeploymentService:
     def __init__(self, session: Session, registry: DriverRegistry, policy: Policy,
-                 *, firmware_reboot_wait: tuple[int, float] = (30, 20.0)) -> None:
+                 *, firmware_reboot_wait: tuple[int, float] = (30, 20.0),
+                 firmware_separate_approver: bool = True,
+                 transfer_hub: TransferHub | None = None) -> None:
         self.s = session
         self.registry = registry
         self.policy = policy
         self.require_separate_approver = policy.require_separate_approver
         self.firmware_reboot_wait = firmware_reboot_wait
+        self.firmware_separate_approver = firmware_separate_approver
+        self.transfer_hub = transfer_hub
 
-    def _policy_problem(self, device: Device, dry_run: bool) -> str | None:
+    def _policy_problem(self, device: Device, dry_run: bool,
+                        firmware: bool = False) -> str | None:
         simulated = self.registry.get(device.driver_id).info.simulated
         if dry_run:
             return self.policy.read_problem(device.name, device.environment, simulated)
+        if firmware and not simulated:
+            return self.policy.firmware_problem(device.name, device.environment, simulated)
         if simulated and device.environment == DeviceEnvironment.PRODUCTION.value \
                 and not self.policy.allow_production_deployments:
             return (f"{device.name} is a production device; production deployments are "
@@ -92,8 +102,9 @@ class DeploymentService:
 
         if rec.kind == "firmware":
             attempts, delay = self.firmware_reboot_wait
-            return FirmwareOrchestrator(sink=sink, reboot_wait_attempts=attempts,
-                                        reboot_wait_delay_s=delay)
+            return FirmwareOrchestrator(
+                sink=sink, reboot_wait_attempts=attempts, reboot_wait_delay_s=delay,
+                require_separate_approver=self.firmware_separate_approver)
         return DeploymentOrchestrator(
             sink=sink, require_separate_approver=self.require_separate_approver
         )
@@ -199,6 +210,8 @@ class DeploymentService:
             if problem:
                 raise ForbiddenError(problem)
             cfg = self._choose_config(device, (config_versions or {}).get(did))
+            if not dry_run:
+                self._check_file_can_be_applied(device, cfg, apply_mode)
             rec.targets.append(DeploymentTargetRecord(
                 device_id=did, position=pos, config_version_id=cfg.id,
                 state=TargetState.PENDING.value,
@@ -214,6 +227,27 @@ class DeploymentService:
                      {"devices": device_ids, "dry_run": dry_run, "apply_mode": apply_mode.value,
                       "config_versions": {t.device_id: t.config_version_id for t in rec.targets}})
         return rec
+
+    def _check_file_can_be_applied(self, device: Device, cfg: ConfigVersion,
+                                   apply_mode: ApplyMode) -> None:
+        """Refuse to apply a supplied file in a way that does not fit what the file is.
+
+        Example: a full backup must be restored as a whole; sending it line by line as
+        if it were a list of changes would leave the device in an undefined state.
+        """
+        report = inspect_config(self.s, cfg, self.registry)
+        if report is None:
+            return
+        what = f"{device.name}: '{cfg.reference}' is a {report.summary}"
+        if report.problems:
+            raise ConflictError(f"{what} with problems; it cannot be applied as it is",
+                                details=list(report.problems))
+        if report.blocked_reason:
+            raise ConflictError(f"{what}. {report.blocked_reason}")
+        if report.apply_mode is not None and report.apply_mode is not apply_mode:
+            raise ConflictError(
+                f"{what}; it can only be applied in {report.apply_mode.value} mode, not "
+                f"{apply_mode.value} mode")
 
     def _choose_config(self, device: Device, version_id: str | None) -> ConfigVersion:
         """Explicit version if given; else latest generated; else latest imported."""
@@ -270,7 +304,7 @@ class DeploymentService:
             device = self.s.get(Device, did)
             if device is None or device.project_id != project_id:
                 raise NotFoundError(f"Device {did} not found in project")
-            problem = self._policy_problem(device, dry_run)
+            problem = self._policy_problem(device, dry_run, firmware=True)
             if problem:
                 raise ForbiddenError(problem)
             issues = device_compatibility(img, device, self.registry)
@@ -308,13 +342,29 @@ class DeploymentService:
         for t in rec.targets:  # settings may have changed since the plan was created
             device = self.s.get(Device, t.device_id)
             assert device is not None
-            problem = self._policy_problem(device, rec.dry_run)
+            problem = self._policy_problem(device, rec.dry_run, firmware=rec.kind == "firmware")
             if problem:
                 raise ForbiddenError(problem)
         dep = self._to_domain(rec)
-        audit.record(self.s, actor, "deployment.execute.start", "deployment", rec.id,
-                     details={"dry_run": rec.dry_run})
-        self._lock_devices(rec)  # commits
+        needs_files = (rec.kind == "firmware" and not rec.dry_run
+                       and any(not t.driver.info.simulated for t in dep.targets))
+        with ExitStack() as stack:
+            if needs_files:
+                if self.transfer_hub is None:
+                    raise ConflictError("No file transfer service is configured")
+                try:
+                    files = stack.enter_context(self.transfer_hub.session())
+                except TftpServerError as e:
+                    raise ConflictError(str(e)) from e
+                for target in dep.targets:
+                    target.driver.file_server = files
+            audit.record(self.s, actor, "deployment.execute.start", "deployment", rec.id,
+                         details={"dry_run": rec.dry_run, "tftp": needs_files})
+            self._lock_devices(rec)  # commits
+            self._run_locked(rec, dep, actor)
+        return rec
+
+    def _run_locked(self, rec: DeploymentRecord, dep: Deployment, actor: str) -> None:
         try:
             self._orchestrator(rec, commit_each_step=True).execute(dep)
         finally:
@@ -324,7 +374,6 @@ class DeploymentService:
             audit.record(self.s, actor, "deployment.execute", "deployment", rec.id, rec.state,
                          {"dry_run": rec.dry_run})
             self.s.commit()
-        return rec
 
     def cancel(self, deployment_id: str, actor: str) -> DeploymentRecord:
         rec = self.get(deployment_id)

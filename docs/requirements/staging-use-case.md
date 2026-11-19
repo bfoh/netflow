@@ -9,7 +9,7 @@ Every system has four network elements:
 | Device | Factory-default access (as stated by the product owner) |
 |---|---|
 | 1 × Fortinet FortiGate 101F | 192.168.1.99 on the management port; user `admin`, no password |
-| 1 × Black Box switch: LIG1014A in some systems, an LE2700-series model in others | 192.0.2.1; user `admin`, no password |
+| 1 × Black Box switch: LIG1014A in some systems, LE2700A in others (confirmed 2026-11-18) | 192.0.2.1; user `admin`, no password |
 | 2 × Aruba 2930F | no usable management IP; user `manager`, no password |
 
 For the two Aruba switches a technician connects to the **console port** and configures
@@ -82,3 +82,12 @@ files with a TFTP URL. The LE2700 series is a different family with different de
   repository; it is entered into UNDM's credential store by the operator.)
 - **Spare factory-default units** on a bench not connected to live networks: available.
 - **Aruba firmware target:** WC.16.10.0025. **Console speed:** 9600.
+
+## FortiGate configuration: two files (stated by the product owner 2026-11-18)
+1. A **base file** common to all sites, uploaded through the FortiGate GUI; afterwards a
+   revision named after the file is saved.
+2. A **site file**, pasted into the CLI console of the GUI; afterwards a revision named
+   after that file is saved.
+
+Samples of both were supplied and studied; the findings and the planned UNDM sequence are in
+`docs/vendor-support/fortigate-101f-staging.md`. The files are not stored in this repository.

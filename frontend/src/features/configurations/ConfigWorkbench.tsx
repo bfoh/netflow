@@ -7,12 +7,37 @@ import { QueryState } from '../../components/Page';
 import { downloadText, fmtDate } from '../../services/format';
 import { useAction, useConfig, useConfigDiff, useConfigs } from '../../hooks/queries';
 import { api } from '../../services/api';
-import type { ConfigVersion, Device, Issue } from '../../types/api';
+import type { ConfigInspection, ConfigVersion, Device, Issue } from '../../types/api';
 
 const label = (v: ConfigVersion) =>
   `${v.kind}${v.kind === 'imported' && v.reference ? ` (${v.reference})` : ''} · ${fmtDate(v.created_at)} · ${v.sha256.slice(0, 8)}`;
 
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+
+/** What the device's driver worked out about an imported file, offline. */
+function FileReport({ report }: { report: ConfigInspection }) {
+  const blocked = report.problems.length > 0 || !!report.blocked_reason;
+  return (
+    <Alert color={blocked ? 'red' : 'blue'} variant="light" mb="xs" p="xs" title={report.summary}
+      icon={blocked ? <IconAlertTriangle size={16} /> : <IconInfoCircle size={16} />}>
+      {report.apply_mode && (
+        <Text size="xs" mb={4}>
+          {report.apply_mode === 'replace'
+            ? 'This kind of file is restored as a whole (replace mode). It is never sent line by line.'
+            : 'This kind of file is a list of changes (merge mode): it changes what it names and leaves the rest of the configuration alone.'}
+        </Text>
+      )}
+      {report.blocked_reason && <Text size="xs" fw={600} mb={4}>Cannot be applied yet: {report.blocked_reason}</Text>}
+      {report.problems.length > 0 && (
+        <>
+          <Text size="xs" fw={600}>Problems found in the file:</Text>
+          <List size="xs" mb={4}>{report.problems.map((p) => <List.Item key={p}>{p}</List.Item>)}</List>
+        </>
+      )}
+      {report.notes.length > 0 && <List size="xs" spacing={2}>{report.notes.map((n) => <List.Item key={n}>{n}</List.Item>)}</List>}
+    </Alert>
+  );
+}
 
 /** Generate, preview, validate and compare configuration versions for one device. */
 export function ConfigWorkbench({ device }: { device: Device }) {
@@ -70,6 +95,7 @@ export function ConfigWorkbench({ device }: { device: Device }) {
                     <Text size="xs">Imported from <b>{shown.data.reference}</b>. It is deployed exactly as written and is not checked against the device intent. Review it, and compare it with the latest backup, before deploying.</Text>
                   </Alert>
                 )}
+                {shown.data.inspection && <FileReport report={shown.data.inspection} />}
                 {shown.data.verification === 'docs_reviewed_not_lab_verified' && (
                   <Alert color="yellow" variant="light" icon={<IconInfoCircle size={16} />} mb="xs" p="xs">
                     <Text size="xs">Template syntax follows public vendor documentation but has not been verified on lab equipment.</Text>

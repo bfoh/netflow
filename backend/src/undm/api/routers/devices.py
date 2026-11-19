@@ -3,11 +3,13 @@ from typing import Any
 from fastapi import APIRouter, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from undm.api.deps import ActorDep, RegistryDep, SessionDep, SettingsDep
 from undm.api.routers.projects import get_project
 from undm.api.schemas import (
     ConfigDiffOut,
+    ConfigFileReportOut,
     ConfigImportIn,
     ConfigVersionFull,
     ConfigVersionOut,
@@ -24,6 +26,7 @@ from undm.configgen.diff import diff_configs
 from undm.db.models import ConfigVersion, CredentialRef, Device
 from undm.domain.enums import DeviceEnvironment
 from undm.domain.operations import DeviceOperation
+from undm.drivers.registry import DriverRegistry
 from undm.inventory.rules import environment_problem
 from undm.services import audit
 from undm.services import devices as svc
@@ -152,9 +155,19 @@ def generate_config(device_id: str, session: SessionDep, registry: RegistryDep,
 @router.post("/api/devices/{device_id}/configs/import", response_model=ConfigVersionFull,
              status_code=status.HTTP_201_CREATED)
 def import_config(device_id: str, body: ConfigImportIn, session: SessionDep,
-                  registry: RegistryDep, actor: ActorDep) -> ConfigVersion:
+                  registry: RegistryDep, actor: ActorDep) -> ConfigVersionFull:
     d = get_device(session, device_id)
-    return svc.import_config(session, d, registry, actor, body.filename, body.text)
+    version = svc.import_config(session, d, registry, actor, body.filename, body.text)
+    return _full(session, version, registry)
+
+
+def _full(session: Session, version: ConfigVersion,
+          registry: DriverRegistry) -> ConfigVersionFull:
+    out = ConfigVersionFull.model_validate(version)
+    report = svc.inspect_config(session, version, registry)
+    if report is not None:
+        out.inspection = ConfigFileReportOut.model_validate(report)
+    return out
 
 
 @router.get("/api/devices/{device_id}/configs", response_model=list[ConfigVersionOut])
@@ -178,11 +191,12 @@ def diff_versions(from_version: str, to_version: str, session: SessionDep) -> Co
 
 
 @router.get("/api/configs/{version_id}", response_model=ConfigVersionFull)
-def read_config(version_id: str, session: SessionDep) -> ConfigVersion:
+def read_config(version_id: str, session: SessionDep,
+                registry: RegistryDep) -> ConfigVersionFull:
     v = session.get(ConfigVersion, version_id)
     if v is None:
         raise NotFoundError("Configuration version not found")
-    return v
+    return _full(session, v, registry)
 
 
 @router.get("/api/devices/{device_id}/diagnostics", response_model=DiagnosticsOut)

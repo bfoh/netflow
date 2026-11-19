@@ -15,7 +15,7 @@ from undm.configgen.engine import GenerationResult, generate
 from undm.db.models import ConfigVersion, Device
 from undm.domain.intent import DeviceIntent
 from undm.domain.operations import DeviceOperation, is_impacting
-from undm.drivers.base import Credentials, DeviceDriver, DeviceTarget
+from undm.drivers.base import ConfigFileReport, Credentials, DeviceDriver, DeviceTarget
 from undm.drivers.registry import DriverRegistry
 from undm.security import credentials as creds
 from undm.services import audit
@@ -91,11 +91,23 @@ def import_config(
     )
     session.add(version)
     session.flush()
+    report = inspect_config(session, version, registry)
     audit.record(session, actor, "config.import", "device", device.id, details={
         "filename": safe_name, "bytes": len(text.encode()), "lines": text.count("\n"),
-        "sha256": version.sha256,
+        "sha256": version.sha256, "file_type": report.file_type if report else "",
     })
     return version
+
+
+def inspect_config(session: Session, version: ConfigVersion,
+                   registry: DriverRegistry) -> ConfigFileReport | None:
+    """What an imported file is, according to the device's driver (offline)."""
+    if version.kind != "imported":
+        return None
+    device = session.get(Device, version.device_id)
+    if device is None or device.driver_id not in registry:
+        return None
+    return registry.get(device.driver_id).inspect_config_file(version.text)
 
 
 def generate_config(

@@ -10,12 +10,14 @@ after verification against vendor documentation and lab equipment.
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 from typing import ClassVar
 
 from undm.domain.operations import DeviceOperation
 from undm.drivers.base import (
     ApplyMode,
     Capability,
+    ConfigFileReport,
     ConfigurationBackup,
     DeviceDriver,
     DeviceFacts,
@@ -23,6 +25,7 @@ from undm.drivers.base import (
     FirmwareImageRef,
     OperationResult,
 )
+from undm.drivers.fortinet.config_files import inspect_fortios_file
 from undm.drivers.mock.lab import SimulatedDevice, default_lab
 
 Op = DeviceOperation
@@ -238,6 +241,15 @@ class MockFortiGateDriver(MockDriver):
         simulated=True,
         capabilities=_COMMON | {C.REST_API, C.ZERO_TOUCH_PROVISIONING},
     )
+
+    @classmethod
+    def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
+        report = inspect_fortios_file(text)
+        if report.file_type == "full_backup":
+            return replace(report, blocked_reason=(
+                "The simulated FortiGate cannot restore a full backup; only CLI scripts can be "
+                "applied in simulation."))
+        return report
 
 
 class MockArubaAOSCXDriver(MockDriver):

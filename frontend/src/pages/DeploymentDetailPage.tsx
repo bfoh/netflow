@@ -1,6 +1,6 @@
 import { Accordion, Alert, Anchor, Badge, Button, Card, Group, Modal, Stack, Stepper, Text, TextInput, Timeline, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { IconAlertTriangle, IconCheck, IconFlask, IconX } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router';
 
@@ -8,7 +8,7 @@ import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { DiffView } from '../components/DiffView';
 import { PageHeader, QueryState } from '../components/Page';
 import { fmtDate } from '../services/format';
-import { useAction, useDeployment, useProjectDevices } from '../hooks/queries';
+import { RUNNING_STATES, useAction, useDeployment, useProjectDevices } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Deployment } from '../types/api';
 
@@ -25,12 +25,11 @@ const OUTCOME: Record<string, { color: string; title: string; text: string }> = 
   recovery_required: { color: 'red', title: 'Manual recovery required', text: 'At least one device may be in an intermediate state. Check each target below before making further changes.' },
   cancelled: { color: 'gray', title: 'Deployment cancelled', text: 'No device was changed.' },
 };
-const TRANSIENT = new Set(['validating', 'preflight', 'backing_up', 'deploying', 'verifying', 'recovering']);
 
 /** datetime-local value (local time) for a Date. */
 const toLocalInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-function Actions({ dep }: { dep: Deployment }) {
+function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boolean) => void }) {
   const [confirm, { open, close }] = useDisclosure();
   const [windowOpen, { open: openWindow, close: closeWindow }] = useDisclosure();
   const [start, setStart] = useState(() => toLocalInput(new Date()));
@@ -40,6 +39,8 @@ function Actions({ dep }: { dep: Deployment }) {
     ? { window_start: new Date(start).toISOString(), window_end: new Date(end).toISOString() } : undefined), 'Deployment approved');
   const execute = useAction(() => api.executeDeployment(dep.id), (d) => `Execution finished: ${d.state.replaceAll('_', ' ')}`);
   const cancel = useAction(() => api.cancelDeployment(dep.id), 'Deployment cancelled');
+  const running = execute.isPending;
+  useEffect(() => onRunning(running), [running, onRunning]);
   const canCancel = ['draft', 'awaiting_approval', 'ready'].includes(dep.state);
   return (
     <Group>
@@ -56,8 +57,8 @@ function Actions({ dep }: { dep: Deployment }) {
           </Group>
         </Stack>
       </Modal>
-      {dep.state === 'ready' && <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={open}>{dep.dry_run ? 'Run dry run' : 'Execute deployment'}</Button>}
-      {canCancel && <Button variant="default" onClick={() => cancel.mutate()} loading={cancel.isPending}>Cancel</Button>}
+      {(dep.state === 'ready' || running) && <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={open} loading={running}>{dep.dry_run ? 'Run dry run' : 'Execute deployment'}</Button>}
+      {canCancel && !running && <Button variant="default" onClick={() => cancel.mutate()} loading={cancel.isPending}>Cancel</Button>}
       <Modal opened={confirm} onClose={close} title={dep.dry_run ? 'Run dry run' : 'Execute deployment'}>
         <Stack>
           <Text size="sm">
@@ -72,7 +73,7 @@ function Actions({ dep }: { dep: Deployment }) {
           <Alert color="violet" icon={<IconFlask size={16} />} p="xs">Check the environment badge of every target below: simulated devices exist only in UNDM; lab devices are real equipment.</Alert>
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Back</Button>
-            <Button color={dep.dry_run ? 'indigo' : 'orange'} loading={execute.isPending} onClick={() => execute.mutate(undefined, { onSettled: close })}>Confirm</Button>
+            <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={() => { close(); execute.mutate(); }}>Confirm</Button>
           </Group>
         </Stack>
       </Modal>
@@ -82,23 +83,34 @@ function Actions({ dep }: { dep: Deployment }) {
 
 export function DeploymentDetailPage() {
   const { deploymentId = '' } = useParams();
-  const dep = useDeployment(deploymentId);
+  const [running, setRunning] = useState(false);
+  const dep = useDeployment(deploymentId, running);
   const devices = useProjectDevices(dep.data?.project_id ?? '');
   if (!dep.data) return <QueryState isLoading={dep.isLoading} error={dep.error} />;
   const d = dep.data;
   const byId = new Map((devices.data ?? []).map((x) => [x.id, x]));
-  const outcome = d.kind === 'firmware' && d.state === 'succeeded'
-    ? { ...OUTCOME.succeeded, text: 'Every upgraded device came back and reports the target firmware version.' }
+  const firmwareText: Record<string, string> = {
+    succeeded: 'Every upgraded device came back and reports the target firmware version.',
+    rolled_back: 'The upgrade did not complete. Every device that was touched runs its previous version; read each target\'s message below before trying again.',
+  };
+  const outcome = d.kind === 'firmware' && firmwareText[d.state]
+    ? { ...OUTCOME[d.state], title: d.state === 'rolled_back' ? 'Upgrade did not complete' : OUTCOME[d.state].title, text: firmwareText[d.state] }
     : OUTCOME[d.state];
+  const working = running || RUNNING_STATES.has(d.state);
 
   return (
     <>
       <PageHeader title={`${d.kind === 'firmware' ? 'Firmware upgrade' : 'Configuration deployment'}${d.dry_run ? ' (dry run)' : ''} · ${fmtDate(d.created_at)}`}
         description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
           ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : ` · ${d.apply_mode} mode`}`}
-        actions={<><StateBadge state={d.state} /><Actions dep={d} /></>} />
-      {TRANSIENT.has(d.state) && <Alert color="blue" mb="md">In progress: {d.state.replaceAll('_', ' ')}…</Alert>}
-      {outcome && <Alert color={outcome.color} title={outcome.title} mb="md" icon={d.state === 'succeeded' ? <IconCheck size={18} /> : <IconAlertTriangle size={18} />}>{outcome.text}</Alert>}
+        actions={<><StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
+      {working && (
+        <Alert color="blue" mb="md" title={`In progress: ${RUNNING_STATES.has(d.state) ? d.state.replaceAll('_', ' ') : 'starting'}…`}>
+          Keep this page open; the events below update as each step finishes.
+          {d.kind === 'firmware' && !d.dry_run && ' A firmware upgrade takes several minutes per device: the image is transferred, written to flash, then the device restarts. Do not power off or unplug a device while this runs.'}
+        </Alert>
+      )}
+      {!working && outcome && <Alert color={outcome.color} title={outcome.title} mb="md" icon={d.state === 'succeeded' ? <IconCheck size={18} /> : <IconAlertTriangle size={18} />}>{outcome.text}</Alert>}
       <Card withBorder mb="md">
         <Stepper active={STEP_OF[d.state] ?? 0} size="xs" allowNextStepsSelect={false}
           color={['failed', 'recovery_required', 'rolled_back'].includes(d.state) ? 'red' : undefined}>

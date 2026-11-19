@@ -37,6 +37,7 @@ class DriverOut(BaseModel):
 
 class PolicyOut(BaseModel):
     enable_real_device_writes: bool
+    enable_real_device_firmware: bool
     allow_production_read_only: bool
     allow_production_deployments: bool
     require_separate_approver: bool
@@ -205,8 +206,21 @@ class ConfigVersionOut(ORM):
     created_at: datetime
 
 
+class ConfigFileReportOut(ORM):
+    """What an imported file is, worked out offline (never contains secret values)."""
+
+    file_type: str
+    summary: str
+    apply_mode: str | None
+    facts: dict[str, str]
+    notes: list[str]
+    problems: list[str]
+    blocked_reason: str
+
+
 class ConfigVersionFull(ConfigVersionOut):
     text: str
+    inspection: ConfigFileReportOut | None = None
 
 
 class GenerateOut(BaseModel):

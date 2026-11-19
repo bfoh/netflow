@@ -78,7 +78,7 @@ describe('application shell', () => {
   });
 
   it('header shows when real-device changes are enabled', async () => {
-    mockApi({ '/policy': { enable_real_device_writes: true, allow_production_read_only: false,
+    mockApi({ '/policy': { enable_real_device_writes: true, enable_real_device_firmware: false, allow_production_read_only: false,
       allow_production_deployments: false, require_separate_approver: false } });
     renderAt('/');
     expect(await screen.findByText('Real-device changes ON')).toBeInTheDocument();

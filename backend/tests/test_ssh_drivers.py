@@ -15,6 +15,7 @@ from fake_netmiko import (
 from memory_keyring import MemoryKeyring
 from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
 
+from undm.domain.operations import DeviceOperation
 from undm.drivers.base import ApplyMode, Credentials, DeviceTarget, ResultStatus
 from undm.drivers.ssh.base import SshCliDriver
 from undm.drivers.ssh.platforms import ArubaAOSCXSsh, ArubaOSSwitchSsh, CiscoIOSXESsh, FortiOSSsh
@@ -112,11 +113,16 @@ def test_fortios_save_is_not_claimed_as_device_save(scenario):
     assert r.ok and "not checked" in r.message
 
 
-def test_no_rollback_or_firmware_declared():
+def test_no_rollback_declared_and_firmware_only_where_implemented():
     for cls in (CiscoIOSXESsh, ArubaAOSCXSsh, ArubaOSSwitchSsh, FortiOSSsh):
         d = drv(cls)
         assert d.rollback_configuration(None).status is ResultStatus.UNSUPPORTED  # type: ignore[arg-type]
-        assert d.install_firmware().status is ResultStatus.UNSUPPORTED
+        assert d.rollback_firmware().status is ResultStatus.UNSUPPORTED
+    for cls in (CiscoIOSXESsh, ArubaAOSCXSsh, FortiOSSsh):
+        assert drv(cls).install_firmware().status is ResultStatus.UNSUPPORTED
+        assert drv(cls).stage_firmware(None).status is ResultStatus.UNSUPPORTED  # type: ignore[arg-type]
+    # The 2930F procedure exists (experimental); see test_aos_switch_firmware.py.
+    assert not drv(ArubaOSSwitchSsh).missing_capabilities(DeviceOperation.INSTALL_FIRMWARE)
 
 
 def test_verification_ignores_indentation_and_hidden_defaults():

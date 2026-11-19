@@ -51,6 +51,11 @@ Safe conclusions:      <what UNDM may use>
 | Q-15 | FortiGate 101F first login: is a password change forced, and what is done about it today? | Answered 2026-11-19: yes, a change is forced; the approved password is set (not recorded here). |
 | Q-16 | Are spare factory-default units available for testing on an isolated bench? | Answered 2026-11-19: yes. |
 | Q-17 | Console speed for a factory-default 2930F: **9600** (answered 2026-11-19). | Default of the console bootstrap. |
-| Q-18 | Can the staging laptop accept inbound TFTP (UDP 69) from the bench network (Windows Firewall / company policy), or is a TFTP server tool already approved? | TFTP is the transfer method documented for Aruba, FortiGate and LIG1014A. |
+| Q-18 | Can the staging laptop accept inbound TFTP (UDP 69) from the bench network (Windows Firewall / company policy), or is a TFTP server tool already approved? | TFTP is the transfer method documented for Aruba, FortiGate and LIG1014A. Product owner 2026-11-18: start with TFTP; change method if the bench test fails. |
+| Q-19 | FortiGate: is the base file restored **before** the firmware upgrade (on 7.2.7, the version it was written on) or after it (on 7.6.5)? | Decides the order of steps 3 and 5 in `vendor-support/fortigate-101f-staging.md`. |
+| Q-20 | FortiGate: after the base file is restored, which administrator password is valid — the approved one, or one that is only in the base file? | UNDM must know which stored credential to use after the restart. The password itself is never recorded here. |
+| Q-21 | FortiGate: when the site file is pasted today, are any error messages normal apart from the first `end`? | UNDM will stop at the first unexpected reply; known harmless ones must be listed. |
+| Q-22 | FortiGate: after the site file, is anything else done by hand (the tunnel's pre-shared key, which is placeholder text in the sample; licence; certificates; the remote-access and inter-site scripts mentioned in the file header)? | Scope of the FortiGate part of the staging run. |
+| Q-23 | Exact Black Box model in the other systems: **LE2700A** (answered 2026-11-18). | Web-managed; needs its own investigation. |
 | Q-09 | Is the zone used for 2930F testing a test/verification system or a live network? | Decides whether phase B (first write) may use this unit. |
 | Q-08 | Can future screenshots be sanitized (system names, hostnames, zone numbers, user names removed) before sharing? | Directive 5 handling rules. |

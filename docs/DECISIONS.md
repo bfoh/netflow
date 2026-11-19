@@ -175,3 +175,41 @@ Empty passwords are allowed there because factory-default devices have none.
 The team upgrades FortiGate 101F from 7.2.7 directly to 7.6.5. UNDM will perform that
 single step and not invent intermediate versions; the firmware image's
 "minimum version to upgrade from" rule stays available if the team wants to enforce a path.
+
+### D-029 TFTP first, served by UNDM itself (2026-11-18)
+The product owner chose TFTP as the first file-transfer method ("if we test and it fails,
+then we look at another method"). UNDM carries its own TFTP server instead of depending on
+a separate tool: read-only, serves only files published for the running job, each file
+only to the one device address it is meant for, started when a real-device job needs it
+and stopped when the job ends. It is tested against an independent client (tftpy).
+
+### D-030 Firmware on real devices has its own switch (2026-11-18)
+`UNDM_ENABLE_REAL_DEVICE_FIRMWARE` is required in addition to the write switch; dry runs
+stay allowed. The second-approver rule for firmware stays on by default and can be turned
+off explicitly (`UNDM_FIRMWARE_REQUIRE_SEPARATE_APPROVER=false`) for one technician staging
+new units on an isolated bench. The maintenance window stays mandatory.
+
+### D-031 Interactive device dialogues: answer only what is known, prove success (2026-11-18)
+Commands that ask questions are run by a dialogue routine with an explicit list of
+(question, answer) pairs. An unrecognised question is never answered: the step ends and
+the device's text is shown in the job events. A step is reported successful only on
+independent evidence: for the 2930F image copy, UNDM's own TFTP record must show the whole
+file was fetched by that switch **and** `show flash` must show the expected version; a
+restart counts as started only after the confirmation was actually sent.
+
+### D-032 A supplied file is applied the way its kind requires (2026-11-18)
+Drivers can describe a supplied configuration file offline (`inspect_config_file`): a full
+backup is restored as a whole (replace), a CLI script is a list of changes (merge).
+Deployment creation refuses a mismatch, a file with structural problems, and a kind the
+driver cannot apply yet. Reason: sending a 12,000-line FortiGate backup line by line, or
+"restoring" a script, would leave a device in an undefined state. The report counts
+secrets but never contains them.
+
+### D-033 FortiGate staging follows the team's two-file method (2026-11-18)
+Base file (full backup, common to all sites) first, then the site script, with a named
+revision saved after each — as the team does by hand. The site script will be run one
+statement at a time and stop at the first unexpected reply, which is stricter than pasting
+(pasting continues after errors). Details and open questions:
+`docs/vendor-support/fortigate-101f-staging.md`.
+
+_Note: entries above dated 2026-11-19 were written on 2026-11-18._
