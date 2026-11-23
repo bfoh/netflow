@@ -461,3 +461,21 @@ loading, approval). Nothing reaches a device until the plan is validated, approv
 executed. Links go both ways: the studio links to the device page and to the Deployment
 Center for the device; a plan's targets link "configuration sent", "backup before" and
 "after deployment" to the studio (`/configurations?device=…&version=…`).
+
+### D-057 Console bootstrap may erase a preconfigured switch first, on explicit request (2026-11-23)
+Product owner: BH-DMZ 2930F units arrive preconfigured (hostname, site configuration and a
+manager password that is not the approved one; the same preconfigured login on all units).
+The bootstrap failed at `enable` ("Unable to verify password"). Decision (product owner,
+asked with alternatives): UNDM erases such a switch instead of the technician doing a
+manual reset. This widens D-025 for one explicit case and is written into CLAUDE.md.
+Safeguards in addition to D-025's: an opt-in "erase its configuration first" option; the
+switch's current login comes from a saved credential (never shown or logged); UNDM logs in
+with it and refuses, erasing nothing, unless the hostname the technician typed equals the
+name in the switch's prompt; a switch that already looks factory default is not erased;
+the configuration read before the erase stays in the transcript; `erase startup-config`
+(vendor CLI documentation; confirmation wording **not yet seen on the bench**) is answered
+only for a y/n question asking to continue/proceed ("n" to a save question), any other
+question stops the run unanswered; UNDM waits up to 7 minutes for the restart, then sets
+the switch up as new with the device's (approved) login and bootstraps it as usual,
+including the factory-default check and read-back. Audit: erase_existing, erased hostname,
+name of the current login. The enable-level failure message now points to this option.

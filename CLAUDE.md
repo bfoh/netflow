@@ -38,7 +38,9 @@ independent of it: no DIMETRA assumptions, no TNDM code, no TNDM assets.
   (`domain/lifecycle.py`); no API endpoint may change a device directly. One exception:
   console bootstrap of factory-default devices (`services/provisioning.py`), which has
   its own safeguards (preview, typed confirmation, write switch, factory-default check,
-  read-back before save, audit) — see DECISIONS D-025. Do not add other exceptions.
+  read-back before save, audit) — see DECISIONS D-025. A preconfigured switch may be
+  erased first only on explicit request, with its current login and its typed hostname
+  (D-057, product owner decision). Do not add other exceptions.
 - Unsupported operations return `OperationResult.unsupported(...)`; they do not raise.
 - Device dialogues answer only listed questions (`SshCliDriver._dialogue`); an unknown
   question ends the step with the device's text. Success needs independent evidence (D-031).

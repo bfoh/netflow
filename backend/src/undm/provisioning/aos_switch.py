@@ -47,6 +47,16 @@ TERMINATED = re.compile(r"Session Terminated, unable to login\.?\s*$", re.I)
 ERROR = re.compile(r"Invalid input|Incomplete input|Ambiguous input|invalid port|"
                    r"not allowed|Error:|Unable to", re.I)
 
+# Erasing a preconfigured switch (product owner, 2026-11-23: BH-DMZ units arrive with a site
+# configuration and a non-approved manager password). Command from the vendor's CLI
+# documentation; its confirmation wording is NOT yet seen on the bench, so only a y/n
+# question that asks to continue/proceed is answered "y", a save question "n", anything
+# else stops the procedure with the switch's text.
+ERASE_COMMAND = "erase startup-config"
+ERASE_CONTINUE = re.compile(r"(?:continue|proceed)[^\n]*(?:\[y/n\]|\(y/n\))\s*\??\s*$", re.I)
+SAVE_QUESTION = re.compile(r"save[^\n]*(?:\[y/n[^\]]*\]|\(y/n\))\s*\??\s*$", re.I)
+ANY_QUESTION = re.compile(r"(?:\?|\[y/n[^\]]*\]|\(y/n\)|:)\s*$", re.I)
+
 _VLAN_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,32}$")
 _PORT = re.compile(r"^[A-Za-z0-9/]{1,8}$")
 # Lines that indicate the switch already carries a site configuration.
@@ -88,6 +98,15 @@ class BootstrapParams:
                 f"untagged {self.untagged_port}", self.ip_line, "exit", "write memory"]
 
 
+@dataclass(frozen=True)
+class EraseRequest:
+    """Erase a preconfigured switch before bootstrapping it."""
+
+    current: Credentials  # the switch's current (preconfigured) manager login
+    confirm_hostname: str  # typed by the technician; must equal the console prompt's name
+    restart_timeout: float = 420.0  # erase, restart and console banner
+
+
 @dataclass
 class BootstrapResult:
     status: BootstrapStatus
@@ -98,6 +117,7 @@ class BootstrapResult:
     saved: bool = False
     transcript: str = ""
     credentials_set: bool = False  # a new switch's first-login credentials were set
+    erased: str = ""  # hostname of the configuration that was erased first, if any
 
 
 def _expand_ports(spec: str) -> set[str]:
@@ -226,9 +246,10 @@ class ArubaOSSwitchConsole:
         time.sleep(self.wake_delay)
         self.s.write_line()
 
-    def login(self) -> str:
+    def login(self, wake: bool = True) -> str:
         """Reach the manager prompt (#) at top level. Returns the prompt's hostname."""
-        self._wake()
+        if wake:
+            self._wake()
         text = ""
         seen = ""
         restarts = 0
@@ -274,7 +295,10 @@ class ArubaOSSwitchConsole:
                     self.s.transport.write((self._credential("password") + "\r").encode())
             m = PROMPT.search(text)
             if m is None or m["mode"] != "#":
-                raise ConsoleError("Could not enter manager (enable) level")
+                raise ConsoleError(
+                    "Could not enter manager (enable) level: the switch has a manager password "
+                    "that the login used does not match. If it is a preconfigured unit, run the "
+                    "bootstrap with 'erase its configuration first' and its current login")
         if m["ctx"]:  # left in a configuration context by an earlier session
             self.command("end")
         self.command("no page")  # session only
@@ -289,23 +313,81 @@ class ArubaOSSwitchConsole:
         return self.command("show running-config", timeout=30)
 
 
+def erase_existing(console: ArubaOSSwitchConsole, request: EraseRequest,
+                   params: BootstrapParams) -> str:
+    """Log in with the switch's current login, confirm its identity, erase its startup
+    configuration and wait until it has restarted. Returns the erased hostname, or "" if
+    the switch was already factory default (nothing erased). Raises ConsoleError."""
+    approved = console.credentials
+    console.credentials = request.current
+    try:
+        name = console.login()
+    except ConsoleError as e:
+        raise ConsoleError(f"Could not log in with the switch's current login ({e}). Check the "
+                           "credential chosen as its current login. Nothing was erased.") from e
+    finally:
+        console.credentials = approved
+    if name != request.confirm_hostname.strip():
+        raise ConsoleError(f"The switch on this console is '{name}', not "
+                           f"'{request.confirm_hostname.strip()}' as typed. Nothing was erased.")
+    if not site_config_findings(console.running_config(), params):
+        return ""  # already factory default: nothing to erase
+    console.s.write_line(ERASE_COMMAND)
+    answered_continue = False
+    for _ in range(4):
+        idx, text = console.s.read_until_any(
+            [SAVE_QUESTION, ERASE_CONTINUE, PROMPT, ANY_QUESTION], timeout=console.login_timeout)
+        if idx == 0:
+            console.s.write_line("n")  # never save the configuration being erased
+            continue
+        if idx == 1:
+            console.s.write_line("y")
+            answered_continue = True
+            break
+        if idx == 2:
+            raise ConsoleError("The switch returned to its prompt without erasing"
+                               + (f" ({text.strip().splitlines()[0][:120]})" if text.strip()
+                                  else "") + ". Nothing was erased.")
+        question = text.strip().splitlines()[-1][-100:] if text.strip() else "?"
+        raise ConsoleError(f"The switch asked something UNDM does not answer ('{question}'). "
+                           "Nothing was answered; check it on the console.")
+    if not answered_continue:
+        raise ConsoleError("The switch did not ask to confirm the erase; nothing was answered.")
+    # The switch now erases and restarts; its console shows the start and then the login.
+    idx, _ = console.s.read_until_any([ANY_KEY, FIRST_LOGIN, LOGIN, PROMPT],
+                                      timeout=request.restart_timeout)
+    if idx == 0:
+        console.s.write_line()
+    console.credentials_set = False
+    return name
+
+
 def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
-              *, allow_configured: bool = False) -> BootstrapResult:
+              *, allow_configured: bool = False,
+              erase: EraseRequest | None = None) -> BootstrapResult:
     """Run the bootstrap. Never raises for device-side problems; returns a result."""
     s = console.s
     sent: list[str] = []
 
+    erased = ""
+
     def done(status: BootstrapStatus, message: str, **kw: object) -> BootstrapResult:
+        if erased:
+            message = f"Erased the configuration of '{erased}' first. {message}"
         if console.credentials_set:
             message += (". The switch was new: its manager credentials were set to the "
                         "device's attached login")
         return BootstrapResult(status, message, commands_sent=sent,
                                transcript=s.transcript_text,
-                               credentials_set=console.credentials_set,
+                               credentials_set=console.credentials_set, erased=erased,
                                **kw)  # type: ignore[arg-type]
 
     try:
-        console.login()
+        if erase is not None:
+            erased = erase_existing(console, erase, params)
+            if erased:
+                sent.append(ERASE_COMMAND)
+        console.login(wake=not erased)
         before = console.running_config()
         if is_configured(before, params):
             return done(BootstrapStatus.ALREADY_CONFIGURED,

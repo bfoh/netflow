@@ -24,6 +24,18 @@ see the results log.
       at that point and sends nothing. If you already set the credentials by hand, use the
       approved password: the bootstrap then logs in with it normally.
 
+## Preconfigured units (BH-DMZ): erase first (D-057)
+- [ ] Save the preconfigured login once in the project's **Credentials** (e.g. "preconfigured
+      login"); the approved login stays attached to the device.
+- [ ] Read the switch's current hostname from its console prompt (the name before `>` or `#`).
+- [ ] Run console bootstrap… → tick **This switch is preconfigured … erase its configuration
+      first** → choose **Its current login** → type the hostname → type the device name →
+      **Erase and bootstrap**. Expected: transcript with the configuration before the erase,
+      `erase startup-config`, the confirmation answered "y", the restart, then the new-unit
+      credential prompts (or a plain login) and the usual bootstrap; badge "erased … first".
+- [ ] Send back the sanitized transcript: the erase confirmation wording and restart time are
+      not yet known (Q-37).
+
 ## Steps
 | # | Step | Expected |
 |---|---|---|

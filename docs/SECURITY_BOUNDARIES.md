@@ -20,7 +20,12 @@ Console bootstrap (Provisioning Center) writes to a device over a serial cable. 
 devices it needs `UNDM_ENABLE_REAL_DEVICE_WRITES=true`, a typed confirmation of the device
 name, and a switch that looks factory default (no password prompt, no site configuration)
 unless the operator explicitly overrides that check. It is meant for spare or new units on
-an isolated bench.
+an isolated bench. A **preconfigured** switch (e.g. BH-DMZ units delivered with another
+manager password) can be erased first, only on explicit request (D-057): UNDM logs in with
+the saved "current login", refuses unless the hostname typed by the technician equals the
+switch's console prompt, keeps the configuration read before the erase in the transcript,
+runs `erase startup-config` answering only a continue/proceed y/n question ("n" to a save
+question), and audits the erase with the hostname and the name of the login used.
 
 File transfer: while a real-device job needs it (firmware; FortiGate full-backup restore), UNDM listens on UDP 69 (TFTP). TFTP
 has no authentication or encryption, so the server is deliberately narrow: read-only, only

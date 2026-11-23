@@ -17,7 +17,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from undm.db.models import Device
+from undm.db.models import CredentialRef, Device
 from undm.domain.enums import ProvisioningStatus
 from undm.drivers.base import Credentials
 from undm.drivers.registry import DriverRegistry
@@ -124,6 +124,8 @@ def run_console_bootstrap(
     session: Session, device: Device, registry: DriverRegistry, policy: Policy, actor: str, *,
     serial_port: str, baudrate: int, profile: dict[str, Any] | None,
     confirm_device_name: str, allow_configured: bool,
+    erase_existing: bool = False, current_credential_ref_id: str | None = None,
+    confirm_hostname: str | None = None,
 ) -> dict[str, Any]:
     if not supports_console_bootstrap(device, registry):
         raise ServiceError("No console bootstrap procedure exists for this device's platform")
@@ -150,6 +152,26 @@ def run_console_bootstrap(
         except creds.CredentialResolutionError as e:
             raise ServiceError(str(e)) from e
 
+    # Erase a preconfigured switch first (D-057): opt-in, with its current login and the
+    # hostname typed by the technician, checked against the switch before anything is sent.
+    erase: aos_switch.EraseRequest | None = None
+    current_ref: CredentialRef | None = None
+    if erase_existing:
+        if not current_credential_ref_id or not (confirm_hostname or "").strip():
+            raise ConflictError("To erase a preconfigured switch, choose its current login and "
+                                "type its current hostname (as shown in its console prompt)")
+        current_ref = session.get(CredentialRef, current_credential_ref_id)
+        if current_ref is None or current_ref.project_id != device.project_id:
+            raise ConflictError("Current login: credential not found in this project")
+        if credentials is None or not credentials.password:
+            raise ConflictError("After the erase the switch is set up with the device's login: "
+                                "attach the approved login to the device first")
+        try:
+            current = creds.resolve(current_ref.provider, current_ref.locator)
+        except creds.CredentialResolutionError as e:
+            raise ServiceError(f"Credential '{current_ref.name}': {e}") from e
+        erase = aos_switch.EraseRequest(current, (confirm_hostname or "").strip())
+
     with _registry_lock:
         lock = _port_locks.setdefault(serial_port if not simulated else f"sim:{device.id}",
                                       threading.Lock())
@@ -172,7 +194,7 @@ def run_console_bootstrap(
             raise ServiceError(str(e)) from e
         result = aos_switch.bootstrap(
             aos_switch.ArubaOSSwitchConsole(console_session, credentials, wake_delay=wake),
-            params, allow_configured=allow_configured)
+            params, allow_configured=allow_configured, erase=erase)
     finally:
         if transport is not None and not simulated:
             transport.close()
@@ -205,6 +227,8 @@ def run_console_bootstrap(
                      "verified": result.verified, "saved": result.saved,
                      "message": result.message, "allow_configured": allow_configured,
                      "first_login_credentials_set": result.credentials_set,
+                     "erase_existing": erase_existing, "erased_hostname": result.erased,
+                     "current_login": current_ref.name if current_ref else None,
                      "credential": device.credential_ref.name if device.credential_ref
                      else None})
     known = [("hostname", device.name), ("ip", address)]
@@ -212,7 +236,7 @@ def run_console_bootstrap(
         "status": result.status.value, "message": result.message,
         "commands_sent": result.commands_sent, "findings": result.findings,
         "verified": result.verified, "saved": result.saved, "transcript": result.transcript,
-        "credentials_set": result.credentials_set,
+        "credentials_set": result.credentials_set, "erased": result.erased,
         "sanitized_transcript": sanitize(result.transcript, known),
         "network_reachable": reachable, "network_hint": hint,
     }

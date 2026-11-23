@@ -440,6 +440,11 @@ class ConsoleBootstrapIn(BaseModel):
     profile: BootstrapProfile | None = None
     confirm_device_name: str
     allow_configured: bool = False
+    # Preconfigured switch: erase its configuration first (D-057). Needs its current login
+    # and its current hostname as typed by the technician.
+    erase_existing: bool = False
+    current_credential_ref_id: str | None = None
+    confirm_hostname: str | None = Field(default=None, max_length=64)
 
 
 class ConsoleBootstrapOut(BaseModel):
@@ -452,5 +457,6 @@ class ConsoleBootstrapOut(BaseModel):
     transcript: str
     sanitized_transcript: str
     credentials_set: bool = False  # a new switch's first-login credentials were set
+    erased: str = ""  # hostname of the configuration erased first, if any
     network_reachable: bool | None
     network_hint: str

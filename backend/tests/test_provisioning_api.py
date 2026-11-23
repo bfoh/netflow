@@ -214,3 +214,56 @@ def test_new_switch_first_login_sets_the_attached_login(monkeypatch):
             assert "Example-Only-Approved-1" not in repr(out) + repr(audit)
     finally:
         keyring.set_keyring(previous)
+
+
+def test_preconfigured_switch_is_erased_first_with_its_current_login(monkeypatch):
+    """BH-DMZ units arrive preconfigured with a non-approved manager password (2026-11-23)."""
+    import keyring
+    from memory_keyring import MemoryKeyring
+
+    previous = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    sim = SimulatedArubaConsole(hostname="lab-bhdmz-sw01", username="manager",
+                                password="Example-Only-Preconfigured", operator_level=True,
+                                enable_login=True,
+                                extra_config=["ip route 0.0.0.0 0.0.0.0 192.0.2.254"])
+    monkeypatch.setattr(prov, "open_serial", lambda port, baud: sim)
+    monkeypatch.setattr(prov, "_tcp_reachable", lambda address, port=22, timeout=3.0: True)
+    monkeypatch.setattr(prov.ConsoleSession, "settle_time", 0)
+    monkeypatch.setattr(prov.aos_switch.time, "sleep", lambda s: None)
+    try:
+        client, _ = make_client(enable_real_device_writes=True)
+        with client:
+            pid = client.post("/api/projects", json={"name": "BH-DMZ"}).json()["id"]
+
+            def login(name, password):
+                ref = client.post(f"/api/projects/{pid}/credential-refs",
+                                  json={"name": name}).json()
+                client.put(f"/api/credential-refs/{ref['id']}/secret",
+                           json={"username": "manager", "password": password})
+                return ref["id"]
+            approved = login("approved login", "Example-Only-Approved-1")
+            current = login("preconfigured login", "Example-Only-Preconfigured")
+            did = client.post(f"/api/projects/{pid}/devices", json=dict(
+                REAL_SWITCH, credential_ref_id=approved)).json()["id"]
+            plain = run(client, did, confirm_device_name="lab-sw", serial_port="COM7").json()
+            assert plain["status"] == "failed" and "enable" in plain["message"]
+            missing = run(client, did, confirm_device_name="lab-sw", serial_port="COM7",
+                          erase_existing=True)
+            assert missing.status_code == 409 and "current login" in missing.json()["error"]
+            out = run(client, did, confirm_device_name="lab-sw", serial_port="COM7",
+                      erase_existing=True, current_credential_ref_id=current,
+                      confirm_hostname="lab-bhdmz-sw01").json()
+            assert out["status"] == "bootstrapped", (out["message"], out["transcript"])
+            assert out["erased"] == "lab-bhdmz-sw01" and out["credentials_set"] is True
+            assert (sim.username, sim.password) == ("manager", "Example-Only-Approved-1")
+            audit = client.get("/api/audit?limit=20").json()
+            entry = next(a for a in audit if a["action"] == "provisioning.console_bootstrap"
+                         and a["details"]["erase_existing"])
+            assert entry["details"]["erased_hostname"] == "lab-bhdmz-sw01"
+            assert entry["details"]["current_login"] == "preconfigured login"
+            shown = repr(out) + repr(audit)
+            assert "Example-Only-Preconfigured" not in shown
+            assert "Example-Only-Approved-1" not in shown
+    finally:
+        keyring.set_keyring(previous)

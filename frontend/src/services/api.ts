@@ -135,6 +135,7 @@ export const api = {
     request<BootstrapPreview>('POST', `/devices/${id}/provisioning/console-bootstrap/preview`, { profile }),
   consoleBootstrap: (id: string, body: {
     serial_port: string; baudrate: number; profile: BootstrapProfile; confirm_device_name: string; allow_configured: boolean;
+    erase_existing?: boolean; current_credential_ref_id?: string | null; confirm_hostname?: string;
   }) => request<BootstrapResult>('POST', `/devices/${id}/provisioning/console-bootstrap`, body),
   topology: (pid: string) => request<Topology>('GET', `/projects/${pid}/topology`),
   createLink: (pid: string, body: TopologyLinkInput) => request<TopologyLink>('POST', `/projects/${pid}/topology/links`, body),

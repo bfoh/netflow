@@ -43,4 +43,7 @@ def console_bootstrap(device_id: str, body: ConsoleBootstrapIn, session: Session
         session, d, registry, Policy.from_settings(settings), actor,
         serial_port=body.serial_port, baudrate=body.baudrate,
         profile=body.profile.model_dump(mode="json") if body.profile else None,
-        confirm_device_name=body.confirm_device_name, allow_configured=body.allow_configured)
+        confirm_device_name=body.confirm_device_name, allow_configured=body.allow_configured,
+        erase_existing=body.erase_existing,
+        current_credential_ref_id=body.current_credential_ref_id,
+        confirm_hostname=body.confirm_hostname)

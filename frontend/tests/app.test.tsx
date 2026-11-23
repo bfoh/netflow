@@ -77,6 +77,37 @@ describe('application shell', () => {
     expect(screen.getByRole('button', { name: 'Run console bootstrap…' })).toBeEnabled();
   });
 
+  it('erasing a preconfigured switch needs its current login and hostname', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const sw = device({ id: 'sw', name: 'dmz-sw', driver_id: 'mock.aruba.aos_switch',
+      bootstrap_profile: { vlan_id: 222, vlan_name: 'OOBM_VLAN', untagged_port: '2', address: '192.168.1.1/24' } });
+    const calls = mockApi({
+      '/devices': [sw],
+      '/drivers': [{ driver_id: 'mock.aruba.aos_switch', platform: 'aos_switch', simulated: true, vendor: 'Aruba', os_family: 'ArubaOS-Switch', description: '', capabilities: [], maturity: 'simulation', transport: 'simulated', notes: [] }],
+      '/provisioning/serial-ports': [{ port: 'SIMULATED', description: 'Simulated switch console', hardware_id: '' }],
+      '/projects/p1/credential-refs': [{ id: 'old', name: 'preconfigured login' }],
+      '/devices/sw/provisioning/console-bootstrap': { status: 'bootstrapped', message: 'ok', commands_sent: [], findings: [],
+        verified: true, saved: true, transcript: '', sanitized_transcript: '', erased: 'lab-bhdmz-sw01',
+        network_reachable: null, network_hint: '' },
+    });
+    renderAt('/provisioning?device=sw');
+    await userEvent.click(await screen.findByRole('button', { name: 'Run console bootstrap…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Run console bootstrap' });
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /preconfigured/ }));
+    await userEvent.type(within(dialog).getByLabelText(/Type the device name to confirm/), 'dmz-sw');
+    const go = within(dialog).getByRole('button', { name: 'Erase and bootstrap' });
+    expect(go).toBeDisabled();  // current login and hostname still missing
+    await userEvent.click(within(dialog).getByPlaceholderText('Choose the preconfigured login'));
+    await userEvent.click(await screen.findByRole('option', { name: 'preconfigured login', hidden: true }));
+    await userEvent.type(within(dialog).getByLabelText(/Type its current hostname/), 'lab-bhdmz-sw01');
+    expect(go).toBeEnabled();
+    await userEvent.click(go);
+    expect(await screen.findByText(/erased “lab-bhdmz-sw01” first/)).toBeInTheDocument();
+    const sent = calls.find((c) => c.url.endsWith('/provisioning/console-bootstrap'));
+    expect(JSON.parse(String(sent?.init?.body))).toMatchObject({ erase_existing: true,
+      current_credential_ref_id: 'old', confirm_hostname: 'lab-bhdmz-sw01', allow_configured: false });
+  });
+
   it('header shows when real-device changes are enabled', async () => {
     mockApi({ '/policy': { enable_real_device_writes: true, enable_real_device_firmware: false, allow_production_read_only: false,
       allow_production_deployments: false, require_separate_approver: false } });

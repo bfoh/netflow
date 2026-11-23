@@ -249,3 +249,80 @@ def test_whole_bootstrap_with_cursor_codes_and_tiny_reads():
     r = run(sim, creds=APPROVED)
     assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
     assert "\x1b" not in r.transcript and "[24;" not in r.transcript
+
+
+# -- preconfigured switches: erase first (product owner, 2026-11-23) ------------------------
+from undm.provisioning.aos_switch import EraseRequest  # noqa: E402
+
+PRECONFIGURED = Credentials("manager", "preconfigured-test-pw")
+NEW_LOGIN = Credentials("manager", "approved-test-pw")
+
+
+def preconfigured(**kw):
+    """As on the bench: operator prompt without login, 'enable' needs the manager login."""
+    return SimulatedArubaConsole(hostname="lab-bhdmz-sw01", username="manager",
+                                 password="preconfigured-test-pw", operator_level=True,
+                                 enable_login=True, first_login_setup=False,
+                                 extra_config=["ip route 0.0.0.0 0.0.0.0 192.0.2.254"], **kw)
+
+
+def test_preconfigured_switch_fails_without_erase_as_on_the_bench():
+    sim = preconfigured()
+    r = run(sim, creds=NEW_LOGIN)
+    assert r.status is BootstrapStatus.FAILED
+    assert "Could not enter manager (enable) level" in r.message
+    assert "Unable to verify password" in r.transcript
+    assert not r.erased and sim.vlans.keys() == {1}
+
+
+def test_preconfigured_switch_is_erased_then_bootstrapped_with_the_approved_login():
+    sim = preconfigured()
+    r = run(sim, creds=NEW_LOGIN,
+            erase=EraseRequest(PRECONFIGURED, "lab-bhdmz-sw01", restart_timeout=2))
+    assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
+    assert r.erased == "lab-bhdmz-sw01" and sim.erased == 1
+    assert r.message.startswith("Erased the configuration of 'lab-bhdmz-sw01' first.")
+    assert r.credentials_set and (sim.username, sim.password) == ("manager", "approved-test-pw")
+    assert r.commands_sent[0] == "erase startup-config" and r.saved and r.verified
+    assert "preconfigured-test-pw" not in r.transcript and "approved-test-pw" not in r.transcript
+
+
+def test_erase_needs_the_typed_hostname_to_match_the_switch():
+    sim = preconfigured()
+    r = run(sim, creds=NEW_LOGIN, erase=EraseRequest(PRECONFIGURED, "other-switch"))
+    assert r.status is BootstrapStatus.FAILED
+    assert "is 'lab-bhdmz-sw01', not 'other-switch'" in r.message
+    assert "erase startup-config" not in sim.commands_received and not getattr(sim, "erased", 0)
+
+
+def test_erase_with_a_wrong_current_login_erases_nothing():
+    sim = preconfigured()
+    r = run(sim, creds=NEW_LOGIN,
+            erase=EraseRequest(Credentials("manager", "wrong"), "lab-bhdmz-sw01"))
+    assert r.status is BootstrapStatus.FAILED
+    assert "Could not log in with the switch's current login" in r.message
+    assert "Nothing was erased" in r.message and not getattr(sim, "erased", 0)
+
+
+def test_erase_on_a_factory_default_switch_erases_nothing():
+    sim = SimulatedArubaConsole()
+    r = run(sim, creds=NEW_LOGIN,
+            erase=EraseRequest(Credentials("manager", ""), "Aruba-2930F-48G-4SFP"))
+    assert r.status is BootstrapStatus.BOOTSTRAPPED, r.message
+    assert not r.erased and "erase startup-config" not in sim.commands_received
+
+
+def test_unknown_question_after_erase_is_not_answered(monkeypatch):
+    sim = preconfigured()
+    original = sim._run
+
+    def run_cmd(cmd):
+        if cmd == "erase startup-config":
+            sim._state = "erase_confirm"
+            return "Type ERASE to wipe all files: "
+        return original(cmd)
+    monkeypatch.setattr(sim, "_run", run_cmd)
+    r = run(sim, creds=NEW_LOGIN, erase=EraseRequest(PRECONFIGURED, "lab-bhdmz-sw01"))
+    assert r.status is BootstrapStatus.FAILED
+    assert "asked something UNDM does not answer" in r.message
+    assert not getattr(sim, "erased", 0)

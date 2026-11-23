@@ -38,6 +38,12 @@ class SimulatedArubaConsole:
     # Prompts preceded by VT100 cursor codes, as seen on the bench ("ESC[24;18HPassword:").
     cursor_codes: bool = False
     max_read: int = 0  # >0: return at most this many bytes per read (splits escape codes)
+    # A preconfigured unit as on the bench (2026-11-23): the console opens at operator level
+    # without a login, and 'enable' asks for the manager username and password.
+    enable_login: bool = False
+    # After 'erase startup-config' the unit starts as new (asks for manager credentials).
+    # The erase confirmation text below is SYNTHETIC (not yet seen on a real unit).
+    setup_after_erase: bool = True
 
     def __post_init__(self) -> None:
         self._out = bytearray()
@@ -94,6 +100,32 @@ class SimulatedArubaConsole:
                 self._emit(BANNER + "Press any key to continue")
                 self._state = "anykey"
             return
+        if self._state == "anykey" and self.enable_login:
+            self._state = "cli"  # operator level, no console login
+            self._emit("\r\n" + self._prompt())
+            return
+        if self._state == "enable_user":
+            self._typed_user = line
+            self._emit(line + "\r\nPassword: ")
+            self._state = "enable_password"
+            return
+        if self._state == "enable_password":
+            self._state = "cli"
+            if line == self.password and self._typed_user == self.username:
+                self._manager = True
+                self._emit("\r\n" + self._prompt())
+            else:
+                self._emit("\r\nUnable to verify password\r\n" + self._prompt())
+            return
+        if self._state == "erase_confirm":
+            self._state = "cli"
+            if line.strip().lower() == "y":
+                self._factory_reset()
+                self._emit(" y\r\nRebooting...\r\n" + BANNER + "Press any key to continue")
+                self._state = "anykey"
+            else:
+                self._emit("\r\n" + self._prompt())
+            return
         if self._state == "anykey":
             if self.first_login_setup and self.username is None:
                 self._emit("\r\nConfigure the manager credentials :\r\nUsername: ")
@@ -147,7 +179,8 @@ class SimulatedArubaConsole:
         if cmd:
             self.commands_received.append(cmd)
             self._emit(self._run(cmd))
-        self._emit(self._prompt())
+        if self._state == "cli":  # not while a question is pending
+            self._emit(self._prompt())
 
     def _run(self, cmd: str) -> str:
         if cmd in self.fail_on:
@@ -155,6 +188,9 @@ class SimulatedArubaConsole:
         if cmd in self.silently_ignore:
             return ""
         if cmd == "enable":
+            if self.enable_login and self.username is not None and not self._manager:
+                self._state = "enable_user"
+                return "Username: "
             self._manager = True
             return ""
         if cmd == "no page":
@@ -176,6 +212,9 @@ class SimulatedArubaConsole:
         if cmd == "write memory":
             self.saved_config = self.render()
             return ""
+        if cmd == "erase startup-config":
+            self._state = "erase_confirm"
+            return "Configuration will be deleted and device rebooted, continue [y/n]? "
         if self._ctx:
             m = re.fullmatch(r"vlan (\d+)", cmd)
             if m:
@@ -200,6 +239,21 @@ class SimulatedArubaConsole:
                     vlan["ip"] = cmd[len("ip address "):]
                     return ""
         return f"Invalid input: {cmd.split()[0]}\r\n"
+
+    def _factory_reset(self) -> None:
+        self.hostname = "Aruba-2930F-48G-4SFP"
+        self.extra_config = []
+        self.username = self.password = None
+        self.enable_login = False
+        self.operator_level = False
+        self._manager = True
+        self._ctx = []
+        self.first_login_setup = self.setup_after_erase
+        self.vlans = {1: {"name": "DEFAULT_VLAN",
+                          "untagged": set(map(str, range(1, self.port_count + 1))),
+                          "ip": "dhcp-bootp"}}
+        self.saved_config = None
+        self.erased = getattr(self, "erased", 0) + 1
 
     @staticmethod
     def _ranges(ports: set[str]) -> str:

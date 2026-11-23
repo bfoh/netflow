@@ -316,6 +316,8 @@ export interface BootstrapResult {
   sanitized_transcript: string;
   /** A new switch's mandatory first-login credentials were set to the device's login. */
   credentials_set?: boolean;
+  /** Hostname of the preconfigured configuration that was erased first, if any. */
+  erased?: string;
   network_reachable: boolean | null;
   network_hint: string;
 }

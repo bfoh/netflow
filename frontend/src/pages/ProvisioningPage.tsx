@@ -10,7 +10,7 @@ import { Link, useSearchParams } from 'react-router';
 import { EnvironmentBadge } from '../components/Badges';
 import { NotImplemented } from '../components/NotImplemented';
 import { PageHeader, QueryState } from '../components/Page';
-import { useAction, useAllDevices, useDrivers, usePolicy, useProjects, useSerialPorts } from '../hooks/queries';
+import { useAction, useAllDevices, useCredentialRefs, useDrivers, usePolicy, useProjects, useSerialPorts } from '../hooks/queries';
 import { api } from '../services/api';
 import { downloadText } from '../services/format';
 import type { BootstrapPreview, BootstrapProfile, BootstrapResult, Device } from '../types/api';
@@ -38,6 +38,11 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
   const [result, setResult] = useState<BootstrapResult | null>(null);
   const [confirm, setConfirm] = useState('');
   const [allowConfigured, setAllowConfigured] = useState(false);
+  // Preconfigured switch (e.g. BH-DMZ units): erase its configuration first (D-057).
+  const [erase, setErase] = useState(false);
+  const [currentLogin, setCurrentLogin] = useState<string | null>(null);
+  const [hostname, setHostname] = useState('');
+  const refs = useCredentialRefs(device.project_id);
   const [opened, { open, close }] = useDisclosure();
 
   const profile: BootstrapProfile = { vlan_id: Number(vlanId), vlan_name: vlanName.trim(), untagged_port: port.trim(), address: address.trim() };
@@ -45,7 +50,9 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
   const save = useAction(() => api.updateDevice(device.id, { bootstrap_profile: profile }), 'Bootstrap settings saved');
   const doPreview = useAction(() => api.bootstrapPreview(device.id, profile));
   const run = useAction(() => api.consoleBootstrap(device.id, {
-    serial_port: serialPort!, baudrate: Number(baud), profile, confirm_device_name: confirm, allow_configured: allowConfigured,
+    serial_port: serialPort!, baudrate: Number(baud), profile, confirm_device_name: confirm,
+    allow_configured: allowConfigured && !erase,
+    ...(erase ? { erase_existing: true, current_credential_ref_id: currentLogin, confirm_hostname: hostname.trim() } : {}),
   }));
   const blocked = !simulated && policy.data && !policy.data.enable_real_device_writes;
   const portOptions = (ports.data ?? [])
@@ -115,6 +122,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
             {result.network_hint && <Text size="sm" mt={6}>{result.network_hint}</Text>}
           </Alert>
           <Group gap="xs" mb="xs">
+            {result.erased && <Badge variant="light" color="orange">erased “{result.erased}” first</Badge>}
             <Badge variant="light" color={result.verified ? 'teal' : 'gray'}>{result.verified ? 'read back and verified' : 'not verified'}</Badge>
             <Badge variant="light" color={result.saved ? 'teal' : 'gray'}>{result.saved ? 'saved (write memory)' : 'not saved'}</Badge>
             {result.network_reachable !== null && <Badge variant="light" color={result.network_reachable ? 'teal' : 'yellow'}>
@@ -140,13 +148,32 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
             configuration back and save it. {simulated ? 'This is a simulated console; no real device is involved.'
               : 'Make sure the console cable is plugged into the right switch.'}
           </Text>
-          <Checkbox label="The switch already has configuration — bootstrap it anyway" checked={allowConfigured}
-            onChange={(e) => setAllowConfigured(e.currentTarget.checked)} />
+          <Checkbox label="This switch is preconfigured (it has a manager password that is not the approved one): erase its configuration first"
+            checked={erase} onChange={(e) => setErase(e.currentTarget.checked)} />
+          {erase && (
+            <Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} p="xs">
+              <Text size="xs" mb={6}>
+                UNDM logs in with the switch's <b>current login</b>, checks that its hostname is the one you type, saves a copy of its
+                configuration in the transcript, runs <code>erase startup-config</code> and confirms it, waits for the restart (up to
+                7 minutes), then sets the switch up as new with this device's login and bootstraps it. The erase cannot be undone.
+                Any question UNDM does not recognise stops it with the switch's text.
+              </Text>
+              <Stack gap={6}>
+                <Select size="xs" label="Its current login" placeholder={refs.data?.length ? 'Choose the preconfigured login' : 'Add it on the project Credentials tab'}
+                  data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={currentLogin} onChange={setCurrentLogin} />
+                <TextInput size="xs" label="Type its current hostname (the name in its console prompt, before > or #)"
+                  value={hostname} onChange={(e) => setHostname(e.currentTarget.value)} />
+              </Stack>
+            </Alert>
+          )}
+          {!erase && <Checkbox label="The switch already has configuration — bootstrap it anyway" checked={allowConfigured}
+            onChange={(e) => setAllowConfigured(e.currentTarget.checked)} />}
           <TextInput label={`Type the device name to confirm: ${device.name}`} value={confirm} onChange={(e) => setConfirm(e.currentTarget.value)} />
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Cancel</Button>
-            <Button color="orange" disabled={confirm.trim() !== device.name} loading={run.isPending}
-              onClick={() => run.mutate(undefined, { onSuccess: (r) => { setResult(r); close(); } })}>Run bootstrap</Button>
+            <Button color={erase ? 'red' : 'orange'} disabled={confirm.trim() !== device.name || (erase && (!currentLogin || !hostname.trim()))}
+              loading={run.isPending}
+              onClick={() => run.mutate(undefined, { onSuccess: (r) => { setResult(r); close(); } })}>{erase ? 'Erase and bootstrap' : 'Run bootstrap'}</Button>
           </Group>
         </Stack>
       </Modal>
