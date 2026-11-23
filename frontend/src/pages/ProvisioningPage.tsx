@@ -216,8 +216,10 @@ export function ProvisioningPage() {
             value={device?.id ?? null} onChange={(v) => setParams(v ? { device: v } : {})} />
           {device && <Group gap="xs" mt="xs"><EnvironmentBadge env={device.environment} /><Text size="sm">driver <code>{device.driver_id}</code> · provisioning status: {device.provisioning_status.replaceAll('_', ' ')}</Text></Group>}
           <Text size="xs" c="dimmed" mt="xs">
-            Console bootstrap is available for ArubaOS-Switch (e.g. Aruba 2930F). It has not been validated on hardware yet:
-            run it first on a spare switch on an isolated bench.
+            Only devices with a console bootstrap procedure are listed: ArubaOS-Switch (e.g. Aruba 2930F; run on bench units,
+            including erase-first for preconfigured units). Other devices need no bootstrap here: a FortiGate already answers
+            at its factory address on its mgmt port (log in once in the browser to set the approved password), so start on
+            its device page with Test connection.
           </Text>
         </Card>
         {device && <Bootstrap key={device.id} device={device} simulated={platform.get(device.driver_id)?.simulated ?? true} />}
