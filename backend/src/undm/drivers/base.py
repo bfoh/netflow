@@ -246,6 +246,11 @@ class DeviceDriver:
             raise ValueError(f"Driver {self.info.driver_id} cannot insert secret values")
         return config
 
+    def restart_notice(self, mode: ApplyMode) -> str | None:
+        """What a person should know before an apply that restarts the device (None: it
+        does not restart). Shown as an event before the apply starts."""
+        return None
+
     def prepare_before_apply(self, config: str, mode: ApplyMode,
                              settings: Mapping[str, Any]) -> OperationResult | None:
         """Steps a file needs on the device before it is applied (None = nothing to do).

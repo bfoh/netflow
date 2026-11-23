@@ -7,6 +7,7 @@ import hashlib
 import os
 import re
 import tempfile
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -282,6 +283,7 @@ class ArubaOSSwitchSsh(SshCliDriver):
             talk = self._dialogue(
                 f"copy tftp startup-config {server_ip} {name} unix",
                 [(self._SAVE_QUESTION, "n"), (self._YES_NO, "y")],
+                restarting=self._RESTARTING,
                 timeout=self.transfer_timeout, idle_timeout=self.question_timeout,
                 # Silence is expected only while the file is still being transferred. Once it
                 # is complete, a switch that restarts may leave the session open but silent
@@ -312,6 +314,9 @@ class ArubaOSSwitchSsh(SshCliDriver):
                     "be waiting for an answer UNDM does not give. Check it on the console.",
                 diagnostics)
         how = "and restarted by itself"
+        if talk.ended == "restarting":
+            self.disconnect()
+            how = "and is restarting (\"Rebooting switch\")"
         if talk.ended == "timeout":
             # Quiet after the complete transfer, no question, no prompt: restarting. The wait
             # for the switch and the checks after it (serial, hostname, lines) prove it.
@@ -358,6 +363,13 @@ class ArubaOSSwitchSsh(SshCliDriver):
             f"the switch fetched the file ({transfer.bytes_sent} bytes) into its startup "
             f"configuration {how}{moved}")
 
+    def restart_notice(self, mode: ApplyMode) -> str | None:
+        if mode is not ApplyMode.REPLACE:
+            return None
+        return ("loading the file: the switch fetches it from this PC and restarts with it. "
+                "Expect 1-2 minutes without answers (bench: about 1 minute). Keep the switch "
+                "powered and connected; UNDM continues by itself")
+
     def verify_configuration(self, intended: str, mode: ApplyMode) -> OperationResult | None:
         if mode is not ApplyMode.REPLACE:
             return None  # merge: the generic line check
@@ -380,9 +392,18 @@ class ArubaOSSwitchSsh(SshCliDriver):
         expected = [ln for ln in self.expected_lines(intended) if not ln.startswith(";")]
         present = self.present_lines(str(running.data))
         missing = [ln for ln in expected if ln not in present]
+        warnings = []
+        if missing:
+            # One line per distinct text, with a count: "no lacp" appears once per port.
+            counts = Counter(missing)
+            shown = [f"{ln} (x{n})" if n > 1 else ln for ln, n in counts.items()]
+            warnings.append(
+                f"{len(missing)} line(s) of the file are not shown in the running "
+                "configuration (often settings the switch does not list because they are "
+                "its defaults); review: " + "; ".join(shown[:20])
+                + (f"; and {len(shown) - 20} more" if len(shown) > 20 else ""))
         return OperationResult.success(
-            op, {"warnings": [f"not shown in the running configuration: {ln}"
-                              for ln in missing[:10]]},
+            op, {"warnings": warnings},
             f"back after loading: hostname {facts.data.hostname}; "
             f"{len(expected) - len(missing)} of {len(expected)} lines of the file appear in "
             "the running configuration")
@@ -417,6 +438,8 @@ class ArubaOSSwitchSsh(SshCliDriver):
     # whole file AND "show flash" shows the expected version. An unknown question is
     # never answered; it ends the step with the switch's text.
     _YES_NO = r"\[y/n\]\??|\(y/n\)\??"
+    # Printed by a 2930F on WC.16.10.0025 after taking a file (bench, 2026-11-23).
+    _RESTARTING = r"Rebooting switch"
     _SAVE_QUESTION = r"save[^\n]*(?:\[y/n[^\]]*\]|\(y/n\))\??"
     transfer_timeout: ClassVar[float] = 2400.0   # whole copy, including the flash write
     question_timeout: ClassVar[float] = 60.0     # silence before the transfer starts

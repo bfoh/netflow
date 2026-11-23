@@ -1,5 +1,6 @@
-import { Accordion, Alert, Anchor, Badge, Button, Card, CopyButton, Group, Modal, Stack, Stepper, Text, TextInput, Timeline, Title } from '@mantine/core';
+import { Accordion, Alert, Anchor, Badge, Button, Card, Code, CopyButton, Group, Modal, Stack, Stepper, Text, TextInput, Timeline, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { IconAlertTriangle, IconCheck, IconFlask, IconX } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router';
@@ -109,6 +110,65 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
   );
 }
 
+const RESTART_STEP = /^(waiting for the device to answer|loading the file: )/;
+const fmtElapsed = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const zoned = (ts: string) => (/([zZ]|[+-]\d\d:?\d\d)$/.test(ts) ? ts : `${ts}Z`);
+
+/** What is happening now, for how long, and whether a device is restarting (be patient). */
+function Progress({ d, names }: { d: Deployment; names: Map<string, { name: string }> }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
+  const last = d.events[d.events.length - 1];
+  const since = last ? now - new Date(zoned(last.timestamp)).getTime() : 0;
+  const device = last?.device_id ? names.get(last.device_id)?.name ?? 'The device' : 'The device';
+  const restarting = !!last && RESTART_STEP.test(last.message);
+  return (
+    <Stack gap="xs" mb="md">
+      {restarting && (
+        <Alert color="yellow" icon={<IconAlertTriangle size={18} />} title={`${device} is restarting: please wait (${fmtElapsed(since)})`}>
+          A restart takes about 1–2 minutes (2930F on the bench: about 1 minute). UNDM checks every 20 seconds and continues by
+          itself as soon as the device answers. <b>Do not power it off or unplug it.</b> If the device's management port changes
+          with the new configuration, connect this PC there now (the event below says where).
+        </Alert>
+      )}
+      <Alert color="blue" title={`In progress: ${RUNNING_STATES.has(d.state) ? d.state.replaceAll('_', ' ') : 'starting'}…`}>
+        {last && <Text size="sm" mb={4}>Latest step ({fmtElapsed(since)} ago): {last.message}</Text>}
+        The run continues on the server even if you leave this page; the events below update as each step finishes.
+        Use <b>Stop</b> to end it at the next safe point.
+        {d.kind === 'firmware' && !d.dry_run && ' A firmware upgrade takes several minutes per device: the image is transferred, written to flash, then the device restarts. Do not power off or unplug a device while this runs.'}
+      </Alert>
+    </Stack>
+  );
+}
+
+/** The running configuration read back after the change: view it, or compare it with what was sent. */
+function AfterConfig({ afterId, sentId }: { afterId: string; sentId: string | null }) {
+  const [mode, setMode] = useState<'view' | 'compare' | null>(null);
+  const after = useQuery({ queryKey: ['config', afterId], queryFn: () => api.config(afterId), enabled: mode !== null });
+  const diff = useQuery({ queryKey: ['config-diff', sentId, afterId], queryFn: () => api.configDiff(sentId!, afterId),
+    enabled: mode === 'compare' && !!sentId });
+  return (
+    <>
+      <Group gap="xs">
+        <Button size="xs" variant="light" onClick={() => setMode('view')}>View configuration after deployment</Button>
+        {sentId && <Button size="xs" variant="default" onClick={() => setMode('compare')}>Compare with what was sent</Button>}
+      </Group>
+      <Modal opened={mode !== null} onClose={() => setMode(null)} size="xl"
+        title={mode === 'compare' ? 'Sent (−) compared with the device after deployment (+)' : 'Configuration on the device after deployment'}>
+        {mode === 'view' && (after.data
+          ? <><Text size="xs" c="dimmed" mb="xs">Read back from the device by UNDM after the change ({after.data.reference}).</Text>
+            <Code block style={{ maxHeight: '65vh', overflow: 'auto' }}>{after.data.text}</Code></>
+          : <QueryState isLoading={after.isLoading} error={after.error} />)}
+        {mode === 'compare' && (diff.data
+          ? <><Text size="xs" c="dimmed" mb="xs">Lines only in what was sent are marked −; lines only on the device are marked +.
+            A device often does not list settings that equal its defaults, and adds lines of its own.</Text>
+            <div style={{ maxHeight: '65vh', overflow: 'auto' }}><DiffView diff={diff.data.unified} /></div></>
+          : <QueryState isLoading={diff.isLoading} error={diff.error} />)}
+      </Modal>
+    </>
+  );
+}
+
 export function DeploymentDetailPage() {
   const { deploymentId = '' } = useParams();
   const [running, setRunning] = useState(false);
@@ -143,13 +203,7 @@ export function DeploymentDetailPage() {
         description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
           ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : ` · ${d.apply_mode} mode`}`}
         actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
-      {working && (
-        <Alert color="blue" mb="md" title={`In progress: ${RUNNING_STATES.has(d.state) ? d.state.replaceAll('_', ' ') : 'starting'}…`}>
-          The run continues on the server even if you leave this page; the events below update as each step finishes.
-          Use <b>Stop</b> to end it at the next safe point.
-          {d.kind === 'firmware' && !d.dry_run && ' A firmware upgrade takes several minutes per device: the image is transferred, written to flash, then the device restarts. Do not power off or unplug a device while this runs.'}
-        </Alert>
-      )}
+      {working && <Progress d={d} names={byId} />}
       {!working && outcome && <Alert color={outcome.color} title={outcome.title} mb="md" icon={d.state === 'succeeded' ? <IconCheck size={18} /> : <IconAlertTriangle size={18} />}>{outcome.text}</Alert>}
       <Card withBorder mb="md">
         <Stepper active={stepOf[d.state] ?? 0} size="xs" allowNextStepsSelect={false}
@@ -188,6 +242,7 @@ export function DeploymentDetailPage() {
                     {t.config_version_id && <>{' · '}configuration version <code>{t.config_version_id.slice(0, 8)}</code></>}
                     {t.backup_version_id && <> · backup <code>{t.backup_version_id.slice(0, 8)}</code></>}
                   </Text>
+                  {t.after_version_id && <AfterConfig afterId={t.after_version_id} sentId={t.config_version_id} />}
                   {d.kind === 'configuration' && <><Text size="sm" fw={600}>Proposed change</Text><DiffView diff={t.diff} /></>}
                 </Stack>
               </Accordion.Panel>

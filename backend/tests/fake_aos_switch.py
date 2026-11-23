@@ -168,7 +168,8 @@ class FakeArubaSwitch:
             if self.ask_save_before_load:
                 self._ask("loadsave", "Do you want to save current configuration [y/n/^C]? ")
             elif self.config_load_mode == "reboot":
-                self._ask("config", "Device will be rebooted, do you want to continue [y/n]? ")
+                # Wording as on a 2930F, WC.16.10.0025 (bench 2026-11-23).
+                self._ask("config", "Device may be rebooted, do you want to continue [y/n]? ")
             else:
                 self._fetch_startup(restart=False)
         elif text == "boot system flash primary":
@@ -242,7 +243,7 @@ class FakeArubaSwitch:
     def _answer_loadsave(self, key: str) -> None:
         self._save_over_file = key == "y"
         if self.config_load_mode == "reboot":
-            self._ask("config", "\r\nDevice will be rebooted, do you want to continue [y/n]? ")
+            self._ask("config", "\r\nDevice may be rebooted, do you want to continue [y/n]? ")
         else:
             self._fetch_startup(restart=False)
 
@@ -258,6 +259,7 @@ class FakeArubaSwitch:
         server, name = self._copy_args
         port = self.tftp_port() if callable(self.tftp_port) else self.tftp_port
         buf = io.BytesIO()
+        self._out += " y\r\nTFTP download in progress.\r\n"
         try:
             tftpy.TftpClient(server, port, {}).download(name, buf, timeout=2)
         except Exception as e:  # noqa: BLE001
@@ -271,10 +273,10 @@ class FakeArubaSwitch:
             self.startup_config = self.running_config
         if restart:
             self._restart_into_startup()
-            if self.silent_restart:
+            if self.silent_restart:  # no announcement, the session just goes quiet
                 self._silent = True
             else:
-                self._out += "\r\nRebooting the System...\r\n"
+                self._out += "\r\n000M \r\nRebooting switch...\r\n"
                 self._closing = True
         else:
             self._out += "\r\nDownload complete.\r\n" + self._prompt()

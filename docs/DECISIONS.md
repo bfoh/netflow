@@ -432,3 +432,20 @@ complete, silence for `question_timeout` with no unanswered question ends the wa
 load is reported as restarting. "Unanswered" means text printed after UNDM's last answer
 (a switch does not echo the "y" it was given). The wait for the switch and the checks after
 it (serial number, hostname from the file, the file's lines) prove the result.
+
+### D-055 Restarts are announced and visible; the configuration after a change is kept (2026-11-23)
+First fully automatic 2930F file load on the bench (succeeded). Product owner: people must
+see that the device is restarting and be patient, and be able to look at the configuration
+after a deployment. (1) Drivers may give a `restart_notice` for an apply that restarts the
+device; it is an event before the apply ("loading the file: … expect 1-2 minutes …").
+(2) The plan page shows the latest step with its age and, while a device restarts, a
+"please wait" banner with a timer and "do not power it off or unplug it". (3) The 2930F
+load ends its wait as soon as the switch prints "Rebooting switch" (verified wording,
+below) instead of after a quiet period. (4) After verification (passed or failed) the
+running configuration read back from the device is stored as a version ("after
+deployment …", `deployment_targets.after_version_id`, migration 33f472692b47); the plan
+page offers "View configuration after deployment" and "Compare with what was sent".
+(5) Verification warnings are grouped (one line per distinct text with a count).
+Wording seen on the bench (2930F, WC.16.10.0025) for `copy tftp startup-config`:
+"Device may be rebooted, do you want to continue [y/n]?", "TFTP download in progress.",
+"Rebooting switch..."; the SSH session then stays open and silent.

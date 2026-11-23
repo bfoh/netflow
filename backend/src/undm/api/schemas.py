@@ -286,6 +286,8 @@ class DeploymentTargetOut(ORM):
     secret_refs: dict[str, str] | None = None
     credential_after_ref_id: str | None = None
     backup_version_id: str | None
+    # Running configuration read back after verification (view or compare with the file).
+    after_version_id: str | None = None
     from_version: str | None
     to_version: str | None
     state: str

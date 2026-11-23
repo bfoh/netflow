@@ -55,7 +55,7 @@ class Dialogue:
 
     output: str
     replies: list[str]
-    ended: Literal["prompt", "closed", "timeout", "stopped"]
+    ended: Literal["prompt", "closed", "timeout", "stopped", "restarting"]
     detail: str = ""
     answered_at: int = 0  # length of the output when UNDM last answered a question
 
@@ -115,7 +115,8 @@ class SshCliDriver(DeviceDriver):
     def _dialogue(self, command: str, answers: list[tuple[str, str]], *, timeout: float,
                   idle_timeout: float = 60.0,
                   patient: Callable[[str], bool] | None = None,
-                  clear: bool = True, poll: float | None = None) -> Dialogue:
+                  clear: bool = True, poll: float | None = None,
+                  restarting: str | None = None) -> Dialogue:
         """Run a command that asks questions and report how the exchange ended.
 
         ``answers`` is an ordered list of (question regex, reply). When the output ends
@@ -153,6 +154,9 @@ class SshCliDriver(DeviceDriver):
                         answered = len(output)
                     elif prompt.search(pending):
                         return Dialogue(output, replies, "prompt", answered_at=answered)
+                    elif restarting and re.search(restarting, pending):
+                        # The device announced its restart: no point waiting for silence.
+                        return Dialogue(output, replies, "restarting", answered_at=answered)
                     continue
                 if self.should_stop is not None and self.should_stop():
                     # Only UNDM stops waiting; what the device is doing is not interrupted.

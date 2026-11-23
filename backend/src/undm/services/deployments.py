@@ -546,6 +546,18 @@ class DeploymentService:
                 self.s.add(v)
                 self.s.flush()
                 tr.backup_version_id = v.id
+            if t.after_config is not None and tr.after_version_id is None \
+                    and not rec.dry_run:
+                # Read back from the device after the change: review it, or compare it with
+                # the configuration that was sent.
+                v = ConfigVersion(
+                    device_id=t.device_id, kind="backup", text=t.after_config,
+                    sha256=hashlib.sha256(t.after_config.encode()).hexdigest(),
+                    reference=f"after deployment {rec.id[:8]}", created_by=actor,
+                )
+                self.s.add(v)
+                self.s.flush()
+                tr.after_version_id = v.id
             device = self.s.get(Device, t.device_id)
             assert device is not None
             if t.state not in _NOT_CONNECTED:

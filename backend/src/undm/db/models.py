@@ -245,6 +245,11 @@ class DeploymentTargetRecord(Base):
         ForeignKey("credential_refs.id", ondelete="SET NULL",
                    name="fk_deployment_targets_credential_after_ref_id"), nullable=True
     )
+    # The running configuration read back from the device once it was verified.
+    after_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("config_versions.id", ondelete="SET NULL",
+                   name="fk_deployment_targets_after_version_id"), nullable=True
+    )
 
 
 class DeploymentEventRecord(Base):

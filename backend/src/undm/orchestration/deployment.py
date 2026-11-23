@@ -106,6 +106,8 @@ class DeploymentTarget:
     target_version: str | None = None
     from_version: str | None = None  # version found at preflight
     current_secondary: str | None = None  # secondary image slot, where the device has one
+    # Running configuration read back once the target was verified (kept for review).
+    after_config: str | None = None
     secondary_failed: bool = False  # writing the secondary image failed or did not verify
     # Values for secret slots of a supplied file (slot id -> value). Inserted only into the
     # copy sent to the device; never stored, logged or shown.
@@ -485,6 +487,10 @@ class DeploymentOrchestrator:
                 if prep is not None and prep.ok:
                     self._emit(dep, "deploy", "ok", prep.message or "prepared", t)
                     self._emit_warnings(dep, t, "deploy", prep)
+                notice = (t.driver.restart_notice(dep.apply_mode)
+                          if prep is None or prep.ok else None)
+                if notice:
+                    self._emit(dep, "deploy", "ok", notice, t)
                 result = (prep if prep is not None and not prep.ok
                           else t.driver.apply_configuration(to_send, dep.apply_mode))
                 if result.ok:
@@ -508,7 +514,8 @@ class DeploymentOrchestrator:
                                 f"the configuration was applied, but the login chosen for "
                                 f"after loading does not work: {back.message}")
                 if result.ok:
-                    applied_message = result.message
+                    applied_message = ("back after the restart; configuration saved"
+                                       if restarting else result.message)
                     result = t.driver.save_configuration()
                     if result.ok and applied_message:
                         result = OperationResult.success(result.operation, result.data,
@@ -536,6 +543,10 @@ class DeploymentOrchestrator:
                 continue
             custom = t.driver.verify_configuration(t.intended_config, dep.apply_mode)
             if custom is not None:
+                # What the device runs now, kept for review whether or not it verified.
+                after = t.driver.get_running_configuration()
+                if after.ok:
+                    t.after_config = str(after.data)
                 if custom.ok:
                     t.state = TargetState.VERIFIED
                     self._emit(dep, "verify", "ok", custom.message or "verified", t)
@@ -550,6 +561,7 @@ class DeploymentOrchestrator:
                 ok = self._fail_target(dep, t, "verify", TargetState.VERIFY_FAILED,
                                        f"could not read configuration back: {running.message}")
                 continue
+            t.after_config = str(running.data)
             if dep.apply_mode is ApplyMode.REPLACE:
                 remaining = diff_configs(running.data, t.intended_config, t.device_name)
                 absent = [ln[1:] for ln in remaining.unified.splitlines()

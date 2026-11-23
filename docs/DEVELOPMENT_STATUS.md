@@ -1,6 +1,7 @@
 # Development Status
 
-_Last updated: 2026-11-23 — Stop for running deployments, runs continue on the server;
+_Last updated: 2026-11-23 — first fully automatic 2930F file load on the bench; restart banner and
+configuration after deployment; Stop for running deployments, runs continue on the server;
 firmware plans can also write the secondary flash; first 2930F console
 bootstrap and firmware downgrade on hardware (2026-11-19); FortiGate 101F staging procedures (firmware, base restore,
 site script with the tunnel key from the credential store, revisions; experimental, bench
@@ -25,6 +26,7 @@ manager, topology._
 | Identity after restarts | Serial number re-checked after every restart (firmware, restore, load); a different unit at the address fails the job |
 | 2930F HTTPS certificate | Created inside the load job before an HTTPS-only file, with the team's commands and the project's certificate subject (Project settings); already-existing certificate accepted. **Fake switch only** |
 | Approved older firmware | Firmware plans can explicitly install the approved image on devices that run a newer one (new 2930F units ship with WC.16.11.0001); refused by default, flagged in preview, badge and audit |
+| Restarts and results visible | An event announces an apply that restarts the device; the plan page shows the latest step with its age and a "please wait" banner with a timer while a device restarts; the configuration read back after a change is kept per target (view / compare with what was sent); grouped verification warnings (D-055) |
 | Stop and background runs | Runs continue on the server (the page follows the events); **Stop** ends a run at its next safe point with an honest outcome (failed if nothing changed, otherwise manual check naming the devices); restart waits name the address, and a 2930F load names the port to connect to (D-051) |
 | Secondary image slot | Firmware plans can also write the approved image into the secondary flash (team standard), only after the primary runs it; devices already on the version get only the secondary; capability-based; 2930F procedure run once on hardware (2026-11-23, spare unit: both slots WC.16.10.0025, confirmed by `show flash`) (D-050) |
 | Login after loading | A plan can name the credential valid once a file is applied (the 2930F files set the approved password); used after the restart and kept for the device once verified (audited) |
@@ -57,11 +59,11 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 364 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 365 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (73 files) |
-| Frontend Vitest | 18 passed |
+| Frontend Vitest | 20 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
 
@@ -82,8 +84,8 @@ Staging four factory-default devices per system (FortiGate 101F, Black Box switc
 build order in `docs/requirements/staging-run-design.md`. Still needed from the product
 owner: Black Box command output from a spare unit (Q-28). Bench runs: 2930F console
 bootstrap, SSH check, firmware (approved downgrade WC.16.11.0001 → WC.16.10.0025) and the
-secondary flash done once on a new unit (2026-11-19/23); file load: works with the certificate
-created first (4th run; D-053), restart detection fixed (D-054); owed: file load, bootstrap re-run;
+secondary flash done once on a new unit (2026-11-19/23); file load: **succeeded fully automatically**
+(5th run, 2026-11-23; D-053, D-054, D-055); owed: file load, bootstrap re-run;
 FortiGate 101F staging.
 
 ## Next milestone

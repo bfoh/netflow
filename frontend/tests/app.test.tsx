@@ -194,6 +194,31 @@ describe('deployment outcome', () => {
     expect(screen.queryByRole('button', { name: 'Execute deployment' })).not.toBeInTheDocument();
   });
 
+  it('a restarting device is shown with a please-wait banner', async () => {
+    mockApi({ '/deployments/dep1': plan({ dry_run: false, kind: 'configuration', state: 'deploying', approved_by: 'a',
+      events: [{ seq: 9, timestamp: new Date().toISOString(), device_id: 'd1', stage: 'deploy', status: 'ok',
+        message: 'waiting for the device to answer at 192.0.2.10 (up to 30 attempts, 20 s apart; Stop ends the wait)' }] }),
+      '/projects/p1/devices': [device({})] });
+    renderAt('/deployments/dep1');
+    expect(await screen.findByText(/sw1 is restarting: please wait/)).toBeInTheDocument();
+    expect(screen.getByText(/Do not power it off or unplug it/)).toBeInTheDocument();
+    expect(screen.getByText(/Latest step/)).toBeInTheDocument();
+  });
+
+  it('shows the configuration read back after the deployment', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const target = { device_id: 'd1', position: 0, config_version_id: 'sent1', backup_version_id: 'b1',
+      after_version_id: 'after1', from_version: null, to_version: null, state: 'verified', diff: '', message: '' };
+    mockApi({ '/deployments/dep1': plan({ dry_run: false, kind: 'configuration', approved_by: 'a', targets: [target] }),
+      '/projects/p1/devices': [device({})],
+      '/configs/after1': { id: 'after1', text: 'hostname "lab-sw"\n', reference: 'after deployment dep1abcd' } });
+    renderAt('/deployments/dep1');
+    await userEvent.click(await screen.findByText('sw1'));
+    await userEvent.click(await screen.findByRole('button', { name: 'View configuration after deployment' }));
+    expect(await screen.findByText(/hostname "lab-sw"/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Compare with what was sent' })).toBeInTheDocument();
+  });
+
   it('a successful real upgrade keeps the upgrade wording', async () => {
     mockApi({ '/deployments/dep1': plan({ dry_run: false, approved_by: 'approver' }), '/projects/p1/devices': [device({})] });
     renderAt('/deployments/dep1');

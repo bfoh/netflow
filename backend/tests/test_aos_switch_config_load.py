@@ -179,9 +179,9 @@ def test_file_is_loaded_into_startup_and_the_switch_restarts(rig):
     assert {k: r.data[k] for k in ("restarting", "address_after")} == \
         {"restarting": True, "address_after": "127.0.0.2"}
     assert r.data["notes"][0].startswith('switch output during the load (UNDM answered "y"): ')
-    assert "Device will be rebooted" in r.data["notes"][0] and "\r" not in r.data["notes"][0]
+    assert "Device may be rebooted" in r.data["notes"][0] and "\r" not in r.data["notes"][0]
     assert "after the restart it answers at 127.0.0.2 (VLAN 222, untagged on port 2)" in r.message
-    assert "restarted by itself" in r.message
+    assert 'is restarting ("Rebooting switch")' in r.message
     assert rig.driver.target.management_address == "127.0.0.2"
     assert rig.switch.keys == ["y"] and rig.switch.restarts == 1
     assert rig.switch.hostname == "lab-oobm-sw01" and rig.switch.startup_config == text
@@ -401,6 +401,18 @@ def test_api_certificate_is_created_before_the_file_is_loaded(api):
     cert = next(i for i, m in enumerate(messages) if "HTTPS certificate 'certificate'" in m)
     fetched = next(i for i, m in enumerate(messages) if "fetched the file" in m)
     assert cert < fetched and switch.certificates == {"certificate"}
+    notice = next(i for i, m in enumerate(messages) if m.startswith("loading the file: "))
+    assert cert < notice < fetched  # people are told to expect the restart before it starts
+    assert messages.count(next(m for m in messages if "fetched the file" in m)) == 1
+    assert "back after the restart; configuration saved" in messages
+    # The configuration read back from the switch is kept: view it, compare it with the file.
+    t = out["targets"][0]
+    after = client.get(f"/api/configs/{t['after_version_id']}").json()
+    assert 'hostname "lab-oobm-sw01"' in after["text"]
+    assert after["reference"].startswith("after deployment ")
+    diff = client.get("/api/configs/diff", params={"from_version": t["config_version_id"],
+                                                   "to_version": t["after_version_id"]})
+    assert diff.status_code == 200, diff.text
     copy_at = next(i for i, c in enumerate(switch.commands) if c.startswith("copy tftp"))
     assert switch.commands.index("web-management ssl") < copy_at
 
@@ -424,6 +436,16 @@ def test_api_https_only_file_needs_the_certificate_subject(api):
     assert not any(c.startswith("copy") for c in switch.commands)  # nothing was sent
     refused = client.post(f"/api/projects/{pid}/deployments", json=plan)
     assert refused.status_code == 409 and "set it first" in refused.json()["error"]
+
+
+def test_verification_warnings_are_grouped(rig):
+    text = sample() + "interface 5\n   no lacp\n   exit\ninterface 6\n   no lacp\n   exit\n"
+    rig.switch.running_config = text.replace("   no lacp\n", "")
+    rig.switch.hostname = "lab-oobm-sw01"
+    r = rig.driver.verify_configuration(text, ApplyMode.REPLACE)
+    assert r is not None and r.ok
+    (warning,) = r.data["warnings"]
+    assert "no lacp (x2)" in warning and "line(s) of the file are not shown" in warning
 
 
 def test_api_load_with_a_silent_restart_succeeds(api):

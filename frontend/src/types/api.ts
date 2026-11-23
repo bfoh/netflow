@@ -175,6 +175,8 @@ export interface DeploymentTarget {
   /** Credential valid once the file is applied (the file changes the login). */
   credential_after_ref_id?: string | null;
   backup_version_id: string | null;
+  /** Running configuration read back after the change (view it or compare it with what was sent). */
+  after_version_id?: string | null;
   from_version: string | null;
   to_version: string | null;
   state: string;
