@@ -161,7 +161,9 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
               <Stack gap={6}>
                 <Select size="xs" label="Its current login" placeholder={refs.data?.length ? 'Choose the preconfigured login' : 'Add it on the project Credentials tab'}
                   data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={currentLogin} onChange={setCurrentLogin} />
-                <TextInput size="xs" label="Type its current hostname (the name in its console prompt, before > or #)"
+                <TextInput size="xs" label="Type its current hostname"
+                  description="The name in its console prompt, before > or # (e.g. for a prompt 'sw-name#' type sw-name). Not the username."
+                  placeholder="as shown in the console prompt"
                   value={hostname} onChange={(e) => setHostname(e.currentTarget.value)} />
               </Stack>
             </Alert>

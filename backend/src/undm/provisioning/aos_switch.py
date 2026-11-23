@@ -327,7 +327,8 @@ def erase_existing(console: ArubaOSSwitchConsole, request: EraseRequest,
                            "credential chosen as its current login. Nothing was erased.") from e
     finally:
         console.credentials = approved
-    if name != request.confirm_hostname.strip():
+    # Identity check, not a secret: upper/lower case does not matter, every character does.
+    if name.lower() != request.confirm_hostname.strip().lower():
         raise ConsoleError(f"The switch on this console is '{name}', not "
                            f"'{request.confirm_hostname.strip()}' as typed. Nothing was erased.")
     if not site_config_findings(console.running_config(), params):

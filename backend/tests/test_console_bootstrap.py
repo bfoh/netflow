@@ -326,3 +326,11 @@ def test_unknown_question_after_erase_is_not_answered(monkeypatch):
     assert r.status is BootstrapStatus.FAILED
     assert "asked something UNDM does not answer" in r.message
     assert not getattr(sim, "erased", 0)
+
+
+def test_typed_hostname_is_compared_without_regard_to_case():
+    sim = preconfigured()
+    r = run(sim, creds=NEW_LOGIN,
+            erase=EraseRequest(PRECONFIGURED, "LAB-BHDMZ-SW01", restart_timeout=2))
+    assert r.status is BootstrapStatus.BOOTSTRAPPED, r.message
+    assert r.erased == "lab-bhdmz-sw01"
