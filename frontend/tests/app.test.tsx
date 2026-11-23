@@ -157,7 +157,7 @@ describe('intent editor hostname safety', () => {
 
 describe('deployment outcome', () => {
   const plan = (over: Record<string, unknown>) => ({
-    id: 'dep1', project_id: 'p1', kind: 'firmware', state: 'succeeded', dry_run: true, allow_downgrade: true,
+    id: 'dep1', project_id: 'p1', kind: 'firmware', state: 'succeeded', dry_run: true, allow_downgrade: true, also_secondary: true,
     apply_mode: 'merge', created_by: 'tester', approved_by: null, created_at: '', firmware_image_id: 'i1',
     window_start: null, window_end: null, approved_at: null, updated_at: '',
     targets: [{ device_id: 'd1', position: 0, config_version_id: null, backup_version_id: null,
@@ -176,6 +176,7 @@ describe('deployment outcome', () => {
     expect(screen.queryByText('Deploy')).not.toBeInTheDocument();
     expect(screen.queryByText('Back up')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy events as text' })).toBeInTheDocument();
+    expect(screen.getByText('Secondary flash too')).toBeInTheDocument();
   });
 
   it('a successful real upgrade keeps the upgrade wording', async () => {

@@ -32,6 +32,8 @@ def call(driver, op):
         DeviceOperation.ROLLBACK_CONFIGURATION: lambda: driver.rollback_configuration(backup),
         DeviceOperation.STAGE_FIRMWARE: lambda: driver.stage_firmware(
             FirmwareImageRef("1.2.3", "img.bin", "0" * 64, 1, "/nonexistent")),
+        DeviceOperation.STAGE_FIRMWARE_SECONDARY: lambda: driver.stage_firmware_secondary(
+            FirmwareImageRef("1.2.3", "img.bin", "0" * 64, 1, "/nonexistent")),
         DeviceOperation.INSTALL_FIRMWARE: driver.install_firmware,
         DeviceOperation.ROLLBACK_FIRMWARE: driver.rollback_firmware,
         DeviceOperation.REBOOT: driver.reboot,

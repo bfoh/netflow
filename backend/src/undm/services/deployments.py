@@ -151,6 +151,7 @@ class DeploymentService:
             dep.firmware = FirmwareRepository.ref(img)
             dep.min_from_version = img.min_from_version
             dep.allow_downgrade = bool(rec.allow_downgrade)
+            dep.also_secondary = bool(rec.also_secondary)
         return dep
 
     @staticmethod
@@ -350,7 +351,7 @@ class DeploymentService:
 
     def create_firmware(
         self, project_id: str, device_ids: list[str], image_id: str, actor: str,
-        *, dry_run: bool, allow_downgrade: bool = False,
+        *, dry_run: bool, allow_downgrade: bool = False, also_secondary: bool = False,
     ) -> DeploymentRecord:
         if not device_ids:
             raise ConflictError("Select at least one device")
@@ -362,7 +363,7 @@ class DeploymentService:
         rec = DeploymentRecord(
             project_id=project_id, kind="firmware", firmware_image_id=img.id,
             state=S.DRAFT.value, dry_run=dry_run, apply_mode=ApplyMode.MERGE.value,
-            created_by=actor, allow_downgrade=allow_downgrade,
+            created_by=actor, allow_downgrade=allow_downgrade, also_secondary=also_secondary,
         )
         self.s.add(rec)
         problems: dict[str, list[str]] = {}
@@ -389,7 +390,8 @@ class DeploymentService:
         self._sync(rec, dep)
         audit.record(self.s, actor, "firmware_deployment.create", "deployment", rec.id,
                      rec.state, {"devices": device_ids, "image": img.id, "version": img.version,
-                                 "dry_run": dry_run, "allow_downgrade": allow_downgrade})
+                                 "dry_run": dry_run, "allow_downgrade": allow_downgrade,
+                                 "also_secondary": also_secondary})
         return rec
 
     def execute(self, deployment_id: str, actor: str) -> DeploymentRecord:

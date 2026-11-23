@@ -312,6 +312,7 @@ class DeploymentOut(ORM):
     state: str
     dry_run: bool
     allow_downgrade: bool = False
+    also_secondary: bool = False
     apply_mode: str
     created_by: str
     approved_by: str | None
@@ -329,6 +330,7 @@ class DeploymentSummary(ORM):
     state: str
     dry_run: bool
     allow_downgrade: bool = False
+    also_secondary: bool = False
     apply_mode: str
     created_by: str
     approved_by: str | None
@@ -405,6 +407,8 @@ class FirmwareDeploymentIn(BaseModel):
     dry_run: bool = False
     # Install the approved image even where a device runs a newer version.
     allow_downgrade: bool = False
+    # Also write the image into the secondary image slot once the primary is verified.
+    also_secondary: bool = False
 
 
 class DiagnosticsOut(BaseModel):

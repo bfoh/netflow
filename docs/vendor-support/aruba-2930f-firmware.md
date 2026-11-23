@@ -15,6 +15,7 @@ Commands UNDM sends (from public write-ups of the ArubaOS-Switch CLI, see
 | Check | `show flash` — primary must show the target version | — |
 | Restart | `boot system flash primary` | `n` to a "save configuration" question, then `y` |
 | After restart | reconnect, `show system` — running version must equal the target | — |
+| Secondary (plan option) | only once the switch runs the target from primary: `copy tftp flash <this PC> <file> secondary`, then `show flash` — secondary must show the target; the boot choice stays primary | `y` to a `[y/n]` / `(y/n)` question only |
 
 Any other question is **not answered**: the job stops and shows the switch's text.
 
@@ -46,6 +47,7 @@ Any other question is **not answered**: the job stops and shows the switch's tex
 | 5 | Execute | page shows "In progress"; events appear step by step |
 | 6 | Watch the events | `stage: … bytes transferred`, `reboot: restart … started`, `device reachable again`, `running WC.16.10.0025`, state **succeeded** |
 | 7 | On the switch: `show flash`, `show version` | primary = running = WC.16.10.0025 |
+| 8 | Team standard: approved version in **both** slots. New plan for the same switch with **Also write the approved version into the secondary flash** (and the downgrade box while secondary holds the newer WC.16.11.0001) → dry run, then real | preview "already running target; only the secondary flash will be written"; events "secondary: WC.16.10.0025 is in the secondary flash (… bytes transferred)", verify "running WC.16.10.0025, secondary WC.16.10.0025"; no restart. **Before** the file load: the team's files switch the TFTP client off |
 
 ## If something goes wrong
 - **"did not request the image"** — the switch never contacted this PC: firewall (UDP 69),

@@ -22,8 +22,8 @@ same layout.
 ## Sequence for one 2930F
 | # | Step | Mechanism | Status |
 |---|---|---|---|
-| 1 | Factory default → (new units: manager credentials set to the approved login) → 192.168.1.1 (or 192.168.1.2 temporarily) on VLAN 222, OOBM port | console bootstrap | built; bench run pending (`aruba-2930f-console-bootstrap.md`) |
-| 2 | Firmware → WC.16.10.0025 | firmware job, TFTP | built (experimental); bench run pending (`aruba-2930f-firmware.md`) |
+| 1 | Factory default → (new units: manager credentials set to the approved login) → 192.168.1.1 (or 192.168.1.2 temporarily) on VLAN 222, OOBM port | console bootstrap | built (experimental); **run once on hardware** 2026-11-19 (`aruba-2930f-console-bootstrap.md`) |
+| 2 | Firmware → WC.16.10.0025 in primary, then (team standard) also in secondary | firmware job, TFTP; plan option "also the secondary flash" | built (experimental); primary **run once on hardware** 2026-11-19, secondary pending (`aruba-2930f-firmware.md`) |
 | 3 | HTTPS certificate on the switch (the file's own caution) | first part of the load job (step 4), with the project's certificate subject | **built (experimental)**; by hand if no subject is set |
 | 4 | Load the complete file into the startup configuration, restart, reconnect at the address the file sets **with the login after loading** (approved password), check the serial number and the hostname, compare the running configuration | configuration job, replace mode, TFTP (`copy tftp startup-config <pc> <file> unix`) | **built (experimental)**, bench run pending (below) |
 
@@ -59,7 +59,8 @@ project's values), the enroll command (silence or "already exists" both count as
 `web-management ssl`, `end` and `write memory`. Any other question or an error stops the job
 before the file is sent. The values live only in the UNDM database, not in this repository.
 
-Order matters: the file switches the TFTP client off, so firmware (step 2) must come first.
+Order matters: the file switches the TFTP client off, so firmware (step 2, both slots) must
+come first.
 Both switch roles end at 192.168.1.1: after step 4 only one of them may be connected to the
 bench network at a time — UNDM checks the serial number after the restart and refuses a
 different switch answering at that address.
@@ -70,6 +71,13 @@ laptop; laptop on 192.168.1.x on the switch's OOBM port; the other switch discon
 project's **Credentials**: the **approved login** (manager + approved password). On new units
 it is already the device's login from the bootstrap; on a unit that still had the factory
 login (manager, no password), choose the approved login under **Login after loading**.
+
+**Port after loading.** The file decides which port carries the OOBM VLAN (sample files: port 3
+on the LTE switch, port 2 on the BH-DMZ switch; the import report lists it). If the bootstrap
+used another port, move the laptop's cable to the file's OOBM port while the switch restarts:
+UNDM waits up to 30 × 20 s for it. The laptop keeps its 192.168.1.x address, which the file's
+`ip authorized-managers` allows. Other addresses in the report (site VLANs on trunk ports)
+are not used for staging.
 
 | # | Step | Expected |
 |---|---|---|

@@ -78,6 +78,8 @@ class DeploymentTarget:
     current_version: str | None = None
     target_version: str | None = None
     from_version: str | None = None  # version found at preflight
+    current_secondary: str | None = None  # secondary image slot, where the device has one
+    secondary_failed: bool = False  # writing the secondary image failed or did not verify
     # Values for secret slots of a supplied file (slot id -> value). Inserted only into the
     # copy sent to the device; never stored, logged or shown.
     secret_values: dict[str, str] = field(default_factory=dict, repr=False)
@@ -117,6 +119,9 @@ class Deployment:
     min_from_version: str | None = None
     # Install the approved image even where the device runs a newer version (project rule).
     allow_downgrade: bool = False
+    # Also write the approved image into the secondary image slot, after the primary is
+    # verified (project standard: the approved release in both slots).
+    also_secondary: bool = False
     window_start: datetime | None = None
     window_end: datetime | None = None
 

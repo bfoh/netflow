@@ -37,6 +37,7 @@ class FakeArubaSwitch:
     copy_question: str = "The Primary OS Image will be deleted, continue [y/n]?  "
     truncate_download: bool = False
     skip_flash_write: bool = False
+    no_fetch_for: set[str] = field(default_factory=set)  # image slots it never fetches for
     reboot_mode: str = "close"  # close | silent | refuse
     down_for_connects: int = 1  # connection attempts that fail after a restart
     # Complete configuration files ('copy tftp startup-config').
@@ -186,7 +187,10 @@ class FakeArubaSwitch:
         if key != "y":
             self._out += "\r\n" + self._prompt()
             return
-        server, name, _bank = self._copy_args
+        server, name, bank = self._copy_args
+        if bank in self.no_fetch_for:
+            self._out += "\r\n" + self._prompt()
+            return
         port = self.tftp_port() if callable(self.tftp_port) else self.tftp_port
         buf = io.BytesIO()
         try:
@@ -202,7 +206,11 @@ class FakeArubaSwitch:
         data = buf.getvalue()
         self._out += f"\r\n{len(data) // 1024:05d}K\r\n"
         if data.startswith(IMAGE_HEADER) and not self.skip_flash_write:
-            self.primary = data[len(IMAGE_HEADER):].split(b"\n", 1)[0].decode()
+            version = data[len(IMAGE_HEADER):].split(b"\n", 1)[0].decode()
+            if bank == "secondary":
+                self.secondary = version
+            else:
+                self.primary = version
             self._out += "Validating and Writing System Software to the Filesystem ...\r\n"
         self._out += self._prompt()
 

@@ -122,7 +122,7 @@ export const api = {
   deleteFirmware: (id: string) => request<void>('DELETE', `/firmware/images/${id}`),
   firmwareCompatibility: (id: string, deviceIds: string[]) =>
     request<Compatibility[]>('POST', `/firmware/images/${id}/compatibility`, { device_ids: deviceIds }),
-  createFirmwareDeployment: (pid: string, body: { device_ids: string[]; image_id: string; dry_run: boolean; allow_downgrade?: boolean }) =>
+  createFirmwareDeployment: (pid: string, body: { device_ids: string[]; image_id: string; dry_run: boolean; allow_downgrade?: boolean; also_secondary?: boolean }) =>
     request<Deployment>('POST', `/projects/${pid}/firmware-upgrades`, body),
   executeDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/execute`),
   cancelDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/cancel`),

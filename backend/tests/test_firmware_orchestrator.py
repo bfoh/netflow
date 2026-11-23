@@ -173,3 +173,72 @@ def test_reboot_that_keeps_failing_requires_manual_recovery():
                      window_end=now + timedelta(hours=1))
     assert run(dep) is S.RECOVERY_REQUIRED
     assert dep.targets[0].state is T.ROLLBACK_FAILED
+
+
+# -- secondary image slot (project standard: approved release in both slots) ---------------
+APPROVED = FirmwareImageRef("WC.16.10.0025", "WC_16_10_0025.swi", "c" * 64, 1, "/tmp/none")
+
+
+def secondary_plan(addr, *, allow_downgrade=False, driver="mock.aruba.aos_switch"):
+    now = datetime.now(UTC)
+    return Deployment("f-sec", [tgt("s", addr, driver)], created_by="alice", firmware=APPROVED,
+                      allow_downgrade=allow_downgrade, also_secondary=True,
+                      window_start=now - timedelta(minutes=1), window_end=now + timedelta(hours=1))
+
+
+def test_secondary_is_written_after_the_primary_runs_the_target():
+    d = dev("10.0.3.1", version="WC.16.09.0004", secondary_firmware="WC.16.09.0004")
+    dep = secondary_plan("10.0.3.1")
+    assert run(dep) is S.SUCCEEDED, [e.message for e in dep.events]
+    assert d.os_version == d.secondary_firmware == "WC.16.10.0025"
+    messages = [e.message for e in dep.events]
+    reboot = next(i for i, m in enumerate(messages) if m.startswith("reboot:"))
+    secondary = next(i for i, m in enumerate(messages) if m.startswith("secondary:"))
+    assert reboot < secondary  # never both slots changed before the new image has booted
+    assert any("secondary WC.16.09.0004 -> WC.16.10.0025" in m for m in messages)  # preview
+    assert dep.targets[0].state is T.VERIFIED
+    assert messages[-2].endswith("running WC.16.10.0025, secondary WC.16.10.0025")
+
+
+def test_device_on_target_gets_only_its_secondary_written():
+    d = dev("10.0.3.2", version="WC.16.10.0025", secondary_firmware="WC.16.11.0001")
+    dep = secondary_plan("10.0.3.2", allow_downgrade=True)
+    assert run(dep) is S.SUCCEEDED, [e.message for e in dep.events]
+    assert d.secondary_firmware == "WC.16.10.0025"
+    messages = [e.message for e in dep.events]
+    assert any("only the secondary flash will be written" in m and "DOWNGRADE" in m
+               for m in messages)
+    assert not any(m.startswith(("stage:", "reboot:")) for m in messages)
+
+
+def test_newer_secondary_is_kept_unless_the_plan_allows_the_older_version():
+    dev("10.0.3.3", version="WC.16.10.0025", secondary_firmware="WC.16.11.0001")
+    dep = secondary_plan("10.0.3.3")
+    assert not orch().prepare(dep)
+    assert "secondary image WC.16.11.0001 is newer" in dep.targets[0].message
+
+
+def test_both_slots_on_target_is_no_change():
+    dev("10.0.3.4", version="WC.16.10.0025", secondary_firmware="WC.16.10.0025")
+    dep = secondary_plan("10.0.3.4")
+    assert run(dep) is S.SUCCEEDED
+    assert dep.targets[0].state is T.NO_CHANGE
+    assert any("secondary already WC.16.10.0025" in e.message for e in dep.events)
+
+
+def test_failed_secondary_keeps_the_verified_primary_and_asks_for_a_check():
+    d = dev("10.0.3.5", version="WC.16.09.0004", secondary_firmware="WC.16.09.0004",
+            fail_on={Op.STAGE_FIRMWARE_SECONDARY})
+    dep = secondary_plan("10.0.3.5")
+    assert run(dep) is S.RECOVERY_REQUIRED
+    assert d.os_version == "WC.16.10.0025"  # the working new primary is not rolled back
+    t = dep.targets[0]
+    assert t.state is T.MANUAL_RECOVERY_REQUIRED
+    assert "boots from its primary image" in t.message and "show flash" in t.message
+
+
+def test_secondary_needs_a_driver_that_can_write_it():
+    dev("10.0.3.6", version="10.0.0")
+    dep = secondary_plan("10.0.3.6", driver="mock.aruba.aoscx")
+    assert not orch().prepare(dep)
+    assert "secondary image slot procedure" in dep.targets[0].message

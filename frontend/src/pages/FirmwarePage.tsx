@@ -115,11 +115,12 @@ function Planner({ images }: { images: FirmwareImage[] }) {
   const [sel, setSel] = useState<string[]>([]);
   const [dryRun, setDryRun] = useState(false);
   const [allowDowngrade, setAllowDowngrade] = useState(false);
+  const [alsoSecondary, setAlsoSecondary] = useState(false);
   const [results, setResults] = useState<Compatibility[] | null>(null);
   const devices = useProjectDevices(projectId ?? '');
   const navigate = useNavigate();
   const check = useAction(() => api.firmwareCompatibility(imageId!, sel));
-  const create = useAction(() => api.createFirmwareDeployment(projectId!, { device_ids: sel, image_id: imageId!, dry_run: dryRun, allow_downgrade: allowDowngrade }),
+  const create = useAction(() => api.createFirmwareDeployment(projectId!, { device_ids: sel, image_id: imageId!, dry_run: dryRun, allow_downgrade: allowDowngrade, also_secondary: alsoSecondary }),
     (d) => `Upgrade plan created: ${d.state.replaceAll('_', ' ')}`);
   const approved = images.filter((i) => i.status === 'approved');
   const allOk = !!results && results.length === sel.length && results.every((r) => r.compatible);
@@ -163,6 +164,9 @@ function Planner({ images }: { images: FirmwareImage[] }) {
             <Checkbox label="Install the approved version even on devices that run a newer one (downgrade)"
               description="For a project that requires an older approved release, e.g. new units shipping with a newer one."
               checked={allowDowngrade} onChange={(e) => setAllowDowngrade(e.currentTarget.checked)} />
+            <Checkbox label="Also write the approved version into the secondary flash"
+              description="After the device runs it from primary (it keeps booting from primary). Devices already on the version get only their secondary written."
+              checked={alsoSecondary} onChange={(e) => setAlsoSecondary(e.currentTarget.checked)} />
             <Button disabled={!allOk} loading={create.isPending}
               onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(`/deployments/${d.id}`) })}>Create upgrade plan</Button>
           </Group>

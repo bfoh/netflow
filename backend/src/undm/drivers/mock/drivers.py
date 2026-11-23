@@ -75,6 +75,8 @@ class MockDriver(DeviceDriver):
             return OperationResult.failed(op, "No simulated device at this address")
         if not dev.reachable:
             return OperationResult.failed(op, f"{dev.address} unreachable (simulated)")
+        if C.FIRMWARE_SECONDARY_IMAGE in self.capabilities() and dev.secondary_firmware is None:
+            dev.secondary_firmware = self.initial_os_version  # shipped with the same image
         self._dev = dev
         return OperationResult.success(op, message="connected (simulated)")
 
@@ -122,7 +124,7 @@ class MockDriver(DeviceDriver):
         return OperationResult.success(
             Op.GET_FIRMWARE_INFORMATION,
             {"running": dev.os_version, "staged": dev.staged_firmware,
-             "previous": dev.previous_os_version},
+             "previous": dev.previous_os_version, "secondary": dev.secondary_firmware},
         )
 
     # -- impacting ------------------------------------------------------------------
@@ -176,6 +178,18 @@ class MockDriver(DeviceDriver):
             return dev
         dev.staged_firmware = image.version
         return OperationResult.success(op, {"staged": image.version, "sha256": image.sha256})
+
+    def stage_firmware_secondary(self, image: FirmwareImageRef) -> OperationResult:
+        op = Op.STAGE_FIRMWARE_SECONDARY
+        if r := self._require(op):
+            return r
+        dev = self._device(op)
+        if isinstance(dev, OperationResult):
+            return dev
+        dev.secondary_firmware = image.version
+        return OperationResult.success(
+            op, {"secondary": image.version},
+            f"{image.version} is in the secondary image slot (simulated)")
 
     def install_firmware(self) -> OperationResult:
         op = Op.INSTALL_FIRMWARE
@@ -327,7 +341,8 @@ class MockArubaOSSwitchDriver(MockDriver):
         description="Simulated ArubaOS-Switch (e.g. 2930F); dual image banks simulated as "
                     "firmware rollback, no configuration rollback",
         simulated=True,
-        capabilities=_COMMON | {C.FIRMWARE_ROLLBACK, C.CONFIGURATION_REPLACE},
+        capabilities=_COMMON | {C.FIRMWARE_ROLLBACK, C.CONFIGURATION_REPLACE,
+                                C.FIRMWARE_SECONDARY_IMAGE},
     )
 
     @classmethod

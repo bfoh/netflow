@@ -366,3 +366,18 @@ its zone (`UtcDateTime`; SQLite stores none, which made the API send zone-less t
 browsers read as local time). The interface shows times as `YYYY-MM-DD HH:MM:SS UTC`,
 whatever the PC's time zone, and the maintenance window is entered in UTC. Device logs,
 UNDM events and the audit log can be compared directly.
+
+### D-050 Approved release in both image slots: secondary written after the primary is verified (2026-11-23)
+Team standard (product owner): the approved release in the primary **and** secondary flash.
+A firmware plan may set "also write the approved version into the secondary flash". Drivers
+declare it as a capability (`supports_firmware_secondary_image`); the 2930F procedure uses
+the same command as for primary with the other slot (`copy tftp flash <pc> <file> secondary`)
+and requires `show flash` to report the target there. Order: the secondary is written only
+after the device has restarted and runs the target from primary, so a new image that does
+not boot never leaves both slots without the previous release. A device already on the
+target gets only its secondary written (no restart). A newer secondary is overwritten only
+when the plan allows the approved older version (D-048). A failed or unconfirmed secondary
+ends in "manual check" with the running version stated; the working primary is not rolled
+back. Because the team's files switch the TFTP client off, both slots are written before
+the file load. The second transfer of the same file is told apart from the first, so an
+earlier fetch never counts as the secondary's.

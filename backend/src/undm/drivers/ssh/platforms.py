@@ -127,7 +127,8 @@ class ArubaOSSwitchSsh(SshCliDriver):
                     "Experimental, not lab-validated.",
         simulated=False,
         capabilities=SSH_CAPABILITIES | {Capability.FIRMWARE_UPGRADE, Capability.REBOOT,
-                                         Capability.CONFIGURATION_REPLACE},
+                                         Capability.CONFIGURATION_REPLACE,
+                                         Capability.FIRMWARE_SECONDARY_IMAGE},
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
         notes=(
@@ -138,8 +139,11 @@ class ArubaOSSwitchSsh(SshCliDriver):
             "only as part of a deployment.",
             "No automatic rollback: failures end in manual recovery from the stored backup.",
             "Firmware: the switch pulls the image from UNDM by TFTP into the primary flash, "
-            "then reboots into it ('boot system flash primary'). Not yet run on hardware; "
-            "no automatic firmware rollback.",
+            "then reboots into it ('boot system flash primary'); no automatic firmware "
+            "rollback. Run once on hardware (approved downgrade on a spare 2930F).",
+            "Optional per plan: after the primary is verified, the same image is copied into "
+            "the secondary flash ('copy tftp flash ... secondary'); the switch keeps booting "
+            "from primary. Secondary copy not yet run on hardware.",
             "Complete configuration files (replace mode): the switch pulls the file by TFTP "
             "into its startup configuration ('copy tftp startup-config ... unix') and restarts; "
             "UNDM follows an address change made by the file, checks the serial number after "
@@ -396,7 +400,15 @@ class ArubaOSSwitchSsh(SshCliDriver):
         })
 
     def stage_firmware(self, image: FirmwareImageRef) -> OperationResult:
-        op = DeviceOperation.STAGE_FIRMWARE
+        return self._copy_image(image, "primary", DeviceOperation.STAGE_FIRMWARE)
+
+    def stage_firmware_secondary(self, image: FirmwareImageRef) -> OperationResult:
+        # Same documented command as for primary, with the other image slot; the boot
+        # choice (primary) is not changed. Run only after the primary is verified.
+        return self._copy_image(image, "secondary", DeviceOperation.STAGE_FIRMWARE_SECONDARY)
+
+    def _copy_image(self, image: FirmwareImageRef, slot: str,
+                    op: DeviceOperation) -> OperationResult:
         if r := self._need(op):
             return r
         files = self.file_server
@@ -408,14 +420,15 @@ class ArubaOSSwitchSsh(SshCliDriver):
             server_ip = files.offer(Path(image.local_path), name, client)
         except Exception as e:  # noqa: BLE001
             return self._fail(op, e)
+        before = files.last_transfer(name, client)  # e.g. the primary copy of the same file
         talk = self._dialogue(
-            f"copy tftp flash {server_ip} {name} primary", [(self._YES_NO, "y")],
+            f"copy tftp flash {server_ip} {name} {slot}", [(self._YES_NO, "y")],
             timeout=self.transfer_timeout, idle_timeout=self.question_timeout,
             # Once the switch has asked for the file, silence is normal: it validates the
             # image and writes it to flash before the prompt returns.
-            patient=lambda _output: files.last_transfer(name, client) is not None)
+            patient=lambda _output: files.last_transfer(name, client) not in (None, before))
         diagnostics: dict[str, object] = {"device_output": talk.tail}
-        transfer = self._settled_transfer(name)
+        transfer = self._settled_transfer(name, since=before)
         if transfer is None:
             return OperationResult.failed(
                 op, "The switch did not request the image from UNDM's TFTP server "
@@ -426,23 +439,24 @@ class ArubaOSSwitchSsh(SshCliDriver):
             return OperationResult.failed(
                 op, f"Transfer incomplete ({transfer.bytes_sent} of {transfer.size} bytes"
                     f"{': ' + transfer.error if transfer.error else ''}). The switch was not "
-                    "restarted; check 'show flash' before doing anything else.", diagnostics)
+                    f"restarted; check 'show flash' ({slot} image) before doing anything else.",
+                diagnostics)
         if talk.ended != "prompt":
             return OperationResult.failed(
                 op, "The image was transferred, but the switch did not return to its prompt "
                     f"({talk.detail}). It may still be writing to flash: do not power it off; "
                     "check 'show flash' on the console.", diagnostics)
         info = self.get_firmware_information()
-        primary = str(info.data.get("primary") or "") if info.ok else ""
-        if not primary or compare(primary, image.version) != 0:
+        found = str(info.data.get(slot) or "") if info.ok else ""
+        if not found or compare(found, image.version) != 0:
             return OperationResult.failed(
-                op, "The image was transferred, but 'show flash' reports primary = "
-                    f"{primary or 'unknown'} instead of {image.version}. The switch was not "
+                op, f"The image was transferred, but 'show flash' reports {slot} = "
+                    f"{found or 'unknown'} instead of {image.version}. The switch was not "
                     "restarted.",
                 {**diagnostics, "show_flash": info.data.get("raw") if info.ok else info.message})
         return OperationResult.success(
-            op, {"primary": primary, "bytes": transfer.bytes_sent},
-            f"{primary} is in the primary flash ({transfer.bytes_sent} bytes transferred)")
+            op, {slot: found, "bytes": transfer.bytes_sent},
+            f"{found} is in the {slot} flash ({transfer.bytes_sent} bytes transferred)")
 
     def install_firmware(self) -> OperationResult:
         return OperationResult.success(

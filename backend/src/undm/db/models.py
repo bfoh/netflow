@@ -200,6 +200,8 @@ class DeploymentRecord(TimestampMixin, Base):
     dry_run: Mapped[bool] = mapped_column(default=False)
     # Firmware plans: install the approved image even where the device runs a newer one.
     allow_downgrade: Mapped[bool] = mapped_column(default=False, server_default=false())
+    # Firmware plans: also write the image into the secondary image slot.
+    also_secondary: Mapped[bool] = mapped_column(default=False, server_default=false())
     apply_mode: Mapped[str] = mapped_column(String(20))
     created_by: Mapped[str] = mapped_column(String(120))
     approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)

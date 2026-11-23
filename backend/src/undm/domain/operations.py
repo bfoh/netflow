@@ -25,6 +25,8 @@ class DeviceOperation(StrEnum):
     SAVE_CONFIGURATION = "save_configuration"
     ROLLBACK_CONFIGURATION = "rollback_configuration"
     STAGE_FIRMWARE = "stage_firmware"
+    # Write the image into the secondary (backup) image slot as well; boot choice unchanged.
+    STAGE_FIRMWARE_SECONDARY = "stage_firmware_secondary"
     INSTALL_FIRMWARE = "install_firmware"
     ROLLBACK_FIRMWARE = "rollback_firmware"
     REBOOT = "reboot"
@@ -43,6 +45,7 @@ IMPACT: dict[DeviceOperation, Impact] = {
     DeviceOperation.SAVE_CONFIGURATION: Impact.IMPACTING,
     DeviceOperation.ROLLBACK_CONFIGURATION: Impact.IMPACTING,
     DeviceOperation.STAGE_FIRMWARE: Impact.IMPACTING,
+    DeviceOperation.STAGE_FIRMWARE_SECONDARY: Impact.IMPACTING,
     DeviceOperation.INSTALL_FIRMWARE: Impact.IMPACTING,
     DeviceOperation.ROLLBACK_FIRMWARE: Impact.IMPACTING,
     DeviceOperation.REBOOT: Impact.IMPACTING,

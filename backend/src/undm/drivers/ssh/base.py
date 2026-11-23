@@ -159,17 +159,22 @@ class SshCliDriver(DeviceDriver):
             return Dialogue(output, replies, "closed",
                             f"{type(e).__name__}: {redact_text(str(e))[:200]}")
 
-    def _settled_transfer(self, name: str, wait: float = 5.0) -> TransferInfo | None:
+    def _settled_transfer(self, name: str, wait: float = 5.0,
+                          since: TransferInfo | None = None) -> TransferInfo | None:
         """The device's latest fetch of ``name``, once the server has finished recording it.
 
         The device can return to its prompt a moment before the server has processed
         the final acknowledgement, so an unfinished record is given a short grace period.
+        ``since`` is the record seen before the command was sent: a second copy of the same
+        file must not be mistaken for the first one, so that record counts as no fetch.
         """
         assert self.file_server is not None
         client = self.target.management_address
         deadline = time.monotonic() + wait
         while True:
             record = self.file_server.last_transfer(name, client)
+            if record is not None and record is since:
+                record = None
             if record is None or record.completed or record.error \
                     or time.monotonic() >= deadline:
                 return record

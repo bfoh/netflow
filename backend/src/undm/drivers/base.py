@@ -35,6 +35,8 @@ class Capability(StrEnum):
     ZERO_TOUCH_PROVISIONING = "supports_zero_touch_provisioning"
     FIRMWARE_UPGRADE = "supports_firmware_upgrade"
     FIRMWARE_ROLLBACK = "supports_firmware_rollback"
+    # A second image slot the driver can write (e.g. ArubaOS-Switch secondary flash).
+    FIRMWARE_SECONDARY_IMAGE = "supports_firmware_secondary_image"
     REBOOT = "supports_reboot"
 
 
@@ -44,6 +46,7 @@ REQUIRED_CAPABILITIES: dict[DeviceOperation, frozenset[Capability]] = {
     DeviceOperation.APPLY_CONFIGURATION: frozenset({Capability.CONFIGURATION_APPLY}),
     DeviceOperation.ROLLBACK_CONFIGURATION: frozenset({Capability.CONFIGURATION_ROLLBACK}),
     DeviceOperation.STAGE_FIRMWARE: frozenset({Capability.FIRMWARE_UPGRADE}),
+    DeviceOperation.STAGE_FIRMWARE_SECONDARY: frozenset({Capability.FIRMWARE_SECONDARY_IMAGE}),
     DeviceOperation.INSTALL_FIRMWARE: frozenset({Capability.FIRMWARE_UPGRADE}),
     DeviceOperation.ROLLBACK_FIRMWARE: frozenset({Capability.FIRMWARE_ROLLBACK}),
     DeviceOperation.REBOOT: frozenset({Capability.REBOOT}),
@@ -300,6 +303,13 @@ class DeviceDriver:
 
     def stage_firmware(self, image: FirmwareImageRef) -> OperationResult:
         return self._unsupported(DeviceOperation.STAGE_FIRMWARE)
+
+    def stage_firmware_secondary(self, image: FirmwareImageRef) -> OperationResult:
+        """Write ``image`` into the secondary image slot; the boot choice stays unchanged.
+
+        Success means the device reports ``image.version`` in that slot afterwards.
+        """
+        return self._unsupported(DeviceOperation.STAGE_FIRMWARE_SECONDARY)
 
     def install_firmware(self) -> OperationResult:
         return self._unsupported(DeviceOperation.INSTALL_FIRMWARE)

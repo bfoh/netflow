@@ -26,6 +26,7 @@ class SimulatedDevice:
     factory_default: bool = True
     reachable: bool = True
     staged_firmware: str | None = None
+    secondary_firmware: str | None = None  # second image slot, where the model has one
     previous_os_version: str | None = None
     checkpoints: dict[str, str] = field(default_factory=dict)
     # Operations that will fail when attempted (failure injection for tests/demos).

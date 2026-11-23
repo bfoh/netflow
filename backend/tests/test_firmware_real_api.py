@@ -210,3 +210,48 @@ def test_approved_older_version_needs_the_plan_option(bench):
     created = next(a for a in audit if a["action"] == "firmware_deployment.create"
                    and a["details"]["allow_downgrade"])
     assert created["details"]["version"] == TARGET
+
+
+def test_plan_can_also_write_the_secondary_flash(bench):
+    """Project standard (2026-11-23): the approved release in both image slots. The bench
+    unit already runs it from primary after the downgrade; secondary still holds the
+    shipped, newer release."""
+    b = bench(enable_real_device_writes=True, enable_real_device_firmware=True)
+    b.switch.running = b.switch.primary = TARGET
+    b.switch.secondary = "WC.16.11.0001"
+    dep = b.client.post(
+        f"/api/projects/{b.pid}/firmware-upgrades", headers=ALICE,
+        json={"device_ids": [b.did], "image_id": b.image_id, "allow_downgrade": True,
+              "also_secondary": True}).json()
+    assert dep["state"] == "awaiting_approval" and dep["also_secondary"] is True, dep["events"]
+    assert any("only the secondary flash will be written" in e["message"]
+               for e in dep["events"])
+    b.approve(dep["id"])
+    out = b.execute(dep["id"]).json()
+    assert out["state"] == "succeeded", [e["message"] for e in out["events"]]
+    assert (b.switch.primary, b.switch.secondary, b.switch.running) == (TARGET,) * 3
+    assert b.switch.restarts == 0  # the running image was not touched
+    assert "copy tftp flash 127.0.0.1 WC_16_10_0025.swi secondary" in b.switch.commands
+    assert not any(c.startswith("copy tftp flash") and c.endswith("primary")
+                   for c in b.switch.commands)
+    messages = [e["message"] for e in out["events"]]
+    assert any(m.startswith("secondary: WC.16.10.0025 is in the secondary flash") for m in messages)
+    assert any(m == f"running {TARGET}, secondary {TARGET}" for m in messages)
+    audit = b.client.get("/api/audit?limit=50").json()
+    assert any(a["action"] == "firmware_deployment.create" and a["details"]["also_secondary"]
+               for a in audit)
+
+
+def test_full_upgrade_with_secondary_restarts_before_writing_secondary(bench):
+    b = bench(enable_real_device_writes=True, enable_real_device_firmware=True)
+    dep = b.client.post(
+        f"/api/projects/{b.pid}/firmware-upgrades", headers=ALICE,
+        json={"device_ids": [b.did], "image_id": b.image_id, "also_secondary": True}).json()
+    b.approve(dep["id"])
+    out = b.execute(dep["id"]).json()
+    assert out["state"] == "succeeded", [e["message"] for e in out["events"]]
+    copies = [c for c in b.switch.commands if c.startswith(("copy tftp flash", "boot"))]
+    assert copies == ["copy tftp flash 127.0.0.1 WC_16_10_0025.swi primary",
+                      "boot system flash primary",
+                      "copy tftp flash 127.0.0.1 WC_16_10_0025.swi secondary"]
+    assert (b.switch.primary, b.switch.secondary, b.switch.running) == (TARGET,) * 3

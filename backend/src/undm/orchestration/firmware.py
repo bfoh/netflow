@@ -2,8 +2,10 @@
 
 Per device: preflight (reachability, identity, current version) -> configuration
 backup -> stage image -> install -> reboot -> wait until reachable -> verify the
-running version equals the target. Devices are upgraded one at a time and the
-run stops at the first failure (failure containment). Recovery uses firmware
+running version equals the target. A plan may also write the image into the secondary
+image slot: only once the device runs the target from its primary slot, so a failed new
+image never leaves both slots without the previous release. Devices are upgraded one
+at a time and the run stops at the first failure (failure containment). Recovery uses firmware
 rollback only where the driver declares it; otherwise the device is reported as
 needing manual (possibly console/physical) recovery.
 
@@ -61,6 +63,11 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                 problems.append((
                     "driver cannot perform firmware upgrades "
                     f"(lacks {', '.join(sorted(m.value for m in missing))})", t))
+            elif dep.also_secondary and t.driver.missing_capabilities(
+                    DeviceOperation.STAGE_FIRMWARE_SECONDARY):
+                problems.append((
+                    "the plan also writes the secondary image, but this driver has no "
+                    "secondary image slot procedure", t))
         for message, target in problems:
             if target is not None:
                 target.message = message
@@ -89,11 +96,43 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                         f"{dep.min_from_version} required for {target}")
         return None
 
+    def _secondary_problem(self, dep: Deployment, t: DeploymentTarget) -> str | None:
+        assert dep.firmware is not None
+        if not dep.also_secondary or not t.current_secondary:
+            return None  # an empty secondary slot is simply written
+        order = compare(t.current_secondary, dep.firmware.version)
+        if order is None:
+            return (f"cannot compare the secondary image {t.current_secondary!r} with "
+                    f"{dep.firmware.version!r}")
+        if order > 0 and not dep.allow_downgrade:
+            return (f"secondary image {t.current_secondary} is newer than "
+                    f"{dep.firmware.version}; overwriting it is refused unless the plan allows "
+                    "installing the approved older version")
+        return None
+
+    def _needs_secondary(self, dep: Deployment, t: DeploymentTarget) -> bool:
+        assert dep.firmware is not None
+        return dep.also_secondary and (
+            not t.current_secondary or compare(t.current_secondary, dep.firmware.version) != 0)
+
     def _read_version(self, t: DeploymentTarget) -> OperationResult:
         info = t.driver.get_firmware_information()
         if info.ok:
             t.current_version = str(info.data["running"])
+            secondary = info.data.get("secondary")
+            t.current_secondary = str(secondary) if secondary else None
         return info
+
+    def _secondary_note(self, dep: Deployment, t: DeploymentTarget) -> str:
+        assert dep.firmware is not None
+        if not dep.also_secondary:
+            return ""
+        if not self._needs_secondary(dep, t):
+            return f"; secondary already {dep.firmware.version}"
+        older = (t.current_secondary is not None
+                 and compare(t.current_secondary, dep.firmware.version) == 1)
+        return (f"; secondary {t.current_secondary or 'empty'} -> {dep.firmware.version}"
+                + (" (DOWNGRADE, allowed by the plan)" if older else ""))
 
     def _preview(self, dep: Deployment) -> bool:
         assert dep.firmware is not None
@@ -112,18 +151,24 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                                            f"cannot read firmware version: {info.message}")
                     continue
                 assert t.current_version is not None
-                problem = self._version_problem(dep, t.current_version)
+                problem = (self._version_problem(dep, t.current_version)
+                           or self._secondary_problem(dep, t))
                 if problem:
                     ok = self._fail_target(dep, t, "preview", TargetState.PREVIEW_FAILED, problem)
                     continue
                 t.state = TargetState.PREVIEWED
                 same = compare(t.current_version, dep.firmware.version) == 0
                 older = compare(t.current_version, dep.firmware.version) == 1
-                self._emit(dep, "preview", "warning" if older else "ok",
+                secondary = self._secondary_note(dep, t)
+                skipped = (" (already running target; only the secondary flash will be "
+                           "written)" if self._needs_secondary(dep, t)
+                           else " (already running target; will be skipped)")
+                self._emit(dep, "preview", "warning" if older or "DOWNGRADE" in secondary
+                           else "ok",
                            f"{t.current_version} -> {dep.firmware.version}"
-                           + (" (already running target; will be skipped)" if same else "")
+                           + (skipped if same else "")
                            + (" (DOWNGRADE to the approved version, allowed by the plan)"
-                              if older else ""), t)
+                              if older else "") + secondary, t)
             finally:
                 t.driver.disconnect()
         return ok
@@ -177,14 +222,17 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                                        f"cannot read firmware version: {info.message}")
                 continue
             assert t.current_version is not None
-            problem = self._version_problem(dep, t.current_version)
+            problem = (self._version_problem(dep, t.current_version)
+                       or self._secondary_problem(dep, t))
             if problem:
                 ok = self._fail_target(dep, t, "preflight", TargetState.PREFLIGHT_FAILED, problem)
                 continue
             t.from_version = t.current_version
             t.state = TargetState.PREFLIGHT_PASSED
             self._emit(dep, "preflight", "ok",
-                       f"reachable, identity ok, running {t.current_version}", t)
+                       f"reachable, identity ok, running {t.current_version}"
+                       + (f", secondary {t.current_secondary or 'empty'}"
+                          if dep.also_secondary else ""), t)
         return ok
 
     def _needs_upgrade(self, dep: Deployment, t: DeploymentTarget) -> bool:
@@ -200,25 +248,50 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
             return t.driver.install_firmware()
         return t.driver.reboot()
 
+    def _write_secondary(self, dep: Deployment, t: DeploymentTarget,
+                         after_restart: bool) -> tuple[str, OperationResult] | None:
+        """Copy the image into the secondary slot, only while the primary runs the target."""
+        assert dep.firmware is not None
+        if after_restart:
+            info = self._read_version(t)
+            if not info.ok or compare(str(t.current_version), dep.firmware.version) != 0:
+                running = t.current_version if info.ok else f"unknown ({info.message})"
+                return ("check", OperationResult.failed(
+                    DeviceOperation.STAGE_FIRMWARE_SECONDARY,
+                    f"after the restart the device runs {running}, not "
+                    f"{dep.firmware.version}; the secondary flash was not written"))
+        result = t.driver.stage_firmware_secondary(dep.firmware)
+        if not result.ok:
+            t.secondary_failed = True
+            return ("secondary", result)
+        self._emit(dep, "deploy", "ok", f"secondary: {result.message or 'written'}", t)
+        return None
+
     def _apply_all(self, dep: Deployment) -> bool:
         assert dep.firmware is not None
         for idx, t in enumerate(dep.targets):
-            if not self._needs_upgrade(dep, t):
+            primary = self._needs_upgrade(dep, t)
+            secondary = self._needs_secondary(dep, t)
+            if not primary and not secondary:
                 t.state = TargetState.NO_CHANGE
-                self._emit(dep, "deploy", "ok", f"already running {dep.firmware.version}", t)
+                self._emit(dep, "deploy", "ok", f"already running {dep.firmware.version}"
+                           + self._secondary_note(dep, t), t)
                 continue
             t.touched = True
             failed: tuple[str, OperationResult] | None = None
-            for name in ("stage", "install", "reboot"):
-                result = self._step(dep, t, name)
-                if not result.ok:
-                    failed = (name, result)
-                    break
-                self._emit(dep, "deploy", "ok", f"{name}: {result.message or 'done'}", t)
-            if failed is None:
-                back = self._wait_until_available(dep, t)
-                if not back.ok:
-                    failed = ("wait", back)
+            if primary:
+                for name in ("stage", "install", "reboot"):
+                    result = self._step(dep, t, name)
+                    if not result.ok:
+                        failed = (name, result)
+                        break
+                    self._emit(dep, "deploy", "ok", f"{name}: {result.message or 'done'}", t)
+                if failed is None:
+                    back = self._wait_until_available(dep, t)
+                    if not back.ok:
+                        failed = ("wait", back)
+            if failed is None and secondary:
+                failed = self._write_secondary(dep, t, after_restart=primary)
             if failed is not None:
                 name, result = failed
                 self._fail_target(dep, t, "deploy", TargetState.APPLY_FAILED,
@@ -252,6 +325,12 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                                        f"device runs {t.current_version}, expected "
                                        f"{dep.firmware.version}")
                 continue
+            if dep.also_secondary and self._needs_secondary(dep, t):
+                t.secondary_failed = True
+                ok = self._fail_target(dep, t, "verify", TargetState.VERIFY_FAILED,
+                                       f"secondary flash holds {t.current_secondary or 'nothing'}"
+                                       f", expected {dep.firmware.version}")
+                continue
             if t.backup is not None:
                 running = t.driver.get_running_configuration()
                 if running.ok:
@@ -261,7 +340,8 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                                    f"{len(missing)} configuration line(s) differ from the "
                                    f"pre-upgrade backup; review: {'; '.join(missing[:3])}", t)
             t.state = TargetState.VERIFIED
-            self._emit(dep, "verify", "ok", f"running {t.current_version}", t)
+            self._emit(dep, "verify", "ok", f"running {t.current_version}"
+                       + (f", secondary {t.current_secondary}" if dep.also_secondary else ""), t)
         return ok
 
     @staticmethod
@@ -277,6 +357,19 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                 continue
             t.driver.disconnect()
             conn = t.driver.connect()
+            if t.secondary_failed:
+                # The primary is not touched again: the device keeps booting from it.
+                all_ok = False
+                running = (t.current_version if conn.ok and self._read_version(t).ok
+                           else "an unknown version (not reachable now)")
+                cause = t.message
+                t.state = TargetState.MANUAL_RECOVERY_REQUIRED
+                t.message = (f"the device runs {running} and boots from its primary image; the "
+                             f"secondary image was not confirmed ({cause}). Check 'show flash' "
+                             "before restarting it from secondary, then run the plan again to "
+                             "write the secondary image")
+                self._emit(dep, "recover", "error", t.message, t)
+                continue
             if conn.ok and self._read_version(t).ok and t.current_version == t.from_version:
                 t.state = TargetState.ROLLED_BACK
                 t.message = (f"still running the original version {t.from_version}; nothing to "

@@ -69,6 +69,35 @@ def test_stage_transfers_image_and_checks_flash(rig):
     assert rig.switch.keys == ["y"]
 
 
+def test_secondary_copy_writes_the_secondary_slot_only(rig):
+    assert rig.driver.stage_firmware(rig.image).ok
+    r = rig.driver.stage_firmware_secondary(rig.image)
+    assert r.ok, (r.message, r.data)
+    assert r.data == {"secondary": TARGET, "bytes": rig.image.size_bytes}
+    assert "secondary flash" in r.message
+    assert rig.switch.secondary == TARGET == rig.switch.primary
+    assert rig.switch.commands.count("copy tftp flash 127.0.0.1 WC_16_10_0025.swi secondary") == 1
+    assert not any(c.startswith("boot") for c in rig.switch.commands)  # boot choice unchanged
+
+
+def test_secondary_copy_is_not_confused_with_the_earlier_primary_copy(rig):
+    """The primary copy of the same file is already recorded by the TFTP server; a switch
+    that never fetches the file for the secondary slot must not be reported as done."""
+    assert rig.driver.stage_firmware(rig.image).ok
+    rig.switch.no_fetch_for = {"secondary"}
+    r = rig.driver.stage_firmware_secondary(rig.image)
+    assert r.status is ResultStatus.FAILED
+    assert "did not request the image" in r.message
+    assert rig.switch.secondary == "WC.16.09.0004"
+
+
+def test_secondary_must_show_the_expected_version(rig):
+    rig.switch.skip_flash_write = True
+    r = rig.driver.stage_firmware_secondary(rig.image)
+    assert r.status is ResultStatus.FAILED
+    assert "reports secondary = WC.16.09.0004" in r.message
+
+
 def test_stage_without_file_server_fails_before_touching_the_switch(rig):
     rig.driver.file_server = None
     r = rig.driver.stage_firmware(rig.image)

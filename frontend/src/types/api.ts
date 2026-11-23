@@ -199,6 +199,8 @@ export interface DeploymentSummary {
   dry_run: boolean;
   /** Firmware plans: install the approved image even where a device runs a newer one. */
   allow_downgrade?: boolean;
+  /** Firmware plans: also write the image into the secondary image slot. */
+  also_secondary?: boolean;
   apply_mode: string;
   created_by: string;
   approved_by: string | null;
