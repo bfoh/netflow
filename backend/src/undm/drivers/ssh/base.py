@@ -21,6 +21,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import re
+import socket
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -69,6 +70,16 @@ class Dialogue:
         """The end of the device output, safe to show (secrets redacted)."""
         return redact_text(self.output)[-1500:]
 
+
+
+def tcp_port_open(host: str, port: int, timeout: float = 3.0) -> bool:
+    """True if a TCP connection to host:port succeeds (used to notice a device that went
+    down without closing its session, e.g. restarting)."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 def _default_factory(**kwargs: Any) -> Any:
     from netmiko import ConnectHandler  # imported lazily: heavy dependency

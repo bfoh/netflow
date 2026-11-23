@@ -24,6 +24,7 @@ import hashlib
 import os
 import re
 import tempfile
+import time
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -47,6 +48,7 @@ from undm.drivers.fortinet.config_files import (
     is_secret_setting,
     script_statements,
 )
+from undm.drivers.ssh import base as ssh_base
 from undm.drivers.ssh.base import SSH_CAPABILITIES, Dialogue, SshCliDriver
 from undm.security.redaction import redact_text
 
@@ -101,6 +103,9 @@ class FortiOSSsh(SshCliDriver):
     _RESTORE_QUESTION: ClassVar[str] = r"overwrite the current setting[\s\S]*\(y/n\)"
     transfer_timeout: ClassVar[float] = 1800.0   # transfer + check + write, until the restart
     question_timeout: ClassVar[float] = 60.0     # silence before the transfer starts
+    # After a complete transfer and a quiet minute, check the SSH port this often: a unit
+    # that restarts without closing the session (as a 2930F did, D-054) is noticed.
+    restart_probe_interval: ClassVar[float] = 10.0
     statement_timeout: ClassVar[float] = 60.0    # per script statement
     script_poll_interval: ClassVar[float] = 0.02
 
@@ -229,10 +234,23 @@ class FortiOSSsh(SshCliDriver):
             return OperationResult.failed(op, "No file server is available for this job")
         client = self.target.management_address
 
+        down, next_probe = [False], [0.0]  # what the last SSH port check found, and when next
+
         def patient(output: str) -> bool:
             # Once the unit has asked for the file, silence is normal (checking, writing),
-            # unless it is waiting for an answer UNDM does not give.
-            return files.last_transfer(name, client) is not None and not _ASKING.search(output)
+            # unless it is waiting for an answer UNDM does not give, or it went down: then
+            # its SSH port stops answering although the session was not closed.
+            record = files.last_transfer(name, client)
+            if record is None or _ASKING.search(output):
+                return False
+            if not record.completed:
+                return True
+            now = time.monotonic()
+            if now >= next_probe[0]:
+                next_probe[0] = now + self.restart_probe_interval
+                down[0] = not ssh_base.tcp_port_open(
+                    self.target.management_address, self.target.port or 22)
+            return not down[0]
 
         talk: Dialogue | None = None
         try:
@@ -241,7 +259,8 @@ class FortiOSSsh(SshCliDriver):
                 talk = self._dialogue(command(server_ip), [(question, "y")],
                                       timeout=self.transfer_timeout,
                                       idle_timeout=self.question_timeout, patient=patient)
-                self._restarting = talk.ended == "closed" and "y" in talk.replies
+                self._restarting = "y" in talk.replies and (
+                    talk.ended == "closed" or (talk.ended == "timeout" and down[0]))
         except Exception as e:  # noqa: BLE001
             return self._fail(op, e)
         diagnostics: dict[str, object] = {"device_output": self._redact(talk.output)[-1500:]}
@@ -270,10 +289,12 @@ class FortiOSSsh(SshCliDriver):
                 op, f"The FortiGate fetched the {what} but neither restarted nor returned to "
                     f"its prompt ({talk.detail}). It may be waiting for an answer UNDM does not "
                     "give; check it on the console.", diagnostics)
+        how = ("closed the session to restart" if talk.ended == "closed"
+               else "is restarting (its SSH port stopped answering)")
         return OperationResult.success(
             op, {"bytes": transfer.bytes_sent},
             f"the FortiGate fetched the {what} ({transfer.bytes_sent} bytes), accepted it "
-            "and closed the session to restart")
+            f"and {how}")
 
     def stage_firmware(self, image: FirmwareImageRef) -> OperationResult:
         op = Op.STAGE_FIRMWARE
@@ -308,6 +329,13 @@ class FortiOSSsh(SshCliDriver):
             return (f"The backup was written on a unit with platform code {code}; this unit "
                     f"reports {model}. Restoring it here is refused.")
         return None
+
+    def restart_notice(self, mode: ApplyMode) -> str | None:
+        if mode is not ApplyMode.REPLACE:
+            return None
+        return ("restoring the base file: the FortiGate fetches it from this PC and restarts "
+                "with it. Expect several minutes without answers. Keep it powered and "
+                "connected; UNDM continues by itself")
 
     def apply_configuration(self, config: str, mode: ApplyMode) -> OperationResult:
         op = Op.APPLY_CONFIGURATION

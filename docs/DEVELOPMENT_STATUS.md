@@ -26,7 +26,7 @@ manager, topology._
 | Identity after restarts | Serial number re-checked after every restart (firmware, restore, load); a different unit at the address fails the job |
 | 2930F HTTPS certificate | Created inside the load job before an HTTPS-only file, with the team's commands and the project's certificate subject (Project settings); already-existing certificate accepted. **Fake switch only** |
 | Approved older firmware | Firmware plans can explicitly install the approved image on devices that run a newer one (new 2930F units ship with WC.16.11.0001); refused by default, flagged in preview, badge and audit |
-| Erase preconfigured switches | Console bootstrap option for preconfigured units (BH-DMZ): log in with the saved current login, confirm the typed hostname, erase, wait for the restart, set up and bootstrap as new; audited; tested on the simulated console only (D-057, Q-37) |
+| Erase preconfigured switches | Console bootstrap option for preconfigured units (BH-DMZ): log in with the saved current login, confirm the typed hostname, erase, wait for the restart, set up and bootstrap as new; audited; **worked on hardware** (BH-DMZ unit, 2026-11-23, one run from erase to saved bootstrap with the approved password set by UNDM; D-057, D-058) |
 | Studio to deployment | "Deploy this version…" in the Configuration Studio opens a plan with the device and version chosen; links between plans and versions both ways (D-056) |
 | Restarts and results visible | An event announces an apply that restarts the device; the plan page shows the latest step with its age and a "please wait" banner with a timer while a device restarts; the configuration read back after a change is kept per target (view / compare with what was sent); grouped verification warnings (D-055) |
 | Stop and background runs | Runs continue on the server (the page follows the events); **Stop** ends a run at its next safe point with an honest outcome (failed if nothing changed, otherwise manual check naming the devices); restart waits name the address, and a 2930F load names the port to connect to (D-051) |
@@ -61,7 +61,7 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 378 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 379 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (73 files) |

@@ -34,6 +34,7 @@ def tune(monkeypatch):
     monkeypatch.setattr(FortiOSSsh, "question_timeout", 0.3)
     monkeypatch.setattr(FortiOSSsh, "statement_timeout", 0.5)
     monkeypatch.setattr(FortiOSSsh, "transfer_timeout", 1.5)
+    monkeypatch.setattr(FortiOSSsh, "restart_probe_interval", 0.0)
 
 
 @pytest.fixture
@@ -93,10 +94,24 @@ def test_an_unexpected_question_is_never_answered(rig, tmp_path):
     assert "signature" in r.diagnostics["device_output"]
 
 
-def test_a_unit_that_goes_silent_is_not_reported_as_restarting(rig, tmp_path):
+def test_a_unit_that_goes_silent_is_not_reported_as_restarting(rig, tmp_path, monkeypatch):
+    from undm.drivers.ssh import base as ssh_base
+    monkeypatch.setattr(ssh_base, "tcp_port_open", lambda host, port, timeout=3.0: True)
     rig.fg.restart_mode = "silent"
     r = rig.driver.stage_firmware(image(tmp_path))
     assert r.status is ResultStatus.FAILED and "neither restarted" in r.message
+
+
+def test_a_unit_restarting_without_closing_the_session_is_noticed(rig, tmp_path, monkeypatch):
+    """Lesson from the 2930F bench (D-054): the session can stay open and silent while the
+    unit restarts. Its SSH port then stops answering, which UNDM checks."""
+    from undm.drivers.ssh import base as ssh_base
+    monkeypatch.setattr(ssh_base, "tcp_port_open",
+                        lambda host, port, timeout=3.0: rig.fg.restarts == 0)
+    rig.fg.restart_mode = "silent"
+    r = rig.driver.stage_firmware(image(tmp_path))
+    assert r.ok, (r.message, r.diagnostics)
+    assert "is restarting (its SSH port stopped answering)" in r.message
 
 
 # -- full backup restore ----------------------------------------------------------------

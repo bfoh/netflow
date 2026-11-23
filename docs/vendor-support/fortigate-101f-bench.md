@@ -30,6 +30,15 @@ hardware. Order agreed 2026-11-19: firmware → base file → site file (D-034).
 - [ ] Device: model FortiGate-101F, **Real lab device (SSH)**, address 192.168.1.99,
       credential `fw-admin`.
 
+## Since the 2930F bench runs (UNDM v33)
+- Runs continue on the server; **Stop** ends one at its next safe point. A yellow banner with
+  a timer shows while the unit restarts; "Copy events as text" copies the event list.
+- If the FortiGate restarts after a firmware or base-file transfer **without closing the SSH
+  session** (as a 2930F did), UNDM notices that its SSH port stopped answering and goes on
+  to wait for it (D-059), instead of waiting up to 30 minutes.
+- After a configuration plan, **View configuration after deployment** / **Compare with what
+  was sent** show what the unit runs.
+
 ## Steps
 | # | Step | Expected |
 |---|---|---|

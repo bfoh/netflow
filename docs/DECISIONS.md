@@ -501,3 +501,14 @@ saves, and confirms by a `password manager` line in the configuration. The passw
 enters the transcript. Other user names are not handled (the command sets the manager
 account); the result then says "no manager password" with what to do. Re-runs do not set
 it again (the switch then asks for the password).
+
+### D-059 A device that restarts without closing the session is noticed by its SSH port (2026-11-23)
+Lesson from the 2930F bench (D-054) applied to the FortiGate procedures, which wait
+patiently after a transfer while the unit checks and writes the file (seconds to minutes),
+without relying on FortiOS wording not yet seen on the bench: once the transfer is
+complete and the session has been quiet for `question_timeout`, UNDM checks the unit's SSH
+port every 10 s; if it stops answering, the step ends as "is restarting (its SSH port
+stopped answering)" and the usual wait for the unit, identity check and verification
+follow. A unit that stays silent with its port open is still reported as "neither
+restarted nor returned to its prompt". The base restore also announces the restart
+(`restart_notice`).
