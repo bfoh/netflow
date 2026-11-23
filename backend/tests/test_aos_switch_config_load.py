@@ -130,6 +130,20 @@ def rig(monkeypatch):
         yield Rig(d, switch, sc)
 
 
+def test_switch_restarting_with_a_silent_session_is_not_waited_for(rig):
+    """Bench 2026-11-23: after taking the file the switch restarted, but the SSH session
+    stayed open and silent; UNDM waited for the transfer timeout (40 minutes)."""
+    import time
+
+    rig.switch.silent_restart = True
+    began = time.monotonic()
+    r = rig.driver.apply_configuration(sample(), ApplyMode.REPLACE)
+    assert r.ok, (r.message, r.diagnostics)
+    assert time.monotonic() - began < 10
+    assert "is restarting (the session went quiet)" in r.message
+    assert r.data["restarting"] is True and rig.switch.restarts == 1
+
+
 def test_save_question_during_the_load_is_answered_no(rig):
     """\"y\" would write the old running configuration over the file just fetched."""
     rig.switch.ask_save_before_load = True
@@ -410,3 +424,13 @@ def test_api_https_only_file_needs_the_certificate_subject(api):
     assert not any(c.startswith("copy") for c in switch.commands)  # nothing was sent
     refused = client.post(f"/api/projects/{pid}/deployments", json=plan)
     assert refused.status_code == 409 and "set it first" in refused.json()["error"]
+
+
+def test_api_load_with_a_silent_restart_succeeds(api):
+    client, pid, did, switch, hub = api
+    switch.silent_restart = True
+    out = _load(client, pid, did, sample())
+    messages = [e["message"] for e in out["events"]]
+    assert out["state"] == "succeeded", messages
+    assert any("the session went quiet" in m for m in messages)
+    assert any(m.startswith("back after loading: hostname lab-oobm-sw01") for m in messages)

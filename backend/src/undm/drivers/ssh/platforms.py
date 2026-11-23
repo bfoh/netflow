@@ -104,6 +104,12 @@ class CiscoIOSXESsh(SshCliDriver):
         )
 
 
+def _transferring(record: object) -> bool:
+    """True while a recorded TFTP transfer is still in progress."""
+    return record is not None and not getattr(record, "completed", False) \
+        and not getattr(record, "error", "")
+
+
 class ArubaOSSwitchSsh(SshCliDriver):
     """ArubaOS-Switch (formerly ProCurve), e.g. Aruba 2930F.
 
@@ -277,8 +283,10 @@ class ArubaOSSwitchSsh(SshCliDriver):
                 f"copy tftp startup-config {server_ip} {name} unix",
                 [(self._SAVE_QUESTION, "n"), (self._YES_NO, "y")],
                 timeout=self.transfer_timeout, idle_timeout=self.question_timeout,
-                patient=lambda out: files.last_transfer(name, client) is not None
-                and not re.search(r"\?\s*$", out))
+                # Silence is expected only while the file is still being transferred. Once it
+                # is complete, a switch that restarts may leave the session open but silent
+                # (bench 2026-11-23): that silence ends the wait after question_timeout.
+                patient=lambda _out: _transferring(files.last_transfer(name, client)))
             transfer = self._settled_transfer(name)
         except Exception as e:  # noqa: BLE001
             return self._fail(op, e)
@@ -298,12 +306,17 @@ class ArubaOSSwitchSsh(SshCliDriver):
             return OperationResult.failed(
                 op, f"Transfer incomplete ({transfer.bytes_sent} of {transfer.size} bytes). "
                     "The switch was not restarted.", diagnostics)
-        if talk.ended == "timeout":
+        if talk.ended == "timeout" and re.search(r"[?:]\s*$", talk.unanswered):
             return OperationResult.failed(
                 op, f"The switch fetched the file but did not finish ({talk.detail}); it may "
                     "be waiting for an answer UNDM does not give. Check it on the console.",
                 diagnostics)
         how = "and restarted by itself"
+        if talk.ended == "timeout":
+            # Quiet after the complete transfer, no question, no prompt: restarting. The wait
+            # for the switch and the checks after it (serial, hostname, lines) prove it.
+            self.disconnect()
+            how = "and is restarting (the session went quiet)"
         if talk.ended == "prompt":
             if re.search(self.error_pattern, talk.output):
                 return OperationResult.failed(

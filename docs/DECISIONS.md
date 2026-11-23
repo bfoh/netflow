@@ -422,3 +422,13 @@ the 2930F inspector requires the certificate subject for HTTPS-only files. Plans
 a file are refused until the subject is set (Project settings → HTTPS certificate), and
 the check is repeated when the run starts. Earlier warning-only behaviour (D-044) is
 replaced for these files.
+
+### D-054 2930F load: a silent session after the transfer means "restarting" (2026-11-23)
+Bench, first load with the certificate: the switch took the file and restarted by itself,
+but the SSH session neither closed nor printed anything. UNDM treated silence after the
+transfer as "still writing" and would have waited for the whole transfer timeout (40
+minutes). Now silence is expected only while the transfer is in progress; once it is
+complete, silence for `question_timeout` with no unanswered question ends the wait and the
+load is reported as restarting. "Unanswered" means text printed after UNDM's last answer
+(a switch does not echo the "y" it was given). The wait for the switch and the checks after
+it (serial number, hostname from the file, the file's lines) prove the result.

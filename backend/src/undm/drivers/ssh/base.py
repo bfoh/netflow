@@ -57,6 +57,12 @@ class Dialogue:
     replies: list[str]
     ended: Literal["prompt", "closed", "timeout", "stopped"]
     detail: str = ""
+    answered_at: int = 0  # length of the output when UNDM last answered a question
+
+    @property
+    def unanswered(self) -> str:
+        """What the device printed after UNDM's last answer."""
+        return self.output[self.answered_at:]
 
     @property
     def tail(self) -> str:
@@ -146,21 +152,23 @@ class SshCliDriver(DeviceDriver):
                         replies.append(reply)
                         answered = len(output)
                     elif prompt.search(pending):
-                        return Dialogue(output, replies, "prompt")
+                        return Dialogue(output, replies, "prompt", answered_at=answered)
                     continue
                 if self.should_stop is not None and self.should_stop():
                     # Only UNDM stops waiting; what the device is doing is not interrupted.
-                    return Dialogue(output, replies, "stopped", "UNDM stopped waiting on request")
+                    return Dialogue(output, replies, "stopped",
+                                    "UNDM stopped waiting on request", answered_at=answered)
                 if now - start > timeout:
                     return Dialogue(output, replies, "timeout",
-                                    f"not finished after {timeout:.0f} s")
+                                    f"not finished after {timeout:.0f} s", answered_at=answered)
                 if now - last_data > idle_timeout and not (patient and patient(output)):
                     return Dialogue(output, replies, "timeout",
-                                    f"no output for {idle_timeout:.0f} s")
+                                    f"no output for {idle_timeout:.0f} s", answered_at=answered)
                 time.sleep(self.poll_interval if poll is None else poll)
         except Exception as e:  # noqa: BLE001 - a closed session is an ending, not a crash
             return Dialogue(output, replies, "closed",
-                            f"{type(e).__name__}: {redact_text(str(e))[:200]}")
+                            f"{type(e).__name__}: {redact_text(str(e))[:200]}",
+                            answered_at=answered)
 
     def _settled_transfer(self, name: str, wait: float = 5.0,
                           since: TransferInfo | None = None) -> TransferInfo | None:

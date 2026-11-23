@@ -57,7 +57,7 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 362 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 364 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (73 files) |
@@ -82,8 +82,8 @@ Staging four factory-default devices per system (FortiGate 101F, Black Box switc
 build order in `docs/requirements/staging-run-design.md`. Still needed from the product
 owner: Black Box command output from a spare unit (Q-28). Bench runs: 2930F console
 bootstrap, SSH check, firmware (approved downgrade WC.16.11.0001 → WC.16.10.0025) and the
-secondary flash done once on a new unit (2026-11-19/23); file load tried twice: the switch
-came back with its previous configuration (Q-36, D-052); owed: file load, bootstrap re-run;
+secondary flash done once on a new unit (2026-11-19/23); file load: works with the certificate
+created first (4th run; D-053), restart detection fixed (D-054); owed: file load, bootstrap re-run;
 FortiGate 101F staging.
 
 ## Next milestone

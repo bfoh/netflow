@@ -47,6 +47,7 @@ class FakeArubaSwitch:
     config_load_mode: str = "reboot"  # reboot: asks, then restarts | prompt: back to prompt
     refuse_config: bool = False  # fetches the file, keeps its old startup configuration
     ask_save_before_load: bool = False  # asks to save first; "y" saves running over the file
+    silent_restart: bool = False  # restarts after a load without closing the session
     serial_after_restart: str | None = None  # another unit answering after the restart
     password: str = ""  # manager password the switch accepts (factory default: none)
     # Password a loaded file sets (the team's files carry the approved password).
@@ -77,6 +78,7 @@ class FakeArubaSwitch:
             from netmiko.exceptions import NetmikoAuthenticationException
             raise NetmikoAuthenticationException("Authentication failed")
         self._closed, self._out, self._pending = False, "", ""
+        self._silent = False
 
     def show(self, command: str) -> str:
         self.commands.append(command)
@@ -108,6 +110,8 @@ class FakeArubaSwitch:
     def write(self, data: str) -> None:
         if self._closed:
             raise OSError("Socket is closed")
+        if self._silent:
+            return
         text = data.strip()
         if self._pending:
             self.keys.append(text)
@@ -176,9 +180,13 @@ class FakeArubaSwitch:
         else:
             self._out += "Invalid input: " + text + "\r\n" + self._prompt()
 
+    _silent: bool = False
+
     def read(self) -> str:
         if self._closed:
             raise OSError("Socket is closed")
+        if self._silent:  # restarting: the old session neither answers nor closes
+            return ""
         out, self._out = self._out, ""
         if self._closing:
             self._closing, self._closed = False, True
@@ -262,9 +270,12 @@ class FakeArubaSwitch:
         if self._save_over_file:  # the old running configuration replaces the file
             self.startup_config = self.running_config
         if restart:
-            self._out += "\r\nRebooting the System...\r\n"
             self._restart_into_startup()
-            self._closing = True
+            if self.silent_restart:
+                self._silent = True
+            else:
+                self._out += "\r\nRebooting the System...\r\n"
+                self._closing = True
         else:
             self._out += "\r\nDownload complete.\r\n" + self._prompt()
             self.unsaved_changes = True  # the running configuration no longer matches
