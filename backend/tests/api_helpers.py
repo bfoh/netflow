@@ -7,7 +7,10 @@ from undm.db.session import make_engine, make_session_factory
 
 
 def make_client(**settings_kw):
-    settings = Settings(database_url="sqlite://", log_level="WARNING", **settings_kw)
+    # In-memory by default; tests with background runs pass a file database, because one
+    # shared in-memory connection must not be used by two threads at once.
+    database_url = settings_kw.pop("database_url", "sqlite://")
+    settings = Settings(database_url=database_url, log_level="WARNING", **settings_kw)
     engine = make_engine(settings.database_url)
     Base.metadata.create_all(engine)
     factory = make_session_factory(engine)

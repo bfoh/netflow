@@ -18,7 +18,7 @@ Safety rules enforced here:
 
 from __future__ import annotations
 
-import time
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -59,6 +59,33 @@ class TargetState(StrEnum):
     ROLLED_BACK = "rolled_back"
     ROLLBACK_FAILED = "rollback_failed"
     MANUAL_RECOVERY_REQUIRED = "manual_recovery_required"
+
+
+@dataclass
+class StopSignal:
+    """A request to stop a running deployment, set from another thread (the Stop button).
+
+    The run stops at the next safe point: between steps, while waiting for a device to
+    come back, or while waiting for a device's answer. A command a device is already
+    executing is not interrupted on the device itself.
+    """
+
+    event: threading.Event = field(default_factory=threading.Event)
+    by: str = ""
+
+    def request(self, by: str) -> None:
+        self.by = by
+        self.event.set()
+
+    def is_set(self) -> bool:
+        return self.event.is_set()
+
+    def wait(self, seconds: float) -> bool:
+        return self.event.wait(seconds)
+
+
+class StopRequested(Exception):  # noqa: N818 - a signal, not an error
+    pass
 
 
 @dataclass
@@ -124,6 +151,7 @@ class Deployment:
     also_secondary: bool = False
     window_start: datetime | None = None
     window_end: datetime | None = None
+    stop: StopSignal = field(default_factory=StopSignal, repr=False)
 
 
 class ApprovalRequiredError(PermissionError):
@@ -144,11 +172,21 @@ class DeploymentOrchestrator:
         self.restart_wait_attempts = restart_wait_attempts
         self.restart_wait_delay_s = restart_wait_delay_s
 
+    def _check_stop(self, dep: Deployment) -> None:
+        if dep.stop.is_set():
+            raise StopRequested
+
     def _wait_until_available(self, dep: Deployment, t: DeploymentTarget) -> OperationResult:
         last = OperationResult.failed(DeviceOperation.CHECK_REACHABILITY, "not attempted")
+        if not t.driver.info.simulated:
+            self._emit(dep, "deploy", "ok",
+                       f"waiting for the device to answer at {t.driver.target.management_address}"
+                       f" (up to {self.restart_wait_attempts} attempts, "
+                       f"{self.restart_wait_delay_s:.0f} s apart; Stop ends the wait)", t)
         for attempt in range(1, self.restart_wait_attempts + 1):
-            if not t.driver.info.simulated:
-                time.sleep(self.restart_wait_delay_s)
+            if not t.driver.info.simulated and dep.stop.wait(self.restart_wait_delay_s):
+                raise StopRequested
+            self._check_stop(dep)
             t.driver.disconnect()
             last = t.driver.connect()
             if last.ok:
@@ -270,29 +308,67 @@ class DeploymentOrchestrator:
             raise ApprovalRequiredError(f"Deployment must be ready to execute (is {dep.state})")
         if not dep.dry_run and not dep.approved_by:
             raise ApprovalRequiredError("Live deployments must be approved before execution")
+        for t in dep.targets:  # long waits inside a driver end early on a stop request
+            t.driver.should_stop = dep.stop.is_set
         try:
             self._move(dep, S.PREFLIGHT)
+            self._check_stop(dep)  # stopped before the run had begun
             if not self._preflight(dep):
+                self._check_stop(dep)
                 self._move(dep, S.FAILED, "preflight failed; no device was changed")
                 return dep.state
+            self._check_stop(dep)
             if dep.dry_run:
                 self._move(dep, S.SUCCEEDED, "dry run complete; no device was changed")
                 return dep.state
             self._move(dep, S.BACKING_UP)
             if not self._backup_all(dep):
+                self._check_stop(dep)
                 self._move(dep, S.FAILED, "backup failed; no device was changed")
                 return dep.state
+            self._check_stop(dep)
             self._move(dep, S.DEPLOYING)
             if not self._apply_all(dep):
+                self._check_stop(dep)
                 return self._recover(dep)
+            self._check_stop(dep)
             self._move(dep, S.VERIFYING)
             if not self._verify_all(dep):
+                self._check_stop(dep)
                 return self._recover(dep)
             self._move(dep, S.SUCCEEDED)
             return dep.state
+        except StopRequested:
+            return self._stopped(dep)
         finally:
             for t in dep.targets:
                 t.driver.disconnect()
+                t.driver.should_stop = None
+
+    _FINISHED = frozenset({TargetState.VERIFIED, TargetState.NO_CHANGE,
+                           TargetState.ROLLED_BACK, TargetState.MANUAL_RECOVERY_REQUIRED})
+
+    def _stopped(self, dep: Deployment) -> DeploymentState:
+        """End a run stopped on request. No further device action is taken."""
+        by = dep.stop.by or "a user"
+        changed = [t for t in dep.targets if t.touched and t.state not in self._FINISHED]
+        for t in dep.targets:
+            if t in changed:
+                t.state = TargetState.MANUAL_RECOVERY_REQUIRED
+                t.message = (f"stopped by {by} while {dep.state.value}; the device may be "
+                             "part-way through a change (or still restarting): check it "
+                             "before making further changes")
+                self._emit(dep, "stop", "error", t.message, t)
+            elif t.state not in self._FINISHED and not t.state.value.endswith("failed"):
+                t.state = TargetState.SKIPPED
+                self._emit(dep, "stop", "skipped", "not attempted: the run was stopped", t)
+        if changed or (dep.state in (S.VERIFYING, S.RECOVERING)):
+            self._move(dep, S.RECOVERY_REQUIRED,
+                       f"stopped by {by}; {len(changed)} device(s) may be mid-change and must "
+                       "be checked")
+        else:
+            self._move(dep, S.FAILED, f"stopped by {by}; no device was changed")
+        return dep.state
 
     # -- internals ------------------------------------------------------------------
     def _fail_target(
@@ -387,6 +463,7 @@ class DeploymentOrchestrator:
 
     def _apply_all(self, dep: Deployment) -> bool:
         for idx, t in enumerate(dep.targets):
+            self._check_stop(dep)
             if not self._needs_change(dep, t):
                 t.state = TargetState.NO_CHANGE
                 self._emit(dep, "deploy", "ok", "already in desired state; not changed", t)
@@ -429,6 +506,7 @@ class DeploymentOrchestrator:
                         result = OperationResult.success(result.operation, result.data,
                                                          applied_message)
             if not result.ok:
+                self._check_stop(dep)  # a step ended early by a stop is not a device failure
                 self._fail_target(dep, t, "deploy", TargetState.APPLY_FAILED, result.message)
                 for rest in dep.targets[idx + 1:]:
                     rest.state = TargetState.SKIPPED
@@ -441,6 +519,7 @@ class DeploymentOrchestrator:
     def _verify_all(self, dep: Deployment) -> bool:
         ok = True
         for t in dep.targets:
+            self._check_stop(dep)
             if t.state is TargetState.NO_CHANGE:
                 continue
             custom = t.driver.verify_configuration(t.intended_config, dep.apply_mode)
@@ -497,6 +576,7 @@ class DeploymentOrchestrator:
         self._move(dep, S.RECOVERING)
         all_ok = True
         for t in dep.targets:
+            self._check_stop(dep)
             if not t.touched:
                 continue
             assert t.backup is not None  # guaranteed by the backup stage

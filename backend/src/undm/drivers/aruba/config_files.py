@@ -119,6 +119,23 @@ def address_after_loading(text: str, current: str) -> str | None:
     return None
 
 
+def where_after_loading(text: str, current: str) -> str | None:
+    """Where the switch answers after loading, as a person needs it on the bench, e.g.
+    "192.168.1.1 (VLAN 222, untagged on port 3)". None if the file has no address in the
+    subnet of ``current``."""
+    after = address_after_loading(text, current)
+    if after is None:
+        return None
+    f = parse(text)
+    for vid, address, _mask in f.management_addresses():
+        if address == after:
+            v = f.vlans[vid]
+            carried = ("untagged on port " + _span(v.untagged) if v.untagged
+                       else "tagged on port " + _span(v.tagged) if v.tagged else "")
+            return f"{address} (VLAN {vid}" + (f", {carried}" if carried else "") + ")"
+    return after
+
+
 def inspect_aos_switch_file(text: str) -> ConfigFileReport:
     f = parse(text)
     facts: dict[str, str] = {"lines": str(len(f.lines))}

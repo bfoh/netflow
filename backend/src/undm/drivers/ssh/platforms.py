@@ -17,6 +17,7 @@ from undm.domain.versions import compare
 from undm.drivers.aruba.config_files import (
     address_after_loading,
     inspect_aos_switch_file,
+    where_after_loading,
 )
 from undm.drivers.aruba.config_files import parse as parse_aos_switch_file
 from undm.drivers.base import (
@@ -311,7 +312,12 @@ class ArubaOSSwitchSsh(SshCliDriver):
         moved = ""
         if after and after != client:
             self.target = replace(self.target, management_address=after)
-            moved = f"; it will answer at {after} (address set by the file)"
+        where = where_after_loading(config, client)
+        if where:
+            # The file may put management on another port than the bootstrap did: say where
+            # this PC must be connected while UNDM waits (bench 2026-11-23).
+            moved = (f"; after the restart it answers at {where}, so this PC must be "
+                     "connected there")
         return OperationResult.success(
             op, {"restarting": True, "address_after": after or client},
             f"the switch fetched the file ({transfer.bytes_sent} bytes) into its startup "

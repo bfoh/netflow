@@ -270,6 +270,7 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
     def _apply_all(self, dep: Deployment) -> bool:
         assert dep.firmware is not None
         for idx, t in enumerate(dep.targets):
+            self._check_stop(dep)
             primary = self._needs_upgrade(dep, t)
             secondary = self._needs_secondary(dep, t)
             if not primary and not secondary:
@@ -293,6 +294,7 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
             if failed is None and secondary:
                 failed = self._write_secondary(dep, t, after_restart=primary)
             if failed is not None:
+                self._check_stop(dep)  # a step ended early by a stop is not a device failure
                 name, result = failed
                 self._fail_target(dep, t, "deploy", TargetState.APPLY_FAILED,
                                   f"{name} failed: {result.message}")
@@ -313,6 +315,7 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
         assert dep.firmware is not None
         ok = True
         for t in dep.targets:
+            self._check_stop(dep)
             if t.state is TargetState.NO_CHANGE:
                 continue
             info = self._read_version(t)
@@ -353,6 +356,7 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
         self._move(dep, S.RECOVERING)
         all_ok = True
         for t in dep.targets:
+            self._check_stop(dep)
             if not t.touched:
                 continue
             t.driver.disconnect()

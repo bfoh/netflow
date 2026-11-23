@@ -40,6 +40,7 @@ from undm.orchestration.deployment import (
     DeploymentEvent,
     DeploymentOrchestrator,
     DeploymentTarget,
+    StopSignal,
     TargetState,
 )
 from undm.orchestration.firmware import FirmwareOrchestrator
@@ -48,6 +49,7 @@ from undm.services import audit
 from undm.services.devices import build_driver, inspect_config, latest_config
 from undm.services.errors import ConflictError, ForbiddenError, NotFoundError
 from undm.services.firmware import FirmwareRepository, device_compatibility
+from undm.services.jobs import DeploymentJobs
 from undm.services.policy import Policy
 from undm.transfer.hub import TransferHub
 from undm.transfer.tftp import TftpServerError
@@ -394,7 +396,8 @@ class DeploymentService:
                                  "also_secondary": also_secondary})
         return rec
 
-    def execute(self, deployment_id: str, actor: str) -> DeploymentRecord:
+    def check_can_execute(self, deployment_id: str) -> DeploymentRecord:
+        """Everything that must hold before a run starts; raises the reason if not."""
         rec = self.get(deployment_id)
         if rec.state != S.READY.value:
             raise ConflictError(f"Deployment must be ready to execute (state {rec.state})")
@@ -413,7 +416,14 @@ class DeploymentService:
             problem = self._policy_problem(device, rec.dry_run, firmware=rec.kind == "firmware")
             if problem:
                 raise ForbiddenError(problem)
+        return rec
+
+    def execute(self, deployment_id: str, actor: str,
+                stop: StopSignal | None = None) -> DeploymentRecord:
+        rec = self.check_can_execute(deployment_id)
         dep = self._to_domain(rec)
+        if stop is not None:
+            dep.stop = stop
         if not rec.dry_run:
             by_id = {t.device_id: t for t in dep.targets}
             for tr in rec.targets:
@@ -443,6 +453,44 @@ class DeploymentService:
                          details={"dry_run": rec.dry_run, "tftp": needs_files})
             self._lock_devices(rec)  # commits
             self._run_locked(rec, dep, actor)
+        return rec
+
+    def record_run_error(self, deployment_id: str, actor: str, reason: str) -> None:
+        """A run started in the background raised instead of ending normally."""
+        rec = self.get(deployment_id)
+        started = rec.state != S.READY.value
+        message = (f"the run ended with an internal error: {reason}" if started
+                   else f"could not start: {reason}")
+        rec.events.append(DeploymentEventRecord(
+            seq=len(rec.events), timestamp=datetime.now(UTC), stage="execute",
+            status="error", message=message,
+        ))
+        audit.record(self.s, actor, "deployment.execute.error", "deployment", rec.id,
+                     "failed", {"reason": reason, "started": started})
+        self.s.commit()
+
+    def request_stop(self, deployment_id: str, actor: str, jobs: DeploymentJobs
+                     ) -> DeploymentRecord:
+        """Stop button: a running run stops at its next safe point; a run that no longer
+        exists (e.g. the application was restarted) is resolved at once."""
+        rec = self.get(deployment_id)
+        if jobs.request_stop(deployment_id, actor):
+            audit.record(self.s, actor, "deployment.stop_requested", "deployment", rec.id,
+                         details={"state": rec.state})
+            return rec
+        return self.stop_without_run(deployment_id, actor)
+
+    def stop_without_run(self, deployment_id: str, actor: str) -> DeploymentRecord:
+        """Resolve a deployment shown as running although no run exists in this process."""
+        rec = self.get(deployment_id)
+        previous = S(rec.state)
+        outcome = interrupted_outcome(previous)
+        if outcome is None:
+            raise ConflictError(f"This deployment is not running (state {rec.state})")
+        resolve_interrupted(self.s, rec, f"stopped by {actor}: no run was active for it in "
+                            f"this application while it was {previous.value}")
+        audit.record(self.s, actor, "deployment.stop", "deployment", rec.id, rec.state,
+                     {"previous_state": previous.value, "run_active": False})
         return rec
 
     def _run_locked(self, rec: DeploymentRecord, dep: Deployment, actor: str) -> None:
@@ -524,6 +572,28 @@ class DeploymentService:
                 device.deployment_status = DeviceDeploymentStatus.UNKNOWN.value
 
 
+def resolve_interrupted(session: Session, rec: DeploymentRecord, why: str) -> None:
+    """End a deployment whose run is gone: devices may have been changed."""
+    previous = S(rec.state)
+    outcome = interrupted_outcome(previous)
+    assert outcome is not None
+    rec.state = outcome.value
+    rec.events.append(DeploymentEventRecord(
+        seq=len(rec.events), timestamp=datetime.now(UTC), stage="lifecycle",
+        status=outcome.value,
+        message=f"{why}; device state must be verified before further changes",
+    ))
+    if outcome is S.RECOVERY_REQUIRED:
+        for tr in rec.targets:
+            device = session.get(Device, tr.device_id)
+            if device is not None:
+                device.deployment_status = DeviceDeploymentStatus.UNKNOWN.value
+    session.execute(
+        update(Device).where(Device.locked_by_deployment_id == rec.id)
+        .values(locked_by_deployment_id=None)
+    )
+
+
 def recover_interrupted_deployments(session: Session) -> list[str]:
     """Resolve deployments left in a transient state by a stopped process.
 
@@ -539,26 +609,10 @@ def recover_interrupted_deployments(session: Session) -> list[str]:
     ).all()
     for rec in stuck:
         previous = S(rec.state)
-        outcome = interrupted_outcome(previous)
-        assert outcome is not None
-        rec.state = outcome.value
-        rec.events.append(DeploymentEventRecord(
-            seq=len(rec.events), timestamp=datetime.now(UTC), stage="lifecycle",
-            status=outcome.value,
-            message=f"application stopped while deployment was {previous.value}; "
-                    "device state must be verified before further changes",
-        ))
-        if outcome is S.RECOVERY_REQUIRED:
-            for tr in rec.targets:
-                device = session.get(Device, tr.device_id)
-                if device is not None:
-                    device.deployment_status = DeviceDeploymentStatus.UNKNOWN.value
-        session.execute(
-            update(Device).where(Device.locked_by_deployment_id == rec.id)
-            .values(locked_by_deployment_id=None)
-        )
+        resolve_interrupted(session, rec, f"application stopped while deployment was "
+                            f"{previous.value}")
         audit.record(session, "system", "deployment.interrupted", "deployment", rec.id,
-                     outcome.value, {"previous_state": previous.value})
+                     rec.state, {"previous_state": previous.value})
         resolved.append(rec.id)
     session.commit()
     return resolved

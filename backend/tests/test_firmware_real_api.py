@@ -33,9 +33,10 @@ class Bench:
         previous = keyring.get_keyring()
         keyring.set_keyring(MemoryKeyring())
         self._restore = lambda: keyring.set_keyring(previous)
+        options = {"firmware_reboot_wait_seconds": 0, "firmware_reboot_wait_attempts": 4,
+                   **settings}
         self.client, _ = make_client(
-            data_dir=str(tmp_path), tftp_host="127.0.0.1", tftp_port=0,
-            firmware_reboot_wait_seconds=0, firmware_reboot_wait_attempts=4, **settings)
+            data_dir=str(tmp_path), tftp_host="127.0.0.1", tftp_port=0, **options)
         hub = self.client.app.state.transfer_hub
         self.hub = hub
         self.switch = FakeArubaSwitch(tftp_port=lambda: hub.port)
@@ -255,3 +256,45 @@ def test_full_upgrade_with_secondary_restarts_before_writing_secondary(bench):
                       "boot system flash primary",
                       "copy tftp flash 127.0.0.1 WC_16_10_0025.swi secondary"]
     assert (b.switch.primary, b.switch.secondary, b.switch.running) == (TARGET,) * 3
+
+
+def test_stop_ends_a_background_run_waiting_for_a_switch_that_does_not_return(bench, tmp_path):
+    """Bench 2026-11-23: after a restart the switch answered on another port, so UNDM kept
+    waiting. The run continues on the server; Stop ends the wait and asks for a check."""
+    import time
+
+    b = bench(enable_real_device_writes=True, enable_real_device_firmware=True,
+              database_url=f"sqlite:///{tmp_path}/bench.db",
+              firmware_reboot_wait_seconds=0.2, firmware_reboot_wait_attempts=500)
+    b.switch.down_for_connects = 10_000  # never answers again at this address
+    dep = b.plan().json()
+    b.approve(dep["id"])
+    r = b.client.post(f"/api/deployments/{dep['id']}/execute?background=true", headers=BOB)
+    assert r.status_code == 200 and r.json()["state"] == "ready"
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        events = b.client.get(f"/api/deployments/{dep['id']}").json()["events"]
+        if any(e["message"].startswith("waiting for the device to answer at 127.0.0.1")
+               for e in events):
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("the run never reached the restart wait")
+    stopped = b.client.post(f"/api/deployments/{dep['id']}/stop", headers=ALICE)
+    assert stopped.status_code == 200
+    while time.monotonic() < deadline:
+        out = b.client.get(f"/api/deployments/{dep['id']}").json()
+        if out["state"] not in ("deploying", "verifying", "recovering"):
+            break
+        time.sleep(0.05)
+    assert out["state"] == "recovery_required", [e["message"] for e in out["events"]]
+    assert out["targets"][0]["state"] == "manual_recovery_required"
+    assert "stopped by alice while deploying" in out["targets"][0]["message"]
+    while b.hub.running and time.monotonic() < deadline:  # closes as the run ends
+        time.sleep(0.05)
+    assert not b.hub.running  # the TFTP session ended with the run
+    device = b.client.get(f"/api/devices/{b.did}").json()
+    assert device["locked_by_deployment_id"] is None
+    audit = b.client.get("/api/audit?limit=50").json()
+    assert any(a["action"] == "deployment.stop_requested" and a["actor"] == "alice"
+               for a in audit)

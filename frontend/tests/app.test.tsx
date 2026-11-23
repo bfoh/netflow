@@ -179,6 +179,21 @@ describe('deployment outcome', () => {
     expect(screen.getByText('Secondary flash too')).toBeInTheDocument();
   });
 
+  it('a running deployment can be stopped after a confirmation', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/deployments/dep1': plan({ dry_run: false, state: 'deploying', approved_by: 'approver' }),
+      '/projects/p1/devices': [device({})] });
+    renderAt('/deployments/dep1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Stop this deployment?' });
+    expect(within(dialog).getByText(/no rollback is started/)).toBeInTheDocument();
+    expect(calls.some((c) => c.url.endsWith('/stop'))).toBe(false);  // nothing before confirming
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/deployments/dep1/stop'
+      && c.init?.method === 'POST')).toBe(true));
+    expect(screen.queryByRole('button', { name: 'Execute deployment' })).not.toBeInTheDocument();
+  });
+
   it('a successful real upgrade keeps the upgrade wording', async () => {
     mockApi({ '/deployments/dep1': plan({ dry_run: false, approved_by: 'approver' }), '/projects/p1/devices': [device({})] });
     renderAt('/deployments/dep1');

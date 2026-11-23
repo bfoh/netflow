@@ -44,9 +44,15 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
   const firmware = dep.kind === 'firmware';
   const approve = useAction(() => api.approveDeployment(dep.id, firmware
     ? { window_start: fromUtcInput(start), window_end: fromUtcInput(end) } : undefined), 'Deployment approved');
-  const execute = useAction(() => api.executeDeployment(dep.id), (d) => `Execution finished: ${d.state.replaceAll('_', ' ')}`);
+  const [started, setStarted] = useState(false);
+  const [stopOpen, { open: openStop, close: closeStop }] = useDisclosure();
+  const execute = useAction(() => api.executeDeployment(dep.id),
+    'Run started on the server; the events below show each step');
+  const stop = useAction(() => api.stopDeployment(dep.id), 'Stop requested');
   const cancel = useAction(() => api.cancelDeployment(dep.id), 'Deployment cancelled');
-  const running = execute.isPending;
+  // Between the start request and the first stored step the plan still reads "ready".
+  const running = execute.isPending || (started && dep.state === 'ready');
+  const active = running || RUNNING_STATES.has(dep.state);
   useEffect(() => onRunning(running), [running, onRunning]);
   const canCancel = ['draft', 'awaiting_approval', 'ready'].includes(dep.state);
   return (
@@ -64,8 +70,23 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
           </Group>
         </Stack>
       </Modal>
-      {(dep.state === 'ready' || running) && <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={open} loading={running}>{dep.dry_run ? 'Run dry run' : 'Execute deployment'}</Button>}
-      {canCancel && !running && <Button variant="default" onClick={() => cancel.mutate()} loading={cancel.isPending}>Cancel</Button>}
+      {dep.state === 'ready' && !started && <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={open} loading={running}>{dep.dry_run ? 'Run dry run' : 'Execute deployment'}</Button>}
+      {canCancel && !active && <Button variant="default" onClick={() => cancel.mutate()} loading={cancel.isPending}>Cancel</Button>}
+      {active && <Button color="red" variant="light" onClick={openStop} loading={stop.isPending}
+        disabled={stop.isSuccess}>{stop.isSuccess ? 'Stopping…' : 'Stop'}</Button>}
+      <Modal opened={stopOpen} onClose={closeStop} title="Stop this deployment?">
+        <Stack>
+          <Text size="sm">UNDM stops at the next safe point: between steps, while waiting for a device to come back, or
+            while waiting for a device's answer. A command a device is already carrying out (a transfer, a restart) is not
+            undone, and no rollback is started.</Text>
+          <Text size="sm">If a device may already have been changed, the plan ends as <b>manual recovery required</b> and names
+            it: check that device before making further changes. If nothing was changed yet, it ends as <b>failed</b>.</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeStop}>Back</Button>
+            <Button color="red" onClick={() => { closeStop(); stop.mutate(); }}>Stop</Button>
+          </Group>
+        </Stack>
+      </Modal>
       <Modal opened={confirm} onClose={close} title={dep.dry_run ? 'Run dry run' : 'Execute deployment'}>
         <Stack>
           <Text size="sm">
@@ -80,7 +101,7 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
           <Alert color="violet" icon={<IconFlask size={16} />} p="xs">Check the environment badge of every target below: simulated devices exist only in UNDM; lab devices are real equipment.</Alert>
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Back</Button>
-            <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={() => { close(); execute.mutate(); }}>Confirm</Button>
+            <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={() => { close(); setStarted(true); execute.mutate(undefined, { onError: () => setStarted(false) }); }}>Confirm</Button>
           </Group>
         </Stack>
       </Modal>
@@ -124,7 +145,8 @@ export function DeploymentDetailPage() {
         actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
       {working && (
         <Alert color="blue" mb="md" title={`In progress: ${RUNNING_STATES.has(d.state) ? d.state.replaceAll('_', ' ') : 'starting'}…`}>
-          Keep this page open; the events below update as each step finishes.
+          The run continues on the server even if you leave this page; the events below update as each step finishes.
+          Use <b>Stop</b> to end it at the next safe point.
           {d.kind === 'firmware' && !d.dry_run && ' A firmware upgrade takes several minutes per device: the image is transferred, written to flash, then the device restarts. Do not power off or unplug a device while this runs.'}
         </Alert>
       )}

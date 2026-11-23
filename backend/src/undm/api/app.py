@@ -28,6 +28,7 @@ from undm.drivers.registry import DriverRegistry, default_registry
 from undm.logging_setup import configure_logging
 from undm.services.deployments import recover_interrupted_deployments
 from undm.services.errors import ServiceError
+from undm.services.jobs import DeploymentJobs
 from undm.transfer.hub import TransferHub
 
 
@@ -54,6 +55,7 @@ def create_app(
                 "resolved interrupted deployments", extra={"ctx": {"ids": resolved}}
             )
         yield
+        app.state.deployment_jobs.stop_all("application shutdown")
 
     app = FastAPI(
         title="Universal Network Deployment Manager",
@@ -70,6 +72,7 @@ def create_app(
     )
     app.state.registry = registry or default_registry()
     app.state.transfer_hub = TransferHub(settings.tftp_host, settings.tftp_port)
+    app.state.deployment_jobs = DeploymentJobs()
     default_lab().autocreate = settings.simulation_autocreate
 
     app.add_middleware(

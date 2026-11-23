@@ -57,7 +57,8 @@ ALLOWED_TRANSITIONS: dict[DeploymentState, frozenset[DeploymentState]] = {
     _S.READY: frozenset({_S.PREFLIGHT, _S.CANCELLED}),
     _S.PREFLIGHT: frozenset({_S.BACKING_UP, _S.SUCCEEDED, _S.FAILED}),
     _S.BACKING_UP: frozenset({_S.DEPLOYING, _S.FAILED}),
-    _S.DEPLOYING: frozenset({_S.VERIFYING, _S.RECOVERING, _S.RECOVERY_REQUIRED}),
+    # DEPLOYING -> FAILED only when a run is stopped before any device was touched.
+    _S.DEPLOYING: frozenset({_S.VERIFYING, _S.RECOVERING, _S.RECOVERY_REQUIRED, _S.FAILED}),
     _S.VERIFYING: frozenset({_S.SUCCEEDED, _S.RECOVERING, _S.RECOVERY_REQUIRED}),
     _S.RECOVERING: frozenset({_S.ROLLED_BACK, _S.RECOVERY_REQUIRED}),
 }

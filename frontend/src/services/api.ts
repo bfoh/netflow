@@ -124,7 +124,10 @@ export const api = {
     request<Compatibility[]>('POST', `/firmware/images/${id}/compatibility`, { device_ids: deviceIds }),
   createFirmwareDeployment: (pid: string, body: { device_ids: string[]; image_id: string; dry_run: boolean; allow_downgrade?: boolean; also_secondary?: boolean }) =>
     request<Deployment>('POST', `/projects/${pid}/firmware-upgrades`, body),
-  executeDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/execute`),
+  /** Starts the run on the server and returns at once; the page follows its events. */
+  executeDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/execute?background=true`),
+  /** Stops a running deployment at its next safe point. */
+  stopDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/stop`),
   cancelDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/cancel`),
 
   serialPorts: () => request<SerialPort[]>('GET', '/provisioning/serial-ports'),

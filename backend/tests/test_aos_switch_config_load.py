@@ -98,6 +98,15 @@ def test_address_after_loading_follows_the_subnet():
     assert address_after_loading(sample(), "203.0.113.5") is None  # no subnet in common
 
 
+def test_load_message_says_where_to_connect_after_the_restart():
+    """Bench 2026-11-23: the bootstrap used another port than the file's OOBM port."""
+    from undm.drivers.aruba.config_files import where_after_loading
+
+    assert where_after_loading(sample(), "192.168.1.1") == \
+        "192.168.1.1 (VLAN 222, untagged on port 2)"
+    assert where_after_loading(sample(), "203.0.113.5") is None
+
+
 @dataclass
 class Rig:
     driver: ArubaOSSwitchSsh
@@ -126,7 +135,7 @@ def test_file_is_loaded_into_startup_and_the_switch_restarts(rig):
     r = rig.driver.apply_configuration(text, ApplyMode.REPLACE)
     assert r.ok, (r.message, r.diagnostics)
     assert r.data == {"restarting": True, "address_after": "127.0.0.2"}
-    assert "it will answer at 127.0.0.2" in r.message
+    assert "after the restart it answers at 127.0.0.2 (VLAN 222, untagged on port 2)" in r.message
     assert rig.driver.target.management_address == "127.0.0.2"
     assert rig.switch.keys == ["y"] and rig.switch.restarts == 1
     assert rig.switch.hostname == "lab-oobm-sw01" and rig.switch.startup_config == text
@@ -217,7 +226,7 @@ def test_api_load_follows_the_new_address_and_checks_identity(api):
     out = _load(client, pid, did, sample(oobm_address="127.0.0.2", mask="255.0.0.0"))
     events = " | ".join(e["message"] for e in out["events"])
     assert out["state"] == "succeeded", events
-    assert "it will answer at 127.0.0.2" in events and "same serial number" in events
+    assert "it answers at 127.0.0.2 (VLAN 222" in events and "same serial number" in events
     assert client.get(f"/api/devices/{did}").json()["management_address"] == "127.0.0.2"
     audit = client.get("/api/audit?limit=50").json()
     moved = next(a for a in audit if a["action"] == "device.address_changed")

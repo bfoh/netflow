@@ -381,3 +381,19 @@ ends in "manual check" with the running version stated; the working primary is n
 back. Because the team's files switch the TFTP client off, both slots are written before
 the file load. The second transfer of the same file is told apart from the first, so an
 earlier fetch never counts as the secondary's.
+
+### D-051 Stop button; runs continue on the server (2026-11-23)
+Bench: after a file load the switch answered on another port than the laptop's, so UNDM
+kept waiting for it; the browser reported the long request as failed while the run went
+on. Now: (1) the page starts a run in the background (`execute?background=true`) and
+follows its events; the run no longer depends on one open browser request (the API keeps
+the synchronous form for scripts and tests). (2) **Stop** (`POST /deployments/{id}/stop`,
+audited) asks the run to stop at its next safe point: between steps and devices, while
+waiting for a device to come back, or while waiting for a device's answer in an SSH
+dialogue. A command the device is already carrying out is not undone and no rollback is
+started after a stop. Outcome: FAILED "no device was changed" if no device was touched,
+otherwise RECOVERY_REQUIRED with the touched devices named for a manual check; devices
+not yet reached are SKIPPED. A plan shown as running without a run in this process (e.g.
+after a restart) is resolved at once, like the startup recovery. (3) While waiting after a
+restart, an event names the address, and a 2930F file load says where the switch answers
+after the restart, with VLAN and port ("untagged on port 3"), so the PC can be moved there.

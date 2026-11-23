@@ -55,7 +55,7 @@ class Dialogue:
 
     output: str
     replies: list[str]
-    ended: Literal["prompt", "closed", "timeout"]
+    ended: Literal["prompt", "closed", "timeout", "stopped"]
     detail: str = ""
 
     @property
@@ -148,6 +148,9 @@ class SshCliDriver(DeviceDriver):
                     elif prompt.search(pending):
                         return Dialogue(output, replies, "prompt")
                     continue
+                if self.should_stop is not None and self.should_stop():
+                    # Only UNDM stops waiting; what the device is doing is not interrupted.
+                    return Dialogue(output, replies, "stopped", "UNDM stopped waiting on request")
                 if now - start > timeout:
                     return Dialogue(output, replies, "timeout",
                                     f"not finished after {timeout:.0f} s")

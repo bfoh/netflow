@@ -83,9 +83,13 @@ are not used for staging.
 |---|---|---|
 | 1 | Device page → Retrieve information | model and serial read; this serial is checked again after the restart |
 | 2 | Configurations → import the team's file | "Complete ArubaOS-Switch configuration (JL260A, 52 ports …)"; the notes above |
-| 3 | Project settings → HTTPS certificate: enter the subject once. Deployments → new plan → choose the file (mode switches to Replace) → (only if the device still has the factory login: **Login after loading** = approved login) → Validate → Approve → Execute | events start with "HTTPS certificate 'certificate' created (self-signed); web management set to SSL and saved" (or "already existed") | "fetched the file (… bytes) into its startup configuration and is restarting" (plus "it will answer at 192.168.1.1" if the switch was on .2), "device reachable again (…, same serial number)", "back after loading: hostname …; N of M lines of the file appear in the running configuration" |
+| 3 | Project settings → HTTPS certificate: enter the subject once. Deployments → new plan → choose the file (mode switches to Replace) → (only if the device still has the factory login: **Login after loading** = approved login) → Validate → Approve → Execute | events start with "HTTPS certificate 'certificate' created (self-signed); web management set to SSL and saved" (or "already existed") | "fetched the file (… bytes) into its startup configuration and is restarting" (plus "after the restart it answers at 192.168.1.1 (VLAN 222, untagged on port …), so this PC must be connected there"), "device reachable again (…, same serial number)", "back after loading: hostname …; N of M lines of the file appear in the running configuration" |
 | 4 | Device page | management address now the one the file set, credential now the approved one (audit: "device.address_changed", "device.credential_changed") |
 | 5 | Browser: `https://192.168.1.1` | the web interface opens over HTTPS (the certificate from step 3 survived the load) |
+
+While UNDM waits after the restart, the plan page shows where it waits ("waiting for the device to
+answer at …") and **Stop** ends the wait; the plan then ends as "manual recovery required" for the
+switch (it has the new file; nothing is rolled back).
 
 If something goes wrong: "did not request the file" — firewall/addresses, or a question UNDM
 did not recognise (its text is in the events); "a different device answers" — another unit

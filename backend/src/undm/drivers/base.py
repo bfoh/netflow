@@ -7,7 +7,7 @@ so the orchestrator can reason about capability gaps explicitly.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -206,6 +206,9 @@ class DeviceDriver:
     """Base class; subclasses override only what they actually support."""
 
     info: ClassVar[DriverInfo]
+    # Set by a running deployment: True once a stop was requested. Drivers that wait long
+    # (transfers, device questions) check it and end the wait early.
+    should_stop: Callable[[], bool] | None = None
     # Set by the service for jobs in which devices pull files from UNDM.
     file_server: FileServer | None = None
 
