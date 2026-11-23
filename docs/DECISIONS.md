@@ -479,3 +479,10 @@ question stops the run unanswered; UNDM waits up to 7 minutes for the restart, t
 the switch up as new with the device's (approved) login and bootstraps it as usual,
 including the factory-default check and read-back. Audit: erase_existing, erased hostname,
 name of the current login. The enable-level failure message now points to this option.
+Amendment (2026-11-23, first bench run): after the erase the switch restarted but its
+console stayed silent until a key was pressed (it senses the speed again), so the run
+waited its full limit. UNDM now waits 20 s, then presses Enter every 10 s until the start
+of a login appears (up to 7 minutes), and hands that prompt to the normal login. If the
+switch never answers, the result says that it was erased and to bootstrap it again
+without erasing.
+

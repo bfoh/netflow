@@ -171,6 +171,13 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
           {!erase && <Checkbox label="The switch already has configuration — bootstrap it anyway" checked={allowConfigured}
             onChange={(e) => setAllowConfigured(e.currentTarget.checked)} />}
           <TextInput label={`Type the device name to confirm: ${device.name}`} value={confirm} onChange={(e) => setConfirm(e.currentTarget.value)} />
+          {run.isPending && (
+            <Alert color="yellow" variant="light" p="xs">
+              <Text size="xs">{erase
+                ? 'Working on the console: erasing, then the switch restarts (1–2 minutes), then UNDM presses Enter every 10 seconds until it answers and bootstraps it. This can take up to 8 minutes. Keep the console cable connected and this window open.'
+                : 'Working on the console… keep the cable connected.'}</Text>
+            </Alert>
+          )}
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Cancel</Button>
             <Button color={erase ? 'red' : 'orange'} disabled={confirm.trim() !== device.name || (erase && (!currentLogin || !hostname.trim()))}

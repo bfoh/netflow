@@ -24,7 +24,7 @@ from enum import StrEnum
 from ipaddress import IPv4Interface
 
 from undm.drivers.base import Credentials
-from undm.provisioning.console import ConsoleError, ConsoleSession
+from undm.provisioning.console import ConsoleError, ConsoleSession, ConsoleTimeoutError
 
 PROMPT = re.compile(
     r"(?:^|\n)[ \t]*(?P<name>[A-Za-z0-9_.-]{1,64})(?P<ctx>\([A-Za-z0-9_/ .-]*\))?(?P<mode>[#>]) ?$")
@@ -105,6 +105,8 @@ class EraseRequest:
     current: Credentials  # the switch's current (preconfigured) manager login
     confirm_hostname: str  # typed by the technician; must equal the console prompt's name
     restart_timeout: float = 420.0  # erase, restart and console banner
+    down_delay: float = 20.0  # let the switch go down before pressing Enter
+    poll: float = 10.0  # press Enter this often until the console answers
 
 
 @dataclass
@@ -246,16 +248,24 @@ class ArubaOSSwitchConsole:
         time.sleep(self.wake_delay)
         self.s.write_line()
 
-    def login(self, wake: bool = True) -> str:
-        """Reach the manager prompt (#) at top level. Returns the prompt's hostname."""
-        if wake:
+    LOGIN_STEPS = (PROMPT, ANY_KEY, LOGIN, PASSWORD, TERMINATED)
+
+    def login(self, wake: bool = True, initial: tuple[int, str] | None = None) -> str:
+        """Reach the manager prompt (#) at top level. Returns the prompt's hostname.
+
+        ``initial`` is a match of LOGIN_STEPS already read (e.g. while waiting for a restart).
+        """
+        if wake and initial is None:
             self._wake()
         text = ""
         seen = ""
         restarts = 0
         for _ in range(10):
-            idx, text = self.s.read_until_any(
-                [PROMPT, ANY_KEY, LOGIN, PASSWORD, TERMINATED], timeout=self.login_timeout)
+            if initial is not None:
+                (idx, text), initial = initial, None
+            else:
+                idx, text = self.s.read_until_any(list(self.LOGIN_STEPS),
+                                                  timeout=self.login_timeout)
             seen += text
             if idx == 4:  # a login left half-way was ended by the wake-up key: start over
                 restarts += 1
@@ -354,13 +364,31 @@ def erase_existing(console: ArubaOSSwitchConsole, request: EraseRequest,
                            "Nothing was answered; check it on the console.")
     if not answered_continue:
         raise ConsoleError("The switch did not ask to confirm the erase; nothing was answered.")
-    # The switch now erases and restarts; its console shows the start and then the login.
-    idx, _ = console.s.read_until_any([ANY_KEY, FIRST_LOGIN, LOGIN, PROMPT],
-                                      timeout=request.restart_timeout)
-    if idx == 0:
-        console.s.write_line()
     console.credentials_set = False
     return name
+
+
+def wait_after_erase(console: ArubaOSSwitchConsole, request: EraseRequest) -> tuple[int, str]:
+    """Wait until the erased switch has restarted and its console answers.
+
+    After a restart the console stays silent until a key is pressed (it senses the speed
+    again: "Connected at 9600 baud", bench 2026-11-23), so Enter is pressed every
+    ``poll`` seconds, as a technician would, until the start of a login appears.
+    """
+    deadline = time.monotonic() + request.restart_timeout
+    time.sleep(request.down_delay)
+    while True:
+        console.s.write_line()
+        left = deadline - time.monotonic()
+        try:
+            return console.s.read_until_any(list(console.LOGIN_STEPS),
+                                             timeout=max(0.1, min(request.poll, left)))
+        except ConsoleTimeoutError:
+            if time.monotonic() >= deadline:
+                raise ConsoleError(
+                    f"The switch was erased but did not answer on the console within "
+                    f"{request.restart_timeout / 60:.0f} minutes. Check it on the console; once "
+                    "it shows its login, run the bootstrap again without erasing.") from None
 
 
 def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
@@ -386,9 +414,12 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
     try:
         if erase is not None:
             erased = erase_existing(console, erase, params)
-            if erased:
-                sent.append(ERASE_COMMAND)
-        console.login(wake=not erased)
+        if erased:
+            assert erase is not None
+            sent.append(ERASE_COMMAND)
+            console.login(initial=wait_after_erase(console, erase))
+        else:
+            console.login()
         before = console.running_config()
         if is_configured(before, params):
             return done(BootstrapStatus.ALREADY_CONFIGURED,

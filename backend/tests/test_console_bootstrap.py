@@ -278,7 +278,8 @@ def test_preconfigured_switch_fails_without_erase_as_on_the_bench():
 def test_preconfigured_switch_is_erased_then_bootstrapped_with_the_approved_login():
     sim = preconfigured()
     r = run(sim, creds=NEW_LOGIN,
-            erase=EraseRequest(PRECONFIGURED, "lab-bhdmz-sw01", restart_timeout=2))
+            erase=EraseRequest(PRECONFIGURED, "lab-bhdmz-sw01", restart_timeout=2,
+                               down_delay=0, poll=0.2))
     assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
     assert r.erased == "lab-bhdmz-sw01" and sim.erased == 1
     assert r.message.startswith("Erased the configuration of 'lab-bhdmz-sw01' first.")
@@ -331,6 +332,23 @@ def test_unknown_question_after_erase_is_not_answered(monkeypatch):
 def test_typed_hostname_is_compared_without_regard_to_case():
     sim = preconfigured()
     r = run(sim, creds=NEW_LOGIN,
-            erase=EraseRequest(PRECONFIGURED, "LAB-BHDMZ-SW01", restart_timeout=2))
+            erase=EraseRequest(PRECONFIGURED, "LAB-BHDMZ-SW01", restart_timeout=2,
+                               down_delay=0, poll=0.2))
     assert r.status is BootstrapStatus.BOOTSTRAPPED, r.message
     assert r.erased == "lab-bhdmz-sw01"
+
+
+def test_erased_switch_that_never_answers_is_reported_clearly():
+    sim = preconfigured()
+    original = sim._factory_reset
+
+    def reset_then_go_silent():
+        original()
+        sim.silent = True  # e.g. the console cable was pulled during the restart
+    sim._factory_reset = reset_then_go_silent
+    r = run(sim, creds=NEW_LOGIN, erase=EraseRequest(PRECONFIGURED, "lab-bhdmz-sw01",
+                                                     restart_timeout=0.6, down_delay=0, poll=0.2))
+    assert r.status is BootstrapStatus.FAILED
+    assert "was erased but did not answer on the console" in r.message
+    assert "run the bootstrap again without erasing" in r.message
+    assert r.erased == "lab-bhdmz-sw01"  # the result says that the erase happened

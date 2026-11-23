@@ -121,8 +121,10 @@ class SimulatedArubaConsole:
             self._state = "cli"
             if line.strip().lower() == "y":
                 self._factory_reset()
-                self._emit(" y\r\nRebooting...\r\n" + BANNER + "Press any key to continue")
-                self._state = "anykey"
+                # As on the bench: after the restart the console is silent until a key is
+                # pressed; the first Enter brings the banner.
+                self._emit(" y\r\nRebooting...\r\n")
+                self._state, self._enters = "asleep", 1
             else:
                 self._emit("\r\n" + self._prompt())
             return
