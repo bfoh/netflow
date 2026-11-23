@@ -186,14 +186,21 @@ def inspect_aos_switch_file(text: str) -> ConfigFileReport:
     # -- what changes about access ------------------------------------------------------
     if "no telnet-server" in stmts:
         notes.append("Telnet is switched off.")
+    required: dict[str, str] = {}
     if "web-management ssl" in stmts and "no web-management" in stmts:
         notes.append("The web interface becomes HTTPS-only, which needs an HTTPS certificate "
                      "on the switch"
                      + (" (the file's own comments say to create it before loading)"
                         if any(ln.startswith(";") and "certificate" in ln.lower()
                                for ln in f.lines) else "")
-                     + ". UNDM creates it before loading when the project has a certificate "
-                       "subject (Project settings).")
+                     + ". UNDM creates it before loading from the project's certificate "
+                       "subject (Project settings), which must be set.")
+        # The switch keeps its old configuration if the certificate is missing (team, web
+        # page; bench 2026-11-23: three loads without it came back unchanged).
+        required["certificate_subject"] = (
+            "The file makes the web interface HTTPS-only, and the switch does not take it "
+            "without an HTTPS certificate. UNDM creates the certificate before loading from "
+            "the project's certificate subject")
     if "no tftp client" in stmts:
         notes.append("The file switches off the switch's TFTP client: once it is active, the "
                      "switch can no longer fetch firmware or files by TFTP. Upgrade the "
@@ -232,4 +239,5 @@ def inspect_aos_switch_file(text: str) -> ConfigFileReport:
         summary=(f"Complete ArubaOS-Switch configuration ({f.product_number or 'model unknown'}"
                  f", {len(f.ports)} ports" + (f", hostname {f.hostname}" if f.hostname else "")
                  + ")"),
-        apply_mode=ApplyMode.REPLACE, facts=facts, notes=tuple(notes), problems=())
+        apply_mode=ApplyMode.REPLACE, facts=facts, notes=tuple(notes), problems=(),
+        required_settings=required)

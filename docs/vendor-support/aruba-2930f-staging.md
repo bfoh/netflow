@@ -24,7 +24,7 @@ same layout.
 |---|---|---|---|
 | 1 | Factory default → (new units: manager credentials set to the approved login) → 192.168.1.1 (or 192.168.1.2 temporarily) on VLAN 222, OOBM port | console bootstrap | built (experimental); **run once on hardware** 2026-11-19 (`aruba-2930f-console-bootstrap.md`) |
 | 2 | Firmware → WC.16.10.0025 in primary, then (team standard) also in secondary | firmware job, TFTP; plan option "also the secondary flash" | built (experimental); both slots **run once on hardware** (primary 2026-11-19, secondary 2026-11-23; `aruba-2930f-firmware.md`) |
-| 3 | HTTPS certificate on the switch (the file's own caution) | first part of the load job (step 4), with the project's certificate subject | **built (experimental)**; by hand if no subject is set |
+| 3 | HTTPS certificate on the switch (the file's own caution; without it the switch does not take the file) | first part of the load job (step 4), with the project's certificate subject | **built (experimental)**; the subject is **required** for HTTPS-only files (D-053) |
 | 4 | Load the complete file into the startup configuration, restart, reconnect at the address the file sets **with the login after loading** (approved password), check the serial number and the hostname, compare the running configuration | configuration job, replace mode, TFTP (`copy tftp startup-config <pc> <file> unix`) | **built (experimental)**, bench run pending (below) |
 
 ### Step 3 — HTTPS certificate, as the team does it today (Q-32)

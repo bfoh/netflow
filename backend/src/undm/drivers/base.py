@@ -183,6 +183,8 @@ class ConfigFileReport:
     # Set by a driver that cannot apply this kind of file (yet).
     blocked_reason: str = ""
     secret_slots: tuple[SecretSlot, ...] = ()
+    # Project settings that must be set before this file may be applied (name -> why).
+    required_settings: dict[str, str] = field(default_factory=dict)
 
 
 class TransferInfo(Protocol):

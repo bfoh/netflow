@@ -25,6 +25,7 @@ from undm.db.models import (
     DeploymentTargetRecord,
     Device,
     FirmwareImage,
+    Project,
 )
 from undm.domain.enums import DeviceDeploymentStatus, DeviceEnvironment
 from undm.domain.lifecycle import (
@@ -55,6 +56,10 @@ from undm.transfer.hub import TransferHub
 from undm.transfer.tftp import TftpServerError
 
 S = DeploymentState
+
+
+# Where a person sets each project setting a file can require.
+_SETTING_LABELS = {"certificate_subject": "Project settings → HTTPS certificate"}
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -278,6 +283,11 @@ class DeploymentService:
             raise ConflictError(
                 f"{what}; it can only be applied in {report.apply_mode.value} mode, not "
                 f"{apply_mode.value} mode")
+        project = self.s.get(Project, device.project_id)
+        for name, why in report.required_settings.items():
+            if not getattr(project, name, None):
+                label = _SETTING_LABELS.get(name, name)
+                raise ConflictError(f"{what}. {why}: set it first ({label}).")
 
     def _credentials_for(self, device: Device, ref_id: str) -> Credentials:
         ref = self.s.get(CredentialRef, ref_id)
@@ -416,6 +426,10 @@ class DeploymentService:
             problem = self._policy_problem(device, rec.dry_run, firmware=rec.kind == "firmware")
             if problem:
                 raise ForbiddenError(problem)
+            if t.config_version_id and not rec.dry_run:
+                cfg = self.s.get(ConfigVersion, t.config_version_id)
+                if cfg is not None:
+                    self._check_file_can_be_applied(device, cfg, ApplyMode(rec.apply_mode))
         return rec
 
     def execute(self, deployment_id: str, actor: str,

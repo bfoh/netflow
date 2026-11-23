@@ -230,6 +230,9 @@ def api(monkeypatch, tmp_path):
         monkeypatch.setattr(SshCliDriver, "connection_factory",
                             staticmethod(factory_for(scenario)))
         pid = client.post("/api/projects", json={"name": "2930F"}).json()["id"]
+        # The sample file is HTTPS-only: the project needs a certificate subject (D-053).
+        assert client.patch(f"/api/projects/{pid}",
+                            json={"certificate_subject": SUBJECT}).status_code == 200
         ref = client.post(f"/api/projects/{pid}/credential-refs", json={"name": "m"}).json()
         client.put(f"/api/credential-refs/{ref['id']}/secret",
                    json={"username": "manager", "password": ""})
@@ -386,3 +389,24 @@ def test_api_certificate_is_created_before_the_file_is_loaded(api):
     assert cert < fetched and switch.certificates == {"certificate"}
     copy_at = next(i for i, c in enumerate(switch.commands) if c.startswith("copy tftp"))
     assert switch.commands.index("web-management ssl") < copy_at
+
+
+def test_api_https_only_file_needs_the_certificate_subject(api):
+    """Team (web page) and bench 2026-11-23: without the HTTPS certificate the switch does
+    not take the file and keeps its old configuration, so UNDM refuses to start."""
+    client, pid, did, switch, hub = api
+    v = client.post(f"/api/devices/{did}/configs/import",
+                    json={"filename": "oobm-switch.pcc", "text": sample()}).json()
+    plan = {"device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]}}
+    dep = client.post(f"/api/projects/{pid}/deployments", json=plan).json()
+    assert dep["state"] == "awaiting_approval"
+    client.post(f"/api/deployments/{dep['id']}/approve")
+    cleared = client.patch(f"/api/projects/{pid}", json={"certificate_subject": None})
+    assert cleared.status_code == 200 and not cleared.json()["certificate_subject"]
+    r = client.post(f"/api/deployments/{dep['id']}/execute")
+    assert r.status_code == 409, r.text
+    assert "without an HTTPS certificate" in r.json()["error"]
+    assert "Project settings → HTTPS certificate" in r.json()["error"]
+    assert not any(c.startswith("copy") for c in switch.commands)  # nothing was sent
+    refused = client.post(f"/api/projects/{pid}/deployments", json=plan)
+    assert refused.status_code == 409 and "set it first" in refused.json()["error"]

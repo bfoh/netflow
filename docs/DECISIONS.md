@@ -411,3 +411,14 @@ the old running configuration over the fetched file. (3) What the switch printed
 the load, and what UNDM answered, is recorded as an event; on a failed configuration step
 the device output is recorded as for firmware. (4) A failed post-load check says that the
 switch is not running the file and where to look (console during the start, `show logging`).
+
+### D-053 An HTTPS-only 2930F file needs the certificate first: a hard requirement (2026-11-23)
+Product owner: through the web page, loading the team's file fails if the HTTPS
+certificate commands were not run first. On the bench, three UNDM loads without a
+certificate subject (certificate step skipped, only a warning) came back with the
+switch's previous configuration. A file report can now name project settings the file
+requires (`required_settings`, generic; core code checks the project, not the vendor);
+the 2930F inspector requires the certificate subject for HTTPS-only files. Plans for such
+a file are refused until the subject is set (Project settings → HTTPS certificate), and
+the check is repeated when the run starts. Earlier warning-only behaviour (D-044) is
+replaced for these files.
