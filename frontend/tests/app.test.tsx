@@ -276,3 +276,21 @@ describe('configuration studio to deployment', () => {
     expect(await screen.findByDisplayValue(/^imported · site-file\.pcc · /)).toBeInTheDocument();
   });
 });
+
+describe('audit trail', () => {
+  it('shows every detail of an entry and filters on details', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const long = { message: 'x'.repeat(200), first_login_credentials_set: false, credential: 'approved login' };
+    mockApi({ '/audit': [
+      { id: 'a1', timestamp: '2026-11-23T13:00:00Z', actor: 'local-user', action: 'provisioning.console_bootstrap',
+        target_type: 'device', target_id: 'c4e8e81f-0000', outcome: 'bootstrapped', details: long },
+      { id: 'a2', timestamp: '2026-11-23T13:01:00Z', actor: 'local-user', action: 'device.check_reachability',
+        target_type: 'device', target_id: 'c4e8e81f-0000', outcome: 'failed', details: { message: 'Authentication failed' } },
+    ] });
+    renderAt('/audit');
+    await userEvent.type(await screen.findByLabelText('Filter audit events'), 'first_login');
+    expect(screen.queryByText('device.check_reachability')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'All details' }));
+    expect(await screen.findByText(/"first_login_credentials_set": false/)).toBeInTheDocument();
+  });
+});
