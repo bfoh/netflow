@@ -143,7 +143,7 @@ class ArubaOSSwitchSsh(SshCliDriver):
             "rollback. Run once on hardware (approved downgrade on a spare 2930F).",
             "Optional per plan: after the primary is verified, the same image is copied into "
             "the secondary flash ('copy tftp flash ... secondary'); the switch keeps booting "
-            "from primary. Secondary copy not yet run on hardware.",
+            "from primary. Run once on hardware (spare 2930F).",
             "Complete configuration files (replace mode): the switch pulls the file by TFTP "
             "into its startup configuration ('copy tftp startup-config ... unix') and restarts; "
             "UNDM follows an address change made by the file, checks the serial number after "
