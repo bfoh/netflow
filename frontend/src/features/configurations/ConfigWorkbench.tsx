@@ -1,6 +1,7 @@
 import { Alert, Badge, Button, Card, Code, CopyButton, FileButton, Group, List, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
-import { IconAlertTriangle, IconCopy, IconDownload, IconFileImport, IconInfoCircle, IconWand } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCopy, IconDownload, IconFileImport, IconInfoCircle, IconRocket, IconWand } from '@tabler/icons-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 
 import { DiffView } from '../../components/DiffView';
 import { QueryState } from '../../components/Page';
@@ -40,10 +41,11 @@ function FileReport({ report }: { report: ConfigInspection }) {
 }
 
 /** Generate, preview, validate and compare configuration versions for one device. */
-export function ConfigWorkbench({ device }: { device: Device }) {
+export function ConfigWorkbench({ device, initialVersion = null }: { device: Device; initialVersion?: string | null }) {
   const versions = useConfigs(device.id);
   const [issues, setIssues] = useState<Issue[] | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialVersion);
+  const navigate = useNavigate();
   const [compareTo, setCompareTo] = useState<string | null>(null);
   const list = versions.data ?? [];
   const current = selected ?? list[0]?.id ?? null;
@@ -96,6 +98,21 @@ export function ConfigWorkbench({ device }: { device: Device }) {
                   </Alert>
                 )}
                 {shown.data.inspection && <FileReport report={shown.data.inspection} />}
+                {(shown.data.kind === 'generated' || shown.data.kind === 'imported') && (() => {
+                  const report = shown.data.inspection;
+                  const blocked = !!report && (report.problems.length > 0 || !!report.blocked_reason);
+                  return (
+                    <Group gap="xs" mb="xs" wrap="nowrap" align="flex-start">
+                      <Button size="xs" leftSection={<IconRocket size={14} />} disabled={blocked}
+                        onClick={() => void navigate(`/deployments?project=${device.project_id}&devices=${device.id}&version=${shown.data!.id}`)}>
+                        Deploy this version…
+                      </Button>
+                      <Text size="xs" c="dimmed">{blocked
+                        ? 'This file cannot be applied as it is (see above).'
+                        : 'Opens a new deployment plan with this version chosen. Nothing is sent to the device until the plan is validated, approved and executed.'}</Text>
+                    </Group>
+                  );
+                })()}
                 {shown.data.verification === 'docs_reviewed_not_lab_verified' && (
                   <Alert color="yellow" variant="light" icon={<IconInfoCircle size={16} />} mb="xs" p="xs">
                     <Text size="xs">Template syntax follows public vendor documentation but has not been verified on lab equipment.</Text>

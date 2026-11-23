@@ -449,3 +449,15 @@ page offers "View configuration after deployment" and "Compare with what was sen
 Wording seen on the bench (2930F, WC.16.10.0025) for `copy tftp startup-config`:
 "Device may be rebooted, do you want to continue [y/n]?", "TFTP download in progress.",
 "Rebooting switch..."; the SSH session then stays open and silent.
+
+### D-056 From a configuration to a deployment: "Deploy this version…", not a second plan form (2026-11-23)
+Product owner asked for a way from the Configuration Studio to deployment. Chosen: a
+contextual action on the version being viewed ("Deploy this version…", generated or
+imported versions; disabled with the reason for a file that cannot be applied) that opens
+the Deployment Center's plan form with the device and that version already chosen.
+Rejected: a deployment tab inside the studio, which would duplicate the plan form and its
+checks (file kind and apply mode, required project settings, secrets, login after
+loading, approval). Nothing reaches a device until the plan is validated, approved and
+executed. Links go both ways: the studio links to the device page and to the Deployment
+Center for the device; a plan's targets link "configuration sent", "backup before" and
+"after deployment" to the studio (`/configurations?device=…&version=…`).

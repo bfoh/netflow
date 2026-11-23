@@ -227,3 +227,21 @@ describe('deployment outcome', () => {
     expect(screen.getByText('Deploy')).toBeInTheDocument();
   });
 });
+
+describe('configuration studio to deployment', () => {
+  it('"Deploy this version…" opens a plan with the device and version chosen', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const sw = device({ id: 'd1', project_id: 'p1' });
+    const v1 = { id: 'v1', device_id: 'd1', kind: 'imported', sha256: 'abcdef0123456789'.repeat(4), platform: '',
+      template_version: '', verification: '', reference: 'site-file.pcc', created_by: 'tester',
+      created_at: '2026-11-23T10:00:00Z', text: 'hostname "lab-sw"\n', inspection: null };
+    mockApi({ '/devices': [sw], '/projects': [{ id: 'p1', name: 'Bench' }], '/devices/d1/configs': [v1],
+      '/configs/v1': v1, '/projects/p1/devices': [sw], '/deployments': [] });
+    renderAt('/configurations?device=d1&version=v1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Deploy this version…' }));
+    expect(await screen.findByText('New deployment plan')).toBeInTheDocument();
+    expect(screen.getByLabelText('Include sw1')).toBeChecked();
+    // The plan's version field shows the version chosen in the Configuration Studio.
+    expect(await screen.findByDisplayValue(/^imported · site-file\.pcc · /)).toBeInTheDocument();
+  });
+});

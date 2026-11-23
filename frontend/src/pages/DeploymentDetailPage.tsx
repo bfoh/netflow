@@ -239,8 +239,9 @@ export function DeploymentDetailPage() {
                   )}
                   <Text size="sm">
                     <Anchor component={Link} to={`/devices/${t.device_id}`}>Device</Anchor>
-                    {t.config_version_id && <>{' · '}configuration version <code>{t.config_version_id.slice(0, 8)}</code></>}
-                    {t.backup_version_id && <> · backup <code>{t.backup_version_id.slice(0, 8)}</code></>}
+                    {t.config_version_id && <>{' · '}<Anchor component={Link} to={`/configurations?device=${t.device_id}&version=${t.config_version_id}`}>configuration sent</Anchor> <code>{t.config_version_id.slice(0, 8)}</code></>}
+                    {t.backup_version_id && <>{' · '}<Anchor component={Link} to={`/configurations?device=${t.device_id}&version=${t.backup_version_id}`}>backup before</Anchor> <code>{t.backup_version_id.slice(0, 8)}</code></>}
+                    {t.after_version_id && <>{' · '}<Anchor component={Link} to={`/configurations?device=${t.device_id}&version=${t.after_version_id}`}>after deployment</Anchor> <code>{t.after_version_id.slice(0, 8)}</code></>}
                   </Text>
                   {t.after_version_id && <AfterConfig afterId={t.after_version_id} sentId={t.config_version_id} />}
                   {d.kind === 'configuration' && <><Text size="sm" fw={600}>Proposed change</Text><DiffView diff={t.diff} /></>}

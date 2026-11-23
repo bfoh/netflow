@@ -71,12 +71,14 @@ function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode, loginAfte
   );
 }
 
-function NewPlan({ projectId, preselected }: { projectId: string; preselected: string[] }) {
+function NewPlan({ projectId, preselected, version }: { projectId: string; preselected: string[]; version: string | null }) {
   const devices = useProjectDevices(projectId);
   const [sel, setSel] = useState<string[]>(preselected);
   const [dryRun, setDryRun] = useState(false);
   const [mode, setMode] = useState('merge');
-  const [choice, setChoice] = useState<Record<string, string>>({});
+  // Opened from "Deploy this version…": that version is chosen for its device.
+  const [choice, setChoice] = useState<Record<string, string>>(
+    () => (version && preselected.length === 1 ? { [preselected[0]]: version } : {}));
   const [secrets, setSecrets] = useState<Record<string, Record<string, string>>>({});
   const [loginAfter, setLoginAfter] = useState<Record<string, string>>({});
   const navigate = useNavigate();
@@ -160,6 +162,7 @@ export function DeploymentsPage() {
   const all = useAllDeployments();
   const projectId = params.get('project');
   const preselected = (params.get('devices') ?? '').split(',').filter(Boolean);
+  const version = params.get('version');
   const names = new Map((projects.data ?? []).map((p) => [p.id, p.name]));
 
   return (
@@ -171,7 +174,8 @@ export function DeploymentsPage() {
             data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
             value={projectId} onChange={(v) => setParams(v ? { project: v } : {})} />
         </Card>
-        {projectId && <NewPlan key={projectId + preselected.join()} projectId={projectId} preselected={preselected} />}
+        {projectId && <NewPlan key={projectId + preselected.join() + (version ?? '')} projectId={projectId}
+          preselected={preselected} version={version} />}
         <Card withBorder padding={0}>
           <Title order={5} p="md" pb={0}>All deployments</Title>
           <QueryState isLoading={all.isLoading} error={all.error} />
