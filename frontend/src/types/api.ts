@@ -318,6 +318,8 @@ export interface BootstrapResult {
   credentials_set?: boolean;
   /** Hostname of the preconfigured configuration that was erased first, if any. */
   erased?: string;
+  /** The switch asked for no password and none was set: it has no manager password. */
+  no_password?: boolean;
   network_reachable: boolean | null;
   network_hint: string;
 }

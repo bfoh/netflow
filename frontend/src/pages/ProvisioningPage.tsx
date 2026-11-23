@@ -123,6 +123,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
           </Alert>
           <Group gap="xs" mb="xs">
             {result.erased && <Badge variant="light" color="orange">erased “{result.erased}” first</Badge>}
+            {result.no_password && <Badge variant="light" color="yellow">no manager password</Badge>}
             <Badge variant="light" color={result.verified ? 'teal' : 'gray'}>{result.verified ? 'read back and verified' : 'not verified'}</Badge>
             <Badge variant="light" color={result.saved ? 'teal' : 'gray'}>{result.saved ? 'saved (write memory)' : 'not saved'}</Badge>
             {result.network_reachable !== null && <Badge variant="light" color={result.network_reachable ? 'teal' : 'yellow'}>

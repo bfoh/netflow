@@ -44,6 +44,8 @@ class SimulatedArubaConsole:
     # After 'erase startup-config' the unit starts as new (asks for manager credentials).
     # The erase confirmation text below is SYNTHETIC (not yet seen on a real unit).
     setup_after_erase: bool = True
+    # After the restart, wording as on the bench (WC.16.10.0025, 2026-11-23).
+    speed_sense_after_erase: bool = False
 
     def __post_init__(self) -> None:
         self._out = bytearray()
@@ -124,7 +126,12 @@ class SimulatedArubaConsole:
                 # As on the bench: after the restart the console is silent until a key is
                 # pressed; the first Enter brings the banner.
                 self._emit(" y\r\nRebooting...\r\n")
-                self._state, self._enters = "asleep", 1
+                if self.speed_sense_after_erase:
+                    self._emit("Initialization done\r\n\r\nWaiting for Speed Sense.  Press "
+                               "<Enter> twice to continue.\r\n")
+                    self._state, self._enters = "asleep", 0
+                else:
+                    self._state, self._enters = "asleep", 1
             else:
                 self._emit("\r\n" + self._prompt())
             return

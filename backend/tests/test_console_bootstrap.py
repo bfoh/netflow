@@ -352,3 +352,25 @@ def test_erased_switch_that_never_answers_is_reported_clearly():
     assert "was erased but did not answer on the console" in r.message
     assert "run the bootstrap again without erasing" in r.message
     assert r.erased == "lab-bhdmz-sw01"  # the result says that the erase happened
+
+
+def test_erased_unit_waiting_for_speed_sense_gets_two_enters_and_is_flagged_without_password():
+    """Bench 2026-11-23 (BH-DMZ, WC.16.10.0025): after the erase the console printed
+    'Waiting for Speed Sense.  Press <Enter> twice to continue.' and then asked for no
+    manager credentials, so the switch had no manager password."""
+    sim = preconfigured(speed_sense_after_erase=True, setup_after_erase=False)
+    r = run(sim, creds=NEW_LOGIN, erase=EraseRequest(PRECONFIGURED, "lab-bhdmz-sw01",
+                                                     restart_timeout=3, down_delay=0, poll=1))
+    assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
+    assert "Waiting for Speed Sense" in r.transcript
+    assert r.no_password and not r.credentials_set
+    assert "it has no manager password" in r.message and "Login after loading" in r.message
+
+
+def test_no_password_flag_only_when_the_switch_asked_for_none():
+    assert run(SimulatedArubaConsole()).no_password  # factory default, no password
+    new = run(SimulatedArubaConsole(first_login_setup=True), creds=NEW_LOGIN)
+    assert new.credentials_set and not new.no_password
+    with_pw = run(SimulatedArubaConsole(username="manager", password="approved-test-pw"),
+                  creds=NEW_LOGIN)
+    assert with_pw.status is BootstrapStatus.BOOTSTRAPPED and not with_pw.no_password

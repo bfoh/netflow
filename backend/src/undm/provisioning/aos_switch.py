@@ -44,6 +44,10 @@ SETUP_REENTER = re.compile(r"Re-enter the new password\s*:\s*$", re.I)
 # 2026-11-19: "Password cannot be empty. / Operation aborted. / Session Terminated,
 # unable to login."). Nothing was set; the login simply starts again.
 TERMINATED = re.compile(r"Session Terminated, unable to login\.?\s*$", re.I)
+# Printed by a 2930F (WC.16.10.0025) after a restart, before anything else (bench,
+# 2026-11-23): the console senses its speed from two Enter key presses.
+SPEED_SENSE = re.compile(
+    r"Waiting for Speed Sense\.\s*Press <Enter> twice to continue\.?\s*$", re.I)
 ERROR = re.compile(r"Invalid input|Incomplete input|Ambiguous input|invalid port|"
                    r"not allowed|Error:|Unable to", re.I)
 
@@ -120,6 +124,8 @@ class BootstrapResult:
     transcript: str = ""
     credentials_set: bool = False  # a new switch's first-login credentials were set
     erased: str = ""  # hostname of the configuration that was erased first, if any
+    # The switch asked for no password and none was set: it has no manager password.
+    no_password: bool = False
 
 
 def _expand_ports(spec: str) -> set[str]:
@@ -191,6 +197,8 @@ class ArubaOSSwitchConsole:
         self.login_timeout = login_timeout
         # True once a new switch's mandatory first-login credentials were set by UNDM.
         self.credentials_set = False
+        # True once the switch asked for a password at login or at enable.
+        self.password_asked = False
 
     def _first_login_setup(self) -> str:
         """Answer a new switch's "Configure the manager credentials" request.
@@ -285,6 +293,7 @@ class ArubaOSSwitchConsole:
             elif idx == 2:
                 self.s.write_line(self._credential("username"))
             else:
+                self.password_asked = True
                 self.s.transcript.append("<<< (password sent)\n")
                 self.s.transport.write((self._credential("password") + "\r").encode())
         else:
@@ -301,6 +310,7 @@ class ArubaOSSwitchConsole:
                 if idx == 1:
                     self.s.write_line(self._credential("username"))
                 else:
+                    self.password_asked = True
                     self.s.transcript.append("<<< (password sent)\n")
                     self.s.transport.write((self._credential("password") + "\r").encode())
             m = PROMPT.search(text)
@@ -365,6 +375,7 @@ def erase_existing(console: ArubaOSSwitchConsole, request: EraseRequest,
     if not answered_continue:
         raise ConsoleError("The switch did not ask to confirm the erase; nothing was answered.")
     console.credentials_set = False
+    console.password_asked = False  # what counts is the login after the erase
     return name
 
 
@@ -377,12 +388,17 @@ def wait_after_erase(console: ArubaOSSwitchConsole, request: EraseRequest) -> tu
     """
     deadline = time.monotonic() + request.restart_timeout
     time.sleep(request.down_delay)
+    steps = [*console.LOGIN_STEPS, SPEED_SENSE]
     while True:
         console.s.write_line()
         left = deadline - time.monotonic()
         try:
-            return console.s.read_until_any(list(console.LOGIN_STEPS),
-                                             timeout=max(0.1, min(request.poll, left)))
+            idx, text = console.s.read_until_any(steps, timeout=max(0.1, min(request.poll, left)))
+            if idx == len(steps) - 1:  # "Press <Enter> twice": the second press follows
+                console.s.write_line()
+                idx, text = console.s.read_until_any(list(console.LOGIN_STEPS),
+                                                     timeout=max(0.1, min(request.poll, left)))
+            return idx, text
         except ConsoleTimeoutError:
             if time.monotonic() >= deadline:
                 raise ConsoleError(
@@ -406,10 +422,19 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
         if console.credentials_set:
             message += (". The switch was new: its manager credentials were set to the "
                         "device's attached login")
+        no_password = (status in (BootstrapStatus.BOOTSTRAPPED,
+                                  BootstrapStatus.ALREADY_CONFIGURED)
+                       and not console.credentials_set and not console.password_asked)
+        if no_password:
+            message += (". Note: the switch asked for no password, so it has no manager "
+                        "password and SSH with the device's login will fail. Either set the "
+                        "approved password on the console, or attach a login with an empty "
+                        "password to the device and choose the approved login as 'Login after "
+                        "loading' when the file is loaded")
         return BootstrapResult(status, message, commands_sent=sent,
                                transcript=s.transcript_text,
                                credentials_set=console.credentials_set, erased=erased,
-                               **kw)  # type: ignore[arg-type]
+                               no_password=no_password, **kw)  # type: ignore[arg-type]
 
     try:
         if erase is not None:
