@@ -45,6 +45,8 @@ class FakeArubaSwitch:
     running_config: str = AOS_SWITCH_RUNNING
     startup_config: str | None = None
     config_load_mode: str = "reboot"  # reboot: asks, then restarts | prompt: back to prompt
+    refuse_config: bool = False  # fetches the file, keeps its old startup configuration
+    ask_save_before_load: bool = False  # asks to save first; "y" saves running over the file
     serial_after_restart: str | None = None  # another unit answering after the restart
     password: str = ""  # manager password the switch accepts (factory default: none)
     # Password a loaded file sets (the team's files carry the approved password).
@@ -97,6 +99,9 @@ class FakeArubaSwitch:
                     "Default Boot Image : Primary\n")
         if command == "show running-config":
             return self.running_config
+        if command == "show config":  # the startup configuration
+            return self.startup_config if self.startup_config is not None \
+                else self.running_config
         return ""
 
     # -- raw channel ------------------------------------------------------------------
@@ -156,7 +161,9 @@ class FakeArubaSwitch:
             self._ask("copy", self.copy_question)
         elif text.startswith("copy tftp startup-config "):
             self._copy_args = text.split()[3:5]
-            if self.config_load_mode == "reboot":
+            if self.ask_save_before_load:
+                self._ask("loadsave", "Do you want to save current configuration [y/n/^C]? ")
+            elif self.config_load_mode == "reboot":
                 self._ask("config", "Device will be rebooted, do you want to continue [y/n]? ")
             else:
                 self._fetch_startup(restart=False)
@@ -224,6 +231,15 @@ class FakeArubaSwitch:
         else:
             self._out += "\r\n" + self._prompt()
 
+    def _answer_loadsave(self, key: str) -> None:
+        self._save_over_file = key == "y"
+        if self.config_load_mode == "reboot":
+            self._ask("config", "\r\nDevice will be rebooted, do you want to continue [y/n]? ")
+        else:
+            self._fetch_startup(restart=False)
+
+    _save_over_file: bool = False
+
     def _answer_config(self, key: str) -> None:
         if key != "y":
             self._out += "\r\n" + self._prompt()
@@ -239,7 +255,12 @@ class FakeArubaSwitch:
         except Exception as e:  # noqa: BLE001
             self._out += f"\r\nTFTP download failed: {type(e).__name__}\r\n" + self._prompt()
             return
-        self.startup_config = buf.getvalue().decode()
+        if self.refuse_config:
+            self._out += "\r\nConfiguration file not accepted.\r\n"  # synthetic wording
+        else:
+            self.startup_config = buf.getvalue().decode()
+        if self._save_over_file:  # the old running configuration replaces the file
+            self.startup_config = self.running_config
         if restart:
             self._out += "\r\nRebooting the System...\r\n"
             self._restart_into_startup()

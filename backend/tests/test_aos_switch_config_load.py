@@ -130,12 +130,44 @@ def rig(monkeypatch):
         yield Rig(d, switch, sc)
 
 
+def test_save_question_during_the_load_is_answered_no(rig):
+    """\"y\" would write the old running configuration over the file just fetched."""
+    rig.switch.ask_save_before_load = True
+    r = rig.driver.apply_configuration(sample(), ApplyMode.REPLACE)
+    assert r.ok, (r.message, r.diagnostics)
+    assert rig.switch.keys == ["n", "y"]
+    assert rig.switch.hostname == "lab-oobm-sw01"  # the switch started with the file
+
+
+def test_switch_back_at_prompt_without_the_file_is_not_restarted(rig):
+    rig.switch.config_load_mode = "prompt"
+    rig.switch.refuse_config = True
+    r = rig.driver.apply_configuration(sample(), ApplyMode.REPLACE)
+    assert not r.ok
+    assert "startup configuration does not contain it" in r.message
+    assert 'no hostname "lab-oobm-sw01"' in r.message
+    assert rig.switch.restarts == 0  # never restarted into the old configuration
+    assert "Configuration file not accepted" in r.diagnostics["device_output"]
+
+
+def test_switch_back_at_prompt_with_the_file_is_restarted_by_undm(rig):
+    rig.switch.config_load_mode = "prompt"
+    r = rig.driver.apply_configuration(sample(), ApplyMode.REPLACE)
+    assert r.ok, (r.message, r.diagnostics)
+    assert "show config" in rig.switch.commands
+    assert "UNDM restarted it" in r.message and rig.switch.restarts == 1
+
+
 def test_file_is_loaded_into_startup_and_the_switch_restarts(rig):
     text = sample(oobm_address="127.0.0.2", mask="255.0.0.0")  # same subnet as 127.0.0.1
     r = rig.driver.apply_configuration(text, ApplyMode.REPLACE)
     assert r.ok, (r.message, r.diagnostics)
-    assert r.data == {"restarting": True, "address_after": "127.0.0.2"}
+    assert {k: r.data[k] for k in ("restarting", "address_after")} == \
+        {"restarting": True, "address_after": "127.0.0.2"}
+    assert r.data["notes"][0].startswith('switch output during the load (UNDM answered "y"): ')
+    assert "Device will be rebooted" in r.data["notes"][0] and "\r" not in r.data["notes"][0]
     assert "after the restart it answers at 127.0.0.2 (VLAN 222, untagged on port 2)" in r.message
+    assert "restarted by itself" in r.message
     assert rig.driver.target.management_address == "127.0.0.2"
     assert rig.switch.keys == ["y"] and rig.switch.restarts == 1
     assert rig.switch.hostname == "lab-oobm-sw01" and rig.switch.startup_config == text

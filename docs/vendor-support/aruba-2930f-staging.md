@@ -95,3 +95,8 @@ If something goes wrong: "did not request the file" — firewall/addresses, or a
 did not recognise (its text is in the events); "a different device answers" — another unit
 uses that address; "Authentication failed" after the restart — see Q-31. Please send back
 the job's event list (names and addresses replaced).
+
+## Results log
+| Date | Unit | Result | Notes |
+|---|---|---|---|
+| 2026-11-23 | spare 2930F (JL260A, WC.16.10.0025 in both slots), LTE switch file | **not loaded**: the switch came back with its previous configuration | Two runs. Each: the switch fetched the whole file (7,265 bytes) by TFTP and restarted; first run: the laptop had been moved to the file's OOBM port, so UNDM waited (led to Stop, D-051); second run: back after 1 minute, same serial number, but hostname and port as before the load, so verification failed and the plan ended "manual recovery required" (correctly: no success was claimed). No certificate subject was set, so the certificate step was skipped (warning). Cause open (Q-36); UNDM hardened (D-052). |

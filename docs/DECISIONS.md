@@ -397,3 +397,17 @@ not yet reached are SKIPPED. A plan shown as running without a run in this proce
 after a restart) is resolved at once, like the startup recovery. (3) While waiting after a
 restart, an event names the address, and a 2930F file load says where the switch answers
 after the restart, with VLAN and port ("untagged on port 3"), so the PC can be moved there.
+
+### D-052 2930F load: evidence before restarting; never save over the fetched file (2026-11-23)
+Bench: the switch fetched the whole file and restarted, but came back with its previous
+configuration (cause open, Q-36). UNDM gaps found and closed: (1) if the switch returns to
+its prompt after the load, UNDM restarted it without checking that the file had reached
+the startup configuration; it now requires the file's `hostname` in `show config` (the
+startup configuration, per the vendor's CLI documentation; not yet seen on the bench)
+and otherwise stops without restarting, showing the switch's output. (2) The load dialogue
+answered "y" to every y/n question; a "save current configuration" question is now
+answered "n" first (as `boot system flash primary` already did), because "y" would write
+the old running configuration over the fetched file. (3) What the switch printed during
+the load, and what UNDM answered, is recorded as an event; on a failed configuration step
+the device output is recorded as for firmware. (4) A failed post-load check says that the
+switch is not running the file and where to look (console during the start, `show logging`).

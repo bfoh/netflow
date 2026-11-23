@@ -207,6 +207,13 @@ class DeploymentOrchestrator:
             f"device not reachable after its restart ({self.restart_wait_attempts} attempts): "
             f"{last.message}")
 
+    def _emit_notes(self, dep: Deployment, t: DeploymentTarget, stage: str,
+                    result: OperationResult) -> None:
+        """Evidence a driver wants on record (e.g. what the device printed), as events."""
+        notes = result.data.get("notes") if isinstance(result.data, dict) else None
+        for note in list(notes or [])[:5]:
+            self._emit(dep, stage, "ok", str(note), t)
+
     def _emit_warnings(self, dep: Deployment, t: DeploymentTarget, stage: str,
                        result: OperationResult) -> None:
         warnings = result.data.get("warnings") if isinstance(result.data, dict) else None
@@ -481,6 +488,7 @@ class DeploymentOrchestrator:
                 result = (prep if prep is not None and not prep.ok
                           else t.driver.apply_configuration(to_send, dep.apply_mode))
                 if result.ok:
+                    self._emit_notes(dep, t, "deploy", result)
                     self._emit_warnings(dep, t, "deploy", result)
                     restarting = isinstance(result.data, dict) and result.data.get("restarting")
                     if t.credentials_after is not None:
@@ -508,6 +516,10 @@ class DeploymentOrchestrator:
             if not result.ok:
                 self._check_stop(dep)  # a step ended early by a stop is not a device failure
                 self._fail_target(dep, t, "deploy", TargetState.APPLY_FAILED, result.message)
+                shown = str(result.diagnostics.get("device_output") or "").strip()
+                if shown:  # what the device printed is the evidence a technician needs
+                    self._emit(dep, "deploy", "warning",
+                               f"device output (last lines): {shown[-600:]}", t)
                 for rest in dep.targets[idx + 1:]:
                     rest.state = TargetState.SKIPPED
                     self._emit(dep, "deploy", "skipped", "not attempted after failure", rest)

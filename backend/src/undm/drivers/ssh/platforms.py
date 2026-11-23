@@ -271,8 +271,11 @@ class ArubaOSSwitchSsh(SshCliDriver):
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
                 f.write(config)
             server_ip = files.offer(Path(tmp), name, client)
+            # A save question is answered "n" first: "y" would write the old running
+            # configuration over the file just fetched (D-041). Other y/n questions: "y".
             talk = self._dialogue(
-                f"copy tftp startup-config {server_ip} {name} unix", [(self._YES_NO, "y")],
+                f"copy tftp startup-config {server_ip} {name} unix",
+                [(self._SAVE_QUESTION, "n"), (self._YES_NO, "y")],
                 timeout=self.transfer_timeout, idle_timeout=self.question_timeout,
                 patient=lambda out: files.last_transfer(name, client) is not None
                 and not re.search(r"\?\s*$", out))
@@ -283,6 +286,9 @@ class ArubaOSSwitchSsh(SshCliDriver):
             with contextlib.suppress(OSError):
                 os.unlink(tmp)
         diagnostics: dict[str, object] = {"device_output": talk.tail}
+        answered = ", ".join(f'"{r}"' for r in talk.replies) or "nothing"
+        notes = [f"switch output during the load (UNDM answered {answered}): "
+                 + (talk.tail[-500:].replace("\r", "").strip() or "(none)")]
         if transfer is None:
             return OperationResult.failed(
                 op, "The switch did not request the file from UNDM's TFTP server "
@@ -297,11 +303,27 @@ class ArubaOSSwitchSsh(SshCliDriver):
                 op, f"The switch fetched the file but did not finish ({talk.detail}); it may "
                     "be waiting for an answer UNDM does not give. Check it on the console.",
                 diagnostics)
+        how = "and restarted by itself"
         if talk.ended == "prompt":
             if re.search(self.error_pattern, talk.output):
                 return OperationResult.failed(
                     op, "The switch fetched the file but reported an error (below). It was "
                         "not restarted.", diagnostics)
+            # Independent evidence before restarting (D-031): the startup configuration
+            # must now be the file. ('show config' shows the startup configuration.)
+            wanted = parse_aos_switch_file(config).hostname
+            if wanted:
+                try:
+                    startup = self._send("show config")
+                except Exception as e:  # noqa: BLE001
+                    return self._fail(op, e)
+                if f'hostname "{wanted}"' not in startup:
+                    return OperationResult.failed(
+                        op, "The switch fetched the file and returned to its prompt, but its "
+                            f"startup configuration does not contain it (no hostname "
+                            f"\"{wanted}\" in 'show config'). It was not restarted; its "
+                            "output is below.", diagnostics)
+            how = "; UNDM restarted it"
             restart = self.reboot()  # answers "n" to any save question
             if not restart.ok:
                 return OperationResult.failed(
@@ -319,9 +341,9 @@ class ArubaOSSwitchSsh(SshCliDriver):
             moved = (f"; after the restart it answers at {where}, so this PC must be "
                      "connected there")
         return OperationResult.success(
-            op, {"restarting": True, "address_after": after or client},
+            op, {"restarting": True, "address_after": after or client, "notes": notes},
             f"the switch fetched the file ({transfer.bytes_sent} bytes) into its startup "
-            f"configuration and is restarting{moved}")
+            f"configuration {how}{moved}")
 
     def verify_configuration(self, intended: str, mode: ApplyMode) -> OperationResult | None:
         if mode is not ApplyMode.REPLACE:
@@ -334,7 +356,9 @@ class ArubaOSSwitchSsh(SshCliDriver):
         if wanted and facts.data.hostname != wanted:
             return OperationResult.failed(
                 op, f"After loading, the hostname is {facts.data.hostname}; the file sets "
-                    f"{wanted}")
+                    f"{wanted}. The switch is not running the file: it may have refused it "
+                    "while starting. Its console shows the reason during the start, and its "
+                    "log afterwards ('show logging')")
         running = self.get_running_configuration()
         if not running.ok:
             return OperationResult.success(
