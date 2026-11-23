@@ -119,6 +119,26 @@ class SimulatedArubaConsole:
             else:
                 self._emit("\r\nUnable to verify password\r\n" + self._prompt())
             return
+        if self._state == "set_password":
+            self._new_password = line
+            self._emit("*" * len(line) + "\r\nRe-enter the new password for manager:  ")
+            self._state = "set_password_confirm"
+            return
+        if self._state == "set_password_confirm":
+            self._state = "cli"
+            self._emit("*" * len(line) + "\r\n")
+            if line == self._new_password and line:
+                self.username, self.password = "manager", line
+                # The five notices seen on the bench after setting the password.
+                self._emit("\r\nDHCP-based image file download from a TFTP server is disabled "
+                           "when an operator\r\n or manager password is set.\r\n\r\nThe TFTP "
+                           "Server is disabled when an operator or manager password is set."
+                           "\r\n\r\nAutorun is disabled when an operator or manager password is "
+                           "set.\r\n\r\n")
+            else:
+                self._emit("[placeholder] Passwords do not match\r\n")
+            self._emit(self._prompt())
+            return
         if self._state == "erase_confirm":
             self._state = "cli"
             if line.strip().lower() == "y":
@@ -221,6 +241,9 @@ class SimulatedArubaConsole:
         if cmd == "write memory":
             self.saved_config = self.render()
             return ""
+        if cmd == "password manager" and self._ctx:
+            self._state = "set_password"
+            return "New password for manager:  "
         if cmd == "erase startup-config":
             self._state = "erase_confirm"
             return "Configuration will be deleted and device rebooted, continue [y/n]? "
@@ -290,4 +313,6 @@ class SimulatedArubaConsole:
             if v["ip"]:
                 lines.append(f"   ip address {v['ip']}")
             lines.append("   exit")
+        if self.password:
+            lines.append("password manager")
         return "\n".join(lines) + "\n"

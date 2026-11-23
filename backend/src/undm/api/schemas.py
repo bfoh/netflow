@@ -459,5 +459,6 @@ class ConsoleBootstrapOut(BaseModel):
     credentials_set: bool = False  # a new switch's first-login credentials were set
     erased: str = ""  # hostname of the configuration erased first, if any
     no_password: bool = False  # the switch asked for no password: it has no manager password
+    password_set: bool = False  # it had none; UNDM set the device's login (confirmed)
     network_reachable: bool | None
     network_hint: str

@@ -44,6 +44,13 @@ SETUP_REENTER = re.compile(r"Re-enter the new password\s*:\s*$", re.I)
 # 2026-11-19: "Password cannot be empty. / Operation aborted. / Session Terminated,
 # unable to login."). Nothing was set; the login simply starts again.
 TERMINATED = re.compile(r"Session Terminated, unable to login\.?\s*$", re.I)
+# Setting the manager password on a switch that has none (bench, WC.16.10.0025, 2026-11-23):
+# in configuration mode, 'password manager' asks these two questions and echoes '*'.
+SET_PASSWORD_COMMAND = "password manager"  # noqa: S105 - a CLI command, not a password
+NEW_MANAGER_PASSWORD = re.compile(r"New password for manager\s*:\s*$", re.I)
+REENTER_MANAGER_PASSWORD = re.compile(r"Re-enter the new password for manager\s*:\s*$", re.I)
+PASSWORD_LINE = re.compile(r"^password manager\b", re.M)
+
 # Printed by a 2930F (WC.16.10.0025) after a restart, before anything else (bench,
 # 2026-11-23): the console senses its speed from two Enter key presses.
 SPEED_SENSE = re.compile(
@@ -126,6 +133,8 @@ class BootstrapResult:
     erased: str = ""  # hostname of the configuration that was erased first, if any
     # The switch asked for no password and none was set: it has no manager password.
     no_password: bool = False
+    # The switch had no manager password; UNDM set the device's login (verified).
+    password_set: bool = False
 
 
 def _expand_ports(spec: str) -> set[str]:
@@ -324,6 +333,39 @@ class ArubaOSSwitchConsole:
         self.command("no page")  # session only
         return str(m["name"])
 
+    def set_manager_password(self) -> None:
+        """Give a switch without a manager password the attached login's password.
+
+        Answers exactly the two questions seen on the bench, in order; anything else stops
+        with the switch's text. The password never enters the transcript (the switch
+        echoes '*'). Only for the user name 'manager' (the command sets that account).
+        """
+        assert self.credentials is not None and self.credentials.password
+        self.command("configure")
+        self.s.write_line(SET_PASSWORD_COMMAND)
+        expected = [NEW_MANAGER_PASSWORD, REENTER_MANAGER_PASSWORD]
+        while expected:
+            # "Re-enter the new password for manager:" also ends like the first question,
+            # so the longer one is checked first.
+            idx, text = self.s.read_until_any(
+                [REENTER_MANAGER_PASSWORD, NEW_MANAGER_PASSWORD, PROMPT],
+                timeout=self.login_timeout)
+            asked = (REENTER_MANAGER_PASSWORD, NEW_MANAGER_PASSWORD, None)[idx]
+            if asked is not expected[0]:
+                self.command("end")
+                last = text.strip().splitlines()[-1][-100:] if text.strip() else "?"
+                raise ConsoleError(f"Setting the manager password: the switch answered '{last}' "
+                                   "where UNDM expected its next password question; nothing "
+                                   "was saved.")
+            expected.pop(0)
+            self.s.transcript.append("<<< (new password sent)\n")
+            self.s.transport.write((self.credentials.password + "\r").encode())
+        _, text = self.s.read_until_any([PROMPT], timeout=self.login_timeout)
+        self.command("end")
+        if ERROR.search(text):
+            raise ConsoleError("The switch did not accept the manager password (its message is "
+                               "in the transcript); nothing was saved.")
+
     def command(self, cmd: str, timeout: float | None = None) -> str:
         self.s.write_line(cmd)
         _, text = self.s.read_until_any([PROMPT], timeout=timeout)
@@ -415,6 +457,27 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
     sent: list[str] = []
 
     erased = ""
+    password_set = False
+
+    def needs_password() -> bool:
+        """The switch asked for no password, and the attached login can be given to it."""
+        c = console.credentials
+        return (not console.credentials_set and not console.password_asked and c is not None
+                and bool(c.password) and c.username == "manager")
+
+    def give_password() -> None:
+        """Set and save the manager password; confirm it from the configuration."""
+        nonlocal password_set
+        console.set_manager_password()
+        sent.append(SET_PASSWORD_COMMAND)
+        out = console.command("write memory", timeout=30)
+        if ERROR.search(out):
+            raise ConsoleError("The manager password was set but 'write memory' reported an "
+                               "error; it will be lost on reboot.")
+        if not PASSWORD_LINE.search(console.running_config()):
+            raise ConsoleError("The manager password was entered, but the configuration does "
+                               "not show it; check the switch on the console.")
+        password_set = True
 
     def done(status: BootstrapStatus, message: str, **kw: object) -> BootstrapResult:
         if erased:
@@ -424,7 +487,11 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
                         "device's attached login")
         no_password = (status in (BootstrapStatus.BOOTSTRAPPED,
                                   BootstrapStatus.ALREADY_CONFIGURED)
-                       and not console.credentials_set and not console.password_asked)
+                       and not console.credentials_set and not console.password_asked
+                       and not password_set)
+        if password_set:
+            message += (". The switch had no manager password: it was set to the device's "
+                        "attached login and saved")
         if no_password:
             message += (". Note: the switch asked for no password, so it has no manager "
                         "password and SSH with the device's login will fail. Either set the "
@@ -434,7 +501,8 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
         return BootstrapResult(status, message, commands_sent=sent,
                                transcript=s.transcript_text,
                                credentials_set=console.credentials_set, erased=erased,
-                               no_password=no_password, **kw)  # type: ignore[arg-type]
+                               no_password=no_password, password_set=password_set,
+                               **kw)  # type: ignore[arg-type]
 
     try:
         if erase is not None:
@@ -447,9 +515,12 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
             console.login()
         before = console.running_config()
         if is_configured(before, params):
+            if needs_password():
+                give_password()
             return done(BootstrapStatus.ALREADY_CONFIGURED,
                         f"VLAN {params.vlan_id} already has {params.address} with port "
-                        f"{params.untagged_port} untagged; nothing was changed", verified=True)
+                        f"{params.untagged_port} untagged"
+                        + ("" if password_set else "; nothing was changed"), verified=True)
         findings = site_config_findings(before, params)
         if findings and not allow_configured:
             return done(BootstrapStatus.REFUSED,
@@ -479,6 +550,13 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
             return done(BootstrapStatus.FAILED,
                         "Configuration is applied but 'write memory' reported an error; it "
                         "will be lost on reboot.", findings=findings, verified=True)
+        if needs_password():
+            try:
+                give_password()
+            except ConsoleError as e:
+                return done(BootstrapStatus.FAILED,
+                            f"VLAN {params.vlan_id} and the address are saved, but: {e}",
+                            findings=findings, verified=True, saved=True)
         return done(BootstrapStatus.BOOTSTRAPPED,
                     f"VLAN {params.vlan_id} ({params.vlan_name}) with port "
                     f"{params.untagged_port} untagged and address {params.address}, saved",

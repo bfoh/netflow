@@ -486,3 +486,18 @@ of a login appears (up to 7 minutes), and hands that prompt to the normal login.
 switch never answers, the result says that it was erased and to bootstrap it again
 without erasing.
 
+### D-058 The bootstrap gives a switch without a manager password the approved one (2026-11-23)
+Bench (BH-DMZ unit after the erase, WC.16.10.0025): the unit asked for no manager
+credentials and was left without a password, so SSH with the approved login failed.
+The product owner set it on the console; the screenshot gave the exact dialogue:
+`configure`, `password manager`, "New password for manager:", "Re-enter the new password
+for manager:" (typed characters echoed as `*`), five notices that DHCP image/config
+download, TR-69 ACS URL, the switch's own TFTP server and autorun are disabled once a
+password is set, then `write memory` (accepted in configuration mode). The bootstrap now
+does this itself when the switch asked for no password at login or enable, and the
+device's attached login is user `manager` with a password: it answers exactly those two
+questions in order ("Re-enter …" is checked first because it also ends like the first),
+saves, and confirms by a `password manager` line in the configuration. The password never
+enters the transcript. Other user names are not handled (the command sets the manager
+account); the result then says "no manager password" with what to do. Re-runs do not set
+it again (the switch then asks for the password).

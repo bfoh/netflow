@@ -320,6 +320,8 @@ export interface BootstrapResult {
   erased?: string;
   /** The switch asked for no password and none was set: it has no manager password. */
   no_password?: boolean;
+  /** The switch had no manager password; UNDM set the device's login (confirmed). */
+  password_set?: boolean;
   network_reachable: boolean | null;
   network_hint: string;
 }

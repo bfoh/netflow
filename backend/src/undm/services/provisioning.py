@@ -228,6 +228,7 @@ def run_console_bootstrap(
                      "message": result.message, "allow_configured": allow_configured,
                      "first_login_credentials_set": result.credentials_set,
                      "no_manager_password": result.no_password,
+                     "manager_password_set": result.password_set,
                      "erase_existing": erase_existing, "erased_hostname": result.erased,
                      "current_login": current_ref.name if current_ref else None,
                      "credential": device.credential_ref.name if device.credential_ref
@@ -238,7 +239,7 @@ def run_console_bootstrap(
         "commands_sent": result.commands_sent, "findings": result.findings,
         "verified": result.verified, "saved": result.saved, "transcript": result.transcript,
         "credentials_set": result.credentials_set, "erased": result.erased,
-        "no_password": result.no_password,
+        "no_password": result.no_password, "password_set": result.password_set,
         "sanitized_transcript": sanitize(result.transcript, known),
         "network_reachable": reachable, "network_hint": hint,
     }

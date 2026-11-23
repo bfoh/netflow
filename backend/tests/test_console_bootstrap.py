@@ -363,8 +363,31 @@ def test_erased_unit_waiting_for_speed_sense_gets_two_enters_and_is_flagged_with
                                                      restart_timeout=3, down_delay=0, poll=1))
     assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
     assert "Waiting for Speed Sense" in r.transcript
-    assert r.no_password and not r.credentials_set
-    assert "it has no manager password" in r.message and "Login after loading" in r.message
+    # It asked for no manager credentials, so UNDM set the approved password itself.
+    assert r.password_set and not r.no_password and not r.credentials_set
+    assert (sim.username, sim.password) == ("manager", "approved-test-pw")
+    assert "it was set to the device's attached login and saved" in r.message
+    assert r.commands_sent[-1] == "password manager"
+    assert "approved-test-pw" not in r.transcript
+
+
+def test_switch_without_password_gets_the_attached_login_with_the_bench_prompts():
+    sim = SimulatedArubaConsole()
+    r = run(sim, creds=NEW_LOGIN)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED and r.password_set and r.saved
+    assert sim.password == "approved-test-pw" and sim.saved_config is not None
+    assert "password manager" in sim.saved_config  # saved together with the VLAN
+    assert "New password for manager:" in r.transcript and "approved-test-pw" not in r.transcript
+    sim._state, sim._enters = "asleep", 0  # a new console session, as the service starts
+    again = run(sim, creds=NEW_LOGIN)  # now it asks for the password: nothing more to do
+    assert again.status is BootstrapStatus.ALREADY_CONFIGURED and not again.password_set
+
+
+def test_password_is_not_set_for_another_user_name():
+    sim = SimulatedArubaConsole()
+    r = run(sim, creds=Credentials("admin", "approved-test-pw"))
+    assert r.status is BootstrapStatus.BOOTSTRAPPED and not r.password_set and r.no_password
+    assert sim.password is None
 
 
 def test_no_password_flag_only_when_the_switch_asked_for_none():
