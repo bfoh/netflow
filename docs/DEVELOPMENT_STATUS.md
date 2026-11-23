@@ -24,7 +24,7 @@ manager, topology._
 | Identity after restarts | Serial number re-checked after every restart (firmware, restore, load); a different unit at the address fails the job |
 | 2930F HTTPS certificate | Created inside the load job before an HTTPS-only file, with the team's commands and the project's certificate subject (Project settings); already-existing certificate accepted. **Fake switch only** |
 | Approved older firmware | Firmware plans can explicitly install the approved image on devices that run a newer one (new 2930F units ship with WC.16.11.0001); refused by default, flagged in preview, badge and audit |
-| Secondary image slot | Firmware plans can also write the approved image into the secondary flash (team standard), only after the primary runs it; devices already on the version get only the secondary; capability-based; 2930F procedure tested against the fake switch, **not yet run on hardware** (D-050) |
+| Secondary image slot | Firmware plans can also write the approved image into the secondary flash (team standard), only after the primary runs it; devices already on the version get only the secondary; capability-based; 2930F procedure run once on hardware (2026-11-23, spare unit: both slots WC.16.10.0025, confirmed by `show flash`) (D-050) |
 | Login after loading | A plan can name the credential valid once a file is applied (the 2930F files set the approved password); used after the restart and kept for the device once verified (audited) |
 | Black Box files | LIG1014A (CLI text) and LE2700A (XML) configuration files recognised at import (complete file → replace; where the switch answers after loading; access settings; base64 "encrypted" password and SNMP exposure flagged; hostile XML refused); both models in the catalog with a **simulated** driver only |
 | Supplied-file recognition | FortiOS files are classified offline at import (full backup vs CLI script), with structure check, what the file will change about access, and a count of secrets (never the values). A file cannot be applied in a way that does not fit its kind |
@@ -79,8 +79,9 @@ Staging four factory-default devices per system (FortiGate 101F, Black Box switc
 2 × Aruba 2930F) from one place: `docs/requirements/staging-use-case.md`, design and
 build order in `docs/requirements/staging-run-design.md`. Still needed from the product
 owner: Black Box command output from a spare unit (Q-28). Bench runs: 2930F console
-bootstrap, SSH check and firmware (approved downgrade WC.16.11.0001 → WC.16.10.0025) done
-once on a new unit (2026-11-19); owed: bootstrap re-run, file load; FortiGate 101F staging.
+bootstrap, SSH check, firmware (approved downgrade WC.16.11.0001 → WC.16.10.0025) and the
+secondary flash done once on a new unit (2026-11-19/23); owed: file load, bootstrap re-run;
+FortiGate 101F staging.
 
 ## Next milestone
 1. **Bench runs** (product owner): 2930F console bootstrap and firmware
