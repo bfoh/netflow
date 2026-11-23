@@ -512,3 +512,13 @@ stopped answering)" and the usual wait for the unit, identity check and verifica
 follow. A unit that stays silent with its port open is still reported as "neither
 restarted nor returned to its prompt". The base restore also announces the restart
 (`restart_notice`).
+
+### D-060 A login that reaches no prompt is explained with what the device showed (2026-11-23)
+Bench, first FortiGate 101F contact: Test connection ended with Netmiko's "ReadTimeout:
+Pattern not detected: 'to accept|[#$]'" — the login was accepted but no command prompt
+followed (on a new FortiGate most likely the forced admin password change; to be
+confirmed). The SSH drivers now record what the device prints while the session is
+prepared (in memory only; Netmiko scrubs the password, UNDM redacts again; the recording
+stops once the prompt is reached) and report "Logged in, but the device did not show its
+command prompt; it showed: …" with platform advice (`prompt_hint`; FortiOS: set the
+approved admin password once by hand, then retry).

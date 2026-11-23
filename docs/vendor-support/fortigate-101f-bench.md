@@ -73,4 +73,4 @@ addresses as usual), especially any "device output" event, and the time each ste
 ## Results log
 | Date | Unit | Step | Result | Notes |
 |---|---|---|---|---|
-| | | | | |
+| 2026-11-23 | spare 101F | Test connection | login accepted, no prompt | Netmiko "Pattern not detected: 'to accept\|[#$]'". Probably the forced admin password change at the first login (to be confirmed by what the unit shows). UNDM now reports the unit's text (D-060). |

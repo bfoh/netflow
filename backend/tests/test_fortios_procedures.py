@@ -229,3 +229,22 @@ def test_revision_not_confirmed_is_reported(rig):
     rig.fg.revisions_supported = False
     r = rig.driver.create_checkpoint("site-x")
     assert r.status is ResultStatus.FAILED and "refused" in r.message
+
+
+def test_login_without_a_prompt_says_what_the_unit_showed(monkeypatch):
+    """Bench 2026-11-23: Test connection on a new FortiGate ended with Netmiko's 'Pattern not
+    detected: to accept|[#$]'. UNDM now shows what the unit printed instead of a prompt.
+    The text below is SYNTHETIC, not a capture of a FortiGate."""
+    from netmiko.exceptions import ReadTimeout
+
+    def factory(**kwargs):
+        kwargs["session_log"].write(
+            b"[synthetic] Please change the admin password.\nNew Password: ")
+        raise ReadTimeout("Pattern not detected: 'to accept|[#$]' in output.")
+    monkeypatch.setattr(SshCliDriver, "connection_factory", staticmethod(factory))
+    d = FortiOSSsh(DeviceTarget("d1", "192.0.2.99", None), Credentials("admin", "x"))
+    r = d.connect()
+    assert r.status is ResultStatus.FAILED
+    assert r.message.startswith("Logged in, but the device did not show its command prompt")
+    assert "New Password:" in r.message
+    assert "A new FortiGate asks for a new admin password at the first login" in r.message

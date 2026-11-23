@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import io
 import re
 import socket
 import time
@@ -101,6 +102,9 @@ class SshCliDriver(DeviceDriver):
     # Model/firmware combinations on which the facts parser was checked against real output.
     parser_validated_on: ClassVar[tuple[str, ...]] = ()
     connect_timeout: ClassVar[int] = 15
+    # Shown when the login worked but no command prompt followed (platform-specific advice).
+    prompt_hint: ClassVar[str] = ("It may be asking for a new password or showing a banner: "
+                                  "open an SSH session by hand once to see it.")
     read_timeout: ClassVar[int] = 120
     poll_interval: ClassVar[float] = 0.2  # pause between reads while a dialogue is quiet
     # Replaced in tests with a fake connection factory.
@@ -244,11 +248,16 @@ class SshCliDriver(DeviceDriver):
             from netmiko.exceptions import (
                 NetmikoAuthenticationException,
                 NetmikoTimeoutException,
+                ReadTimeout,
             )
         except ImportError:  # pragma: no cover - dependency is declared
             return OperationResult.failed(op, "netmiko is not installed")
+        # What the device printed while the session was prepared, to explain a login that
+        # did not reach a prompt (Netmiko scrubs the password; redacted again below).
+        seen = io.BytesIO()
         try:
             self._conn = self.connection_factory(
+                session_log=seen,
                 device_type=self.netmiko_device_type,
                 host=self.target.management_address,
                 port=self.target.port or 22,
@@ -266,8 +275,17 @@ class SshCliDriver(DeviceDriver):
             return OperationResult.failed(
                 op, f"Timed out connecting to {self.target.management_address}:"
                     f"{self.target.port or 22} (unreachable, filtered, or SSH disabled)")
+        except ReadTimeout:
+            shown = redact_text(seen.getvalue().decode("utf-8", "replace")).strip()
+            shown = " ".join(shown.split())[-300:]
+            return OperationResult.failed(
+                op, "Logged in, but the device did not show its command prompt"
+                    + (f"; it showed: “{shown}”" if shown else "") + f". {self.prompt_hint}",
+                {"device_output": shown})
         except Exception as e:  # noqa: BLE001 - report any transport error cleanly
             return self._fail(op, e)
+        with contextlib.suppress(Exception):
+            self._conn.session_log = None  # only the login is recorded
         return OperationResult.success(
             op, message=f"SSH session established ({self.info.os_family})")
 
