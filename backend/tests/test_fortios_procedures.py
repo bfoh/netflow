@@ -220,7 +220,8 @@ def test_script_runs_statement_by_statement_through_a_hostname_change(rig):
     assert r.data["statements"] == 35 and rig.fg.hostname == "lab-fw-site"
     warnings = r.data["warnings"]
     assert any("'end'" in w and "expected" in w for w in warnings)  # the leading bare end
-    assert any("current vf=root:0" in w for w in warnings)  # reported, did not stop the run
+    # Bench 2026-11-24: FortiOS's note on entering a VDOM is information, not a warning.
+    assert not any("current vf=root:0" in w for w in warnings)
     assert "set psksecret example-only-not-a-secret" in rig.fg.applied  # placeholder as written
     v = rig.driver.verify_configuration(SCRIPT, ApplyMode.MERGE)
     assert v.ok and "hostname lab-fw-site" in v.message and "appear in 'show'" in v.message
@@ -611,3 +612,15 @@ def test_api_staging_plan_refuses_the_files_the_wrong_way_round(api):
         "device_id": did, "base_version_id": site["id"], "site_version_id": base["id"]})
     assert r.status_code == 409, r.json()
     assert client.get(f"/api/projects/{pid}/deployments").json() == []
+
+
+def test_reply_ignores_control_codes_and_a_repeated_statement():
+    """Bench 2026-11-24 (site script, v41): three warnings were empty and one was the
+    statement itself (it holds a double space). Neither is something the unit said."""
+    st = 'set comment "Example  service"'
+    assert FortiOSSsh._reply(st, st + "\r\n\x1b[K\x08\r\nlab-fw # ") == ""
+    assert FortiOSSsh._reply(st, 'set comment "Example service"\r\n' + st + "\r\nlab-fw # ") == ""
+    assert FortiOSSsh._reply("edit x", "edit x\r\nnew entry 'x' added\r\nlab-fw # ") == (
+        "new entry 'x' added")
+    assert FortiOSSsh._reply("set x 1", "set x 1\r\n\x1b[Kentry not found\r\nlab-fw # ") == (
+        "entry not found")

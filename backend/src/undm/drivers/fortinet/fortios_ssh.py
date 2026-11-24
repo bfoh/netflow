@@ -55,6 +55,8 @@ from undm.security.redaction import redact_text
 
 Op = DeviceOperation
 _VDOMS_ON = re.compile(r"Virtual domain configuration\s*:\s*(multiple|enable|split-task)")
+# Terminal control sequences and control characters (not newline or tab) in device output.
+_CONTROL = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|[\x00-\x08\x0b-\x1f\x7f]")
 _ASKING = re.compile(r"\?\s*(?:\(y/n\))?\s*$")
 
 
@@ -130,6 +132,8 @@ class FortiOSSsh(SshCliDriver):
     # FortiOS's answer to 'edit' of an entry that does not exist yet (bench, site script on
     # a 101F v7.6.5, 2026-11-24): normal, counted instead of listed as a warning.
     _NEW_ENTRY: ClassVar[re.Pattern[str]] = re.compile(r"^new entry '[^'\n]*' added$")
+    # Shown on entering a VDOM ("current vf=root:0", bench, same run): information only.
+    _CONTEXT_NOTE: ClassVar[re.Pattern[str]] = re.compile(r"^current vf=\S+$")
     statement_timeout: ClassVar[float] = 60.0    # per script statement
     script_poll_interval: ClassVar[float] = 0.02
 
@@ -176,8 +180,12 @@ class FortiOSSsh(SshCliDriver):
 
     @staticmethod
     def _reply(statement: str, output: str) -> str:
-        """What the device printed in answer to one statement (echo and prompt removed)."""
-        text = output.replace("\r", "")
+        """What the device printed in answer to one statement (echo and prompt removed).
+
+        Terminal control codes are dropped, and so is a line that only repeats the statement
+        (bench, site script on a 101F v7.6.5, 2026-11-24: empty "warnings" and a statement
+        with a double space shown as its own reply)."""
+        text = _CONTROL.sub("", output.replace("\r", ""))
         i = j = 0
         while i < len(text) and j < len(statement):  # the echo may wrap onto new lines
             if text[i] == statement[j]:
@@ -191,7 +199,9 @@ class FortiOSSsh(SshCliDriver):
         lines = text[i:].split("\n")
         if lines and re.search(r"[#$] ?$", lines[-1]):
             lines = lines[:-1]
-        return "\n".join(ln.strip() for ln in lines if ln.strip())
+        echo = " ".join(statement.split())
+        return "\n".join(ln.strip() for ln in lines
+                         if ln.strip() and " ".join(ln.split()) != echo)
 
     # -- session --------------------------------------------------------------------
     def connect(self) -> OperationResult:
@@ -560,6 +570,8 @@ class FortiOSSsh(SshCliDriver):
                 continue
             if statement.split()[0] == "edit" and self._NEW_ENTRY.match(reply):
                 created += 1
+                continue
+            if self._CONTEXT_NOTE.match(reply):  # where the statement put the session
                 continue
             if self._ERROR_REPLY.search(reply):
                 in_use = (" The object exists already and is in use: a site configuration "

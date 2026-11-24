@@ -693,3 +693,11 @@ login after loading, password change, secrets, policy switches, device locks, St
   succeeded.
 - UI: Deployment Center → "New staging plan (base file, then site file)"; a staging page
   with both steps, Approve both steps, Execute, Stop; each step's page links back to it.
+
+### D-072 FortiOS replies: control codes, a repeated statement and the VDOM note are not warnings (2026-11-24)
+Bench, corrected site file on a clean base (v41, 1784 statements, every one accepted): of
+six warnings, three were empty (terminal control codes only), one was the statement itself
+(it holds a double space, so the echo removal missed it) and one was "current vf=root:0",
+FortiOS's note on entering a VDOM. Replies now drop control codes and any line that only
+repeats the statement (spacing ignored), and "current vf=<name>" is not listed. Everything
+else is listed as before; error-looking replies still stop the script.
