@@ -147,8 +147,10 @@ class FortiOSSsh(SshCliDriver):
 
     def _prompt_pattern(self) -> str:
         # Any prompt on a new line: the hostname and the "(context)" change while a
-        # script runs, so the prompt seen at login cannot be relied on.
-        return r"\n[^\n]*[#$] ?$"
+        # script runs, so the prompt seen at login cannot be relied on. The line must hold
+        # something besides '#': while fetching a file the unit prints lines of '#'
+        # progress marks, which are not its prompt (bench, 101F v7.2.6, 2026-11-24).
+        return r"\n[^\n]*[^\s#][ \t]*[#$] ?$"
 
     def _redact(self, text: str) -> str:
         for value in self._sent_secrets:
@@ -259,17 +261,28 @@ class FortiOSSsh(SshCliDriver):
                     self.target.management_address, self.target.port or 22)
             return not down[0]
 
+        def fetching(_: str) -> bool:
+            # The unit cannot be back at its prompt while it is still fetching the file.
+            record = files.last_transfer(name, client)
+            return record is not None and not record.completed and not record.error
+
         talk: Dialogue | None = None
         try:
             server_ip = files.offer(path, name, client)
             with self._global_context():
                 talk = self._dialogue(command(server_ip), [(question, "y")],
                                       timeout=self.transfer_timeout,
-                                      idle_timeout=self.question_timeout, patient=patient)
+                                      idle_timeout=self.question_timeout, patient=patient,
+                                      prompt_ok=lambda out: not fetching(out))
                 self._restarting = "y" in talk.replies and (
                     talk.ended == "closed" or (talk.ended == "timeout" and down[0]))
         except Exception as e:  # noqa: BLE001
+            files.withdraw(name)
             return self._fail(op, e)
+        # From here on the unit cannot fetch the file any more, nor finish a fetch that is
+        # still running: a step UNDM reports as failed must not complete later. A block
+        # already sent is still acknowledged, so a fetch that has just ended stays complete.
+        files.withdraw(name)
         diagnostics: dict[str, object] = {"device_output": self._redact(talk.output)[-1500:]}
         transfer = self._settled_transfer(name)
         if self._restarting:
@@ -282,7 +295,10 @@ class FortiOSSsh(SshCliDriver):
         if not transfer.completed:
             return OperationResult.failed(
                 op, f"Transfer incomplete ({transfer.bytes_sent} of {transfer.size} bytes"
-                    f"{': ' + transfer.error if transfer.error else ''}).", diagnostics)
+                    f"{': ' + transfer.error if transfer.error else ''}; "
+                    f"{talk.detail or 'the exchange ended at the ' + talk.ended}). UNDM has "
+                    "withdrawn the file, so the FortiGate cannot finish fetching it later.",
+                diagnostics)
         if "y" not in talk.replies:
             return OperationResult.failed(
                 op, "The FortiGate did not ask the expected question, so nothing was "

@@ -201,6 +201,10 @@ class FileServer(Protocol):
         """Publish the file for that device; returns the server address to give it."""
         ...
 
+    def withdraw(self, name: str) -> None:
+        """Stop offering the file; a fetch of it still running is cancelled."""
+        ...
+
     def last_transfer(self, name: str, client_ip: str) -> TransferInfo | None: ...
 
 

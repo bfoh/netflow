@@ -131,7 +131,8 @@ class SshCliDriver(DeviceDriver):
                   idle_timeout: float = 60.0,
                   patient: Callable[[str], bool] | None = None,
                   clear: bool = True, poll: float | None = None,
-                  restarting: str | None = None) -> Dialogue:
+                  restarting: str | None = None,
+                  prompt_ok: Callable[[str], bool] | None = None) -> Dialogue:
         """Run a command that asks questions and report how the exchange ended.
 
         ``answers`` is an ordered list of (question regex, reply). When the output ends
@@ -141,6 +142,9 @@ class SshCliDriver(DeviceDriver):
         quiet and the caller gets its text back, after ``idle_timeout`` rather than
         after the whole ``timeout``. ``patient(output so far)`` may report that silence
         is expected (for example while the device writes a file it has received).
+        ``prompt_ok(output so far)`` may report that the prompt cannot be back yet (for
+        example while the device is still fetching a file); the prompt is then checked
+        again with the next output or while the session is quiet.
 
         Never raises for device behaviour; the caller decides what each ending means.
         ``clear=False`` skips discarding unread output first (for back-to-back statements
@@ -167,12 +171,15 @@ class SshCliDriver(DeviceDriver):
                         conn.write_channel(reply + enter)
                         replies.append(reply)
                         answered = len(output)
-                    elif prompt.search(pending):
+                    elif prompt.search(pending) and (prompt_ok is None or prompt_ok(output)):
                         return Dialogue(output, replies, "prompt", answered_at=answered)
                     elif restarting and re.search(restarting, pending):
                         # The device announced its restart: no point waiting for silence.
                         return Dialogue(output, replies, "restarting", answered_at=answered)
                     continue
+                if prompt_ok is not None and prompt.search(output[answered:]) \
+                        and prompt_ok(output):
+                    return Dialogue(output, replies, "prompt", answered_at=answered)
                 if self.should_stop is not None and self.should_stop():
                     # Only UNDM stops waiting; what the device is doing is not interrupted.
                     return Dialogue(output, replies, "stopped",

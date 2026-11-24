@@ -550,3 +550,27 @@ naming the approver and the reason (audit `image_verified: false`). The vendor's
 can still be added later, which makes the image verified. Without a reason the approval is
 refused as before. Everything else about firmware plans (maintenance window, second
 approver, firmware safety switch) is unchanged.
+
+### D-063 A fetch still running is never mistaken for the end of the step, and is cancelled when UNDM ends it (2026-11-24)
+Bench, first FortiOS firmware run (101F v7.2.6 → 7.6.5, image approved under D-062): after
+"y" the unit printed "Please wait...", "Connect to tftp server <PC> ..." and a line of '#'
+progress marks. The FortiOS prompt pattern (any line ending in '#') took that line for the
+prompt; five seconds later the step failed as "Transfer incomplete (5581824 of 101271832
+bytes)" while the unit was still fetching. Worse, the TFTP server did not stop a transfer
+that was under way when the job ended (it only refused new requests), so the unit could
+have finished the fetch and installed the image after UNDM had reported "rolled back".
+Changes:
+- FortiOS prompt: the line must hold something besides '#' (a line of progress marks is
+  not a prompt).
+- `_dialogue(prompt_ok=...)`: while the device's fetch of the offered file is under way,
+  no prompt is accepted; it is checked again with the next output or while quiet.
+- TFTP server: a transfer under way is cancelled (TFTP error "Transfer cancelled by the
+  server", record "cancelled by UNDM: ...") at the next block once its file is withdrawn
+  or the server stops; a block already sent is still acknowledged, so a fetch that has
+  just ended stays complete.
+- FortiOS procedures withdraw the file as soon as the exchange ends, before deciding the
+  result, so a step reported as failed cannot complete later. `FileServer.withdraw`.
+Regression tests: the fake FortiGate now fetches in the background and prints the bench's
+lines and '#' marks; the old code fails that test with the bench's result. Still unknown
+(Q-39): what the unit prints when the fetch ends, and what it does when the TFTP server
+cancels a fetch or the SSH session closes during one.

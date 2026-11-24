@@ -59,6 +59,9 @@ hardware. Order agreed 2026-11-19: firmware → base file → site file (D-034).
 - **"did not accept it: it returned to its prompt"** — the unit refused the file (for example
   a licence or image check message, shown in the events).
 - **"neither restarted nor returned to its prompt"** — check the unit on the console.
+- **"Transfer incomplete … UNDM has withdrawn the file"** — the fetch was cut off by UNDM (or
+  the unit stopped acknowledging); the unit cannot finish it later. Check its output in the
+  events and that it still runs the old version.
 - **"Authentication failed" after the base restore** — the base file's admin password is not
   the stored one. Log in on the console with the base file's password and set the approved one.
 - **Site file stops at a line** — the event names the line and the unit's answer; lines
@@ -79,3 +82,4 @@ addresses as usual), especially any "device output" event, and the time each ste
 | 2026-11-24 | same unit | Test connection, Retrieve information | **passed** | SSH with the approved admin login; facts read correctly: hostname and model FortiGate-101F, FortiOS **v7.2.6** (as shipped; the checklist expected v7.2.7), serial number (not recorded here), VDOM mode disabled. The FortiOS facts parser is now listed as checked on FortiGate-101F v7.2.6. |
 | 2026-11-24 | same unit | Firmware image upload | not verified | Uploaded without a checksum; Fortinet publishes MD5 and SHA-512, which UNDM did not accept. Fixed: SHA-512 accepted, checksum can be added after upload (D-061). |
 | 2026-11-24 | same unit | Firmware image approval | decision | Fortinet's SHA-512 could not be obtained; product owner decided to allow approval with a written reason (D-062). |
+| 2026-11-24 | same unit | Firmware 7.2.6 → 7.6.5 (real plan) | **failed, UNDM fault** | After "y": "Please wait...", "Connect to tftp server <PC> ...", then '#' progress marks. UNDM took the '#' line for the prompt and failed after 5 s: "Transfer incomplete (5581824 of 101271832 bytes)"; recovery found v7.2.6. The TFTP server did not stop the fetch that was under way, so the unit may have finished it afterwards: to be checked on the unit (version, restart). Fixed (D-063). |

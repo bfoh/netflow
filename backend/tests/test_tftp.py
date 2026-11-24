@@ -135,3 +135,55 @@ def test_port_conflict_gives_clear_error(server):
     other = TftpServer("127.0.0.1", server.port)
     with pytest.raises(TftpServerError, match="Another TFTP program"):
         other.start()
+
+
+def _start_raw_fetch(server, name):
+    """Request ``name`` and acknowledge the first block; returns (socket, server TID)."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(2)
+    sock.sendto(struct.pack("!H", 1) + name.encode() + b"\0octet\0", ("127.0.0.1", server.port))
+    data, tid = sock.recvfrom(2048)
+    assert struct.unpack("!HH", data[:4]) == (3, 1)
+    return sock, tid
+
+
+@pytest.mark.parametrize("how", ["withdrawn", "stopped"])
+def test_a_transfer_in_progress_is_cancelled(tmp_path, how):
+    """Bench 2026-11-24: a fetch must not carry on after UNDM ended the step. Withdrawing
+    the file (or stopping the server) cancels the transfer at the next block."""
+    s = TftpServer("127.0.0.1", 0, timeout=1.0, retries=3)
+    s.start()
+    try:
+        src = tmp_path / "image.out"
+        src.write_bytes(os.urandom(512 * 20))
+        s.publish("image.out", src)
+        sock, tid = _start_raw_fetch(s, "image.out")
+        if how == "withdrawn":
+            s.unpublish("image.out")
+        else:
+            s.stop()
+        sock.sendto(struct.pack("!HH", 4, 1), tid)  # acknowledge block 1
+        data, _ = sock.recvfrom(2048)
+        assert struct.unpack("!H", data[:2])[0] == 5  # ERROR instead of block 2
+        assert b"cancelled" in data
+        sock.close()
+        record = s.transfers[-1]
+        deadline = time.time() + 3
+        while time.time() < deadline and record.finished_at is None:
+            time.sleep(0.02)
+        assert not record.completed and record.bytes_sent == 512
+        assert record.error.startswith("cancelled by UNDM")
+    finally:
+        s.stop()
+
+
+def test_a_republished_file_keeps_its_transfer_going(server, tmp_path):
+    src = tmp_path / "image.out"
+    src.write_bytes(os.urandom(512 * 3))
+    server.publish("image.out", src, {"127.0.0.1"})
+    sock, tid = _start_raw_fetch(server, "image.out")
+    server.publish("image.out", src, {"127.0.0.1"})  # offered again: same file, same client
+    sock.sendto(struct.pack("!HH", 4, 1), tid)
+    data, _ = sock.recvfrom(2048)
+    assert struct.unpack("!HH", data[:4]) == (3, 2)
+    sock.close()

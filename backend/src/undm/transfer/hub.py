@@ -36,6 +36,11 @@ class TransferSession:
         self._published.add(name)
         return server_ip
 
+    def withdraw(self, name: str) -> None:
+        """Stop offering ``name``; a fetch of it still running is cancelled."""
+        self._server.unpublish(name)
+        self._published.discard(name)
+
     def last_transfer(self, name: str, client_ip: str) -> Transfer | None:
         records = self._server.transfers_for(name, client_ip)
         return records[-1] if records else None

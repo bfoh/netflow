@@ -76,6 +76,31 @@ def test_firmware_is_fetched_confirmed_and_the_unit_restarts(rig, tmp_path):
     assert rig.driver.reboot().status is ResultStatus.FAILED  # only one restart was started
 
 
+def test_progress_marks_while_fetching_are_not_the_prompt(rig, tmp_path):
+    """Bench, 101F v7.2.6 (2026-11-24): UNDM took the first line of '#' progress marks
+    for the prompt and reported "Transfer incomplete (5581824 of 101271832 bytes)"."""
+    rig.fg.progress_marks, rig.fg.fetch_delay = True, 0.002
+    r = rig.driver.stage_firmware(image(tmp_path))
+    assert r.ok, (r.message, r.diagnostics)
+    assert rig.fg.restarts == 1 and rig.fg.version == "v7.6.5"
+    assert rig.fg.blocks_received >= 20  # at least one line of '#' marks was printed
+
+
+def test_a_fetch_still_running_when_undm_stops_waiting_is_cancelled(rig, tmp_path):
+    """A step UNDM reports as failed must not complete later: the file is withdrawn and
+    the unit's fetch is cut off, so it cannot install the image afterwards."""
+    rig.fg.progress_marks, rig.fg.fetch_delay = True, 0.01
+    rig.driver.should_stop = lambda: rig.fg.blocks_received >= 40
+    img = image(tmp_path)
+    r = rig.driver.stage_firmware(img)
+    assert r.status is ResultStatus.FAILED and "Transfer incomplete" in r.message
+    assert "cannot finish fetching it later" in r.message
+    assert rig.fg.fetch_done.wait(10)
+    assert rig.fg.fetch_failed and rig.fg.restarts == 0 and rig.fg.version == "v7.2.7"
+    record = rig.driver.file_server.last_transfer(img.filename, "127.0.0.1")
+    assert not record.completed and record.error.startswith("cancelled by UNDM")
+
+
 def test_rejected_image_is_a_failure_with_the_units_answer(rig, tmp_path):
     rig.fg.image_rejected = True
     r = rig.driver.stage_firmware(image(tmp_path))

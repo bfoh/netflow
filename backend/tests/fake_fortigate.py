@@ -5,13 +5,17 @@ tests in the general shape described in Fortinet's public documentation; they ar
 not captured from a FortiGate and do not prove that the real wording matches.
 What IS real: the fake fetches files from UNDM's TFTP server with an independent
 client (tftpy), so publishing, the per-device allowlist and transfer records are
-exercised end to end.
+exercised end to end. Taken from the bench (101F v7.2.6, 2026-11-24): after the image
+question the unit prints "Please wait...", "Connect to tftp server <address> ..." and
+then lines of '#' progress marks while it fetches (``progress_marks``).
 """
 
 from __future__ import annotations
 
 import io
 import re
+import threading
+import time
 from dataclasses import dataclass, field
 
 import tftpy
@@ -44,6 +48,8 @@ class FakeFortiGate:
     question_on: dict[str, str] = field(default_factory=dict)  # statement -> question text
     revisions_supported: bool = True
     down_for_connects: int = 1
+    progress_marks: bool = False  # fetch in the background, printing '#' marks (bench)
+    fetch_delay: float = 0.0      # seconds per received block, to slow the fetch down
     # Observations.
     commands: list[str] = field(default_factory=list)
     keys: list[str] = field(default_factory=list)
@@ -55,6 +61,10 @@ class FakeFortiGate:
     revisions: list[str] = field(default_factory=list)
     restarts: int = 0
     fetched: list[str] = field(default_factory=list)
+    blocks_received: int = 0
+    fetch_failed: bool = False
+    fetch_done: threading.Event = field(default_factory=threading.Event)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
     _out: str = ""
     _pending: str = ""
     _closing: bool = False
@@ -145,7 +155,8 @@ class FakeFortiGate:
     def read(self) -> str:
         if self._closed:
             raise OSError("Socket is closed")
-        out, self._out = self._out, ""
+        with self._lock:
+            out, self._out = self._out, ""
         if self._closing and not out:
             self._closed = True
             raise OSError("Socket is closed")
@@ -199,7 +210,16 @@ class FakeFortiGate:
     def _fetch(self, name: str, server: str) -> bytes:
         port = self.tftp_port() if callable(self.tftp_port) else self.tftp_port
         buf = io.BytesIO()
-        tftpy.TftpClient(server, port, {}).download(name, buf, timeout=2)
+
+        def block(_packet: object) -> None:
+            self.blocks_received += 1
+            if self.progress_marks and self.blocks_received % 20 == 0:
+                with self._lock:
+                    self._out += "#"
+            if self.fetch_delay:
+                time.sleep(self.fetch_delay)
+
+        tftpy.TftpClient(server, port, {}).download(name, buf, packethook=block, timeout=2)
         self.fetched.append(name)
         return buf.getvalue()
 
@@ -214,17 +234,31 @@ class FakeFortiGate:
         if key != "y":
             self._reply("")
             return
+        if self.progress_marks:
+            self._out += (f"\r\nPlease wait...\r\n\r\nConnect to tftp server {self._args[1]} "
+                          "...\r\n")
+            threading.Thread(target=self._image_fetch, daemon=True).start()
+            return
+        self._image_fetch()
+
+    def _image_fetch(self) -> None:
         try:
-            data = self._fetch(*self._args)
-        except Exception:  # noqa: BLE001
-            self._reply("Get image from tftp server failed.")
-            return
-        if self.image_rejected or not data.startswith(IMAGE_HEADER):
-            self._reply("Image check failed.")
-            return
-        self.version = "v" + data[len(IMAGE_HEADER):].split(b"\n", 1)[0].decode()
-        self._out += "Get image from tftp server OK.\r\nCheck image OK.\r\n"
-        self._restart()
+            try:
+                data = self._fetch(*self._args)
+            except Exception:  # noqa: BLE001
+                self.fetch_failed = True
+                with self._lock:
+                    self._reply("\r\nGet image from tftp server failed.")
+                return
+            with self._lock:
+                if self.image_rejected or not data.startswith(IMAGE_HEADER):
+                    self._reply("Image check failed.")
+                    return
+                self.version = "v" + data[len(IMAGE_HEADER):].split(b"\n", 1)[0].decode()
+                self._out += "\r\nGet image from tftp server OK.\r\nCheck image OK.\r\n"
+                self._restart()
+        finally:
+            self.fetch_done.set()
 
     def _answer_config(self, key: str) -> None:
         if key != "y":

@@ -6,7 +6,9 @@ configuration files from the PC running UNDM. Deliberately restricted:
 * read requests only — write requests are refused;
 * only files explicitly published are served, under the published name;
 * each published file may be limited to named client addresses;
-* every transfer is recorded (client, bytes, completed or error).
+* every transfer is recorded (client, bytes, completed or error);
+* a transfer in progress is cancelled when its file is withdrawn or the server stops,
+  so a device cannot finish fetching a file after UNDM has ended the step.
 
 Binary (octet) transfer only; netascii requests are served the same bytes.
 """
@@ -72,6 +74,12 @@ class TftpServer:
     def unpublish(self, name: str) -> None:
         with self._lock:
             self._files.pop(name, None)
+
+    def _still_offered(self, name: str, path: Path, client: str) -> bool:
+        with self._lock:
+            published = self._files.get(name)
+        return (published is not None and published.path == path
+                and (published.clients is None or client in published.clients))
 
     def transfers_for(self, name: str, client: str | None = None) -> list[Transfer]:
         with self._lock:
@@ -216,6 +224,12 @@ class TftpServer:
         with path.open("rb") as f:
             block = 0
             while True:
+                if self._stop.is_set() or not self._still_offered(name, path, addr[0]):
+                    self._error(sock, addr, 0, "Transfer cancelled by the server")
+                    record.error = ("cancelled by UNDM: "
+                                    + ("the server stopped" if self._stop.is_set()
+                                       else "the file is no longer offered"))
+                    break
                 chunk = f.read(block_size)
                 block = (block + 1) & 0xFFFF  # block numbers wrap for files > 65535 blocks
                 if not exchange(struct.pack("!HH", OP_DATA, block) + chunk, block):
