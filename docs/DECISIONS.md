@@ -807,3 +807,13 @@ bytes to …" lines are progress; any other `%` line is a refusal. The saved byt
 compared with what UNDM sent (reported, not a failure, as the switch may store the file in
 its own form), and the switch's lines are kept as events. The fake switch prints the
 bench wording; the old code fails that test with the bench's message.
+
+### D-079 LIG1014A: first complete load passed on hardware; VLAN lists compared as sets (2026-11-24)
+With v50 the team's file was loaded end to end on the factory LIG1014A: "Import Done!",
+`reload cold`, the switch answered again after 29 s (first attempt), same MAC address,
+login with the approved password (kept for the device), name as in the file, 191 of 192
+lines shown. Q-27 answered: the file's `access management` ("web telnet" from VLAN 222
+192.0.2.0–254) still lets SSH in from the PC on port 1/3. The one line "not shown",
+`vlan 168,222,1001,1006`, is listed in the switch's own form; `vlan` list lines are now
+compared as sets of VLANs (ranges understood), so a VLAN that is really missing is still
+reported.

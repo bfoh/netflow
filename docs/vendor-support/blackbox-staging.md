@@ -74,7 +74,7 @@ the load: no re-cabling, and the device address in UNDM does not change.
 - LE2700A XML: files that declare a document type or entities are refused (no XML-based
   attack can reach the backend through an import).
 
-## Loading the team's file with UNDM (D-077, not yet run on hardware)
+## Loading the team's file with UNDM (D-077, D-078; passed on hardware 2026-11-24)
 1. PC on port 1/3 with a fixed address in 192.0.2.0/24 (not .1); Windows firewall lets
    UDP 69 in (as for the 2930F and the FortiGate).
 2. Device: model LIG1014A, driver "Black Box LIG1014A over SSH", its own login = the factory
@@ -101,3 +101,4 @@ the load: no re-cabling, and the device address in UNDM does not change.
 | 2026-11-24 | same unit | Back up (v48) | **passed** | Factory configuration stored (the page prompt answered with `g`). Read-only checks complete: the LIG1014A is listed as lab-checked for reading (connect, facts, backup). |
 | 2026-11-24 | factory unit | `copy tftp://<pc>/test.txt ?`, `reload cold` | **captured** | Destinations `<url_file>`, `running-config`, `startup-config`; `reload cold` asks nothing ("% Cold reload in progress, please stand by.", prompt, session closed); errors start with `%`. Load procedure built (D-077). |
 | 2026-11-24 | factory unit | First load by UNDM (v49) | **stopped by a UNDM fault** | The switch fetched the file and answered "% Loading /<file> from TFTP server <pc>", "% Saving 5997 bytes to flash:startup-config", "Import Done! Configuration will become active after reboot!"; UNDM took the `%` progress line for a refusal and did not restart the switch (file in the startup configuration, not running). Fixed (D-078). |
+| 2026-11-24 | factory unit | Load by UNDM (v50) | **passed** | "Import Done!", `reload cold`, back after 29 s (attempt 1), same MAC address, approved login works and is kept, name as in the file, 191 of 192 lines shown (`vlan 168,222,1001,1006` listed in the switch's own form; now compared as sets, D-079). SSH works after the load (Q-27). |

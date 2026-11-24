@@ -226,3 +226,22 @@ def test_merge_is_not_offered(switch):
     assert d.apply_configuration("hostname x\nend\n", ApplyMode.MERGE).status \
         is ResultStatus.UNSUPPORTED
 
+
+def test_vlan_lists_are_compared_as_sets():
+    """Bench 2026-11-24 (first load): the only line "not shown" was 'vlan 168,222,1001,1006';
+    the switch lists its VLANs in its own form."""
+    from undm.drivers.blackbox.lig1014a_ssh import _vlans
+    assert _vlans("vlan 168,222,1001,1006") == {168, 222, 1001, 1006}
+    assert _vlans("vlan 1,168,222,1001-1006") >= {168, 222, 1001, 1006}
+    d = driver()
+    d._conn = object()  # verification reads through the two methods below
+
+    class Facts:
+        ok, data = True, type("F", (), {"hostname": "lab-bbsw01"})()
+    d.get_device_facts = lambda: Facts()
+    d.get_running_configuration = lambda: type("R", (), {
+        "ok": True, "data": "hostname lab-bbsw01\nvlan 1,168,222\n!\nend"})()
+    r = d.verify_configuration("hostname lab-bbsw01\nvlan 168,222\n!\nend\n",
+                               ApplyMode.REPLACE)
+    assert r.ok and "2 of 2 lines" in r.message and not r.data["warnings"]
+

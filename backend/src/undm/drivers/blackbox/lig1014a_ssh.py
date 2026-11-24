@@ -91,7 +91,7 @@ class BlackBoxLig1014aSsh(SshCliDriver):
         platform="blackbox_lig1014a",
         os_family="Black Box LIG1014A",
         description="Black Box LIG1014A over SSH CLI. Experimental: connection, device "
-                    "information, backup; loading a complete file (not yet run on hardware).",
+                    "information, backup; loading a complete file (passed once on hardware).",
         simulated=False,
         capabilities=frozenset({Capability.SSH, Capability.CONFIGURATION_BACKUP,
                                 Capability.CONFIGURATION_APPLY,
@@ -107,7 +107,8 @@ class BlackBoxLig1014aSsh(SshCliDriver):
             "Loading the team's complete file (replace mode): the switch fetches it by TFTP "
             "into its startup configuration ('copy tftp://<pc>/<file> startup-config'), then "
             "'reload cold'; UNDM waits, logs in (login after loading), checks the MAC address, "
-            "the hostname and the file's lines. Not yet run on hardware.",
+            "the hostname and the file's lines. Passed once on hardware (factory unit, "
+            "2026-11-24).",
         ),
     )
 
@@ -319,7 +320,9 @@ class BlackBoxLig1014aSsh(SshCliDriver):
         present = {ln.strip() for ln in str(running.data).splitlines()}
         expected = [ln.strip() for ln in self.config_lines(intended)
                     if ln.strip() and ln.strip() not in ("end",)]
-        missing = [ln for ln in expected if ln not in present]
+        shown_vlans = set().union(*[_vlans(ln) for ln in present if _VLAN_LIST.match(ln)])
+        missing = [ln for ln in expected if ln not in present
+                   and not (_VLAN_LIST.match(ln) and _vlans(ln) <= shown_vlans)]
         shown = len(expected) - len(missing)
         result = OperationResult.success(
             op, {"warnings": [f"not shown by 'show running-config': {ln[:120]}"
@@ -330,6 +333,21 @@ class BlackBoxLig1014aSsh(SshCliDriver):
 
 
 _RELOADING = r"Cold reload in progress"
+# 'vlan 168,222,1001,1006' (file) may be shown in another form, e.g. with VLAN 1 or as a
+# range (bench, 2026-11-24: the line was not shown as written): compared as sets of VLANs.
+_VLAN_LIST = re.compile(r"^vlan [0-9][0-9,\- ]*$")
+
+
+def _vlans(line: str) -> set[int]:
+    found: set[int] = set()
+    for part in line.split(None, 1)[1].replace(" ", "").split(","):
+        if "-" in part:
+            low, _, high = part.partition("-")
+            if low.isdigit() and high.isdigit():
+                found.update(range(int(low), int(high) + 1))
+        elif part.isdigit():
+            found.add(int(part))
+    return found
 
 
 def _answer(output: str, command: str | None = None) -> str:
