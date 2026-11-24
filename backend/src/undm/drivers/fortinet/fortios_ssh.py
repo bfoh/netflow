@@ -106,6 +106,9 @@ class FortiOSSsh(SshCliDriver):
     # After a complete transfer and a quiet minute, check the SSH port this often: a unit
     # that restarts without closing the session (as a 2930F did, D-054) is noticed.
     restart_probe_interval: ClassVar[float] = 10.0
+    # Facts read correctly from a real unit (bench, 2026-11-24): hostname, model, version,
+    # serial number, VDOM mode.
+    parser_validated_on = ("FortiGate-101F v7.2.6",)
     prompt_hint: ClassVar[str] = (
         "A new FortiGate asks for a new admin password at the first login: log in once by "
         "hand (browser at its address, or SSH) as admin, set the approved password, then try "
