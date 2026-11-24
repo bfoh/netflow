@@ -101,7 +101,7 @@ def test_policy_reports_the_firmware_switch(bench):
 def test_real_firmware_needs_both_switches_but_dry_run_is_allowed(bench):
     b = bench(enable_real_device_writes=True)  # firmware switch still off
     r = b.plan()
-    assert r.status_code == 403 and "UNDM_ENABLE_REAL_DEVICE_FIRMWARE" in r.json()["error"]
+    assert r.status_code == 403 and "Firmware changes are off" in r.json()["error"]
     dry = b.plan(dry_run=True)
     assert dry.status_code == 201, dry.json()
     t = dry.json()["targets"][0]
@@ -113,7 +113,7 @@ def test_real_firmware_needs_both_switches_but_dry_run_is_allowed(bench):
 def test_firmware_switch_alone_is_not_enough(bench):
     b = bench(enable_real_device_firmware=True)  # write switch off
     r = b.plan()
-    assert r.status_code == 403 and "UNDM_ENABLE_REAL_DEVICE_WRITES" in r.json()["error"]
+    assert r.status_code == 403 and "Real-device changes are off" in r.json()["error"]
 
 
 def test_full_upgrade_of_a_fake_2930f_over_tftp(bench):
@@ -298,3 +298,71 @@ def test_stop_ends_a_background_run_waiting_for_a_switch_that_does_not_return(be
     audit = b.client.get("/api/audit?limit=50").json()
     assert any(a["action"] == "deployment.stop_requested" and a["actor"] == "alice"
                for a in audit)
+
+
+# --- Settings → Safety (D-082) -------------------------------------------------------------
+
+def test_safety_switches_start_off_and_change_from_settings(bench):
+    b = bench()
+    pol = b.client.get("/api/policy").json()
+    assert (pol["enable_real_device_writes"], pol["enable_real_device_firmware"]) == (False, False)
+    assert pol["locked"] == [] and pol["firmware_require_separate_approver"] is True
+    assert b.plan().status_code == 403  # off: the plan is refused
+    r = b.client.put("/api/policy", headers=BOB, json={
+        "enable_real_device_writes": True, "enable_real_device_firmware": True})
+    assert r.status_code == 200, r.json()
+    assert r.json()["enable_real_device_writes"] and r.json()["enable_real_device_firmware"]
+    assert b.plan().json()["state"] == "awaiting_approval"  # in force at once, no restart
+    audit = [a for a in b.client.get("/api/audit").json() if a["action"] == "policy.change"]
+    seen = {(a["actor"], a["target_id"], a["details"]["before"], a["details"]["after"])
+            for a in audit}
+    assert seen == {("bob", "enable_real_device_writes", False, True),
+                    ("bob", "enable_real_device_firmware", False, True)}
+
+
+def test_safety_switches_are_kept_in_the_data_folder(bench, tmp_path):
+    b = bench()
+    b.client.put("/api/policy", json={"firmware_require_separate_approver": False})
+    stored = (tmp_path / "settings.json").read_text()
+    assert '"firmware_require_separate_approver": false' in stored
+    again, _ = make_client(data_dir=str(tmp_path))  # a restart of the same copy
+    assert again.get("/api/policy").json()["firmware_require_separate_approver"] is False
+
+
+def test_an_unchanged_switch_is_not_audited(bench):
+    b = bench()
+    assert b.client.put("/api/policy", json={"enable_real_device_writes": False}).status_code == 200
+    assert not [a for a in b.client.get("/api/audit").json() if a["action"] == "policy.change"]
+
+
+def test_a_switch_from_the_start_up_settings_is_locked(bench, tmp_path):
+    b = bench(enable_real_device_writes=True)
+    pol = b.client.get("/api/policy").json()
+    assert pol["locked"] == ["enable_real_device_writes"] and pol["enable_real_device_writes"]
+    r = b.client.put("/api/policy", json={"enable_real_device_writes": False})
+    assert r.status_code == 409 and "start-up settings" in r.json()["error"]
+    assert not (tmp_path / "settings.json").exists()
+
+
+def test_production_switches_cannot_be_changed_from_settings(bench):
+    r = bench().client.put("/api/policy", json={"allow_production_deployments": True})
+    assert r.status_code == 422
+
+
+def test_turning_firmware_off_stops_an_approved_plan_from_running(bench):
+    b = bench()
+    b.client.put("/api/policy", json={"enable_real_device_writes": True,
+                                      "enable_real_device_firmware": True,
+                                      "firmware_require_separate_approver": False})
+    dep = b.plan().json()
+    assert b.approve(dep["id"]).json()["state"] == "ready"
+    b.client.put("/api/policy", json={"enable_real_device_firmware": False})
+    r = b.client.post(f"/api/deployments/{dep['id']}/execute")
+    assert r.status_code == 403 and "Firmware changes are off" in r.json()["error"]
+    assert not any(c.startswith(("copy", "boot")) for c in b.switch.commands)
+
+
+def test_a_damaged_settings_file_means_all_switches_off(bench, tmp_path):
+    (tmp_path / "settings.json").write_text("{not json")
+    pol = bench().client.get("/api/policy").json()
+    assert (pol["enable_real_device_writes"], pol["enable_real_device_firmware"]) == (False, False)

@@ -401,7 +401,11 @@ class DeploymentOrchestrator:
         if dep.dry_run:
             raise ValueError("Dry runs do not need approval")
         if self.require_separate_approver and approver == dep.created_by:
-            raise ApprovalRequiredError("Approver must differ from the deployment creator")
+            raise ApprovalRequiredError(
+                f"A second person must approve this plan: it was made by {dep.created_by}. "
+                "Ask a colleague to approve it under their own name (Settings → Your name). "
+                "For firmware plans on a bench where you work alone, turn off 'A second "
+                "person approves firmware plans' in Settings → Safety.")
         dep.approved_by = approver
         dep.approved_at = datetime.now(UTC)
         self._move(dep, S.READY, f"approved by {approver}")

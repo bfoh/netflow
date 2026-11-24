@@ -12,6 +12,7 @@ import { fmtDate } from '../services/format';
 import { RUNNING_STATES, useAction, useDeployment, useProjectDevices } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Deployment } from '../types/api';
+import { stageLabel, stateLabel } from '../services/labels';
 
 const STEPS = ['Validate & preview', 'Approve', 'Preflight', 'Back up', 'Deploy', 'Verify', 'Complete'];
 const STEP_OF: Record<string, number> = {
@@ -25,11 +26,11 @@ const DRY_STEP_OF: Record<string, number> = {
   draft: 0, validating: 0, ready: 1, preflight: 1, succeeded: 3, failed: 3, cancelled: 3,
 };
 const OUTCOME: Record<string, { color: string; title: string; text: string }> = {
-  succeeded: { color: 'teal', title: 'Deployment succeeded', text: 'Every changed device was verified against its intended configuration.' },
-  failed: { color: 'red', title: 'Deployment failed before any change', text: 'No device was changed. See events for the reason.' },
-  rolled_back: { color: 'orange', title: 'Deployment failed and was rolled back', text: 'Every changed device was automatically restored from its backup.' },
+  succeeded: { color: 'teal', title: 'Plan succeeded', text: 'Every changed device was verified against its intended configuration.' },
+  failed: { color: 'red', title: 'Plan failed before any change', text: 'No device was changed. See events for the reason.' },
+  rolled_back: { color: 'orange', title: 'Plan failed and the device was put back', text: 'Every changed device was automatically restored from its backup.' },
   recovery_required: { color: 'red', title: 'Manual recovery required', text: 'At least one device may be in an intermediate state. Check each target below before making further changes.' },
-  cancelled: { color: 'gray', title: 'Deployment cancelled', text: 'No device was changed.' },
+  cancelled: { color: 'gray', title: 'Plan cancelled', text: 'No device was changed.' },
 };
 
 /** datetime-local value in UTC for a Date (UNDM shows and takes times in UTC, like the network). */
@@ -44,13 +45,13 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
   const [end, setEnd] = useState(() => toUtcInput(new Date(Date.now() + 2 * 3600 * 1000)));
   const firmware = dep.kind === 'firmware';
   const approve = useAction(() => api.approveDeployment(dep.id, firmware
-    ? { window_start: fromUtcInput(start), window_end: fromUtcInput(end) } : undefined), 'Deployment approved');
+    ? { window_start: fromUtcInput(start), window_end: fromUtcInput(end) } : undefined), 'Plan approved');
   const [started, setStarted] = useState(false);
   const [stopOpen, { open: openStop, close: closeStop }] = useDisclosure();
   const execute = useAction(() => api.executeDeployment(dep.id),
     'Run started on the server; the events below show each step');
   const stop = useAction(() => api.stopDeployment(dep.id), 'Stop requested');
-  const cancel = useAction(() => api.cancelDeployment(dep.id), 'Deployment cancelled');
+  const cancel = useAction(() => api.cancelDeployment(dep.id), 'Plan cancelled');
   // Between the start request and the first stored step the plan still reads "ready".
   const running = execute.isPending || (started && dep.state === 'ready');
   const active = running || RUNNING_STATES.has(dep.state);
@@ -71,11 +72,11 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
           </Group>
         </Stack>
       </Modal>
-      {dep.state === 'ready' && !started && <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={open} loading={running}>{dep.dry_run ? 'Run dry run' : 'Execute deployment'}</Button>}
+      {dep.state === 'ready' && !started && <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={open} loading={running}>{dep.dry_run ? 'Run dry run' : 'Run plan'}</Button>}
       {canCancel && !active && <Button variant="default" onClick={() => cancel.mutate()} loading={cancel.isPending}>Cancel</Button>}
       {active && <Button color="red" variant="light" onClick={openStop} loading={stop.isPending}
         disabled={stop.isSuccess}>{stop.isSuccess ? 'Stopping…' : 'Stop'}</Button>}
-      <Modal opened={stopOpen} onClose={closeStop} title="Stop this deployment?">
+      <Modal opened={stopOpen} onClose={closeStop} title="Stop this plan?">
         <Stack>
           <Text size="sm">UNDM stops at the next safe point: between steps, while waiting for a device to come back, or
             while waiting for a device's answer. A command a device is already carrying out (a transfer, a restart) is not
@@ -88,7 +89,7 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
           </Group>
         </Stack>
       </Modal>
-      <Modal opened={confirm} onClose={close} title={dep.dry_run ? 'Run dry run' : 'Execute deployment'}>
+      <Modal opened={confirm} onClose={close} title={dep.dry_run ? 'Run dry run' : 'Run plan'}>
         <Stack>
           <Text size="sm">
             {firmware
@@ -131,7 +132,7 @@ function Progress({ d, names }: { d: Deployment; names: Map<string, { name: stri
           with the new configuration, connect this PC there now (the event below says where).
         </Alert>
       )}
-      <Alert color="blue" title={`In progress: ${RUNNING_STATES.has(d.state) ? d.state.replaceAll('_', ' ') : 'starting'}…`}>
+      <Alert color="blue" title={`In progress: ${RUNNING_STATES.has(d.state) ? stateLabel(d.state).toLowerCase() : 'starting'}…`}>
         {last && <Text size="sm" mb={4}>Latest step ({fmtElapsed(since)} ago): {last.message}</Text>}
         The run continues on the server even if you leave this page; the events below update as each step finishes.
         Use <b>Stop</b> to end it at the next safe point.
@@ -150,11 +151,11 @@ function AfterConfig({ afterId, sentId }: { afterId: string; sentId: string | nu
   return (
     <>
       <Group gap="xs">
-        <Button size="xs" variant="light" onClick={() => setMode('view')}>View configuration after deployment</Button>
+        <Button size="xs" variant="light" onClick={() => setMode('view')}>View configuration after the plan</Button>
         {sentId && <Button size="xs" variant="default" onClick={() => setMode('compare')}>Compare with what was sent</Button>}
       </Group>
       <Modal opened={mode !== null} onClose={() => setMode(null)} size="xl"
-        title={mode === 'compare' ? 'Sent (−) compared with the device after deployment (+)' : 'Configuration on the device after deployment'}>
+        title={mode === 'compare' ? 'Sent (−) compared with the device afterwards (+)' : 'Configuration on the device afterwards'}>
         {mode === 'view' && (after.data
           ? <><Text size="xs" c="dimmed" mb="xs">Read back from the device by UNDM after the change ({after.data.reference}).</Text>
             <Code block style={{ maxHeight: '65vh', overflow: 'auto' }}>{after.data.text}</Code></>
@@ -201,7 +202,7 @@ export function DeploymentDetailPage() {
 
   return (
     <>
-      <PageHeader title={`${d.kind === 'firmware' ? 'Firmware upgrade' : d.kind === 'first_login' ? 'First login (new unit)' : 'Configuration deployment'}${d.dry_run ? ' (dry run)' : ''} · ${fmtDate(d.created_at)}`}
+      <PageHeader title={`${d.kind === 'firmware' ? 'Firmware upgrade' : d.kind === 'first_login' ? 'First login (new unit)' : 'Configuration plan'}${d.dry_run ? ' (dry run)' : ''} · ${fmtDate(d.created_at)}`}
         description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
           ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : d.kind === 'first_login' ? '' : ` · ${d.apply_mode} mode`}`}
         actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
@@ -250,7 +251,7 @@ export function DeploymentDetailPage() {
                     <Anchor component={Link} to={`/devices/${t.device_id}`}>Device</Anchor>
                     {t.config_version_id && <>{' · '}<Anchor component={Link} to={`/configurations?device=${t.device_id}&version=${t.config_version_id}`}>configuration sent</Anchor> <code>{t.config_version_id.slice(0, 8)}</code></>}
                     {t.backup_version_id && <>{' · '}<Anchor component={Link} to={`/configurations?device=${t.device_id}&version=${t.backup_version_id}`}>backup before</Anchor> <code>{t.backup_version_id.slice(0, 8)}</code></>}
-                    {t.after_version_id && <>{' · '}<Anchor component={Link} to={`/configurations?device=${t.device_id}&version=${t.after_version_id}`}>after deployment</Anchor> <code>{t.after_version_id.slice(0, 8)}</code></>}
+                    {t.after_version_id && <>{' · '}<Anchor component={Link} to={`/configurations?device=${t.device_id}&version=${t.after_version_id}`}>afterwards</Anchor> <code>{t.after_version_id.slice(0, 8)}</code></>}
                   </Text>
                   {t.after_version_id && <AfterConfig afterId={t.after_version_id} sentId={t.config_version_id} />}
                   {d.kind === 'configuration' && <><Text size="sm" fw={600}>Proposed change</Text><DiffView diff={t.diff} /></>}
@@ -272,7 +273,7 @@ export function DeploymentDetailPage() {
           {d.events.map((e) => (
             <Timeline.Item key={e.seq} color={e.status === 'error' ? 'red' : e.stage === 'lifecycle' ? 'indigo' : 'teal'}
               bullet={e.status === 'error' ? <IconX size={11} /> : undefined}
-              title={<Text size="sm" fw={600}>{e.stage}{e.device_id ? ` · ${byId.get(e.device_id)?.name ?? ''}` : ''} — {e.status.replaceAll('_', ' ')}</Text>}>
+              title={<Text size="sm" fw={600}>{stageLabel(e.stage)}{e.device_id ? ` · ${byId.get(e.device_id)?.name ?? ''}` : ''} — {stateLabel(e.status)}</Text>}>
               <Text size="sm" c="dimmed">{e.message}</Text>
               <Text size="xs" c="dimmed">{fmtDate(e.timestamp)}</Text>
             </Timeline.Item>

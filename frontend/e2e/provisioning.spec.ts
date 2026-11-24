@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-/** Console bootstrap of a simulated ArubaOS-Switch through the Provisioning Center. */
+/** Console bootstrap of a simulated ArubaOS-Switch through the Console setup page. */
 test('console bootstrap on the simulated console: run, verify, re-run is a no-op', async ({ page }) => {
   const id = String(Date.now()).slice(-6);
   const name = `dmz-sw-${id}`;
   await page.goto('/projects');
-  await page.getByRole('button', { name: 'New project' }).click();
-  await page.getByLabel('Project name').fill(`Bootstrap ${id}`);
-  await page.getByRole('button', { name: 'Create project' }).click();
+  await page.getByRole('button', { name: 'New system' }).click();
+  await page.getByLabel('System name').fill(`Bootstrap ${id}`);
+  await page.getByRole('button', { name: 'Create system' }).click();
 
   await page.getByRole('button', { name: 'Add device' }).first().click();
   const dialog = page.getByRole('dialog');
@@ -19,7 +19,7 @@ test('console bootstrap on the simulated console: run, verify, re-run is a no-op
 
   await page.getByRole('link', { name }).click();
   await page.getByRole('link', { name: 'Console bootstrap' }).click();
-  await expect(page.getByRole('heading', { name: 'Provisioning Center' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Console setup' })).toBeVisible();
 
   await page.getByLabel('Untagged port').fill('2');
   await page.getByLabel('Address / prefix').fill('192.168.1.2/24');
@@ -46,5 +46,5 @@ test('console bootstrap on the simulated console: run, verify, re-run is a no-op
   await expect(page.getByText('Already bootstrapped — nothing was changed')).toBeVisible();
 
   await page.getByRole('link', { name: 'Continue on the device page' }).click();
-  await expect(page.getByText('192.168.1.2 (ssh)')).toBeVisible();
+  await expect(page.getByText('192.168.1.2', { exact: true })).toBeVisible();
 });

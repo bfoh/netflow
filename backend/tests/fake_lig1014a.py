@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import re
+import time
 from dataclasses import dataclass, field
 
 import tftpy
@@ -92,7 +93,7 @@ class FakeLig1014A:
     # firmware upgrade behaviour (wording SYNTHETIC until seen on the bench):
     # restart | prompt_then_restart | prompt_only | refuse
     upgrade_mode: str = "restart"
-    _close_after: int = 0
+    _close_at: float = 0.0  # monotonic time the session closes (restart after the prompt)
     fetched: list[str] = field(default_factory=list)
     _closing: bool = False
     _down: int = 0
@@ -176,7 +177,7 @@ class FakeLig1014A:
                 self._out += self.prompt_text()
                 self.restarts += 1
                 self._down = self.down_for_connects
-                self._close_after = 3
+                self._close_at = time.monotonic() + 0.15  # after the prompt, by time
                 return
             self.restarts += 1
             self._down = self.down_for_connects
@@ -212,9 +213,8 @@ class FakeLig1014A:
                 self.password = self.password_after_load
 
     def read(self) -> str:
-        if self._close_after:
-            self._close_after -= 1
-            self._closing = self._close_after == 0
+        if self._close_at and time.monotonic() >= self._close_at:
+            self._close_at, self._closing = 0.0, True
         out, self._out = self._out, ""
         if self._closing and not out:
             raise OSError("Software caused connection abort")

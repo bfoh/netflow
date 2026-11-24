@@ -1,16 +1,22 @@
+import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, Query, Request
 from sqlalchemy import select
 
 from undm import __version__
-from undm.api.deps import RegistryDep, SessionDep, SettingsDep
-from undm.api.schemas import AuditOut, DeviceModelOut, DriverOut, PolicyOut
+from undm.api.deps import ActorDep, RegistryDep, SessionDep, SettingsDep
+from undm.api.schemas import AuditOut, DeviceModelOut, DriverOut, PolicyChange, PolicyOut
+from undm.config import Settings
 from undm.db.models import AuditEvent
 from undm.inventory.catalog import CATALOG
+from undm.services import audit
+from undm.services import safety_settings as safety
+from undm.services.errors import ConflictError
 from undm.services.policy import Policy
 
 router = APIRouter(tags=["system"])
+log = logging.getLogger("undm")
 
 
 @router.get("/api/health")
@@ -31,10 +37,36 @@ def list_drivers(registry: RegistryDep) -> list[DriverOut]:
     ]
 
 
+def _policy_out(settings: Settings) -> PolicyOut:
+    return PolicyOut(**asdict(Policy.from_settings(settings)),
+                     firmware_require_separate_approver=settings.firmware_require_separate_approver,
+                     locked=sorted(safety.locked(settings)))
+
+
 @router.get("/api/policy", response_model=PolicyOut)
 def policy(settings: SettingsDep) -> PolicyOut:
-    """Current real-device safety switches (read-only; set via UNDM_* settings)."""
-    return PolicyOut(**asdict(Policy.from_settings(settings)))
+    """The safety switches in force now (start-up settings, then Settings → Safety)."""
+    return _policy_out(settings)
+
+
+@router.put("/api/policy", response_model=PolicyOut)
+def change_policy(body: PolicyChange, request: Request, session: SessionDep,
+                  actor: ActorDep) -> PolicyOut:
+    """Change safety switches from Settings → Safety. Every change is audited (D-082)."""
+    base: Settings = request.app.state.settings
+    changes = {k: v for k, v in body.model_dump().items() if v is not None}
+    try:
+        done = safety.change(base, changes)
+    except safety.SafetySettingsError as e:
+        raise ConflictError(str(e)) from e
+    for name, (before, after) in done.items():
+        audit.record(session, actor, "policy.change", "policy", name,
+                     details={"switch": name, "meaning": safety.SWITCHES[name],
+                              "before": before, "after": after})
+    if done:
+        log.warning("safety switch changed", extra={"ctx": {
+            "actor": actor, "changes": {k: v[1] for k, v in done.items()}}})
+    return _policy_out(safety.effective(base))
 
 
 @router.get("/api/device-models", response_model=list[DeviceModelOut])

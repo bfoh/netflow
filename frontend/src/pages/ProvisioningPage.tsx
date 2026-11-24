@@ -8,11 +8,11 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge } from '../components/Badges';
-import { NotImplemented } from '../components/NotImplemented';
 import { PageHeader, QueryState } from '../components/Page';
 import { useAction, useAllDevices, useCredentialRefs, useDrivers, usePolicy, useProjects, useSerialPorts } from '../hooks/queries';
 import { api } from '../services/api';
 import { downloadText } from '../services/format';
+import { driverLabel, stateLabel } from '../services/labels';
 import type { BootstrapPreview, BootstrapProfile, BootstrapResult, Device } from '../types/api';
 
 const CONSOLE_PLATFORMS = new Set(['aos_switch']);
@@ -103,8 +103,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
         )}
         {blocked && (
           <Alert color="orange" mt="sm" icon={<IconAlertTriangle size={16} />}>
-            Changes to real devices are switched off on this server. Add <code>UNDM_ENABLE_REAL_DEVICE_WRITES=true</code> to
-            <code> backend\.env</code> and restart the backend to run a console bootstrap. Preview still works.
+            Real-device changes are off. Turn them on in Settings → Safety to run a console setup. Preview still works.
           </Alert>
         )}
         <Group mt="md">
@@ -161,7 +160,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
                 Any question UNDM does not recognise stops it with the switch's text.
               </Text>
               <Stack gap={6}>
-                <Select size="xs" label="Its current login" placeholder={refs.data?.length ? 'Choose the preconfigured login' : 'Add it on the project Credentials tab'}
+                <Select size="xs" label="Its current login" placeholder={refs.data?.length ? 'Choose the preconfigured login' : 'Add it on the system\'s Logins tab'}
                   data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={currentLogin} onChange={setCurrentLogin} />
                 <TextInput size="xs" label="Type its current hostname"
                   description="The name in its console prompt, before > or # (e.g. for a prompt 'sw-name#' type sw-name). Not the username."
@@ -205,30 +204,23 @@ export function ProvisioningPage() {
 
   return (
     <>
-      <PageHeader title="Provisioning Center"
-        description="Give a factory-default device its first management address through the console cable, so it can be reached over the network." />
+      <PageHeader title="Console setup"
+        description="Give a new Aruba switch its first address and login through the console cable, so UNDM can reach it over the network." />
       <QueryState isLoading={devices.isLoading || drivers.isLoading} error={devices.error ?? drivers.error} />
       <Stack>
         <Card withBorder>
           <Select label="Device" w={520} searchable
-            placeholder={eligible.length ? 'Choose a switch' : 'No devices with a console bootstrap procedure yet'}
+            placeholder={eligible.length ? 'Choose a switch' : 'No Aruba 2930F in your systems yet'}
             data={eligible.map((d) => ({ value: d.id, label: `${d.name} — ${d.manufacturer} ${d.model} (${names.get(d.project_id) ?? ''})` }))}
             value={device?.id ?? null} onChange={(v) => setParams(v ? { device: v } : {})} />
-          {device && <Group gap="xs" mt="xs"><EnvironmentBadge env={device.environment} /><Text size="sm">driver <code>{device.driver_id}</code> · provisioning status: {device.provisioning_status.replaceAll('_', ' ')}</Text></Group>}
+          {device && <Group gap="xs" mt="xs"><EnvironmentBadge env={device.environment} /><Text size="sm">{driverLabel(device.driver_id, drivers.data)} · setup: {stateLabel(device.provisioning_status).toLowerCase()}</Text></Group>}
           <Text size="xs" c="dimmed" mt="xs">
-            Only devices with a console bootstrap procedure are listed: ArubaOS-Switch (e.g. Aruba 2930F; run on bench units,
-            including erase-first for preconfigured units). Other devices need no bootstrap here: a FortiGate already answers
-            at its factory address on its mgmt port (log in once in the browser to set the approved password), so start on
-            its device page with Test connection.
+            Only switches that need a console setup are listed: Aruba 2930F (ArubaOS-Switch), new or preconfigured (it can
+            be erased first). The other devices need none: a new FortiGate answers at its factory address, and a First login
+            plan sets its approved password; a new Black Box LIG1014A answers at its factory address with no password.
           </Text>
         </Card>
         {device && <Bootstrap key={device.id} device={device} simulated={platform.get(device.driver_id)?.simulated ?? true} />}
-        <NotImplemented title="Zero-touch and network-based provisioning" phase="later phases"
-          note="Only the console bootstrap above is available today." planned={[
-          'FortiGate and Black Box first-login handling at their factory-default addresses',
-          'DHCP-based bootstrap for switches that request an address at factory default (to be verified on a spare unit)',
-          'A staging run that takes all devices of a system through bootstrap, firmware and configuration in one go',
-        ]} />
       </Stack>
     </>
   );

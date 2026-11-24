@@ -99,9 +99,11 @@ For the Aruba 2930F follow `docs/vendor-support/aruba-2930f-acceptance.md`.
    **Sanitized diagnostics** produces a shareable report with identifying details masked.
    (FortiGate note: if console paging is on, the SSH library temporarily sets
    `config system console / set output standard` for the session and restores it afterwards.)
-4. Deployment **dry runs** are allowed. To let approved deployments change lab devices, add
-   `UNDM_ENABLE_REAL_DEVICE_WRITES=true` to `backend\.env` and restart the backend.
-   The header then shows **Real-device changes ON**.
+4. Plan **dry runs** are allowed. To let approved plans change lab devices, turn on
+   **Settings → Safety → Real-device changes** (confirmed and recorded in the audit log; kept
+   in `settings.json` in the data folder). The header then shows **Real-device changes ON**.
+   A switch set in `backend\.env` (`UNDM_ENABLE_REAL_DEVICE_WRITES=...`) still works, wins,
+   and is shown as fixed on the Settings page (D-082).
 5. Production devices are blocked entirely unless `UNDM_ALLOW_PRODUCTION_READ_ONLY` /
    `UNDM_ALLOW_PRODUCTION_DEPLOYMENTS` are set — do not do this during testing.
 
@@ -113,13 +115,11 @@ Aruba 2930F and the FortiGate (below; both experimental).
 The switch pulls the image from this PC over TFTP, UNDM checks `show flash`, restarts the
 switch into the new image and verifies the running version. Not yet run on hardware: do the
 first run on a spare switch with `docs/vendor-support/aruba-2930f-firmware.md`.
-Add to `backend\.env` and restart the backend:
-```
-UNDM_ENABLE_REAL_DEVICE_WRITES=true
-UNDM_ENABLE_REAL_DEVICE_FIRMWARE=true
-# only if one person stages alone on an isolated bench:
-UNDM_FIRMWARE_REQUIRE_SEPARATE_APPROVER=false
-```
+Turn on **Settings → Safety → Real-device changes** and **Firmware changes**; only if one
+person stages alone on an isolated bench, turn off **A second person approves firmware
+plans**. (The same switches in `backend\.env` — `UNDM_ENABLE_REAL_DEVICE_WRITES`,
+`UNDM_ENABLE_REAL_DEVICE_FIRMWARE`, `UNDM_FIRMWARE_REQUIRE_SEPARATE_APPROVER` — still work
+and then cannot be changed on the Settings page.)
 Windows must allow inbound UDP 69 (TFTP) to Python on the bench network, and no other
 TFTP program may be running. The TFTP server only runs during a job that needs it.
 
@@ -157,7 +157,7 @@ device first and the bootstrap sets it. For a factory-default switch with no man
 switch → enter the management VLAN, port and address → **Preview commands** → choose the
 console cable's COM port → **Run console bootstrap**. Simulated devices use the
 `SIMULATED` console port, so you can try the workflow without hardware. Real switches
-need `UNDM_ENABLE_REAL_DEVICE_WRITES=true`; PuTTY must be closed while UNDM uses the COM
+need Real-device changes on (Settings → Safety); PuTTY must be closed while UNDM uses the COM
 port. First real run: follow `docs/vendor-support/aruba-2930f-console-bootstrap.md`
 on a spare switch.
 

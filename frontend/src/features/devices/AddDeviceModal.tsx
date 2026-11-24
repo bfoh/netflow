@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { useAction, useCredentialRefs, useDeviceModels, useDrivers } from '../../hooks/queries';
 import { api } from '../../services/api';
+import { driverLabel } from '../../services/labels';
 
 const PROTOCOLS = [
   { value: 'ssh', label: 'SSH' }, { value: 'https_api', label: 'HTTPS API' },
@@ -41,30 +42,30 @@ export function AddDeviceModal({ projectId, opened, onClose }:
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Add network element" size="lg">
+    <Modal opened={opened} onClose={onClose} title="Add device" size="lg">
       <Stack>
         <Select
-          label="Device model" required searchable placeholder="Choose from the device model registry"
-          data={(models.data ?? []).map((m) => ({ value: m.model_id, label: `${m.manufacturer} ${m.model} (${m.category})` }))}
+          label="Device model" required searchable placeholder="Choose the model"
+          data={(models.data ?? []).map((m) => ({ value: m.model_id, label: `${m.manufacturer} ${m.model} (${m.category.replaceAll('_', ' ')})` }))}
           value={modelId} onChange={setModelId}
         />
         <SegmentedControl value={kind} onChange={(v) => setKind(v as 'simulated' | 'real')} data={[
-          { value: 'simulated', label: 'Simulated device' }, { value: 'real', label: 'Real lab device (SSH)' }]} />
+          { value: 'simulated', label: 'Simulated device' }, { value: 'real', label: 'Real device on the bench' }]}
+          aria-label="Simulated or real device" />
         {model && kind === 'simulated' && (
           <Alert color="violet" icon={<IconFlask size={18} />} variant="light">
             <Text size="sm">
-              {model.manufacturer} {model.product_family} · {model.os_family}. Driver <code>{driverId}</code>; the device exists only
-              in the UNDM simulation lab.
+              {model.manufacturer} {model.model}: a simulated device that exists only inside UNDM. Use it to try plans safely.
             </Text>
           </Alert>
         )}
         {model && kind === 'real' && (
           driverId ? (
-            <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Experimental real-device driver">
+            <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Real device">
               <Text size="sm">
-                Driver <code>{driverId}</code> connects over SSH. It has not been validated on lab equipment for any model.
-                The device is created in the <b>lab</b> environment: reading from it is allowed; changing it requires
-                <code> UNDM_ENABLE_REAL_DEVICE_WRITES=true</code> and an approved deployment. Use isolated test equipment only.
+                UNDM connects to it over SSH ({driverLabel(driverId, drivers.data)}). Reading from it is always allowed. Changing
+                it needs an approved plan and Real-device changes turned on in Settings → Safety. Its procedures stay marked
+                experimental until proven on the bench: use isolated test equipment only.
               </Text>
               {driver && <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{driver.notes.map((n) => <li key={n}><Text size="xs">{n}</Text></li>)}</ul>}
             </Alert>
@@ -72,15 +73,15 @@ export function AddDeviceModal({ projectId, opened, onClose }:
         )}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <TextInput label="Device name" required value={form.name} onChange={set('name')} />
-          <TextInput label="Network role" placeholder="e.g. access-switch" value={form.role} onChange={set('role')} />
-          <TextInput label="Management address" placeholder="e.g. 10.255.0.11" value={form.management_address} onChange={set('management_address')} />
-          <Select label="Management protocol" data={PROTOCOLS} value={form.management_protocol}
+          <TextInput label="Role" placeholder="e.g. LTE switch" value={form.role} onChange={set('role')} />
+          <TextInput label="Address" description="The address UNDM reaches it at (factory address for a new unit)" placeholder="e.g. 192.0.2.1" value={form.management_address} onChange={set('management_address')} />
+          <Select label="Connects by" data={PROTOCOLS} value={form.management_protocol}
             onChange={(v) => setForm({ ...form, management_protocol: v ?? 'ssh' })} />
           <TextInput label="Site" value={form.site} onChange={set('site')} />
           <TextInput label="Rack / physical location" value={form.rack_location} onChange={set('rack_location')} />
           {kind === 'real' && (
-            <Select label="Credential" clearable
-              placeholder={refs.data?.length ? 'Choose a credential' : 'Add one on the Credentials tab first'}
+            <Select label="Login" clearable
+              placeholder={refs.data?.length ? 'Choose a login' : 'Add one on the Logins tab first'}
               data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={credentialRef} onChange={setCredentialRef} />
           )}
         </SimpleGrid>

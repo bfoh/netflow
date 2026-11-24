@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from undm.config import Settings
 from undm.drivers.registry import DriverRegistry
+from undm.services.safety_settings import effective
 
 
 def get_session(request: Request) -> Iterator[Session]:
@@ -27,8 +28,8 @@ def get_registry(request: Request) -> DriverRegistry:
 
 
 def get_settings_dep(request: Request) -> Settings:
-    settings: Settings = request.app.state.settings
-    return settings
+    """Settings in force now, including the safety switches changed in Settings → Safety."""
+    return effective(request.app.state.settings)
 
 
 def get_actor(x_undm_actor: Annotated[str | None, Header()] = None) -> str:

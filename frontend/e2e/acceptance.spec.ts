@@ -11,14 +11,14 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
 
   // 2. dashboard
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
 
   // 3. create project
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Projects').click();
-  await page.getByRole('button', { name: 'New project' }).click();
-  await page.getByLabel('Project name').fill(project);
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Systems').click();
+  await page.getByRole('button', { name: 'New system' }).click();
+  await page.getByLabel('System name').fill(project);
   await page.getByLabel('Site or location').fill('Synthetic Site');
-  await page.getByRole('button', { name: 'Create project' }).click();
+  await page.getByRole('button', { name: 'Create system' }).click();
   await expect(page.getByRole('heading', { name: project })).toBeVisible();
 
   // 4-5, 7. add an Aruba switch and a Fortinet firewall with metadata and roles
@@ -28,8 +28,8 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
     await dialog.getByRole('combobox', { name: 'Device model' }).click();
     await page.getByRole('option', { name: model }).click();
     await dialog.getByLabel('Device name').fill(name);
-    await dialog.getByLabel('Network role').fill(role);
-    await dialog.getByLabel('Management address').fill(address);
+    await dialog.getByLabel('Role', { exact: true }).fill(role);
+    await dialog.getByLabel('Address', { exact: true }).fill(address);
     await dialog.getByRole('button', { name: 'Add device' }).click();
     await expect(dialog).toBeHidden();
   };
@@ -37,7 +37,7 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
   await addDevice(/FortiGate-60F/, `fw-${suffix}`, 'edge-firewall', `10.200.${octet}.1`);
 
   // 6. both visible in the inventory
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Network Elements').click();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Devices', { exact: true }).click();
   await page.getByLabel('Search devices').fill(suffix);
   await expect(page.getByRole('link', { name: `sw-${suffix}` })).toBeVisible();
   await expect(page.getByRole('link', { name: `fw-${suffix}` })).toBeVisible();
@@ -59,7 +59,7 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
   await expect(page.getByText('interface vlan 99')).toBeVisible();
 
   // firewall: management interface intent, generated through the same path
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Network Elements').click();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Devices', { exact: true }).click();
   await page.getByLabel('Search devices').fill(suffix);
   await page.getByRole('link', { name: `fw-${suffix}` }).click();
   await page.getByRole('tab', { name: 'Intent' }).click();
@@ -73,22 +73,23 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
   await expect(page.getByText(`set hostname "fw-${suffix}"`)).toBeVisible();
 
   // 11. simulated deployment plan with both devices
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Deployments').click();
-  await page.getByRole('combobox', { name: 'Project for a new plan' }).click();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Plans').click();
+  await page.getByRole('combobox', { name: 'System for a new plan' }).click();
   await page.getByRole('option', { name: project }).click();
   await page.getByLabel(`Include sw-${suffix}`).check();
   await page.getByLabel(`Include fw-${suffix}`).check();
   await page.getByRole('button', { name: 'Validate and preview' }).click();
-  await expect(page.getByText('awaiting approval').first()).toBeVisible();
+  await expect(page.getByText('Waiting for approval').first()).toBeVisible();
 
   // 12-13. approve, execute, inspect progress and outcome
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
-  await page.getByRole('button', { name: 'Execute deployment' }).click();
+  await page.getByRole('button', { name: 'Run plan' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Confirm' }).click();
-  await expect(page.getByText('Deployment succeeded')).toBeVisible();
-  await expect(page.getByText('verified', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('Plan succeeded')).toBeVisible();
+  await expect(page.getByText('Verified', { exact: true })).toHaveCount(2);
 
   // 14. audit record
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Logs & Audit').click();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Advanced').click();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Audit log').click();
   await expect(page.getByText('deployment.execute', { exact: true }).first()).toBeVisible();
 });

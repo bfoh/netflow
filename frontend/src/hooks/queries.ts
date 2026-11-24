@@ -20,7 +20,7 @@ export const keys = {
 
 export const useProjects = () => useQuery({ queryKey: keys.projects, queryFn: api.projects });
 export const useProject = (id: string) =>
-  useQuery({ queryKey: keys.project(id), queryFn: () => api.project(id) });
+  useQuery({ queryKey: keys.project(id), queryFn: () => api.project(id), enabled: !!id });
 export const useAllDevices = () => useQuery({ queryKey: keys.devices, queryFn: api.allDevices });
 export const useProjectDevices = (pid: string) =>
   useQuery({ queryKey: keys.projectDevices(pid), queryFn: () => api.projectDevices(pid) });

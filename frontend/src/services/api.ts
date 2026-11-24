@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SerialPort, StagingPlan, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingPlan, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -44,7 +44,7 @@ function describe(body: unknown, status: number): string {
     }
     if (typeof b.detail === 'string') return b.detail;
   }
-  if (status >= 500) return `No usable answer from the backend (${status}). Is it running on port 8000?`;
+  if (status >= 500) return `UNDM could not answer (error ${status}). Is UNDM still running? Its window or log says why.`;
   return `Request failed (${status})`;
 }
 
@@ -69,6 +69,7 @@ export const api = {
   health: () => request<{ status: string; version: string; problem?: string | null }>('GET', '/health'),
   drivers: () => request<Driver[]>('GET', '/drivers'),
   policy: () => request<Policy>('GET', '/policy'),
+  changePolicy: (changes: Partial<Record<SafetySwitch, boolean>>) => request<Policy>('PUT', '/policy', changes),
   credentialRefs: (pid: string) => request<CredentialRef[]>('GET', `/projects/${pid}/credential-refs`),
   createCredentialRef: (pid: string, body: { name: string; provider?: string; locator?: string }) =>
     request<CredentialRef>('POST', `/projects/${pid}/credential-refs`, body),

@@ -41,7 +41,7 @@ class Policy:
         production = environment == DeviceEnvironment.PRODUCTION.value
         if production and not self.allow_production_read_only:
             return (f"{name} is a production device; connecting to production devices is disabled "
-                    "(UNDM_ALLOW_PRODUCTION_READ_ONLY=false)")
+                    "(start-up setting UNDM_ALLOW_PRODUCTION_READ_ONLY)")
         return None
 
     def write_problem(self, name: str, environment: str, simulated: bool) -> str | None:
@@ -53,9 +53,9 @@ class Policy:
             return (f"{name} is a production device; production deployments are disabled by "
                     "policy (UNDM_ALLOW_PRODUCTION_DEPLOYMENTS)")
         if not self.enable_real_device_writes:
-            return (f"{name} is a real device; configuration changes to real devices are disabled "
-                    "(set UNDM_ENABLE_REAL_DEVICE_WRITES=true to allow changes to lab devices). "
-                    "Dry runs are allowed.")
+            return (f"{name} is a real device and Real-device changes are off. Turn them on "
+                    "in Settings → Safety to let approved plans change lab devices. Dry runs "
+                    "are allowed.")
         return None
 
     def firmware_problem(self, name: str, environment: str, simulated: bool) -> str | None:
@@ -66,7 +66,7 @@ class Policy:
         if problem:
             return problem
         if not self.enable_real_device_firmware:
-            return (f"{name} is a real device; firmware changes to real devices are disabled "
-                    "(set UNDM_ENABLE_REAL_DEVICE_FIRMWARE=true to allow them on lab devices). "
+            return (f"{name} is a real device and Firmware changes are off. Turn them on in "
+                    "Settings → Safety to let approved firmware plans upgrade lab devices. "
                     "Dry runs are allowed.")
         return None

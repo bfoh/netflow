@@ -8,16 +8,22 @@ Two different actors must be distinguished:
   connections only.
 - **The operator running UNDM on their own machine** decides which devices UNDM reaches.
   On 2026-11-18 the product owner requested real-device capability for testing on a real
-  system. UNDM enforces these switches (all off by default, set in `backend/.env`):
+  system. UNDM enforces these switches (all off by default). Since D-082 (2026-11-24) the
+  three bench switches — real-device changes, firmware changes, second approver for firmware —
+  can also be changed in **Settings → Safety**: turning one to its less safe position needs a
+  confirmation, every change is audited (`policy.change`, who, before, after), and the values
+  are kept in `settings.json` in this copy's data folder. A switch set in `backend/.env` or the
+  environment wins and is shown as fixed. The production switches are start-up settings only.
+  A damaged `settings.json` counts as empty, i.e. everything off.
 
 | Environment | Read-only (connect, facts, backup, dry runs) | Configuration changes | Firmware |
 |---|---|---|---|
 | Simulated | always | always (through approved deployments) | simulated upgrades |
-| Lab (real) | allowed | only with `UNDM_ENABLE_REAL_DEVICE_WRITES=true`, through approved deployments | only with the write switch **and** `UNDM_ENABLE_REAL_DEVICE_FIRMWARE=true`, approved plan, maintenance window; one procedure exists (Aruba 2930F, experimental, one successful run on a spare unit 2026-11-19) |
+| Lab (real) | allowed | only with Real-device changes on (`UNDM_ENABLE_REAL_DEVICE_WRITES` or Settings → Safety), through approved plans | only with the write switch **and** Firmware changes on (`UNDM_ENABLE_REAL_DEVICE_FIRMWARE` or Settings → Safety), approved plan, maintenance window; procedures exist for Aruba 2930F, FortiGate 101F and Black Box LIG1014A (experimental, each run on bench units) |
 | Production (real) | only with `UNDM_ALLOW_PRODUCTION_READ_ONLY=true` | only with writes enabled **and** `UNDM_ALLOW_PRODUCTION_DEPLOYMENTS=true` | not implemented |
 
-Console bootstrap (Provisioning Center) writes to a device over a serial cable. For real
-devices it needs `UNDM_ENABLE_REAL_DEVICE_WRITES=true`, a typed confirmation of the device
+Console bootstrap (Console setup page) writes to a device over a serial cable. For real
+devices it needs Real-device changes on, a typed confirmation of the device
 name, and a switch that looks factory default (no password prompt, no site configuration)
 unless the operator explicitly overrides that check. It is meant for spare or new units on
 an isolated bench. A **preconfigured** switch (e.g. BH-DMZ units delivered with another

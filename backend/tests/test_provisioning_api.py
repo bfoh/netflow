@@ -93,7 +93,7 @@ def test_real_device_needs_write_switch_and_real_port(client, monkeypatch):
     opened = []
     monkeypatch.setattr(prov, "open_serial", lambda port, baud: opened.append(port))
     r = run(client, did, confirm_device_name="lab-sw", serial_port="COM7")
-    assert r.status_code == 403 and "UNDM_ENABLE_REAL_DEVICE_WRITES" in r.json()["error"]
+    assert r.status_code == 403 and "Real-device changes are off" in r.json()["error"]
     assert run(client, did, confirm_device_name="lab-sw").status_code == 400  # SIMULATED refused
     assert opened == []
     pre = client.post(f"/api/devices/{did}/provisioning/console-bootstrap/preview",

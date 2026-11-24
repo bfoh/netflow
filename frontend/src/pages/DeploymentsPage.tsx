@@ -24,6 +24,7 @@ function ConfigChoice({ deviceId, value, onChange }: { deviceId: string; value: 
     onChange={(v) => onChange(v ?? DEFAULT_CHOICE)} allowDeselect={false} />;
 }
 import { api } from '../services/api';
+import { applyModeLabel, stateLabel } from '../services/labels';
 
 /**
  * What the chosen file needs: the apply mode its kind requires, and a credential for each
@@ -43,13 +44,13 @@ function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode, loginAfte
   return (
     <Stack gap={4} mt={4}>
       <Text size="xs" c={report.blocked_reason || report.problems.length ? 'red' : 'dimmed'}>
-        {report.summary}{mode ? ` → ${mode} mode` : ''}{report.blocked_reason ? `. ${report.blocked_reason}` : ''}
+        {report.summary}{mode ? ` → loaded as ${applyModeLabel(mode)}` : ''}{report.blocked_reason ? `. ${report.blocked_reason}` : ''}
       </Text>
       {(report.secret_slots ?? []).map((slot) => (
         <Select key={slot.slot_id} size="xs" w={320} clearable
           label={`Value for ${slot.setting} (line ${slot.line})`}
-          description={secrets[slot.slot_id] ? 'Sent from the credential store; never shown or stored with the plan.' : 'Not set: the value written in the file is sent.'}
-          placeholder={refs.data?.length ? 'Choose a credential' : 'Add one on the project Credentials tab'}
+          description={secrets[slot.slot_id] ? 'Sent from Windows Credential Manager; never shown or stored with the plan.' : 'Not set: the value written in the file is sent.'}
+          placeholder={refs.data?.length ? 'Choose a login' : 'Add one on the system\'s Logins tab'}
           data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
           value={secrets[slot.slot_id] ?? null}
           onChange={(v) => {
@@ -63,7 +64,7 @@ function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode, loginAfte
           description={loginAfter
             ? 'UNDM logs in with this after the restart and keeps it for the device. If the unit then demands a new password, UNDM sets the device\'s current (approved) login where it knows the questions (FortiGate), otherwise it waits for you to set it by hand; the device then keeps its current login.'
             : 'Choose it if the file changes the login (2930F files: the approved password; FortiGate base file: the password it sets).'}
-          placeholder={refs.data?.length ? 'Same login as now' : 'Add one on the project Credentials tab'}
+          placeholder={refs.data?.length ? 'Same login as now' : 'Add one on the system\'s Logins tab'}
           data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
           value={loginAfter} onChange={onLoginAfter} />
       )}
@@ -93,11 +94,11 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
     secrets: Object.keys(chosenSecrets).length ? chosenSecrets : undefined,
     credentials_after: Object.keys(chosenLogins).length ? chosenLogins : undefined,
   }),
-    (d) => `Plan created: ${d.state.replaceAll('_', ' ')}`);
+    (d) => `Plan created: ${stateLabel(d.state).toLowerCase()}`);
 
   return (
     <Card withBorder>
-      <Title order={4} mb="xs">New deployment plan</Title>
+      <Title order={4} mb="xs">New configuration plan</Title>
       <Text size="sm" c="dimmed" mb="md">
         For each selected device choose which configuration to deploy (default: the latest generated one, or the latest
         imported file if nothing was generated). It is validated and previewed against the device.
@@ -177,7 +178,7 @@ function NewStagingPlan({ projectId }: { projectId: string }) {
     credential_after_ref_id: loginAfter,
     secrets: Object.keys(secrets).length ? secrets : undefined,
     first_login: firstLogin,
-  }), (p) => `Staging plan created: step 1 ${p.steps[0]?.state.replaceAll('_', ' ')}`);
+  }), (p) => `Staging plan created: step 1 ${stateLabel(p.steps[0]?.state ?? '').toLowerCase()}`);
   const ignoreMode = useCallback(() => undefined, []);
 
   return (
@@ -221,7 +222,7 @@ function NewFirstLogin({ projectId }: { projectId: string }) {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const navigate = useNavigate();
   const create = useAction(() => api.createFirstLogin(projectId, deviceId!),
-    (d) => `First login planned: ${d.state.replaceAll('_', ' ')}`);
+    (d) => `First login planned: ${stateLabel(d.state).toLowerCase()}`);
   return (
     <Card withBorder>
       <Title order={4} mb="xs">First login on a new unit</Title>
@@ -254,10 +255,10 @@ export function DeploymentsPage() {
 
   return (
     <>
-      <PageHeader title="Deployment Center" description="Plan, approve, execute and inspect configuration deployments." />
+      <PageHeader title="Plans" description="A plan is one approved piece of work on devices: load a file, upgrade firmware or set the first login. Make one, approve it, then run it." />
       <Stack>
         <Card withBorder>
-          <Select label="Project for a new plan" placeholder="Choose a project" maw={420}
+          <Select label="System for a new plan" placeholder="Choose a system" maw={420}
             data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
             value={projectId} onChange={(v) => setParams(v ? { project: v } : {})} />
         </Card>
@@ -266,11 +267,11 @@ export function DeploymentsPage() {
         {projectId && <NewFirstLogin key={`first-${projectId}`} projectId={projectId} />}
         {projectId && <NewStagingPlan key={`staging-${projectId}`} projectId={projectId} />}
         <Card withBorder padding={0}>
-          <Title order={5} p="md" pb={0}>All deployments</Title>
+          <Title order={5} p="md" pb={0}>All plans</Title>
           <QueryState isLoading={all.isLoading} error={all.error} />
           <Table.ScrollContainer minWidth={640}>
             <Table verticalSpacing="xs" horizontalSpacing="md" highlightOnHover>
-              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Project</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>State</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>System</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>
                 {(all.data ?? []).map((d) => (
                   <Table.Tr key={d.id}>
@@ -282,7 +283,7 @@ export function DeploymentsPage() {
                     <Table.Td><StateBadge state={d.state} /></Table.Td>
                   </Table.Tr>
                 ))}
-                {all.data?.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text c="dimmed" ta="center" p="md">No deployments yet.</Text></Table.Td></Table.Tr>}
+                {all.data?.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text c="dimmed" ta="center" p="md">No plans yet.</Text></Table.Td></Table.Tr>}
               </Table.Tbody>
             </Table>
           </Table.ScrollContainer>

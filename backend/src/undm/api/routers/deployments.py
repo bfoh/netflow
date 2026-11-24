@@ -23,13 +23,14 @@ from undm.services.deployments import DeploymentService
 from undm.services.errors import ConflictError
 from undm.services.jobs import DeploymentJobs
 from undm.services.policy import Policy
+from undm.services.safety_settings import effective
 
 router = APIRouter(tags=["deployments"])
 log = logging.getLogger("undm")
 
 
 def build_service(session: Session, state: Any) -> DeploymentService:
-    settings = state.settings
+    settings = effective(state.settings)  # switches as they are now, also for queued runs
     return DeploymentService(
         session, state.registry, Policy.from_settings(settings),
         firmware_reboot_wait=(settings.firmware_reboot_wait_attempts,

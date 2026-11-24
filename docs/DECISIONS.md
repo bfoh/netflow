@@ -844,3 +844,35 @@ of the team's file no longer shown afterwards: `ip http secure-server` and `ip h
 secure-redirect` (Q-44). Staging order for this switch: firmware first, then the team's
 file. The firmware orchestrator now also shows what a driver reports the device printed
 during a step (as configuration loads already did).
+
+### D-082 Safety switches can be changed in Settings → Safety (2026-11-24)
+Product owner decision (Plan A, A1b): colleagues must be able to switch real-device changes
+on and off without editing `backend\.env`. `services/safety_settings.py` keeps three switches
+in `settings.json` in the data folder: `enable_real_device_writes`,
+`enable_real_device_firmware`, `firmware_require_separate_approver`. Defaults are unchanged
+(off, off, second approver on; rule 1). `GET /api/policy` reports the switches in force and
+which are `locked`; `PUT /api/policy` changes them, records one `policy.change` audit event
+per switch that really changed (actor, before, after), logs a warning, and answers 409 for a
+switch fixed by the start-up settings (an `UNDM_*` variable or `.env` line wins, as before).
+Production switches are not accepted (422): UNDM changes production devices only when its
+start-up settings say so. The settings in force are read for every request and when a queued
+plan builds its service, so turning a switch off stops an approved plan that has not started.
+A damaged file counts as empty (everything off). The UI asks for a confirmation ("the devices
+are spare units on an isolated bench") before a switch moves to its less safe position, not
+for the safe direction. Refusal texts now name Settings → Safety instead of variable names,
+and the second-approver refusal says how to proceed.
+
+### D-083 Plain words and a work-ordered navigation (2026-11-24)
+Plan A, A1a + A2: one glossary in the UI (`frontend/src/services/labels.ts`): a *device*, a
+*system* (internally a project), a *plan* run in steps (internally a deployment), a *login*
+(internally a credential reference), *file* (configuration). States, drivers, platforms,
+fact keys, capabilities and audit actions are shown in words; internal ids stay visible only
+under "Technical details". Navigation: Home, Systems, Devices, Files, Firmware, Console
+setup, Plans, Advanced (Topology, Audit log), Settings; page titles match. Texts that were
+wrong are corrected: the Firmware page lists the three real upgrade procedures (2930F,
+FortiGate 101F, LIG1014A — experimental, each run on bench units); the Console setup page
+says a FortiGate gets its password from a First login plan and a LIG1014A needs no console
+setup; the Home page lost "Firmware Manager is planned for Phase 7" and shows what is
+waiting for the user; the "port 8000" error text is gone. API paths and stored values are
+unchanged.
+

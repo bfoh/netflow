@@ -113,7 +113,12 @@ export interface Policy {
   allow_production_read_only: boolean;
   allow_production_deployments: boolean;
   require_separate_approver: boolean;
+  firmware_require_separate_approver: boolean;
+  /** Switches fixed by the start-up settings; they cannot be changed in Settings. */
+  locked: string[];
 }
+
+export type SafetySwitch = 'enable_real_device_writes' | 'enable_real_device_firmware' | 'firmware_require_separate_approver';
 
 export interface DeviceModel {
   model_id: string;

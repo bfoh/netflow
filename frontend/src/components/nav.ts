@@ -1,18 +1,24 @@
 import {
-  IconBinaryTree2, IconCpu, IconDashboard, IconFileCode, IconFolders,
-  IconHistory, IconRocket, IconRouter, IconSettings, IconUpload,
+  IconBinaryTree2, IconCpu, IconFileCode, IconFolders, IconHistory, IconHome,
+  IconRocket, IconRouter, IconSettings, IconUpload,
 } from '@tabler/icons-react';
 
-/** Main navigation: one entry per application module. */
+/** Main navigation, in the order of the work: systems and devices, their files and firmware,
+ * the console setup of new switches, then the plans that change devices. */
 export const NAV = [
-  { to: '/', label: 'Dashboard', icon: IconDashboard },
-  { to: '/projects', label: 'Projects', icon: IconFolders },
-  { to: '/devices', label: 'Network Elements', icon: IconRouter },
-  { to: '/topology', label: 'Topology', icon: IconBinaryTree2 },
-  { to: '/configurations', label: 'Configurations', icon: IconFileCode },
-  { to: '/provisioning', label: 'Provisioning', icon: IconCpu },
+  { to: '/', label: 'Home', icon: IconHome },
+  { to: '/projects', label: 'Systems', icon: IconFolders },
+  { to: '/devices', label: 'Devices', icon: IconRouter },
+  { to: '/configurations', label: 'Files', icon: IconFileCode },
   { to: '/firmware', label: 'Firmware', icon: IconUpload },
-  { to: '/deployments', label: 'Deployments', icon: IconRocket },
-  { to: '/audit', label: 'Logs & Audit', icon: IconHistory },
-  { to: '/settings', label: 'Settings', icon: IconSettings },
+  { to: '/provisioning', label: 'Console setup', icon: IconCpu },
+  { to: '/deployments', label: 'Plans', icon: IconRocket },
 ] as const;
+
+/** Tools experienced users need now and then; folded away by default. */
+export const ADVANCED_NAV = [
+  { to: '/topology', label: 'Topology', icon: IconBinaryTree2 },
+  { to: '/audit', label: 'Audit log', icon: IconHistory },
+] as const;
+
+export const SETTINGS_NAV = { to: '/settings', label: 'Settings', icon: IconSettings } as const;

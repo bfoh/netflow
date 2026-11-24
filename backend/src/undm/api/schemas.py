@@ -41,6 +41,19 @@ class PolicyOut(BaseModel):
     allow_production_read_only: bool
     allow_production_deployments: bool
     require_separate_approver: bool
+    firmware_require_separate_approver: bool = True
+    # Switches fixed by the start-up settings (.env or environment): not changeable in the UI.
+    locked: list[str] = []
+
+
+class PolicyChange(BaseModel):
+    """Switches to change from Settings → Safety; omitted ones stay as they are."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enable_real_device_writes: bool | None = None
+    enable_real_device_firmware: bool | None = None
+    firmware_require_separate_approver: bool | None = None
 
 
 _CLI_TEXT = r'^[^"?\\\x00-\x1f\x7f]*$'  # typed into a switch CLI: no quotes, '?', '\\'

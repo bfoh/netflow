@@ -9,6 +9,7 @@ import { downloadText, fmtDate } from '../../services/format';
 import { useAction, useConfig, useConfigDiff, useConfigs } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { ConfigInspection, ConfigVersion, Device, Issue } from '../../types/api';
+import { humanize } from '../../services/labels';
 
 const label = (v: ConfigVersion) =>
   `${v.kind}${v.kind === 'imported' && v.reference ? ` (${v.reference})` : ''} · ${fmtDate(v.created_at)} · ${v.sha256.slice(0, 8)}`;
@@ -90,11 +91,11 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
                 <Group gap="xs" mb="xs">
                   <Badge variant="light">{shown.data.kind}</Badge>
                   {shown.data.platform && <Badge variant="light" color="gray">{shown.data.template_version ? `${shown.data.platform} template v${shown.data.template_version}` : shown.data.platform}</Badge>}
-                  {shown.data.verification && <Badge variant="light" color="yellow">{shown.data.verification.replaceAll('_', ' ')}</Badge>}
+                  {shown.data.verification && <Badge variant="light" color="yellow">{humanize(shown.data.verification)}</Badge>}
                 </Group>
                 {shown.data.kind === 'imported' && (
                   <Alert color="orange" variant="light" icon={<IconInfoCircle size={16} />} mb="xs" p="xs">
-                    <Text size="xs">Imported from <b>{shown.data.reference}</b>. It is deployed exactly as written and is not checked against the device intent. Review it, and compare it with the latest backup, before deploying.</Text>
+                    <Text size="xs">Imported from <b>{shown.data.reference}</b>. It is sent exactly as written and is not checked against the device's settings. Review it, and compare it with the latest backup, before making a plan.</Text>
                   </Alert>
                 )}
                 {shown.data.inspection && <FileReport report={shown.data.inspection} />}
@@ -105,11 +106,11 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
                     <Group gap="xs" mb="xs" wrap="nowrap" align="flex-start">
                       <Button size="xs" leftSection={<IconRocket size={14} />} disabled={blocked}
                         onClick={() => void navigate(`/deployments?project=${device.project_id}&devices=${device.id}&version=${shown.data!.id}`)}>
-                        Deploy this version…
+                        Make a plan with this version…
                       </Button>
                       <Text size="xs" c="dimmed">{blocked
                         ? 'This file cannot be applied as it is (see above).'
-                        : 'Opens a new deployment plan with this version chosen. Nothing is sent to the device until the plan is validated, approved and executed.'}</Text>
+                        : 'Opens a new plan with this version chosen. Nothing is sent to the device until the plan is checked, approved and run.'}</Text>
                     </Group>
                   );
                 })()}

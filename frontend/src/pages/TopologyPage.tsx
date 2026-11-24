@@ -167,9 +167,9 @@ export function TopologyPage() {
   const topo = useTopology(projectId);
   return (
     <>
-      <PageHeader title="Topology Designer" description="Design devices and the links between their interfaces. The graph, not the drawing, is what UNDM validates." />
+      <PageHeader title="Topology" description="Design devices and the links between their interfaces. The graph, not the drawing, is what UNDM validates." />
       <Group mb="md">
-        <Select label="Project" w={320} data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+        <Select label="System" w={320} data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
           value={projectId || null} onChange={(v) => v && setParams({ project: v })} allowDeselect={false} />
       </Group>
       <QueryState isLoading={topo.isLoading} error={topo.error} />

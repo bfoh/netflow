@@ -39,7 +39,7 @@ export function IntentEditor({ device }: { device: Device }) {
         <TextInput label="Hostname" required maw={320} value={intent.hostname} onChange={(e) => update('hostname', e.currentTarget.value)} />
         {renames && (
           <Alert color="orange" mt="sm" icon={<IconAlertTriangle size={16} />} title="This intent renames the device">
-            The device currently reports hostname <b>{observedHostname}</b>. Deploying this intent sets it to <b>{intent.hostname}</b>.
+            The device currently reports hostname <b>{observedHostname}</b>. A plan with these settings sets it to <b>{intent.hostname}</b>.
             Keep the current name unless you mean to rename it.
             <Button size="xs" variant="light" ml="sm" onClick={() => update('hostname', observedHostname!)}>Use {observedHostname}</Button>
           </Alert>

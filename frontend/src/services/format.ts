@@ -16,8 +16,4 @@ export function downloadText(filename: string, text: string): void {
   URL.revokeObjectURL(url);
 }
 
-/** Short label for a plan's type in lists. */
-export function planKind(d: { kind: string; apply_mode: string; dry_run: boolean }): string {
-  const base = d.kind === 'firmware' ? 'firmware' : d.kind === 'first_login' ? 'first login' : `config · ${d.apply_mode}`;
-  return base + (d.dry_run ? ' · dry run' : '');
-}
+export { planKind } from './labels';

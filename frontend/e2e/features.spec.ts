@@ -8,7 +8,8 @@ const nav = (page: Page, label: string) =>
 
 async function setActor(page: Page, name: string) {
   await nav(page, 'Settings');
-  await page.getByLabel('Acting as').fill(name);
+  await page.getByRole('tab', { name: 'Your name' }).click();
+  await page.getByRole('textbox', { name: 'Your name' }).fill(name);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole("banner").getByText(name, { exact: true })).toBeVisible();
 }
@@ -20,10 +21,10 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   await page.goto('/');
   await setActor(page, 'e2e-engineer');
 
-  await nav(page, 'Projects');
-  await page.getByRole('button', { name: 'New project' }).click();
-  await page.getByLabel('Project name').fill(project);
-  await page.getByRole('button', { name: 'Create project' }).click();
+  await nav(page, 'Systems');
+  await page.getByRole('button', { name: 'New system' }).click();
+  await page.getByLabel('System name').fill(project);
+  await page.getByRole('button', { name: 'Create system' }).click();
   await expect(page.getByRole('heading', { name: project })).toBeVisible();
 
   for (const [model, name, addr] of [[/Aruba 6300M/, `sw-${id}`, `10.201.${octet}.11`],
@@ -33,7 +34,7 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
     await dialog.getByRole('combobox', { name: 'Device model' }).click();
     await page.getByRole('option', { name: model }).click();
     await dialog.getByLabel('Device name').fill(name);
-    await dialog.getByLabel('Management address').fill(addr);
+    await dialog.getByLabel('Address', { exact: true }).fill(addr);
     await dialog.getByRole('button', { name: 'Add device' }).click();
     await expect(dialog).toBeHidden();
   }
@@ -49,8 +50,9 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   await expect(page.getByText('vlan 42')).toBeVisible();
 
   // Topology: connect the two devices
+  await nav(page, 'Advanced');
   await nav(page, 'Topology');
-  await page.getByRole('combobox', { name: 'Project' }).click();
+  await page.getByRole('combobox', { name: 'System' }).click();
   await page.getByRole('option', { name: project }).click();
   const sw = page.locator('.react-flow__node', { hasText: `sw-${id}` });
   const fw = page.locator('.react-flow__node', { hasText: `fw-${id}` });
@@ -75,20 +77,20 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   await page.getByLabel('Vendor checksum (SHA-256 or SHA-512)').fill(createHash('sha256').update(image).digest('hex'));
   await page.getByRole('button', { name: 'Upload to repository' }).click();
   const row = page.getByRole('row', { name: new RegExp(`cx-${id}`) });
-  await expect(row.getByText('verified')).toBeVisible();
+  await expect(row.getByText('Verified')).toBeVisible();
   await row.getByRole('button', { name: 'Approve' }).click();
-  await expect(row.getByText('approved', { exact: true })).toBeVisible();
+  await expect(row.getByText('Approved', { exact: true })).toBeVisible();
 
-  await page.getByRole('tab', { name: 'Upgrade planning' }).click();
+  await page.getByRole('tab', { name: 'Make an upgrade plan' }).click();
   await page.getByRole('combobox', { name: 'Approved image' }).click();
   await page.getByRole('option', { name: new RegExp(`cx-${id}`) }).click();
-  await page.getByRole('combobox', { name: 'Project' }).click();
+  await page.getByRole('combobox', { name: 'System' }).click();
   await page.getByRole('option', { name: project }).click();
   await page.getByLabel(`Upgrade sw-${id}`).check();
   await page.getByRole('button', { name: 'Check compatibility (offline)' }).click();
   await expect(page.getByText('compatible', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Create upgrade plan' }).click();
-  await expect(page.getByText('awaiting approval').first()).toBeVisible();
+  await expect(page.getByText('Waiting for approval').first()).toBeVisible();
   const planUrl = page.url();
 
   // A different person approves with a maintenance window, then executes.
@@ -96,8 +98,8 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   await page.goto(planUrl);
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
   await page.getByRole('button', { name: 'Approve with this window' }).click();
-  await page.getByRole('button', { name: 'Execute deployment' }).click();
+  await page.getByRole('button', { name: 'Run plan' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Confirm' }).click();
-  await expect(page.getByText('Deployment succeeded')).toBeVisible();
+  await expect(page.getByText('Plan succeeded')).toBeVisible();
   await expect(page.getByText(/→ 10\.2\.0/)).toBeVisible();
 });

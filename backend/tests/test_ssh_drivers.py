@@ -181,7 +181,7 @@ def test_lab_device_read_only_and_writes_gated(scenario, mem_keyring):
         facts = client.post(f"/api/devices/{did}/operations/get_facts").json()
         assert facts["status"] == "success" and facts["data"]["serial_number"] == "FDO0000TEST"
         r = client.post(f"/api/projects/{pid}/deployments", json={"device_ids": [did]})
-        assert r.status_code == 403 and "UNDM_ENABLE_REAL_DEVICE_WRITES" in r.json()["error"]
+        assert r.status_code == 403 and "Real-device changes are off" in r.json()["error"]
         dry = client.post(f"/api/projects/{pid}/deployments",
                           json={"device_ids": [did], "dry_run": True}).json()
         out = client.post(f"/api/deployments/{dry['id']}/execute").json()

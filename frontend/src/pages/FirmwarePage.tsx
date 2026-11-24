@@ -10,6 +10,7 @@ import { PageHeader, QueryState } from '../components/Page';
 import { useAction, useDeviceModels, useFirmwareImages, usePolicy, useProjectDevices, useProjects } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Compatibility, FirmwareImage } from '../types/api';
+import { platformLabel, stateLabel } from '../services/labels';
 
 const PLATFORMS = [
   { value: 'aos_switch', label: 'ArubaOS-Switch (e.g. 2930F)' }, { value: 'aoscx', label: 'Aruba AOS-CX' },
@@ -118,25 +119,25 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
     <Card withBorder padding={0}>
       <Table.ScrollContainer minWidth={900}>
         <Table verticalSpacing="xs" horizontalSpacing="md">
-          <Table.Thead><Table.Tr><Table.Th>Version</Table.Th><Table.Th>Platform</Table.Th><Table.Th>File</Table.Th><Table.Th>Models</Table.Th>
-            <Table.Th>Integrity</Table.Th><Table.Th>Status</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
+          <Table.Thead><Table.Tr><Table.Th>Version</Table.Th><Table.Th>For</Table.Th><Table.Th>File</Table.Th><Table.Th>Models</Table.Th>
+            <Table.Th>Checksum</Table.Th><Table.Th>Status</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>
             {images.map((i) => (
               <Table.Tr key={i.id}>
                 <Table.Td><Text fw={600} size="sm">{i.version}</Text>{i.min_from_version && <Text size="xs" c="dimmed">from ≥ {i.min_from_version}</Text>}</Table.Td>
-                <Table.Td>{i.platform}</Table.Td>
-                <Table.Td><Text size="sm">{i.filename}</Text><Text size="xs" c="dimmed" ff="monospace">{fmtSize(i.size_bytes)} · {i.sha256.slice(0, 12)}…</Text></Table.Td>
+                <Table.Td>{platformLabel(i.platform)}</Table.Td>
+                <Table.Td><Text size="sm">{i.filename}</Text><Text size="xs" c="dimmed">{fmtSize(i.size_bytes)}</Text></Table.Td>
                 <Table.Td><Text size="sm">{i.compatible_models.join(', ')}</Text></Table.Td>
                 <Table.Td>{i.integrity_verified
-                  ? <Tooltip label={`${i.vendor_sha512 ? 'SHA-512' : 'SHA-256'} matched the vendor-published checksum`}><Badge color="teal" variant="light" leftSection={<IconShieldCheck size={12} />}>verified</Badge></Tooltip>
+                  ? <Tooltip label={`${i.vendor_sha512 ? 'SHA-512' : 'SHA-256'} matched the vendor-published checksum`}><Badge color="teal" variant="light" leftSection={<IconShieldCheck size={12} />}>Verified</Badge></Tooltip>
                   : <Group gap={4} wrap="nowrap">
                       {i.status === 'approved' && i.unverified_reason
                         ? <Tooltip multiline w={320} label={`Approved by ${i.approved_by ?? '?'} without the vendor's checksum. Reason: ${i.unverified_reason}`}>
-                            <Badge color="orange" variant="light" leftSection={<IconAlertTriangle size={12} />}>not verified · approved with reason</Badge></Tooltip>
-                        : <Tooltip label="No vendor checksum was supplied. Add it, or approve the image with a written reason."><Badge color="yellow" variant="light">not verified</Badge></Tooltip>}
+                            <Badge color="orange" variant="light" leftSection={<IconAlertTriangle size={12} />}>Not verified · approved with reason</Badge></Tooltip>
+                        : <Tooltip label="No vendor checksum was supplied. Add it, or approve the image with a written reason."><Badge color="yellow" variant="light" leftSection={<IconAlertTriangle size={12} />}>Not verified</Badge></Tooltip>}
                       {i.status !== 'retired' && <Button size="compact-xs" variant="light" onClick={() => { setChecksum(''); setChecking(i); }}>Add vendor checksum…</Button>}
                     </Group>}</Table.Td>
-                <Table.Td><Badge color={i.status === 'approved' ? 'teal' : i.status === 'retired' ? 'gray' : 'blue'} variant="light">{i.status}</Badge>
+                <Table.Td><Badge color={i.status === 'approved' ? 'teal' : i.status === 'retired' ? 'gray' : 'blue'} variant="light">{stateLabel(i.status)}</Badge>
                   {i.approved_by && <Text size="xs" c="dimmed">by {i.approved_by}</Text>}</Table.Td>
                 <Table.Td>
                   <Group gap={4}>
@@ -149,7 +150,7 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
                 </Table.Td>
               </Table.Tr>
             ))}
-            {images.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text c="dimmed" ta="center" p="md">No images in the repository yet.</Text></Table.Td></Table.Tr>}
+            {images.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text c="dimmed" ta="center" p="md">No firmware images yet. Upload one above.</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
       </Table.ScrollContainer>
@@ -171,7 +172,7 @@ function Planner({ images }: { images: FirmwareImage[] }) {
   const navigate = useNavigate();
   const check = useAction(() => api.firmwareCompatibility(imageId!, sel));
   const create = useAction(() => api.createFirmwareDeployment(projectId!, { device_ids: sel, image_id: imageId!, dry_run: dryRun, allow_downgrade: allowDowngrade, also_secondary: alsoSecondary }),
-    (d) => `Upgrade plan created: ${d.state.replaceAll('_', ' ')}`);
+    (d) => `Upgrade plan created: ${stateLabel(d.state).toLowerCase()}`);
   const approved = images.filter((i) => i.status === 'approved');
   const chosen = approved.find((i) => i.id === imageId);
   const allOk = !!results && results.length === sel.length && results.every((r) => r.compatible);
@@ -183,7 +184,7 @@ function Planner({ images }: { images: FirmwareImage[] }) {
           <Select label="Approved image" placeholder={approved.length ? 'Choose an image' : 'Approve an image first'}
             data={approved.map((i) => ({ value: i.id, label: `${i.platform} ${i.version} (${i.filename})${i.integrity_verified ? '' : ' · NOT VERIFIED'}` }))}
             value={imageId} onChange={(v) => { setImageId(v); setResults(null); }} />
-          <Select label="Project" data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+          <Select label="System" data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
             value={projectId} onChange={(v) => { setProjectId(v); setSel([]); setResults(null); }} />
         </SimpleGrid>
         {chosen && !chosen.integrity_verified && (
@@ -219,7 +220,7 @@ function Planner({ images }: { images: FirmwareImage[] }) {
               onClick={() => check.mutate(undefined, { onSuccess: setResults })}>Check compatibility (offline)</Button>
             <Switch label="Dry run (read versions only, no approval)" checked={dryRun} onChange={(e) => setDryRun(e.currentTarget.checked)} />
             <Checkbox label="Install the approved version even on devices that run a newer one (downgrade)"
-              description="For a project that requires an older approved release, e.g. new units shipping with a newer one."
+              description="For a system that requires an older approved release, e.g. new units shipping with a newer one."
               checked={allowDowngrade} onChange={(e) => setAllowDowngrade(e.currentTarget.checked)} />
             <Checkbox label="Also write the approved version into the secondary flash"
               description="After the device runs it from primary (it keeps booting from primary). Devices already on the version get only their secondary written."
@@ -239,26 +240,26 @@ export function FirmwarePage() {
   const realFirmware = !!policy.data?.enable_real_device_writes && !!policy.data?.enable_real_device_firmware;
   return (
     <>
-      <PageHeader title="Firmware Manager" description="Approved image repository, offline compatibility checks and controlled upgrade plans." />
-      <Alert color="orange" icon={<IconAlertTriangle size={18} />} mb="md"
-        title={realFirmware ? 'Firmware changes to real lab devices are ENABLED' : 'Real devices: dry runs only'}>
-        Simulated devices can be upgraded freely. One real-device procedure exists and is <b>experimental, not yet run on
-        hardware</b>: Aruba 2930F (ArubaOS-Switch), where the switch pulls the image from this PC over TFTP and restarts into it.
-        Use it only on a spare unit on an isolated bench. {realFirmware
-          ? 'Both safety switches are on for this server.'
-          : 'Real upgrades stay blocked until both UNDM_ENABLE_REAL_DEVICE_WRITES and UNDM_ENABLE_REAL_DEVICE_FIRMWARE are set; dry runs (read the running version, change nothing) are allowed.'}{' '}
-        Other real models are reported as incompatible until their procedure is implemented.
+      <PageHeader title="Firmware" description="Upload firmware images, approve them, then make an upgrade plan for the devices that need them." />
+      <Alert color={realFirmware ? 'red' : 'gray'} icon={<IconAlertTriangle size={18} />} mb="md"
+        title={realFirmware ? 'Firmware changes are ON: approved plans may upgrade real devices' : 'Firmware changes are OFF: real devices get dry runs only'}>
+        Real devices with an upgrade procedure: Aruba 2930F, FortiGate 101F and Black Box LIG1014A. Each has been run on
+        bench units and stays marked experimental. The device fetches the image from this PC and restarts into it, so use
+        a spare unit on an isolated bench. {realFirmware
+          ? 'Turn firmware changes off in Settings → Safety when you are done.'
+          : 'A dry run reads the running version and changes nothing. To upgrade, turn on device and firmware changes in Settings → Safety.'}{' '}
+        Other real models are shown as not compatible. Simulated devices can always be upgraded.
       </Alert>
       <QueryState isLoading={images.isLoading} error={images.error} />
       <Tabs defaultValue="repo" keepMounted={false}>
         <Tabs.List mb="md">
-          <Tabs.Tab value="repo">Image repository ({images.data?.length ?? 0})</Tabs.Tab>
-          <Tabs.Tab value="plan">Upgrade planning</Tabs.Tab>
+          <Tabs.Tab value="repo">Images ({images.data?.length ?? 0})</Tabs.Tab>
+          <Tabs.Tab value="plan">Make an upgrade plan</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="repo"><Stack><UploadForm /><ImageTable images={images.data ?? []} /></Stack></Tabs.Panel>
         <Tabs.Panel value="plan"><Planner images={images.data ?? []} /></Tabs.Panel>
       </Tabs>
-      <Text size="xs" c="dimmed" mt="md">Upgrade plans and their history appear in the Deployment Center.</Text>
+      <Text size="xs" c="dimmed" mt="md">Upgrade plans and their history are on the Plans page.</Text>
     </>
   );
 }

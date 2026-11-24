@@ -16,8 +16,8 @@ import type { CertificateSubject, Project } from '../types/api';
 
 function ProjectSettings({ project }: { project: Project }) {
   const [form, setForm] = useState(project);
-  const save = useAction((p: Partial<Project>) => api.updateProject(project.id, p), 'Project saved');
-  const del = useAction(() => api.deleteProject(project.id), 'Project deleted');
+  const save = useAction((p: Partial<Project>) => api.updateProject(project.id, p), 'System saved');
+  const del = useAction(() => api.deleteProject(project.id), 'System deleted');
   const navigate = useNavigate();
   return (
     <Card withBorder maw={640}>
@@ -28,8 +28,8 @@ function ProjectSettings({ project }: { project: Project }) {
         <Textarea label="Description" autosize minRows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.currentTarget.value })} />
         <Group justify="space-between">
           <Button color="red" variant="subtle" loading={del.isPending}
-            onClick={() => { if (window.confirm(`Delete project "${project.name}" and all its devices and history?`)) del.mutate(undefined, { onSuccess: () => void navigate('/projects') }); }}>
-            Delete project
+            onClick={() => { if (window.confirm(`Delete system "${project.name}" and all its devices and history?`)) del.mutate(undefined, { onSuccess: () => void navigate('/projects') }); }}>
+            Delete system
           </Button>
           <Button loading={save.isPending} onClick={() => save.mutate({ name: form.name, site: form.site, purpose: form.purpose, description: form.description })}>Save</Button>
         </Group>
@@ -95,10 +95,10 @@ export function ProjectDetailPage() {
         actions={<Button leftSection={<IconPlus size={16} />} onClick={open}>Add device</Button>} />
       <Tabs defaultValue="devices" keepMounted={false}>
         <Tabs.List mb="md">
-          <Tabs.Tab value="devices">Network elements ({devices.data?.length ?? 0})</Tabs.Tab>
-          <Tabs.Tab value="deployments">Deployments ({deployments.data?.length ?? 0})</Tabs.Tab>
-          <Tabs.Tab value="credentials">Credentials</Tabs.Tab>
-          <Tabs.Tab value="settings">Project settings</Tabs.Tab>
+          <Tabs.Tab value="devices">Devices ({devices.data?.length ?? 0})</Tabs.Tab>
+          <Tabs.Tab value="deployments">Plans ({deployments.data?.length ?? 0})</Tabs.Tab>
+          <Tabs.Tab value="credentials">Logins</Tabs.Tab>
+          <Tabs.Tab value="settings">System settings</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="devices">
           <QueryState isLoading={devices.isLoading} error={devices.error} />
@@ -107,7 +107,7 @@ export function ProjectDetailPage() {
         <Tabs.Panel value="deployments">
           <Card withBorder padding={0}>
             <Table verticalSpacing="xs" horizontalSpacing="md">
-              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>State</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>
                 {(deployments.data ?? []).map((d) => (
                   <Table.Tr key={d.id}>
@@ -117,7 +117,7 @@ export function ProjectDetailPage() {
                     <Table.Td><StateBadge state={d.state} /></Table.Td>
                   </Table.Tr>
                 ))}
-                {deployments.data?.length === 0 && <Table.Tr><Table.Td colSpan={5}><Text c="dimmed" ta="center" p="md">No deployments yet.</Text></Table.Td></Table.Tr>}
+                {deployments.data?.length === 0 && <Table.Tr><Table.Td colSpan={5}><Text c="dimmed" ta="center" p="md">No plans yet. Make one on the Plans page.</Text></Table.Td></Table.Tr>}
               </Table.Tbody>
             </Table>
           </Card>

@@ -15,7 +15,7 @@ export function ProjectsPage() {
   const [opened, { open, close }] = useDisclosure();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', description: '', site: '', purpose: '' });
-  const create = useAction(api.createProject, 'Project created');
+  const create = useAction(api.createProject, 'System created');
 
   const submit = () =>
     create.mutate(form, {
@@ -25,9 +25,9 @@ export function ProjectsPage() {
   return (
     <>
       <PageHeader
-        title="Projects"
-        description="A project holds the design, devices, configurations and deployment history for one network."
-        actions={<Button leftSection={<IconPlus size={16} />} onClick={open}>New project</Button>}
+        title="Systems"
+        description="A system is the set of devices you stage together, with their files, logins and plans."
+        actions={<Button leftSection={<IconPlus size={16} />} onClick={open}>New system</Button>}
       />
       <QueryState isLoading={projects.isLoading} error={projects.error} />
       <Card withBorder padding={0}>
@@ -45,24 +45,24 @@ export function ProjectsPage() {
                 </Table.Tr>
               ))}
               {projects.data?.length === 0 && (
-                <Table.Tr><Table.Td colSpan={5}><Text c="dimmed" ta="center" p="md">No projects yet.</Text></Table.Td></Table.Tr>
+                <Table.Tr><Table.Td colSpan={5}><Text c="dimmed" ta="center" p="md">No systems yet. A system is the set of devices you stage together: create one with New system.</Text></Table.Td></Table.Tr>
               )}
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
       </Card>
 
-      <Modal opened={opened} onClose={close} title="New project">
+      <Modal opened={opened} onClose={close} title="New system">
         <Stack>
-          <TextInput label="Project name" required value={form.name} data-autofocus
+          <TextInput label="System name" required value={form.name} data-autofocus
             onChange={(e) => setForm({ ...form, name: e.currentTarget.value })} />
           <TextInput label="Site or location" value={form.site}
             onChange={(e) => setForm({ ...form, site: e.currentTarget.value })} />
-          <TextInput label="Network purpose" value={form.purpose}
+          <TextInput label="Purpose" value={form.purpose}
             onChange={(e) => setForm({ ...form, purpose: e.currentTarget.value })} />
           <Textarea label="Description" autosize minRows={2} value={form.description}
             onChange={(e) => setForm({ ...form, description: e.currentTarget.value })} />
-          <Button onClick={submit} loading={create.isPending} disabled={!form.name.trim()}>Create project</Button>
+          <Button onClick={submit} loading={create.isPending} disabled={!form.name.trim()}>Create system</Button>
         </Stack>
       </Modal>
     </>

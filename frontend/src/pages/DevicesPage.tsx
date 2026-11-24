@@ -21,7 +21,7 @@ export function DevicesPage() {
 
   return (
     <>
-      <PageHeader title="Network Elements" description="Inventory of all devices across projects. Add devices from a project page." />
+      <PageHeader title="Devices" description="Every device in every system. To add a device, open its system and choose Add device." />
       <Group mb="md" wrap="wrap">
         <TextInput placeholder="Search name, address, role, model, site" leftSection={<IconSearch size={16} />}
           value={q} onChange={(e) => setQ(e.currentTarget.value)} w={320} aria-label="Search devices" />

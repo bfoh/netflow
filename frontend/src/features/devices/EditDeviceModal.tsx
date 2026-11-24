@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { useAction, useCredentialRefs, useDrivers } from '../../hooks/queries';
 import { api } from '../../services/api';
+import { driverLabel } from '../../services/labels';
 import type { Device, DeviceEnvironment, DeviceInput } from '../../types/api';
 
 const PROTOCOLS = [
@@ -43,7 +44,7 @@ export function EditDeviceModal({ device, opened, onClose }: { device: Device; o
       <Stack>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <TextInput label="Device name" value={f.name ?? ''} onChange={set('name')} />
-          <TextInput label="Network role" value={f.role ?? ''} onChange={set('role')} />
+          <TextInput label="Role" value={f.role ?? ''} onChange={set('role')} />
           <TextInput label="Model" value={f.model ?? ''} onChange={set('model')} />
           <TextInput label="Hardware revision" value={f.hardware_revision ?? ''} onChange={set('hardware_revision')} />
           <TextInput label="Operating system" value={f.os_family ?? ''} onChange={set('os_family')} />
@@ -51,18 +52,18 @@ export function EditDeviceModal({ device, opened, onClose }: { device: Device; o
         </SimpleGrid>
         <Text fw={600} mt="xs">Connection</Text>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <Select label="Driver" data={vendorDrivers.map((d) => ({ value: d.driver_id, label: `${d.driver_id} (${d.maturity})` }))}
+          <Select label="Connects by" data={vendorDrivers.map((d) => ({ value: d.driver_id, label: `${driverLabel(d.driver_id, vendorDrivers)}${d.maturity === 'experimental' ? ' (experimental)' : ''}` }))}
             value={f.driver_id ?? null} onChange={chooseDriver} allowDeselect={false} />
           <Select label="Environment" value={f.environment ?? 'simulated'} allowDeselect={false}
             data={driver?.simulated ? [{ value: 'simulated', label: 'Simulated' }]
               : [{ value: 'lab', label: 'Lab (isolated test equipment)' }, { value: 'production', label: 'Production' }]}
             onChange={(v) => setF({ ...f, environment: (v ?? 'lab') as DeviceEnvironment })} />
-          <TextInput label="Management address" placeholder="IP address or hostname" value={f.management_address ?? ''} onChange={set('management_address')} />
-          <Select label="Management protocol" data={PROTOCOLS} value={f.management_protocol ?? 'ssh'} onChange={(v) => setF({ ...f, management_protocol: v ?? 'ssh' })} />
-          <NumberInput label="Management port" placeholder="default (22 for SSH)" min={1} max={65535} value={f.management_port ?? ''}
+          <TextInput label="Address" placeholder="IP address or hostname" value={f.management_address ?? ''} onChange={set('management_address')} />
+          <Select label="Protocol" data={PROTOCOLS} value={f.management_protocol ?? 'ssh'} onChange={(v) => setF({ ...f, management_protocol: v ?? 'ssh' })} />
+          <NumberInput label="Port" placeholder="default (22 for SSH)" min={1} max={65535} value={f.management_port ?? ''}
             onChange={(v) => setF({ ...f, management_port: v === '' ? null : Number(v) })} />
           <TextInput label="Management VRF" value={f.management_vrf ?? ''} onChange={set('management_vrf')} />
-          <Select label="Credential" placeholder={refs.data?.length ? 'Choose a credential' : 'Add one on the project Credentials tab'} clearable
+          <Select label="Login" placeholder={refs.data?.length ? 'Choose a login' : 'Add one on the system\'s Logins tab'} clearable
             data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={f.credential_ref_id ?? null}
             onChange={(v) => setF({ ...f, credential_ref_id: v })} />
         </SimpleGrid>

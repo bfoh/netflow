@@ -20,8 +20,8 @@ describe('application shell', () => {
     mockApi({});
     renderAt('/');
     const nav = await screen.findByRole('navigation', { name: 'Main navigation' });
-    for (const label of ['Dashboard', 'Projects', 'Network Elements', 'Topology', 'Configurations',
-      'Provisioning', 'Firmware', 'Deployments', 'Logs & Audit', 'Settings']) {
+    for (const label of ['Home', 'Systems', 'Devices', 'Files', 'Firmware', 'Console setup', 'Plans',
+      'Advanced', 'Settings']) {
       expect(within(nav).getByText(label)).toBeInTheDocument();
     }
     expect(screen.getByText('Real-device changes off')).toBeInTheDocument();
@@ -34,24 +34,26 @@ describe('application shell', () => {
       '/deployments': [{ id: 'x', project_id: 'p1', state: 'awaiting_approval', dry_run: false, apply_mode: 'merge', created_by: 'a', approved_by: null, created_at: '2026-01-01T00:00:00Z' }],
     });
     renderAt('/');
-    expect(await screen.findByText('Fortinet')).toBeInTheDocument();
-    const pending = screen.getByText('Pending approvals').parentElement!;
-    expect(within(pending).getByText('1')).toBeInTheDocument();
-    expect(screen.getByText('awaiting approval')).toBeInTheDocument();
+    const waiting = (await screen.findByText('Waiting for you', { selector: 'p' })).parentElement!;
+    expect(await within(waiting).findByText('1')).toBeInTheDocument();
+    expect(screen.getByText('Read the preview and approve it')).toBeInTheDocument();
+    expect(screen.getAllByText('Waiting for approval').length).toBeGreaterThan(0);
+    expect(screen.getByText('0 of 2 up to date')).toBeInTheDocument();
   });
 
   it('inventory marks simulated devices and offers only read-only bulk actions', async () => {
     mockApi({ '/devices': [device({})], '/projects': [] });
     renderAt('/devices');
     expect(await screen.findByText('sw1')).toBeInTheDocument();
-    expect(screen.getByText('SIMULATED')).toBeInTheDocument();
+    expect(screen.getByText('Simulated')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Perform' })).toBeDisabled();
   });
 
-  it('provisioning page states what is not implemented yet', async () => {
+  it('console setup page says which devices need none', async () => {
     mockApi({});
     renderAt('/provisioning');
-    expect(await screen.findByText(/Zero-touch and network-based provisioning is not implemented yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/a First login\s+plan sets its approved password/)).toBeInTheDocument();
+    expect(screen.queryByText(/not implemented/)).not.toBeInTheDocument();
   });
 
   it('provisioning page previews the exact console commands for a switch', async () => {
@@ -123,7 +125,7 @@ describe('application shell', () => {
       created_by: 'x', created_at: '2026-01-01T00:00:00Z' }] });
     renderAt('/firmware');
     expect(await screen.findByText('cx.swi')).toBeInTheDocument();
-    expect(screen.getByText('verified')).toBeInTheDocument();
+    expect(screen.getByText('Verified')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
   });
 });
@@ -216,7 +218,7 @@ describe('deployment outcome', () => {
       '/projects/p1/devices': [device({})] });
     renderAt('/deployments/dep1');
     await userEvent.click(await screen.findByRole('button', { name: 'Stop' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Stop this deployment?' });
+    const dialog = await screen.findByRole('dialog', { name: 'Stop this plan?' });
     expect(within(dialog).getByText(/no rollback is started/)).toBeInTheDocument();
     expect(calls.some((c) => c.url.endsWith('/stop'))).toBe(false);  // nothing before confirming
     await userEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
@@ -245,7 +247,7 @@ describe('deployment outcome', () => {
       '/configs/after1': { id: 'after1', text: 'hostname "lab-sw"\n', reference: 'after deployment dep1abcd' } });
     renderAt('/deployments/dep1');
     await userEvent.click(await screen.findByText('sw1'));
-    await userEvent.click(await screen.findByRole('button', { name: 'View configuration after deployment' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'View configuration after the plan' }));
     expect(await screen.findByText(/hostname "lab-sw"/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Compare with what was sent' })).toBeInTheDocument();
   });
@@ -253,14 +255,14 @@ describe('deployment outcome', () => {
   it('a successful real upgrade keeps the upgrade wording', async () => {
     mockApi({ '/deployments/dep1': plan({ dry_run: false, approved_by: 'approver' }), '/projects/p1/devices': [device({})] });
     renderAt('/deployments/dep1');
-    expect(await screen.findByText('Deployment succeeded')).toBeInTheDocument();
+    expect(await screen.findByText('Plan succeeded')).toBeInTheDocument();
     expect(screen.getByText(/Every upgraded device came back/)).toBeInTheDocument();
     expect(screen.getByText('Deploy')).toBeInTheDocument();
   });
 });
 
 describe('configuration studio to deployment', () => {
-  it('"Deploy this version…" opens a plan with the device and version chosen', async () => {
+  it('"Make a plan with this version…" opens a plan with the device and version chosen', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     const sw = device({ id: 'd1', project_id: 'p1' });
     const v1 = { id: 'v1', device_id: 'd1', kind: 'imported', sha256: 'abcdef0123456789'.repeat(4), platform: '',
@@ -269,8 +271,8 @@ describe('configuration studio to deployment', () => {
     mockApi({ '/devices': [sw], '/projects': [{ id: 'p1', name: 'Bench' }], '/devices/d1/configs': [v1],
       '/configs/v1': v1, '/projects/p1/devices': [sw], '/deployments': [] });
     renderAt('/configurations?device=d1&version=v1');
-    await userEvent.click(await screen.findByRole('button', { name: 'Deploy this version…' }));
-    expect(await screen.findByText('New deployment plan')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Make a plan with this version…' }));
+    expect(await screen.findByText('New configuration plan')).toBeInTheDocument();
     expect(screen.getByLabelText('Include sw1')).toBeChecked();
     // The plan's version field shows the version chosen in the Configuration Studio.
     expect(await screen.findByDisplayValue(/^imported · site-file\.pcc · /)).toBeInTheDocument();
@@ -345,7 +347,7 @@ describe('firmware approval without a vendor checksum', () => {
       approved_at: '2026-11-24T08:10:00Z', created_by: 'tester', created_at: '2026-11-24T08:00:00Z' };
     mockApi({ '/firmware/images': [img] });
     renderAt('/firmware');
-    expect(await screen.findByText('not verified · approved with reason')).toBeInTheDocument();
+    expect(await screen.findByText('Not verified · approved with reason')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add vendor checksum…' })).toBeInTheDocument();
   });
 });
@@ -379,5 +381,47 @@ describe('staging plan', () => {
     renderAt('/staging/sp1');
     expect(await screen.findByText('The plan did not complete')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Execute' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Settings → Safety', () => {
+  const policy = {
+    enable_real_device_writes: false, enable_real_device_firmware: false, allow_production_read_only: false,
+    allow_production_deployments: false, require_separate_approver: false, firmware_require_separate_approver: true, locked: [],
+  };
+
+  it('turning a switch on needs a confirmation; turning it off does not', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/policy': policy });
+    renderAt('/settings');
+    await userEvent.click(await screen.findByRole('switch', { name: 'Real-device changes' }));
+    const dialog = await screen.findByRole('dialog');
+    const go = within(dialog).getByRole('button', { name: 'Turn on' });
+    expect(go).toBeDisabled();
+    expect(calls.some((c) => c.init?.method === 'PUT')).toBe(false);
+    await userEvent.click(within(dialog).getByLabelText('The devices are spare units on an isolated bench'));
+    await userEvent.click(go);
+    const put = calls.find((c) => c.init?.method === 'PUT');
+    expect(JSON.parse(String(put?.init?.body))).toEqual({ enable_real_device_writes: true });
+  });
+
+  it('a switch fixed by the start-up settings cannot be changed here', async () => {
+    mockApi({ '/policy': { ...policy, enable_real_device_writes: true, locked: ['enable_real_device_writes'] } });
+    renderAt('/settings');
+    expect(await screen.findByRole('switch', { name: 'Real-device changes' })).toBeDisabled();
+    expect(screen.getByText(/Fixed by the start-up settings file/)).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Firmware changes' })).toBeEnabled();
+  });
+});
+
+describe('plain words', () => {
+  it('states, drivers and capabilities are shown in words', async () => {
+    const { capabilityLabel, driverLabel, stateLabel } = await import('../src/services/labels');
+    expect(stateLabel('awaiting_approval')).toBe('Waiting for approval');
+    expect(stateLabel('recovery_required')).toBe('Needs attention');
+    expect(stateLabel('some_new_state')).toBe('Some new state');
+    expect(driverLabel('ssh.blackbox.lig1014a')).toBe('Black Box LIG1014A over SSH');
+    expect(driverLabel('mock.aruba.aoscx')).toMatch(/^Simulated/);
+    expect(capabilityLabel('supports_firmware_upgrade')).toBe('Upgrade its firmware');
   });
 });

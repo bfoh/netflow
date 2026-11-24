@@ -37,17 +37,17 @@ export function CredentialsPanel({ projectId }: { projectId: string }) {
       await api.deleteCredentialRef(ref.id); // do not leave an empty reference behind
       throw e;
     }
-  }, 'Credential stored in the OS credential store');
+  }, 'Login stored in Windows Credential Manager');
   const update = useAction(({ id, u, p }: { id: string; u: string; p: string }) => api.setCredentialSecret(id, u, p), 'Password updated');
-  const del = useAction((id: string) => api.deleteCredentialRef(id), 'Credential deleted');
+  const del = useAction((id: string) => api.deleteCredentialRef(id), 'Login deleted');
 
   return (
     <Stack>
       <Alert color="blue" icon={<IconShieldLock size={18} />}>
-        Passwords are stored in your operating system's credential store (Windows Credential Manager on Windows), not in the
-        UNDM database. They cannot be viewed again through UNDM. Attach a credential to a device on its <b>Edit device</b> form.
+        A login is a user name and password for a device. Passwords are kept in your Windows Credential Manager, not in UNDM,
+        and cannot be viewed again here. Choose a device's login on its <b>Edit device</b> form.
       </Alert>
-      <Group><Button leftSection={<IconPlus size={16} />} onClick={() => { setName(''); open(); }}>Add credential</Button></Group>
+      <Group><Button leftSection={<IconPlus size={16} />} onClick={() => { setName(''); open(); }}>Add login</Button></Group>
       <Card withBorder padding={0}>
         <Table verticalSpacing="xs" horizontalSpacing="md">
           <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Stored in</Table.Th><Table.Th>Password set</Table.Th><Table.Th w={110} /></Table.Tr></Table.Thead>
@@ -55,26 +55,26 @@ export function CredentialsPanel({ projectId }: { projectId: string }) {
             {(refs.data ?? []).map((r) => (
               <Table.Tr key={r.id}>
                 <Table.Td>{r.name}</Table.Td>
-                <Table.Td>{r.provider === 'keyring' ? 'OS credential store' : `environment (${r.locator})`}</Table.Td>
+                <Table.Td>{r.provider === 'keyring' ? 'Credential Manager' : `environment (${r.locator})`}</Table.Td>
                 <Table.Td>{r.has_secret === null ? <Badge color="yellow" variant="light">store unavailable</Badge>
                   : r.has_secret ? <Badge color="teal" variant="light">yes</Badge> : <Badge color="gray" variant="light">no</Badge>}</Table.Td>
                 <Table.Td>
                   <Group gap={4}>
                     {r.provider === 'keyring' && <Tooltip label="Set username/password"><ActionIcon variant="subtle" aria-label={`Set password for ${r.name}`} onClick={() => setEditing(r)}><IconKey size={16} /></ActionIcon></Tooltip>}
                     <Tooltip label="Delete"><ActionIcon variant="subtle" color="red" aria-label={`Delete ${r.name}`}
-                      onClick={() => { if (window.confirm(`Delete credential "${r.name}"? Devices using it are detached.`)) del.mutate(r.id); }}><IconTrash size={16} /></ActionIcon></Tooltip>
+                      onClick={() => { if (window.confirm(`Delete login "${r.name}"? Devices using it lose their login.`)) del.mutate(r.id); }}><IconTrash size={16} /></ActionIcon></Tooltip>
                   </Group>
                 </Table.Td>
               </Table.Tr>
             ))}
-            {refs.data?.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text c="dimmed" ta="center" p="md">No credentials yet.</Text></Table.Td></Table.Tr>}
+            {refs.data?.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text c="dimmed" ta="center" p="md">No logins yet. Add the factory login and your approved login.</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
       </Card>
-      <Modal opened={opened} onClose={close} title="Add credential">
+      <Modal opened={opened} onClose={close} title="Add login">
         <Stack>
-          <TextInput label="Credential name" placeholder="e.g. lab-switch-admin" value={name} onChange={(e) => setName(e.currentTarget.value)} />
-          {name.trim() && <SecretForm busy={create.isPending} submitLabel="Store credential"
+          <TextInput label="Name" placeholder="e.g. switch approved login" value={name} onChange={(e) => setName(e.currentTarget.value)} />
+          {name.trim() && <SecretForm busy={create.isPending} submitLabel="Store login"
             onSubmit={(u, p) => create.mutate({ u, p }, { onSuccess: close })} />}
         </Stack>
       </Modal>

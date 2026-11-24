@@ -1,12 +1,11 @@
 import { Alert, AppShell, Badge, Burger, Group, NavLink, Text, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconActivity, IconDatabaseExclamation } from '@tabler/icons-react';
+import { IconActivity, IconDatabaseExclamation, IconTool } from '@tabler/icons-react';
 import { NavLink as RouterNavLink, Outlet, useLocation } from 'react-router';
 
 import { useHealth, usePolicy } from '../hooks/queries';
 import { getActor } from '../services/api';
-import { NAV } from './nav';
-
+import { ADVANCED_NAV, NAV, SETTINGS_NAV } from './nav';
 
 
 export function AppLayout() {
@@ -31,15 +30,20 @@ export function AppLayout() {
             <Text c="dimmed" size="sm" visibleFrom="md">Universal Network Deployment Manager</Text>
           </Group>
           <Group gap="sm" wrap="nowrap">
-            {policy.data?.enable_real_device_writes ? (
-              <Tooltip label="Approved deployments may change real lab devices (UNDM_ENABLE_REAL_DEVICE_WRITES=true)." withArrow>
-                <Badge color="red" variant="filled" radius="sm">Real-device changes ON</Badge>
-              </Tooltip>
-            ) : (
-              <Tooltip label="Real devices can only be read. Simulated devices can be fully exercised." withArrow>
-                <Badge color="violet" variant="filled" radius="sm">Real-device changes off</Badge>
-              </Tooltip>
-            )}
+            <Tooltip withArrow multiline w={300} label={policy.data?.enable_real_device_writes
+              ? 'Approved plans may change real devices on the bench.'
+              : 'Real devices can only be read. Simulated devices can be changed freely.'}>
+              <Badge color={policy.data?.enable_real_device_writes ? 'red' : 'gray'} variant={policy.data?.enable_real_device_writes ? 'filled' : 'light'} radius="sm">
+                Real-device changes {policy.data?.enable_real_device_writes ? 'ON' : 'off'}
+              </Badge>
+            </Tooltip>
+            <Tooltip withArrow multiline w={300} label={policy.data?.enable_real_device_firmware
+              ? 'Approved firmware plans may upgrade real devices.'
+              : 'Firmware on real devices cannot be changed (dry runs only).'}>
+              <Badge color={policy.data?.enable_real_device_firmware ? 'red' : 'gray'} variant={policy.data?.enable_real_device_firmware ? 'filled' : 'light'} radius="sm" visibleFrom="sm">
+                Firmware changes {policy.data?.enable_real_device_firmware ? 'ON' : 'off'}
+              </Badge>
+            </Tooltip>
             <Text size="sm" c="dimmed" visibleFrom="xs">acting as <b>{getActor()}</b></Text>
           </Group>
         </Group>
@@ -47,22 +51,23 @@ export function AppLayout() {
 
       <AppShell.Navbar p="xs" aria-label="Main navigation">
         {NAV.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            component={RouterNavLink}
-            to={to}
-            label={label}
-            leftSection={<Icon size={18} stroke={1.6} />}
-            active={isActive(to)}
-            onClick={close}
-            variant="light"
-          />
+          <NavLink key={to} component={RouterNavLink} to={to} label={label}
+            leftSection={<Icon size={18} stroke={1.6} />} active={isActive(to)} onClick={close} variant="light" />
         ))}
+        <NavLink label="Advanced" leftSection={<IconTool size={18} stroke={1.6} />}
+          defaultOpened={ADVANCED_NAV.some(({ to }) => isActive(to))} variant="light">
+          {ADVANCED_NAV.map(({ to, label, icon: Icon }) => (
+            <NavLink key={to} component={RouterNavLink} to={to} label={label}
+              leftSection={<Icon size={16} stroke={1.6} />} active={isActive(to)} onClick={close} variant="light" />
+          ))}
+        </NavLink>
+        <NavLink component={RouterNavLink} to={SETTINGS_NAV.to} label={SETTINGS_NAV.label} mt="auto"
+          leftSection={<SETTINGS_NAV.icon size={18} stroke={1.6} />} active={isActive(SETTINGS_NAV.to)} onClick={close} variant="light" />
       </AppShell.Navbar>
 
       <AppShell.Main>
         {health.data?.problem && (
-          <Alert color="red" icon={<IconDatabaseExclamation size={18} />} mb="md" title="Database upgrade needed">
+          <Alert color="red" icon={<IconDatabaseExclamation size={18} />} mb="md" title="UNDM needs a database upgrade">
             {health.data.problem}
           </Alert>
         )}
