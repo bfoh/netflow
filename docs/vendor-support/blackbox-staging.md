@@ -17,6 +17,9 @@ the team's file sets the approved admin password. In UNDM: the device's own logi
 factory one, and a plan that loads the file names the approved login as "login after
 loading", as for the 2930F (D-042). UNDM keeps the approved login for the device once the
 load is verified. Cable the PC to **port 1/3**: the file keeps management on that port only.
+The factory address is the same address the file keeps on VLAN 222 (product owner,
+2026-11-24), so with the PC on port 1/3 the switch answers at one address before and after
+the load: no re-cabling, and the device address in UNDM does not change.
 
 ## LIG1014A file (facts read from the sample)
 | Topic | Finding |
