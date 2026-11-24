@@ -362,16 +362,16 @@ describe('staging plan', () => {
     ...extra,
   });
 
-  it('shows both steps and approves them with one action', async () => {
+  it('shows every step and approves them with one action', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     const calls = mockApi({
       '/staging-plans/sp1': { staging_id: 'sp1', steps: [step(1, 'awaiting_approval'), step(2, 'awaiting_approval')] },
       '/staging-plans/sp1/approve': { staging_id: 'sp1', steps: [step(1, 'ready'), step(2, 'ready')] },
     });
     renderAt('/staging/sp1');
-    expect(await screen.findByText(/Step 1 · base file \(replace\)/)).toBeInTheDocument();
+    expect(await screen.findByText(/Step 1 · Complete file: the device fetches it/)).toBeInTheDocument();
     expect(screen.getByText(/preview deferred/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Approve both steps' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Approve all steps' }));
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/staging-plans/sp1/approve'
       && c.init?.method === 'POST')).toBe(true));
   });
@@ -380,7 +380,7 @@ describe('staging plan', () => {
     mockApi({ '/staging-plans/sp1': { staging_id: 'sp1', steps: [step(1, 'recovery_required'), step(2, 'cancelled')] } });
     renderAt('/staging/sp1');
     expect(await screen.findByText('The plan did not complete')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Execute' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
   });
 });
 
@@ -453,5 +453,35 @@ describe('confirmations', () => {
     await userEvent.type(within(dialog).getByLabelText('Type Lab A to confirm'), 'Lab A');
     expect(go).toBeEnabled();
     expect(calls.some((c) => c.init?.method === 'DELETE')).toBe(false);
+  });
+});
+
+describe('Stage a system', () => {
+  it('makes one plan for a device from the choices in the wizard', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    window.localStorage.setItem('undm.stage.p1', JSON.stringify({ blackbox: {
+      firstLogin: true, imageId: null, allowDowngrade: false, alsoSecondary: false,
+      baseId: null, siteId: null, fileId: 'v1', loginAfter: null, secrets: {} } }));
+    const calls = mockApi({
+      '/projects/p1': { id: 'p1', name: 'Lab A', description: '', site: '', purpose: '', created_at: '', updated_at: '', certificate_subject: null },
+      '/projects/p1/devices': [device({ id: 'bb', name: 'lab-a-bb', manufacturer: 'Black Box', model: 'LIG1014A',
+        driver_id: 'mock.blackbox.switch', management_address: '192.0.2.1' })],
+      '/projects/p1/staging-plans': [],
+    });
+    renderAt('/stage/p1?step=3');
+    expect(await screen.findByText('lab-a-bb')).toBeInTheDocument();
+    expect(screen.getByText('1. Team file')).toBeInTheDocument();  // no firmware chosen: kept as it is
+    await userEvent.click(screen.getByRole('button', { name: 'Make the plan' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1/device-staging')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/projects/p1/device-staging');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ device_id: 'bb', steps: [{ kind: 'configuration', version_id: 'v1' }] });
+    window.localStorage.removeItem('undm.stage.p1');
+  });
+
+  it('without a system it offers to make or choose one', async () => {
+    mockApi({});
+    renderAt('/stage');
+    expect(await screen.findByRole('heading', { name: 'Stage a system' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create and continue' })).toBeDisabled();
   });
 });

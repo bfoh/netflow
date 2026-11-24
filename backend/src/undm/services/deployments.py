@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from contextlib import ExitStack
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import PurePath
 from typing import Any
@@ -63,6 +64,24 @@ S = DeploymentState
 
 # Where a person sets each project setting a file can require.
 _SETTING_LABELS = {"certificate_subject": "Project settings → HTTPS certificate"}
+
+MAX_STAGING_STEPS = 8
+_STEP_WORDS = {"first_login": "first login", "firmware": "firmware",
+               "configuration": "load a file"}
+
+
+@dataclass(frozen=True)
+class StagingStep:
+    """One step of a device's staging plan (D-085)."""
+
+    kind: str  # first_login | firmware | configuration
+    image_id: str | None = None
+    allow_downgrade: bool = False
+    also_secondary: bool = False
+    version_id: str | None = None
+    apply_mode: ApplyMode | None = None  # None: as the file's kind requires (else merge)
+    credential_after_ref_id: str | None = None
+    secrets: dict[str, str] | None = None
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -357,6 +376,100 @@ class DeploymentService:
                               "base_version": base_version_id, "site_version": site_version_id})
         return steps
 
+    def create_device_staging(self, project_id: str, device_id: str, actor: str,
+                              steps: list[StagingStep]) -> list[DeploymentRecord]:
+        """Any sequence of first login, firmware and file steps for one device, as one plan
+        (D-085). Every step is checked offline before any is made; steps after the first
+        are previewed at their run, because the earlier steps change the device."""
+        device = self.s.get(Device, device_id)
+        if device is None or device.project_id != project_id:
+            raise NotFoundError(f"Device {device_id} not found in project")
+        if not 1 <= len(steps) <= MAX_STAGING_STEPS:
+            raise ConflictError(f"A staging plan has 1 to {MAX_STAGING_STEPS} steps")
+        if any(s.kind == "first_login" for s in steps[1:]):
+            raise ConflictError("The first login can only be the first step")
+        for n, step in enumerate(steps, 1):
+            self._check_staging_step(device, n, step)
+        staging_id = str(uuid.uuid4())
+        made: list[DeploymentRecord] = []
+        for n, step in enumerate(steps, 1):
+            later = (f"it is made at the run, after step {n - 1} ({_STEP_WORDS[steps[n - 2].kind]})"
+                     if n > 1 else None)
+            if step.kind == "first_login":
+                rec = self.create_first_login(project_id, device_id, actor,
+                                              staging=(staging_id, n))
+            elif step.kind == "firmware":
+                assert step.image_id is not None
+                rec = self.create_firmware(
+                    project_id, [device_id], step.image_id, actor, dry_run=False,
+                    allow_downgrade=step.allow_downgrade, also_secondary=step.also_secondary,
+                    staging=(staging_id, n), defer_preview=later)
+            else:
+                rec = self.create(
+                    project_id, [device_id], actor, dry_run=False,
+                    apply_mode=self._staging_mode(device, step),
+                    config_versions={device_id: str(step.version_id)},
+                    secrets={device_id: step.secrets} if step.secrets else None,
+                    credentials_after=({device_id: step.credential_after_ref_id}
+                                       if step.credential_after_ref_id else None),
+                    staging=(staging_id, n), defer_preview=later)
+            made.append(rec)
+            if rec.state == S.FAILED.value:
+                break
+        failed = next((r for r in made if r.state == S.FAILED.value), None)
+        audit.record(self.s, actor, "staging.create", "staging_plan", staging_id,
+                     details={"device": device_id, "steps": [r.id for r in made],
+                              "kinds": [s.kind for s in steps]})
+        if failed is not None:
+            # A step that fails its check ends the plan: the steps not yet made are not made.
+            self.cancel_rest_of_staging(staging_id, failed.staging_step or 0, actor,
+                                        f"step {failed.staging_step} failed its validation "
+                                        "or preview")
+        return made
+
+    def _staging_mode(self, device: Device, step: StagingStep) -> ApplyMode:
+        """The mode chosen, else the one the file's kind requires, else merge."""
+        if step.apply_mode is not None:
+            return step.apply_mode
+        cfg = self._choose_config(device, step.version_id)
+        report = inspect_config(self.s, cfg, self.registry)
+        return report.apply_mode if report and report.apply_mode else ApplyMode.MERGE
+
+    def _check_staging_step(self, device: Device, n: int, step: StagingStep) -> None:
+        """What can be known before anything is made: right inputs, files fit, image fits."""
+        where = f"Step {n} ({_STEP_WORDS.get(step.kind, step.kind)})"
+        if step.kind == "first_login":
+            if not device.credential_ref_id:
+                raise ConflictError(f"{where}: choose the device's login first (user and the "
+                                    "approved password); the first login sets that password")
+            problem = self._policy_problem(device, False)
+        elif step.kind == "firmware":
+            img = self.s.get(FirmwareImage, step.image_id) if step.image_id else None
+            if img is None:
+                raise ConflictError(f"{where}: choose an approved firmware image")
+            if img.status != "approved":
+                raise ConflictError(f"{where}: image {img.version} is {img.status}, not approved")
+            errors = [i.message for i in device_compatibility(img, device, self.registry)
+                      if i.severity is Severity.ERROR]
+            if errors:
+                raise ConflictError(f"{where}: image {img.version} does not fit "
+                                    f"{device.name}", details=errors)
+            problem = self._policy_problem(device, False, firmware=True)
+        elif step.kind == "configuration":
+            if not step.version_id:
+                raise ConflictError(f"{where}: choose the file to load")
+            cfg = self._choose_config(device, step.version_id)
+            self._check_file_can_be_applied(device, cfg, self._staging_mode(device, step))
+            if step.secrets:
+                self._check_secrets(device, cfg, step.secrets)
+            if step.credential_after_ref_id:
+                self._credentials_for(device, step.credential_after_ref_id)
+            problem = self._policy_problem(device, False)
+        else:
+            raise ConflictError(f"Step {n}: unknown kind '{step.kind}'")
+        if problem:
+            raise ForbiddenError(problem)
+
     def staging_steps(self, staging_id: str) -> list[DeploymentRecord]:
         steps = list(self.s.scalars(
             select(DeploymentRecord).where(DeploymentRecord.staging_id == staging_id)
@@ -365,17 +478,39 @@ class DeploymentService:
             raise NotFoundError("Staging plan not found")
         return steps
 
-    def approve_staging(self, staging_id: str, actor: str) -> list[DeploymentRecord]:
-        """One approval for every step still awaiting it."""
+    def approve_staging(self, staging_id: str, actor: str, window_start: datetime | None = None,
+                        window_end: datetime | None = None) -> list[DeploymentRecord]:
+        """One approval for every step still awaiting it; firmware steps take the
+        maintenance window given."""
         steps = self.staging_steps(staging_id)
         waiting = [r for r in steps if r.state == S.AWAITING_APPROVAL.value]
         if not waiting:
             raise ConflictError("No step of this staging plan is awaiting approval")
+        if any(r.kind == "firmware" for r in waiting) and (window_start is None
+                                                          or window_end is None):
+            raise ConflictError("This staging plan has a firmware step: give the maintenance "
+                                "window it may run in")
         for rec in waiting:
-            self.approve(rec.id, actor)
+            self.approve(rec.id, actor, window_start, window_end)
         audit.record(self.s, actor, "staging.approve", "staging_plan", staging_id,
                      details={"steps": [r.id for r in waiting]})
         return steps
+
+    def project_stagings(self, project_id: str) -> list[tuple[str, str, list[DeploymentRecord]]]:
+        """(staging id, device id, steps) for every staging plan of a project, newest first."""
+        recs = list(self.s.scalars(
+            select(DeploymentRecord).where(DeploymentRecord.project_id == project_id,
+                                           DeploymentRecord.staging_id.is_not(None))
+            .order_by(DeploymentRecord.created_at.desc(), DeploymentRecord.staging_step)))
+        plans: dict[str, list[DeploymentRecord]] = {}
+        for r in recs:
+            plans.setdefault(str(r.staging_id), []).append(r)
+        out = []
+        for sid, steps in plans.items():
+            steps.sort(key=lambda r: r.staging_step or 0)
+            device = steps[0].targets[0].device_id if steps[0].targets else ""
+            out.append((sid, device, steps))
+        return out
 
     def check_staging_can_start(self, staging_id: str) -> list[DeploymentRecord]:
         steps = self.staging_steps(staging_id)
@@ -503,6 +638,7 @@ class DeploymentService:
     def create_firmware(
         self, project_id: str, device_ids: list[str], image_id: str, actor: str,
         *, dry_run: bool, allow_downgrade: bool = False, also_secondary: bool = False,
+        staging: tuple[str, int] | None = None, defer_preview: str | None = None,
     ) -> DeploymentRecord:
         if not device_ids:
             raise ConflictError("Select at least one device")
@@ -515,6 +651,8 @@ class DeploymentService:
             project_id=project_id, kind="firmware", firmware_image_id=img.id,
             state=S.DRAFT.value, dry_run=dry_run, apply_mode=ApplyMode.MERGE.value,
             created_by=actor, allow_downgrade=allow_downgrade, also_secondary=also_secondary,
+            staging_id=staging[0] if staging else None,
+            staging_step=staging[1] if staging else None,
         )
         self.s.add(rec)
         problems: dict[str, list[str]] = {}
@@ -538,6 +676,7 @@ class DeploymentService:
                                 details=problems)
         self.s.flush()
         dep = self._to_domain(rec)
+        dep.defer_preview = defer_preview
         self._orchestrator(rec).prepare(dep)
         self._sync(rec, dep)
         if not img.integrity_verified:
@@ -550,7 +689,9 @@ class DeploymentService:
                      rec.state, {"devices": device_ids, "image": img.id, "version": img.version,
                                  "image_verified": img.integrity_verified,
                                  "dry_run": dry_run, "allow_downgrade": allow_downgrade,
-                                 "also_secondary": also_secondary})
+                                 "also_secondary": also_secondary,
+                                 **({"staging_id": staging[0], "staging_step": staging[1]}
+                                    if staging else {})})
         return rec
 
     def check_can_execute(self, deployment_id: str) -> DeploymentRecord:

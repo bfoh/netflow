@@ -1,0 +1,172 @@
+import {
+  Alert, Anchor, Badge, Button, Card, Group, SegmentedControl, Select, SimpleGrid, Stack, Stepper, Text, TextInput, Title,
+} from '@mantine/core';
+import { IconCheck, IconPlus } from '@tabler/icons-react';
+import { useMemo, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+
+import { EnvironmentBadge } from '../components/Badges';
+import { DialogError } from '../components/ConfirmDialog';
+import { PageHeader, QueryState } from '../components/Page';
+import { BenchStep } from '../features/stage/BenchStep';
+import { type Choice, type Choices, EMPTY_CHOICE, loadChoices, planSteps, saveChoices } from '../features/stage/choices';
+import { FilesStep } from '../features/stage/FilesStep';
+import { ReportStep } from '../features/stage/ReportStep';
+import { assignRoles, ROLES, type Role, type RoleKey } from '../features/stage/roles';
+import { RunStep } from '../features/stage/RunStep';
+import {
+  useAction, useCredentialRefs, useDeviceModels, useProject, useProjectDevices, useProjects, useProjectStagings,
+} from '../hooks/queries';
+import { api } from '../services/api';
+import type { Device } from '../types/api';
+
+const STEPS = ['System and devices', 'Files and firmware', 'Bench check', 'Run', 'Report'];
+
+/** Step 0 without a system: choose one or make a new one. */
+function ChooseSystem() {
+  const projects = useProjects();
+  const navigate = useNavigate();
+  const [name, setName] = useState('');
+  const create = useAction(() => api.createProject({ name: name.trim(), purpose: 'Staging' }), 'System created', { errorInDialog: true });
+  return (
+    <SimpleGrid cols={{ base: 1, md: 2 }}>
+      <Card withBorder>
+        <Title order={2} size="h5" mb="xs">A new system</Title>
+        <Stack gap="xs">
+          <TextInput label="System name" placeholder="e.g. site 12 staging" value={name} onChange={(e) => setName(e.currentTarget.value)} />
+          <DialogError error={create.error} />
+          <Group><Button leftSection={<IconPlus size={16} />} disabled={!name.trim()} loading={create.isPending}
+            onClick={() => create.mutate(undefined, { onSuccess: (p) => void navigate(`/stage/${p.id}`) })}>Create and continue</Button></Group>
+        </Stack>
+      </Card>
+      <Card withBorder>
+        <Title order={2} size="h5" mb="xs">A system you have</Title>
+        <Select label="System" placeholder={projects.data?.length ? 'Choose a system' : 'No systems yet'} searchable
+          data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+          onChange={(v) => { if (v) void navigate(`/stage/${v}`); }} />
+      </Card>
+    </SimpleGrid>
+  );
+}
+
+/** One role: its device, or a button that adds it with the bench defaults. */
+function RoleCard({ role, device, projectId, systemName, simulated }: {
+  role: Role; device?: Device; projectId: string; systemName: string; simulated: boolean;
+}) {
+  const models = useDeviceModels();
+  const refs = useCredentialRefs(projectId);
+  const model = models.data?.find((m) => m.model_id === role.modelId);
+  const slug = systemName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'system';
+  const add = useAction(() => api.createDevice(projectId, {
+    name: `${slug}-${role.nameSuffix}`, manufacturer: model?.manufacturer ?? '', product_family: model?.product_family ?? '',
+    model: role.model, category: model?.category ?? 'switch', os_family: model?.os_family ?? '',
+    driver_id: simulated ? role.simulatedDriver : role.realDriver, environment: simulated ? 'simulated' : 'lab',
+    management_address: role.address, management_protocol: 'ssh', role: role.title,
+  }), `${role.title} added`, { errorInDialog: true });
+  const setLogin = useAction((ref: string | null) => api.updateDevice(device!.id, { credential_ref_id: ref }), 'Login chosen');
+  return (
+    <Card withBorder>
+      <Group justify="space-between" wrap="nowrap" mb={4}>
+        <Title order={2} size="h5">{role.title}</Title>
+        {device && <EnvironmentBadge env={device.environment} />}
+      </Group>
+      <Text size="xs" c="dimmed" mb="xs">{role.hint}</Text>
+      {device ? (
+        <Stack gap={6}>
+          <Group gap="xs"><Anchor component={Link} to={`/devices/${device.id}`} fw={600} size="sm">{device.name}</Anchor>
+            <Text size="sm" ff="monospace" c="dimmed">{device.management_address}</Text></Group>
+          <Select size="xs" label="Its login" clearable w="100%" maw={320}
+            description={role.key === 'blackbox' ? 'Factory: user admin, no password.' : 'The approved login (the setup steps set it on a new unit).'}
+            placeholder={refs.data?.length ? 'Choose a login' : 'Add logins on the system page first'}
+            data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
+            value={device.credential_ref_id} onChange={(v) => setLogin.mutate(v)} />
+        </Stack>
+      ) : (
+        <Stack gap={6}>
+          <Text size="sm">Not in this system yet.</Text>
+          <DialogError error={add.error} />
+          <Group><Button size="xs" leftSection={<IconPlus size={14} />} loading={add.isPending} disabled={!model}
+            onClick={() => add.mutate(undefined)}>Add it ({role.address})</Button></Group>
+        </Stack>
+      )}
+    </Card>
+  );
+}
+
+export function StageSystemPage() {
+  const { projectId = '' } = useParams();
+  // A new system starts with its own choices: the page is made afresh per system.
+  return <StageSystem key={projectId} projectId={projectId} />;
+}
+
+function StageSystem({ projectId }: { projectId: string }) {
+  const [params, setParams] = useSearchParams();
+  const active = Math.min(Number(params.get('step') ?? 0) || 0, STEPS.length - 1);
+  const setActive = (n: number) => setParams({ step: String(n) });
+  const project = useProject(projectId);
+  const devices = useProjectDevices(projectId);
+  const stagings = useProjectStagings(projectId, active === 3 || active === 4);
+  const [simulated, setSimulated] = useState('real');
+  const [choices, setChoices] = useState<Choices>(() => (projectId ? loadChoices(projectId) : {}));
+  const assigned = useMemo(() => assignRoles(devices.data ?? []), [devices.data]);
+  const roles = ROLES.flatMap((role) => (assigned[role.key] ? [{ role, device: assigned[role.key]! }] : []));
+  const setChoice = (key: string, c: Choice) => {
+    const next = { ...choices, [key]: c };
+    setChoices(next);
+    saveChoices(projectId, next);
+  };
+  const filesReady = roles.length > 0 && roles.every(({ role, device }) => planSteps(role, choices[role.key as RoleKey] ?? EMPTY_CHOICE, device).missing.length === 0);
+
+  if (!projectId) {
+    return (
+      <>
+        <PageHeader title="Stage a system" description="Take the devices of one system from factory default to their approved firmware and files, step by step." />
+        <ChooseSystem />
+      </>
+    );
+  }
+  if (!project.data) return <QueryState isLoading={project.isLoading} error={project.error} />;
+  return (
+    <>
+      <PageHeader title={`Stage a system · ${project.data.name}`}
+        description="Step by step: the devices, their files and firmware, the bench, then one plan per device. Nothing changes a device until you approve and run its plan."
+        actions={<Button variant="default" component={Link} to={`/projects/${projectId}`}>System page</Button>} />
+      <Stepper active={active} onStepClick={setActive} size="sm" mb="lg" allowNextStepsSelect>
+        {STEPS.map((label, i) => (
+          <Stepper.Step key={label} label={label}
+            completedIcon={<IconCheck size={16} />}
+            description={i === 0 ? `${roles.length} of ${ROLES.length} devices` : i === 1 ? (filesReady ? 'ready' : 'to choose') : undefined} />
+        ))}
+      </Stepper>
+      {active === 0 && (
+        <Stack>
+          <Group justify="space-between" wrap="wrap">
+            <Text size="sm" c="dimmed">Devices are found by model; add the missing ones with the bench defaults (you can edit them later).</Text>
+            <SegmentedControl size="xs" aria-label="Devices to add" value={simulated} onChange={setSimulated}
+              data={[{ value: 'real', label: 'Real devices on the bench' }, { value: 'simulated', label: 'Practice (simulated)' }]} />
+          </Group>
+          {(devices.data ?? []).length > roles.length && (
+            <Alert color="gray" p="xs"><Text size="xs">This system also has devices that play no staging role; they are left out here.</Text></Alert>
+          )}
+          <SimpleGrid cols={{ base: 1, md: 2 }}>
+            {ROLES.map((role) => (
+              <RoleCard key={role.key} role={role} device={assigned[role.key]} projectId={projectId}
+                systemName={project.data!.name} simulated={simulated === 'simulated'} />
+            ))}
+          </SimpleGrid>
+          <Text size="xs" c="dimmed">Logins are kept on the system page (<Anchor component={Link} to={`/projects/${projectId}`} size="xs">Logins tab</Anchor>):
+            add the approved login, and for the FortiGate base file the login it sets.</Text>
+        </Stack>
+      )}
+      {active === 1 && <FilesStep roles={roles} choices={choices} onChange={setChoice} />}
+      {active === 2 && <BenchStep roles={roles} />}
+      {active === 3 && <RunStep projectId={projectId} roles={roles} choices={choices} stagings={stagings.data ?? []} />}
+      {active === 4 && <ReportStep project={project.data} roles={roles} stagings={stagings.data ?? []} />}
+      <Group justify="space-between" mt="lg" className="no-print">
+        <Button variant="default" disabled={active === 0} onClick={() => setActive(active - 1)}>Back</Button>
+        {active < STEPS.length - 1 && <Button onClick={() => setActive(active + 1)}>Next: {STEPS[active + 1]}</Button>}
+      </Group>
+      {active === 0 && roles.length === 0 && <Badge mt="xs" color="gray" variant="light" tt="none">Add at least one device to continue usefully</Badge>}
+    </>
+  );
+}

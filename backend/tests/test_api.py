@@ -55,6 +55,7 @@ def test_health_drivers_models(client):
     support = {m["model_id"]: m["support"] for m in models}
     assert support.pop("aruba-2930f") == "lab_read_only"  # acceptance phase A, 2026-11-19
     assert support.pop("blackbox-lig1014a") == "lab_read_only"  # read-only bench, 2026-11-24
+    assert support.pop("fortinet-fg-101f") == "lab_read_only"  # base + site on a bench unit
     assert set(support.values()) == {"simulated_only"}
 
 

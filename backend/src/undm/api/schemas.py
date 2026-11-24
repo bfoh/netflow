@@ -357,6 +357,47 @@ class FirstLoginIn(BaseModel):
     device_id: str
 
 
+class StagingStepIn(BaseModel):
+    """One step of a device's staging plan (D-085)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["first_login", "firmware", "configuration"]
+    # firmware
+    image_id: str | None = None
+    allow_downgrade: bool = False
+    also_secondary: bool = False
+    # configuration
+    version_id: str | None = None
+    apply_mode: Literal["merge", "replace"] | None = None  # None: as the file requires
+    credential_after_ref_id: str | None = None
+    secrets: dict[str, str] | None = None
+
+
+class DeviceStagingIn(BaseModel):
+    """Steps for one device, run in this order after one approval."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    device_id: str
+    steps: list[StagingStepIn] = Field(min_length=1, max_length=8)
+
+
+class StagingApproveIn(BaseModel):
+    """Maintenance window for the plan's firmware steps (none needed without firmware)."""
+
+    window_start: datetime | None = None
+    window_end: datetime | None = None
+
+
+class StagingIndexOut(BaseModel):
+    staging_id: str
+    device_id: str
+    created_at: datetime
+    kinds: list[str]
+    states: list[str]
+
+
 class StagingPlanOut(BaseModel):
     staging_id: str
     steps: list[DeploymentOut]

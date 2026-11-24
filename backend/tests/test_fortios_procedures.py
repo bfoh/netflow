@@ -677,3 +677,36 @@ def test_api_staging_plan_for_a_new_unit_starts_with_the_first_login(api):
     steps = client.post(f"/api/staging-plans/{sid}/execute?background=false").json()["steps"]
     assert [s["state"] for s in steps] == ["succeeded"] * 3, [_events(s) for s in steps]
     assert fg.hostname == "lab-fw-site" and fg.password == APPROVED
+
+
+def test_api_device_staging_first_login_then_firmware_checks_the_version_at_its_run(api):
+    """D-085: on a new unit the firmware step cannot read the version when the plan is made
+    (no login yet); it is read when the step runs, after the first login."""
+    from datetime import UTC, datetime, timedelta
+
+    client, pid, did, fg, refs = api
+    _new_unit(fg)
+    assert client.put("/api/policy", json={"enable_real_device_firmware": True,
+                                           "firmware_require_separate_approver": False}
+                      ).status_code == 200
+    data = fake_image("7.6.5")
+    img = client.post("/api/firmware/images", data={
+        "vendor": "Fortinet", "platform": "fortios", "version": "7.6.5",
+        "compatible_models": "FortiGate-101F",
+        "vendor_sha256": hashlib.sha256(data).hexdigest()},
+        files={"file": ("FGT_101F-v7.6.5-FORTINET.out", data, "application/octet-stream")}).json()
+    client.post(f"/api/firmware/images/{img['id']}/approve")
+    plan = client.post(f"/api/projects/{pid}/device-staging", json={"device_id": did, "steps": [
+        {"kind": "first_login"}, {"kind": "firmware", "image_id": img["id"]}]}).json()
+    first, firmware = plan["steps"]
+    assert first["state"] == firmware["state"] == "awaiting_approval", _events(firmware)
+    assert "version check deferred: it is made at the run, after step 1 (first login)" \
+        in _events(firmware)
+    now = datetime.now(UTC)
+    client.post(f"/api/staging-plans/{plan['staging_id']}/approve", json={
+        "window_start": (now - timedelta(minutes=1)).isoformat(),
+        "window_end": (now + timedelta(hours=1)).isoformat()})
+    steps = client.post(f"/api/staging-plans/{plan['staging_id']}/execute?background=false"
+                        ).json()["steps"]
+    assert [s["state"] for s in steps] == ["succeeded", "succeeded"], [_events(s) for s in steps]
+    assert fg.password == APPROVED and fg.version == "v7.6.5"

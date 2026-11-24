@@ -19,6 +19,7 @@ manager, topology._
 | Intent & generation | Hostname, VLANs, L3 interfaces, static routes → AOS-CX / FortiOS / IOS-XE templates; validation; platform support checks |
 | Configuration import | Upload a file per device; normalised, versioned, labelled unvalidated; selectable per device in deployment plans |
 | First login | New unit's first login as an approved plan (kind `first_login`): read-only check of the empty password, then the device's login set when the unit demands a new password, verified by a fresh login (D-073). Fake FortiGate only; factory SSH wording not yet seen (Q-41) |
+| Stage a system (wizard) | `/stage`: system and its four devices by role, files and firmware per device, bench check, one plan per device (any of first login, firmware, files; checked before anything is made; later steps checked at their run), approve with a window when firmware is in it, run, stop, report to print or save. Tested with fake devices (API) and simulated devices (browser); **not yet run on hardware through the wizard** (D-085) |
 | Staging plan | Base file (replace), then site file (merge) for one device as one plan (optionally after the first login): one approval, one Execute, step 2 previewed at its run and run only after step 1 succeeded, shared Stop (D-071). API and fake FortiGate tests; **not yet run on hardware** |
 | Deployments | Lifecycle with directive-15 states; dry runs; approval; preflight with identity check; backup; verification by read-back (platform-aware for SSH drivers); rollback or manual recovery; device locks; crash recovery on restart |
 | Firmware | Repository with SHA-256 or SHA-512 vs vendor checksum (addable after upload); approval only when verified or with a written, audited reason (D-062); retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery. Simulated devices, plus **one experimental real procedure: Aruba 2930F** (switch pulls the image from UNDM by TFTP into primary flash, restarts, version verified) behind `UNDM_ENABLE_REAL_DEVICE_FIRMWARE`. Experimental: **one successful run on hardware** (2026-11-19, spare JL260A, approved downgrade WC.16.11.0001 → WC.16.10.0025, verified) |
@@ -64,16 +65,16 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-24, v55)
+## Test results (2026-11-24, v56)
 | Suite | Result |
 |---|---|
-| Backend pytest | 440 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
+| Backend pytest | 443 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (77 files) |
-| Frontend Vitest | 33 passed |
+| Frontend Vitest | 39 passed |
 | tsc / oxlint / vite build | clean / clean / success |
-| Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
+| Playwright E2E | 4 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box) |
 
 ## Known issues and limitations
 - Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole
@@ -99,8 +100,9 @@ FortiGate 101F staging.
 ## Next milestone
 **Plan A — UI/UX for colleagues** (product owner, 2026-11-24; plan B, the portable Windows
 app, is deferred). Done: A0 baseline screenshots, A1a words, A1b safety switches, A2
-navigation, A1c feedback and confirmations (D-084). Next: A3 the **Stage a
-system** wizard on a generalised staging engine; A4 page-by-page fixes; A5 export/import of
+navigation, A1c feedback and confirmations (D-084), A3 the **Stage a system** wizard on a
+generalised staging engine (D-085; bench run through the wizard still to do). Next: A4
+page-by-page fixes; A5 export/import of
 a system without secrets. Bench items below stay open.
 
 1. **Bench runs** (product owner): 2930F console bootstrap and firmware

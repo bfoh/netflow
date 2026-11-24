@@ -13,13 +13,17 @@ from undm.api.schemas import (
     DeploymentIn,
     DeploymentOut,
     DeploymentSummary,
+    DeviceStagingIn,
     FirmwareDeploymentIn,
     FirstLoginIn,
+    StagingApproveIn,
+    StagingIndexOut,
     StagingPlanIn,
     StagingPlanOut,
 )
 from undm.db.models import DeploymentRecord
-from undm.services.deployments import DeploymentService
+from undm.drivers.base import ApplyMode
+from undm.services.deployments import DeploymentService, StagingStep
 from undm.services.errors import ConflictError
 from undm.services.jobs import DeploymentJobs
 from undm.services.policy import Policy
@@ -180,14 +184,43 @@ def create_first_login(project_id: str, body: FirstLoginIn, session: SessionDep,
     return svc.create_first_login(project_id, body.device_id, actor)
 
 
+@router.post("/api/projects/{project_id}/device-staging", response_model=StagingPlanOut,
+             status_code=status.HTTP_201_CREATED)
+def create_device_staging(project_id: str, body: DeviceStagingIn, session: SessionDep,
+                          svc: ServiceDep, actor: ActorDep) -> dict[str, Any]:
+    """Any sequence of first login, firmware and file steps for one device (D-085)."""
+    get_project(session, project_id)
+    steps = [StagingStep(
+        kind=s.kind, image_id=s.image_id, allow_downgrade=s.allow_downgrade,
+        also_secondary=s.also_secondary, version_id=s.version_id,
+        apply_mode=ApplyMode(s.apply_mode) if s.apply_mode else None,
+        credential_after_ref_id=s.credential_after_ref_id, secrets=s.secrets or None)
+        for s in body.steps]
+    made = svc.create_device_staging(project_id, body.device_id, actor, steps)
+    return _staging(str(made[0].staging_id), made)
+
+
+@router.get("/api/projects/{project_id}/staging-plans", response_model=list[StagingIndexOut])
+def list_staging_plans(project_id: str, session: SessionDep,
+                       svc: ServiceDep) -> list[StagingIndexOut]:
+    """Every staging plan of a system, newest first, with its device and step states."""
+    get_project(session, project_id)
+    return [StagingIndexOut(staging_id=sid, device_id=device, created_at=steps[0].created_at,
+                            kinds=[r.kind for r in steps], states=[r.state for r in steps])
+            for sid, device, steps in svc.project_stagings(project_id)]
+
+
 @router.get("/api/staging-plans/{staging_id}", response_model=StagingPlanOut)
 def read_staging_plan(staging_id: str, svc: ServiceDep) -> dict[str, Any]:
     return _staging(staging_id, svc.staging_steps(staging_id))
 
 
 @router.post("/api/staging-plans/{staging_id}/approve", response_model=StagingPlanOut)
-def approve_staging_plan(staging_id: str, svc: ServiceDep, actor: ActorDep) -> dict[str, Any]:
-    return _staging(staging_id, svc.approve_staging(staging_id, actor))
+def approve_staging_plan(staging_id: str, svc: ServiceDep, actor: ActorDep,
+                         body: StagingApproveIn | None = None) -> dict[str, Any]:
+    window = body or StagingApproveIn()
+    return _staging(staging_id, svc.approve_staging(staging_id, actor, window.window_start,
+                                                    window.window_end))
 
 
 def _run_staging(state: Any, staging_id: str, actor: str, signal: Any) -> None:

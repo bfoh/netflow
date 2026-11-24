@@ -48,7 +48,9 @@ CATALOG: tuple[DeviceModel, ...] = (
                 SupportLevel.LAB_READ_ONLY,
                 notes="Runs ArubaOS-Switch (not AOS-CX). Read-only acceptance passed 2026-11-19 "
                       "on 2930F-48G-4SFP (JL260A) WC.16.10.0025: connect, facts, backup. "
-                      "Configuration changes not yet validated."),
+                      "On bench units (experimental): console bootstrap 2026-11-19, firmware "
+                      "(approved downgrade, secondary flash) 2026-11-19/23, complete-file "
+                      "load 2026-11-23, erase of a preconfigured unit 2026-11-23."),
     DeviceModel("blackbox-lig1014a", "Black Box", "Industrial managed switch", "LIG1014A",
                 DeviceCategory.SWITCH, "Black Box managed switch",
                 ("mock.blackbox.switch", "ssh.blackbox.lig1014a"),
@@ -69,10 +71,12 @@ CATALOG: tuple[DeviceModel, ...] = (
     DeviceModel("fortinet-fg-100f", "Fortinet", "FortiGate", "FortiGate-100F",
                 DeviceCategory.FIREWALL, "FortiOS", _FORTIOS, SupportLevel.SIMULATED_ONLY),
     DeviceModel("fortinet-fg-101f", "Fortinet", "FortiGate", "FortiGate-101F",
-                DeviceCategory.FIREWALL, "FortiOS", _FORTIOS, SupportLevel.SIMULATED_ONLY,
+                DeviceCategory.FIREWALL, "FortiOS", _FORTIOS, SupportLevel.LAB_READ_ONLY,
                 notes="Staging target. Supplied files are recognised offline (full backup vs "
-                      "CLI script); restore, multi-VDOM scripts and firmware are not "
-                      "implemented for real units yet."),
+                      "CLI script). On a bench unit 2026-11-24 (experimental): connect and "
+                      "facts, base restore and site script end to end; the unit installed "
+                      "7.6.5 by UNDM's firmware procedure (reported failed by an UNDM fault, "
+                      "fixed, not yet re-run). First login: fake device only."),
     DeviceModel("cisco-c9300", "Cisco", "Catalyst 9300", "C9300-24T", DeviceCategory.SWITCH,
                 "IOS-XE", ("mock.cisco.iosxe", "ssh.cisco.iosxe"), SupportLevel.SIMULATED_ONLY),
     DeviceModel("cisco-isr4331", "Cisco", "ISR 4000", "ISR4331", DeviceCategory.ROUTER,

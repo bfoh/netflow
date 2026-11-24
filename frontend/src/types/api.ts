@@ -223,6 +223,25 @@ export interface StagingPlan {
   steps: Deployment[];
 }
 
+/** One step of a device's staging plan, as sent to UNDM (D-085). */
+export interface StagingStepInput {
+  kind: 'first_login' | 'firmware' | 'configuration';
+  image_id?: string;
+  allow_downgrade?: boolean;
+  also_secondary?: boolean;
+  version_id?: string;
+  credential_after_ref_id?: string;
+  secrets?: Record<string, string>;
+}
+
+export interface StagingIndex {
+  staging_id: string;
+  device_id: string;
+  created_at: string;
+  kinds: string[];
+  states: string[];
+}
+
 export interface Deployment extends DeploymentSummary {
   firmware_image_id: string | null;
   window_start: string | null;

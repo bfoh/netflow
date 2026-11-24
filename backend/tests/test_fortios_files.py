@@ -177,7 +177,9 @@ def test_drivers_say_what_they_cannot_apply_yet():
                   'xyz\n-----END"\n  next\nend\n')
     assert "several lines" in FortiOSSsh.inspect_config_file(multi_line).blocked_reason
     assert MockFortiGateDriver.inspect_config_file(SCRIPT).blocked_reason == ""
-    assert "simulated" in MockFortiGateDriver.inspect_config_file(BACKUP).blocked_reason
+    # D-085: the simulation restores a base file too (practice runs), in replace mode only.
+    backup = MockFortiGateDriver.inspect_config_file(BACKUP)
+    assert backup.blocked_reason == "" and backup.apply_mode is ApplyMode.REPLACE
 
 
 def test_secret_slots_are_listed_without_values():

@@ -25,7 +25,7 @@ export const useAllDevices = () => useQuery({ queryKey: keys.devices, queryFn: a
 export const useProjectDevices = (pid: string) =>
   useQuery({ queryKey: keys.projectDevices(pid), queryFn: () => api.projectDevices(pid) });
 export const useDevice = (id: string) =>
-  useQuery({ queryKey: keys.device(id), queryFn: () => api.device(id) });
+  useQuery({ queryKey: keys.device(id), queryFn: () => api.device(id), enabled: !!id });
 export const useConfigs = (id: string) =>
   useQuery({ queryKey: keys.configs(id), queryFn: () => api.configs(id) });
 export const useConfig = (vid: string | null) =>
@@ -61,6 +61,9 @@ export const useStaging = (id: string, live = false) =>
       return waiting || steps.some((s) => RUNNING_STATES.has(s.state)) ? 2000 : false;
     },
   });
+export const useProjectStagings = (pid: string, live = false) =>
+  useQuery({ queryKey: ['stagings', pid], queryFn: () => api.projectStagings(pid), enabled: !!pid,
+    refetchInterval: live ? 3000 : false });
 export const useAudit = (target?: string, limit = 200) =>
   useQuery({ queryKey: keys.audit(target), queryFn: () => api.audit({ target_id: target, limit }) });
 export const useDrivers = () => useQuery({ queryKey: keys.drivers, queryFn: api.drivers });

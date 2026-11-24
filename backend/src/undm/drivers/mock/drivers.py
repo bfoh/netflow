@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping
-from dataclasses import replace
 from typing import ClassVar
 
 from undm.domain.operations import DeviceOperation
@@ -260,17 +259,14 @@ class MockFortiGateDriver(MockDriver):
         os_family="FortiOS",
         description="Simulated FortiGate (no rollback capability in this simulation profile)",
         simulated=True,
-        capabilities=_COMMON | {C.REST_API, C.ZERO_TOUCH_PROVISIONING},
+        # Restoring a base file (full backup) is simulated too, so a staging run can be
+        # practised end to end (D-085); it says nothing about real units.
+        capabilities=_COMMON | {C.REST_API, C.ZERO_TOUCH_PROVISIONING, C.CONFIGURATION_REPLACE},
     )
 
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
-        report = inspect_fortios_file(text)
-        if report.file_type == "full_backup":
-            return replace(report, blocked_reason=(
-                "The simulated FortiGate cannot restore a full backup; only CLI scripts can be "
-                "applied in simulation."))
-        return report
+        return inspect_fortios_file(text)
 
     def prepare_for_device(self, config: str, secrets: Mapping[str, str]) -> str:
         # Checked like a real unit, but the simulation never holds the value: it keeps an

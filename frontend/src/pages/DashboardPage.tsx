@@ -1,6 +1,6 @@
 import { Anchor, Badge, Button, Card, Group, List, SimpleGrid, Stack, Table, Text, ThemeIcon, Title } from '@mantine/core';
 import type { ReactNode } from 'react';
-import { IconAlertTriangle, IconCircleCheck, IconPlus } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCircleCheck, IconListCheck, IconPlus } from '@tabler/icons-react';
 import { Link } from 'react-router';
 
 import { StateBadge } from '../components/Badges';
@@ -44,7 +44,8 @@ function GettingStarted({ hasSystems, hasDevices }: { hasSystems: boolean; hasDe
   return (
     <Card withBorder mb="lg">
       <Title order={2} size="h3" mb="xs">Getting started</Title>
-      <Text size="sm" c="dimmed" mb="sm">Staging a system takes four steps. UNDM checks every change and asks for approval before it touches a device.</Text>
+      <Text size="sm" c="dimmed" mb="sm">The quickest way: <Anchor component={Link} to="/stage">Stage a system</Anchor> walks you through it. By hand,
+        it takes four steps. UNDM checks every change and asks for approval before it touches a device.</Text>
       <List spacing="xs" size="sm" center>
         <Step done={hasSystems}><Anchor component={Link} to="/projects">Create a system</Anchor>: the set of devices you stage together.</Step>
         <Step done={hasDevices}>Add its devices on the system page (model, address, login).</Step>
@@ -70,7 +71,10 @@ export function DashboardPage() {
   return (
     <>
       <PageHeader title="Home" description="Your systems, the plans waiting for you and what ran last."
-        actions={<Button component={Link} to="/projects" leftSection={<IconPlus size={16} />} variant="light">New system</Button>} />
+        actions={<>
+          <Button component={Link} to="/projects" leftSection={<IconPlus size={16} />} variant="light">New system</Button>
+          <Button component={Link} to="/stage" leftSection={<IconListCheck size={16} />}>Stage a system</Button>
+        </>} />
       <QueryState isLoading={devices.isLoading} error={devices.error ?? projects.error ?? deployments.error} />
       {loaded && (systems.length === 0 || d.length === 0) && <GettingStarted hasSystems={systems.length > 0} hasDevices={d.length > 0} />}
       <SimpleGrid cols={{ base: 2, md: 4 }} mb="lg">

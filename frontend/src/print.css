@@ -1,0 +1,8 @@
+/* Printing (e.g. the staging report): only the page content. */
+@media print {
+  .no-print,
+  .mantine-AppShell-navbar,
+  .mantine-AppShell-header,
+  .mantine-Stepper-steps { display: none !important; }
+  .mantine-AppShell-main { padding: 0 !important; }
+}

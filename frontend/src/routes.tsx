@@ -14,6 +14,7 @@ import { ProvisioningPage } from './pages/ProvisioningPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { StageSystemPage } from './pages/StageSystemPage';
 import { StagingPage } from './pages/StagingPage';
 import { TopologyPage } from './pages/TopologyPage';
 
@@ -28,6 +29,8 @@ export const routes: RouteObject[] = [
         errorElement: <RouteError />,
         children: [
           { index: true, element: <DashboardPage /> },
+          { path: 'stage', element: <StageSystemPage /> },
+          { path: 'stage/:projectId', element: <StageSystemPage /> },
           { path: 'projects', element: <ProjectsPage /> },
           { path: 'projects/:projectId', element: <ProjectDetailPage /> },
           { path: 'devices', element: <DevicesPage /> },

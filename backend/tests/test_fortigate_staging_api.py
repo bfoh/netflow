@@ -161,3 +161,72 @@ def test_base_file_with_another_password_ends_with_a_clear_message(bench):
     assert out["state"] == "recovery_required", messages(out)
     assert "Authentication failed" in out["targets"][0]["message"]
     assert b.fg.revisions == []
+
+
+# --- generic device staging (D-085): firmware, base, site as one plan -----------------------
+
+def approved_image(b, version="7.6.5", approve=True):
+    data = fake_image(version)
+    img = b.c.post("/api/firmware/images", data={
+        "vendor": "Fortinet", "platform": "fortios", "version": version,
+        "compatible_models": "FortiGate-101F", "vendor_sha256": hashlib.sha256(data).hexdigest()},
+        files={"file": (f"FGT_101F-v{version}-FORTINET.out", data, "application/octet-stream")}
+    ).json()
+    if approve:
+        b.c.post(f"/api/firmware/images/{img['id']}/approve")
+    return img
+
+
+def test_firmware_base_and_site_as_one_device_staging_plan(bench):
+    b = bench
+    img = approved_image(b)
+    base = imported(b, "base-example.conf", BACKUP)
+    site = imported(b, "site-example.cfg", SCRIPT)
+    r = b.c.post(f"/api/projects/{b.pid}/device-staging", json={"device_id": b.did, "steps": [
+        {"kind": "firmware", "image_id": img["id"]},
+        {"kind": "configuration", "version_id": base["id"]},  # mode from the file: replace
+        {"kind": "configuration", "version_id": site["id"], "secrets": {SLOT: b.psk}}]})
+    assert r.status_code == 201, r.json()
+    plan_ = r.json()
+    steps = plan_["steps"]
+    assert [s["kind"] for s in steps] == ["firmware", "configuration", "configuration"]
+    assert [s["apply_mode"] for s in steps[1:]] == ["replace", "merge"]
+    assert all(s["state"] == "awaiting_approval" for s in steps)
+    assert "deferred: it is made at the run, after step 1 (firmware)" in messages(steps[1])
+    assert b.fg.restarts == 0  # nothing changed yet
+    listed = b.c.get(f"/api/projects/{b.pid}/staging-plans").json()
+    assert listed[0]["device_id"] == b.did and listed[0]["kinds"] == [
+        "firmware", "configuration", "configuration"]
+
+    sid = plan_["staging_id"]
+    no_window = b.c.post(f"/api/staging-plans/{sid}/approve")
+    assert no_window.status_code == 409 and "maintenance window" in no_window.json()["error"]
+    approved = b.c.post(f"/api/staging-plans/{sid}/approve", json=window()).json()
+    assert all(s["state"] == "ready" for s in approved["steps"])
+    out = b.c.post(f"/api/staging-plans/{sid}/execute?background=false").json()
+    assert [s["state"] for s in out["steps"]] == ["succeeded"] * 3, [
+        messages(s) for s in out["steps"]]
+    assert b.fg.version == "v7.6.5" and b.fg.hostname == "lab-fw-site"
+    assert b.fg.revisions == ["base-example", "site-example"]
+    assert f'set psksecret "{PSK}"' in b.fg.applied
+    assert PSK not in repr(out)
+
+
+def test_device_staging_is_checked_before_anything_is_made(bench):
+    b = bench
+    img = approved_image(b, "7.6.6", approve=False)
+    site = imported(b, "site-example.cfg", SCRIPT)
+    before = len(b.c.get("/api/deployments").json())
+    cases = [
+        ([{"kind": "firmware", "image_id": img["id"]}], "not approved"),
+        ([{"kind": "configuration", "version_id": site["id"]}, {"kind": "first_login"}],
+         "first login can only be the first step"),
+        ([{"kind": "configuration", "version_id": site["id"], "apply_mode": "replace"}],
+         "merge mode"),
+        ([{"kind": "configuration"}], "choose the file"),
+    ]
+    for steps, words in cases:
+        r = b.c.post(f"/api/projects/{b.pid}/device-staging",
+                     json={"device_id": b.did, "steps": steps})
+        assert r.status_code == 409 and words in r.json()["error"], (words, r.json())
+    assert len(b.c.get("/api/deployments").json()) == before  # no plan was made

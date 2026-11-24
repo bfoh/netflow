@@ -130,9 +130,19 @@ def test_already_compliant_device_is_not_touched():
 
 
 def test_replace_mode_rejected_for_driver_without_replace():
+    import dataclasses
+
+    from undm.drivers.base import Capability
+    from undm.drivers.mock.drivers import MockFortiGateDriver
+
+    class NoReplace(MockFortiGateDriver):  # a driver that cannot load a complete file
+        info = dataclasses.replace(MockFortiGateDriver.info, capabilities=frozenset(
+            MockFortiGateDriver.info.capabilities - {Capability.CONFIGURATION_REPLACE}))
+
     lab_device("10.0.0.1")
     orch = DeploymentOrchestrator()
-    dep = Deployment("d1", [target("fw1", "10.0.0.1", "mock.fortinet.fortios")],
+    drv = NoReplace(DeviceTarget("fw1", "10.0.0.1"))
+    dep = Deployment("d1", [DeploymentTarget("fw1", "fw1", drv, CFG.format(name="fw1"))],
                      created_by="alice", apply_mode=ApplyMode.REPLACE)
     assert not orch.prepare(dep)
     assert dep.state is S.FAILED

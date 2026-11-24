@@ -890,3 +890,34 @@ well as a colour, the plan form's mode switch and the topology link mode have la
 configuration versions can be chosen with the keyboard. Checked at 390 px and 1280 px: no
 page scrolls sideways.
 
+### D-085 "Stage a system" wizard on a generalised staging engine (2026-11-24)
+Plan A, A3 (product owner decision: guided staging wizard). Engine: a staging plan is now any
+sequence of 1–8 steps for one device — `first_login`, `firmware`, `configuration` — made by
+`POST /api/projects/{id}/device-staging` (`DeploymentService.create_device_staging`). Every
+step is checked offline before any is made (inputs present, file fits its mode, the mode
+taken from the file's kind unless given, secrets and login-after valid, image approved and
+compatible, safety switches); a first login may only be the first step. Steps after the
+first are previewed at their run, because earlier steps change the device; this now applies
+to firmware steps too (the running version is read at the step's preflight; on a new
+FortiGate it cannot be read before the first login). Approving a staging plan with a
+firmware step needs a maintenance window (`POST /api/staging-plans/{id}/approve` takes
+`window_start`/`window_end`); the second-approver switch applies as for any firmware plan.
+`GET /api/projects/{id}/staging-plans` lists a system's plans with their device and step
+states. The base+site endpoint (D-071) is unchanged. The console setup of the 2930F stays
+its own action (CLAUDE.md exception, D-025/D-057); the wizard asks for it before the
+switch's plan can be made. No new device-changing path.
+
+Wizard (`/stage`, `/stage/{system}`): 1 system and its four devices by role (FortiGate 101F,
+Black Box LIG1014A, two 2930F; found by name, then bench address, then order; missing ones
+added with the bench defaults of `staging-run-design.md`, real or simulated); 2 files and
+firmware per device (import a file in place, what UNDM found in it, tunnel-key values from
+logins, login after loading; first login offered only where the driver supports it); 3
+bench check (cabling, PC addresses, safety switches, console setup status, Test connection);
+4 run board (one card per device: make the plan, approve, run, stop, follow; expected step
+durations); 5 report (per device: firmware and identity read last, each step's result, start,
+duration, approver, warnings; print or save as HTML). Choices are kept in the browser only;
+the plans made are the record. The simulated FortiGate now also restores a base file, so the
+whole run can be practised on simulated devices (no statement about real units). Messages
+moved to the top right so they never cover the wizard's buttons. Catalog notes for the
+FortiGate 101F and 2930F brought up to date with the bench results.
+

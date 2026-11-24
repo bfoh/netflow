@@ -1,5 +1,5 @@
 import {
-  IconBinaryTree2, IconCpu, IconFileCode, IconFolders, IconHistory, IconHome,
+  IconBinaryTree2, IconCpu, IconFileCode, IconFolders, IconHistory, IconHome, IconListCheck,
   IconRocket, IconRouter, IconSettings, IconUpload,
 } from '@tabler/icons-react';
 
@@ -7,6 +7,7 @@ import {
  * the console setup of new switches, then the plans that change devices. */
 export const NAV = [
   { to: '/', label: 'Home', icon: IconHome },
+  { to: '/stage', label: 'Stage a system', icon: IconListCheck },
   { to: '/projects', label: 'Systems', icon: IconFolders },
   { to: '/devices', label: 'Devices', icon: IconRouter },
   { to: '/configurations', label: 'Files', icon: IconFileCode },

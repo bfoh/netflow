@@ -137,6 +137,12 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
 
     def _preview(self, dep: Deployment) -> bool:
         assert dep.firmware is not None
+        if dep.defer_preview:  # a later step of a staging plan: read at the run (preflight)
+            for t in dep.targets:
+                t.target_version = dep.firmware.version
+                t.state = TargetState.PREVIEWED
+                self._emit(dep, "preview", "ok", f"version check deferred: {dep.defer_preview}", t)
+            return True
         ok = True
         for t in dep.targets:
             t.target_version = dep.firmware.version

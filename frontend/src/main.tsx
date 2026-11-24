@@ -1,5 +1,6 @@
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+import './print.css';
 
 import { createTheme, MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
@@ -23,7 +24,7 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MantineProvider theme={theme} defaultColorScheme="auto">
-      <Notifications position="bottom-right" autoClose={4000} />
+      <Notifications position="top-right" autoClose={4000} />
       <QueryClientProvider client={queryClient}>
         <App />
       </QueryClientProvider>
