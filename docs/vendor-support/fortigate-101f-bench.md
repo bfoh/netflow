@@ -74,3 +74,4 @@ addresses as usual), especially any "device output" event, and the time each ste
 | Date | Unit | Step | Result | Notes |
 |---|---|---|---|---|
 | 2026-11-23 | spare 101F | Test connection | login accepted, no prompt | Netmiko "Pattern not detected: 'to accept\|[#$]'". Probably the forced admin password change at the first login (to be confirmed by what the unit shows). UNDM now reports the unit's text (D-060). |
+| 2026-11-24 | spare 101F | First login (by hand, browser) | done | GUI after `admin` with an empty password: page "Change Password" with "You are required to change the default password.", fields Old Password / New Password / Confirm Password, buttons OK / Logout; after OK the login page returns. Confirms the forced change behind the SSH "no prompt" result. The SSH wording of the same step is not yet seen (needed before UNDM can do it). |
