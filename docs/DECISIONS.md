@@ -921,3 +921,16 @@ whole run can be practised on simulated devices (no statement about real units).
 moved to the top right so they never cover the wizard's buttons. Catalog notes for the
 FortiGate 101F and 2930F brought up to date with the bench results.
 
+### D-086 Page-by-page fixes (2026-11-24)
+Plan A, A4, from the audit of every page: a device can be deleted from its page (its name
+typed to confirm; the device itself is untouched); Add device checks the address (IPv4,
+IPv6 or host name; no port or prefix length) and suggests the bench address for the model;
+the firmware planner says why "Create upgrade plan" is not available yet and shows drivers
+and platforms in words; the configuration plan form has column headings, always starts
+from a real file choice (the one UNDM would take) so the file's needs are always shown, and
+takes the apply mode from the chosen file's kind (shown, not silently changed; files of
+both kinds in one plan are refused with a reason); audit details are shown as named values
+(raw JSON one click away); the topology has a legend and an "Add link…" dialog that works
+without dragging; a plan's page shows its latest 40 events with the earlier ones one click
+away, warnings marked, and the staging note no longer assumes base and site files.
+

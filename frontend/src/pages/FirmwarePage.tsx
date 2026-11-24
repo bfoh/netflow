@@ -12,7 +12,7 @@ import { useConfirm } from '../hooks/useConfirm';
 import { useAction, useDeviceModels, useFirmwareImages, usePolicy, useProjectDevices, useProjects } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Compatibility, FirmwareImage } from '../types/api';
-import { platformLabel, stateLabel } from '../services/labels';
+import { driverLabel, platformLabel, stateLabel } from '../services/labels';
 
 const PLATFORMS = [
   { value: 'aos_switch', label: 'ArubaOS-Switch (e.g. 2930F)' }, { value: 'aoscx', label: 'Aruba AOS-CX' },
@@ -54,7 +54,7 @@ function UploadForm() {
           <FileInput label="Firmware image file" placeholder="Choose the vendor image" value={file} onChange={setFile} required />
           <Select label="Platform" data={PLATFORMS} value={platform} onChange={setPlatform} allowDeselect={false} />
           <TextInput label="Version" placeholder="as reported by the device, e.g. WC.16.11.0003" value={version} onChange={(e) => setVersion(e.currentTarget.value)} required />
-          <TagsInput label="Compatible models" placeholder="type and press Enter" data={suggestions} value={compatible} onChange={setCompatible} />
+          <TagsInput label="Compatible models" placeholder="choose from the list, or type and press Enter" data={suggestions} value={compatible} onChange={setCompatible} />
           <TextInput label="Vendor checksum (SHA-256 or SHA-512)" description="Copy it from the vendor's download page (Fortinet: the SHA-512 under 'Checksum'). MD5 is not accepted. Required for approval; it can also be added after the upload." value={sha} onChange={(e) => setSha(e.currentTarget.value)} />
           <TextInput label="Minimum version to upgrade from (optional)" description="Upgrade-path rule from the release notes" value={minFrom} onChange={(e) => setMinFrom(e.currentTarget.value)} />
         </SimpleGrid>
@@ -194,7 +194,7 @@ function Planner({ images }: { images: FirmwareImage[] }) {
       <Card withBorder>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <Select label="Approved image" placeholder={approved.length ? 'Choose an image' : 'Approve an image first'}
-            data={approved.map((i) => ({ value: i.id, label: `${i.platform} ${i.version} (${i.filename})${i.integrity_verified ? '' : ' · NOT VERIFIED'}` }))}
+            data={approved.map((i) => ({ value: i.id, label: `${platformLabel(i.platform)} ${i.version} (${i.filename})${i.integrity_verified ? '' : ' · NOT VERIFIED'}` }))}
             value={imageId} onChange={(v) => { setImageId(v); setResults(null); }} />
           <Select label="System" data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
             value={projectId} onChange={(v) => { setProjectId(v); setSel([]); setResults(null); }} />
@@ -209,7 +209,7 @@ function Planner({ images }: { images: FirmwareImage[] }) {
         <Card withBorder>
           <Table.ScrollContainer minWidth={520}>
             <Table verticalSpacing={4}>
-              <Table.Thead><Table.Tr><Table.Th w={36} /><Table.Th>Device</Table.Th><Table.Th>Model</Table.Th><Table.Th>Driver</Table.Th><Table.Th>Running version (observed)</Table.Th><Table.Th>Compatibility</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th w={36} /><Table.Th>Device</Table.Th><Table.Th>Model</Table.Th><Table.Th>Connects by</Table.Th><Table.Th>Firmware now (last read)</Table.Th><Table.Th>Compatibility</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>
                 {(devices.data ?? []).map((d) => {
                   const r = results?.find((x) => x.device_id === d.id);
@@ -217,11 +217,11 @@ function Planner({ images }: { images: FirmwareImage[] }) {
                     <Table.Tr key={d.id}>
                       <Table.Td><Checkbox aria-label={`Upgrade ${d.name}`} checked={sel.includes(d.id)}
                         onChange={() => { setResults(null); setSel((s) => (s.includes(d.id) ? s.filter((x) => x !== d.id) : [...s, d.id])); }} /></Table.Td>
-                      <Table.Td>{d.name}</Table.Td><Table.Td>{d.model}</Table.Td><Table.Td><Text size="xs" ff="monospace">{d.driver_id}</Text></Table.Td>
-                      <Table.Td>{String(d.observed_facts?.os_version ?? '— (retrieve information)')}</Table.Td>
-                      <Table.Td>{r && (r.compatible ? <Stack gap={2}><Badge color="teal" variant="light" leftSection={<IconCheck size={12} />}>compatible</Badge>
+                      <Table.Td>{d.name}</Table.Td><Table.Td>{d.model}</Table.Td><Table.Td><Text size="xs">{driverLabel(d.driver_id)}</Text></Table.Td>
+                      <Table.Td>{String(d.observed_facts?.os_version ?? '— (use Retrieve information on the device page)')}</Table.Td>
+                      <Table.Td>{r && (r.compatible ? <Stack gap={2}><Badge color="teal" variant="light" leftSection={<IconCheck size={12} />}>Compatible</Badge>
                           {r.issues.map((i) => <Text key={i.code} size="xs" c="orange">{i.message}</Text>)}</Stack>
-                        : <Stack gap={2}><Badge color="red" variant="light" leftSection={<IconX size={12} />}>not compatible</Badge>
+                        : <Stack gap={2}><Badge color="red" variant="light" leftSection={<IconX size={12} />}>Not compatible</Badge>
                           {r.issues.map((i) => <Text key={i.code} size="xs" c="red">{i.message}</Text>)}</Stack>)}</Table.Td>
                     </Table.Tr>
                   );
@@ -242,6 +242,9 @@ function Planner({ images }: { images: FirmwareImage[] }) {
             <Button disabled={!allOk} loading={create.isPending}
               onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(`/deployments/${d.id}`) })}>Create upgrade plan</Button>
           </Group>
+          {!allOk && <Text size="xs" c="dimmed" mt="xs">{!imageId ? 'Choose an approved image.' : sel.length === 0 ? 'Tick the devices to upgrade.'
+            : !results || results.length !== sel.length ? 'Check compatibility first: the plan is made only for devices the image fits.'
+              : 'An image that does not fit every ticked device cannot be planned: untick those devices.'}</Text>}
         </Card>
       )}
     </Stack>

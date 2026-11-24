@@ -41,3 +41,11 @@ describe('stage a system: steps per device', () => {
     expect(roles.aruba_b?.id).toBe('1');
   });
 });
+
+describe('device address check', () => {
+  it('accepts addresses and host names, refuses the rest', async () => {
+    const { addressProblem } = await import('../src/services/validation');
+    for (const ok of ['', '192.0.2.1', 'switch-1.example.net', 'fe80::1']) expect(addressProblem(ok)).toBeNull();
+    for (const bad of ['192.0.2.300', '192.0.2.1/24', '192.0.2.1:22', 'two words']) expect(addressProblem(bad)).not.toBeNull();
+  });
+});

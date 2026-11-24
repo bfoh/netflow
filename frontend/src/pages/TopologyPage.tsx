@@ -58,7 +58,7 @@ function edgeFor(l: TopologyLink, hasError: boolean, pos: Record<string, XY>): E
 function Canvas({ projectId, topo }: { projectId: string; topo: Topology }) {
   const scheme = useComputedColorScheme('light');
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNodeType>(layout(topo));
-  const [editing, setEditing] = useState<{ id?: string; link: TopologyLinkInput } | null>(null);
+  const [editing, setEditing] = useState<{ id?: string; link: TopologyLinkInput; pick?: boolean } | null>(null);
   const names = useMemo(() => Object.fromEntries(topo.nodes.map((n) => [n.device_id, n.name])), [topo.nodes]);
   const errorLinks = new Set(topo.issues.filter((i) => i.severity === 'error' && i.path.startsWith('links/')).map((i) => i.path.slice(6)));
   const positions = Object.fromEntries(nodes.map((n) => [n.id, n.position]));
@@ -87,7 +87,8 @@ function Canvas({ projectId, topo }: { projectId: string; topo: Topology }) {
     <>
       <Group mb="xs">
         <Button size="xs" variant="default" leftSection={<IconLayoutGrid size={14} />} onClick={autoArrange}>Auto-arrange</Button>
-        <Text size="xs" c="dimmed">Drag from a device's edge dot to another device to add a link. Click a link to edit it. Drag devices to arrange them.</Text>
+        <Button size="xs" variant="default" onClick={() => setEditing({ pick: true, link: { a_device_id: '', a_interface: '', b_device_id: '', b_interface: '', mode: 'routed', vlans: [], notes: '' } })}>Add link…</Button>
+        <Text size="xs" c="dimmed">Or drag from a device's edge dot to another device. Click a link to edit it. Drag devices to arrange them.</Text>
       </Group>
       <Card withBorder padding={0} h={560}>
         <ReactFlow
@@ -109,8 +110,14 @@ function Canvas({ projectId, topo }: { projectId: string; topo: Topology }) {
           <Controls showInteractive={false} />
         </ReactFlow>
       </Card>
+      <Group gap="md" mt={6} aria-label="Legend">
+        {Object.entries({ routed: 'Routed (L3)', trunk: 'Trunk', access: 'Access (one VLAN)' }).map(([m, label]) => (
+          <Group key={m} gap={4}><span style={{ width: 18, height: 3, background: MODE_COLOR[m], display: 'inline-block' }} /><Text size="xs">{label}</Text></Group>
+        ))}
+        <Group gap={4}><span style={{ width: 18, height: 3, background: '#e03131', display: 'inline-block' }} /><Text size="xs">Has a problem (see the list)</Text></Group>
+      </Group>
       {editing && (
-        <LinkModal initial={editing.link} names={names} busy={create.isPending || update.isPending}
+        <LinkModal initial={editing.link} names={names} busy={create.isPending || update.isPending} pickDevices={editing.pick}
           onClose={() => setEditing(null)}
           onDelete={editing.id ? () => del.mutate(editing.id!, { onSuccess: () => setEditing(null) }) : undefined}
           onSave={(l) => (editing.id
@@ -176,7 +183,7 @@ export function TopologyPage() {
       </Group>
       <QueryState isLoading={topo.isLoading} error={topo.error} />
       {topo.data && topo.data.nodes.length === 0 && (
-        <Alert color="gray" icon={<IconAlertTriangle size={18} />}>This project has no devices yet. Add devices on the project page first.</Alert>
+        <Alert color="gray" icon={<IconAlertTriangle size={18} />}>This system has no devices yet. Add devices on the system page first.</Alert>
       )}
       {topo.data && topo.data.nodes.length > 0 && (
         <Grid>

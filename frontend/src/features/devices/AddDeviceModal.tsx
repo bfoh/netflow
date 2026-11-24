@@ -6,6 +6,8 @@ import { DialogError } from '../../components/ConfirmDialog';
 import { useAction, useCredentialRefs, useDeviceModels, useDrivers } from '../../hooks/queries';
 import { api } from '../../services/api';
 import { driverLabel } from '../../services/labels';
+import { addressProblem } from '../../services/validation';
+import { ROLES } from '../stage/roles';
 
 const PROTOCOLS = [
   { value: 'ssh', label: 'SSH' }, { value: 'https_api', label: 'HTTPS API' },
@@ -75,7 +77,9 @@ export function AddDeviceModal({ projectId, opened, onClose }:
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <TextInput label="Device name" required value={form.name} onChange={set('name')} />
           <TextInput label="Role" placeholder="e.g. LTE switch" value={form.role} onChange={set('role')} />
-          <TextInput label="Address" description="The address UNDM reaches it at (factory address for a new unit)" placeholder="e.g. 192.0.2.1" value={form.management_address} onChange={set('management_address')} />
+          <TextInput label="Address" description="The address UNDM reaches it at (factory address for a new unit)"
+            placeholder={`e.g. ${ROLES.find((r) => r.model === model?.model)?.address ?? '192.0.2.1'}`}
+            value={form.management_address} onChange={set('management_address')} error={addressProblem(form.management_address)} />
           <Select label="Connects by" data={PROTOCOLS} value={form.management_protocol}
             onChange={(v) => setForm({ ...form, management_protocol: v ?? 'ssh' })} />
           <TextInput label="Site" value={form.site} onChange={set('site')} />
@@ -90,7 +94,7 @@ export function AddDeviceModal({ projectId, opened, onClose }:
         <DialogError error={create.error} />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} loading={create.isPending} disabled={!model || !driverId || !form.name.trim() || (kind === 'real' && !form.management_address.trim())}>Add device</Button>
+          <Button onClick={submit} loading={create.isPending} disabled={!model || !driverId || !form.name.trim() || !!addressProblem(form.management_address) || (kind === 'real' && !form.management_address.trim())}>Add device</Button>
         </Group>
       </Stack>
     </Modal>

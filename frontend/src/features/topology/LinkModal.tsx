@@ -1,18 +1,30 @@
-import { Button, Group, Modal, SegmentedControl, SimpleGrid, Stack, TagsInput, Text, Textarea, TextInput } from '@mantine/core';
+import { Button, Group, Modal, SegmentedControl, Select, SimpleGrid, Stack, TagsInput, Text, Textarea, TextInput } from '@mantine/core';
 import { useState } from 'react';
 
 import type { TopologyLinkInput } from '../../types/api';
 
-export function LinkModal({ initial, names, onSave, onDelete, onClose, busy }: {
+export function LinkModal({ initial, names, onSave, onDelete, onClose, busy, pickDevices }: {
   initial: TopologyLinkInput; names: Record<string, string>; busy: boolean;
+  /** Choose both devices in the dialog (a link without dragging, e.g. from the keyboard). */
+  pickDevices?: boolean;
   onSave: (l: TopologyLinkInput) => void; onDelete?: () => void; onClose: () => void;
 }) {
   const [l, setL] = useState(initial);
   const vlanText = l.vlans.map(String);
   const badVlans = vlanText.some((v) => !/^\d+$/.test(v) || Number(v) < 1 || Number(v) > 4094);
+  const devices = Object.entries(names).map(([value, label]) => ({ value, label }));
+  const noDevices = !l.a_device_id || !l.b_device_id || l.a_device_id === l.b_device_id;
   return (
     <Modal opened onClose={onClose} title={onDelete ? 'Edit link' : 'New link'}>
       <Stack>
+        {pickDevices && (
+          <SimpleGrid cols={2}>
+            <Select label="From device" data={devices} value={l.a_device_id || null} data-autofocus
+              onChange={(v) => setL({ ...l, a_device_id: v ?? '' })} />
+            <Select label="To device" data={devices.filter((d) => d.value !== l.a_device_id)} value={l.b_device_id || null}
+              onChange={(v) => setL({ ...l, b_device_id: v ?? '' })} />
+          </SimpleGrid>
+        )}
         <SimpleGrid cols={2}>
           <TextInput label={`Interface on ${names[l.a_device_id] ?? 'A'}`} placeholder="e.g. 1/1/48, port1, Gi1" data-autofocus
             value={l.a_interface} onChange={(e) => setL({ ...l, a_interface: e.currentTarget.value })} />
@@ -35,7 +47,7 @@ export function LinkModal({ initial, names, onSave, onDelete, onClose, busy }: {
           {onDelete ? <Button color="red" variant="subtle" onClick={onDelete}>Delete link</Button> : <span />}
           <Group>
             <Button variant="default" onClick={onClose}>Cancel</Button>
-            <Button loading={busy} disabled={!l.a_interface.trim() || !l.b_interface.trim() || badVlans} onClick={() => onSave(l)}>Save</Button>
+            <Button loading={busy} disabled={noDevices || !l.a_interface.trim() || !l.b_interface.trim() || badVlans} onClick={() => onSave(l)}>Save</Button>
           </Group>
         </Group>
       </Stack>

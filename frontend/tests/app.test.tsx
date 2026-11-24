@@ -293,7 +293,9 @@ describe('audit trail', () => {
     await userEvent.type(await screen.findByLabelText('Filter audit events'), 'first_login');
     expect(screen.queryByText('device.check_reachability')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'All details' }));
-    expect(await screen.findByText(/"first_login_credentials_set": false/)).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('First login credentials set')).toBeInTheDocument();
+    expect(within(dialog).getByText('approved login')).toBeInTheDocument();
   });
 });
 

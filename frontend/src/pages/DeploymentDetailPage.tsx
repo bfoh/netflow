@@ -123,6 +123,30 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
   );
 }
 
+const SHOWN_EVENTS = 40;
+
+/** A plan's events; long runs show the latest ones first, with the rest one click away. */
+function EventList({ events, names }: { events: Deployment['events']; names: Map<string, { name: string }> }) {
+  const [all, setAll] = useState(false);
+  const hidden = all ? 0 : Math.max(0, events.length - SHOWN_EVENTS);
+  const shown = events.slice(hidden);
+  return (
+    <Card withBorder>
+      {hidden > 0 && <Button size="xs" variant="subtle" mb="sm" onClick={() => setAll(true)}>Show the {hidden} earlier events</Button>}
+      <Timeline bulletSize={18} lineWidth={2} active={shown.length - 1}>
+        {shown.map((e) => (
+          <Timeline.Item key={e.seq} color={e.status === 'error' ? 'red' : e.status === 'warning' ? 'orange' : e.stage === 'lifecycle' ? 'indigo' : 'teal'}
+            bullet={e.status === 'error' ? <IconX size={11} /> : e.status === 'warning' ? <IconAlertTriangle size={11} /> : undefined}
+            title={<Text size="sm" fw={600}>{stageLabel(e.stage)}{e.device_id ? ` · ${names.get(e.device_id)?.name ?? ''}` : ''} — {stateLabel(e.status)}</Text>}>
+            <Text size="sm" c="dimmed" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{e.message}</Text>
+            <Text size="xs" c="dimmed">{fmtDate(e.timestamp)}</Text>
+          </Timeline.Item>
+        ))}
+      </Timeline>
+    </Card>
+  );
+}
+
 const RESTART_STEP = /^(waiting for the device to answer|loading the file: )/;
 const fmtElapsed = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const zoned = (ts: string) => (/([zZ]|[+-]\d\d:?\d\d)$/.test(ts) ? ts : `${ts}Z`);
@@ -220,8 +244,8 @@ export function DeploymentDetailPage() {
         actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
       {d.staging_id && (
         <Alert color="grape" mb="md" p="xs" title={`Step ${d.staging_step} of a staging plan`}>
-          {d.staging_step === 1 ? 'The base file. The site file (step 2) runs after this step has succeeded. '
-            : 'The site file. It runs only after step 1 (the base file) has succeeded. '}
+          {d.staging_step === 1 ? 'The first step: the next step runs only after this one has succeeded. '
+            : `It runs only after steps 1–${(d.staging_step ?? 2) - 1} have succeeded. `}
           <Anchor component={Link} to={`/staging/${d.staging_id}`}>Open the staging plan</Anchor>
         </Alert>
       )}
@@ -280,18 +304,7 @@ export function DeploymentDetailPage() {
           {({ copied, copy }) => <Button size="xs" variant="light" onClick={copy}>{copied ? 'Copied' : 'Copy events as text'}</Button>}
         </CopyButton>
       </Group>
-      <Card withBorder>
-        <Timeline bulletSize={18} lineWidth={2} active={d.events.length - 1}>
-          {d.events.map((e) => (
-            <Timeline.Item key={e.seq} color={e.status === 'error' ? 'red' : e.stage === 'lifecycle' ? 'indigo' : 'teal'}
-              bullet={e.status === 'error' ? <IconX size={11} /> : undefined}
-              title={<Text size="sm" fw={600}>{stageLabel(e.stage)}{e.device_id ? ` · ${byId.get(e.device_id)?.name ?? ''}` : ''} — {stateLabel(e.status)}</Text>}>
-              <Text size="sm" c="dimmed">{e.message}</Text>
-              <Text size="xs" c="dimmed">{fmtDate(e.timestamp)}</Text>
-            </Timeline.Item>
-          ))}
-        </Timeline>
-      </Card>
+      <EventList events={d.events} names={byId} />
     </>
   );
 }

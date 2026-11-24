@@ -9,19 +9,22 @@ import { fmtDate, planKind } from '../services/format';
 import { useAction, useAllDeployments, useConfig, useConfigs, useCredentialRefs, useProjectDevices, useProjects } from '../hooks/queries';
 import type { ConfigVersion } from '../types/api';
 
-const DEFAULT_CHOICE = '__default__';
 const versionLabel = (v: ConfigVersion) =>
   `${v.kind}${v.reference ? ` · ${v.reference}` : ''} · ${fmtDate(v.created_at)} · ${v.sha256.slice(0, 8)}`;
 
-/** Which configuration version a plan deploys to one device. */
-function ConfigChoice({ deviceId, value, onChange }: { deviceId: string; value: string; onChange: (v: string) => void }) {
+/** Which configuration version a plan deploys to one device; starts with the latest generated
+ *  file, else the latest imported one (what UNDM would take), so its needs are always shown. */
+function ConfigChoice({ deviceId, value, onChange }: { deviceId: string; value: string | null; onChange: (v: string) => void }) {
   const configs = useConfigs(deviceId);
-  const data = [
-    { value: DEFAULT_CHOICE, label: 'Latest generated (or latest imported)' },
-    ...(configs.data ?? []).map((v) => ({ value: v.id, label: versionLabel(v) })),
-  ];
-  return <Select size="xs" w="100%" maw={320} aria-label="Configuration to deploy" data={data} value={value}
-    onChange={(v) => onChange(v ?? DEFAULT_CHOICE)} allowDeselect={false} />;
+  const versions = (configs.data ?? []).filter((v) => v.kind !== 'backup');
+  const fallback = versions.find((v) => v.kind === 'generated') ?? versions.find((v) => v.kind === 'imported');
+  useEffect(() => { if (!value && fallback) onChange(fallback.id); }, [value, fallback, onChange]);
+  if (configs.data && versions.length === 0) {
+    return <Text size="xs" c="orange">No file yet: import one (Files page) or generate one from its settings.</Text>;
+  }
+  return <Select size="xs" w="100%" maw={320} aria-label="Configuration to deploy" placeholder="Choose the file"
+    data={versions.map((v) => ({ value: v.id, label: versionLabel(v) }))} value={value}
+    onChange={(v) => { if (v) onChange(v); }} allowDeselect={false} />;
 }
 import { api } from '../services/api';
 import { applyModeLabel, stateLabel } from '../services/labels';
@@ -77,6 +80,8 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
   const [sel, setSel] = useState<string[]>(preselected);
   const [dryRun, setDryRun] = useState(false);
   const [mode, setMode] = useState('merge');
+  // The mode each chosen file requires by its kind (complete file → replace, script → merge).
+  const [fileModes, setFileModes] = useState<Record<string, string>>({});
   // Opened from "Deploy this version…": that version is chosen for its device.
   const [choice, setChoice] = useState<Record<string, string>>(
     () => (version && preselected.length === 1 ? { [preselected[0]]: version } : {}));
@@ -84,12 +89,15 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
   const [loginAfter, setLoginAfter] = useState<Record<string, string>>({});
   const navigate = useNavigate();
   const chosen = Object.fromEntries(
-    Object.entries(choice).filter(([id, v]) => sel.includes(id) && v !== DEFAULT_CHOICE));
+    Object.entries(choice).filter(([id]) => sel.includes(id)));
+  const required = [...new Set(sel.filter((id) => chosen[id] && fileModes[id]).map((id) => fileModes[id]))];
+  const forced = required.length === 1 ? required[0] : null;
+  const effectiveMode = forced ?? mode;
   const chosenLogins = Object.fromEntries(Object.entries(loginAfter).filter(([id]) => id in chosen));
   const chosenSecrets = Object.fromEntries(
     Object.entries(secrets).filter(([id, s]) => id in chosen && Object.keys(s).length));
   const create = useAction(() => api.createDeployment(projectId, {
-    device_ids: sel, dry_run: dryRun, apply_mode: mode,
+    device_ids: sel, dry_run: dryRun, apply_mode: effectiveMode,
     config_versions: Object.keys(chosen).length ? chosen : undefined,
     secrets: Object.keys(chosenSecrets).length ? chosenSecrets : undefined,
     credentials_after: Object.keys(chosenLogins).length ? chosenLogins : undefined,
@@ -100,13 +108,14 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
     <Card withBorder>
       <Title order={2} size="h4" mb="xs">New configuration plan</Title>
       <Text size="sm" c="dimmed" mb="md">
-        For each selected device choose which configuration to deploy (default: the latest generated one, or the latest
-        imported file if nothing was generated). It is validated and previewed against the device.
-        Live plans then need approval before execution; dry runs only read from devices.
+        Tick the devices and choose the file each one gets (it starts with the latest generated file, else the latest
+        imported one). The plan is checked and previewed against each device; it then needs approval before it runs. A dry
+        run only reads from the devices.
       </Text>
       <QueryState isLoading={devices.isLoading} error={devices.error} />
       <Table.ScrollContainer minWidth={760}>
       <Table verticalSpacing={4} mb="md">
+        <Table.Thead><Table.Tr><Table.Th w={36} /><Table.Th>Device</Table.Th><Table.Th>Model</Table.Th><Table.Th>Kind</Table.Th><Table.Th>Status</Table.Th><Table.Th>File to load</Table.Th></Table.Tr></Table.Thead>
         <Table.Tbody>
           {(devices.data ?? []).map((d) => (
             <Table.Tr key={d.id}>
@@ -116,15 +125,17 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
               <Table.Td><EnvironmentBadge env={d.environment} /></Table.Td><Table.Td><StateBadge state={d.deployment_status} /></Table.Td>
               <Table.Td>{sel.includes(d.id) && (
                 <>
-                  <ConfigChoice deviceId={d.id} value={choice[d.id] ?? DEFAULT_CHOICE}
+                  <ConfigChoice deviceId={d.id} value={choice[d.id] ?? null}
                     onChange={(v) => {
-                      setChoice((c) => ({ ...c, [d.id]: v }));
+                      setChoice((c) => (c[d.id] === v ? c : { ...c, [d.id]: v }));
+                      setFileModes((m) => { if (!(d.id in m)) return m; const n = { ...m }; delete n[d.id]; return n; });
                       setSecrets((s) => ({ ...s, [d.id]: {} }));
                       setLoginAfter((l) => { const n = { ...l }; delete n[d.id]; return n; });
                     }} />
-                  {choice[d.id] && choice[d.id] !== DEFAULT_CHOICE && (
+                  {choice[d.id] && (
                     <FileNeeds projectId={projectId} versionId={choice[d.id]} secrets={secrets[d.id] ?? {}}
-                      onSecrets={(v) => setSecrets((s) => ({ ...s, [d.id]: v }))} onMode={setMode}
+                      onSecrets={(v) => setSecrets((s) => ({ ...s, [d.id]: v }))}
+                      onMode={(m) => setFileModes((f) => (f[d.id] === m ? f : { ...f, [d.id]: m }))}
                       loginAfter={loginAfter[d.id] ?? null}
                       onLoginAfter={(v) => setLoginAfter((l) => {
                         const n = { ...l };
@@ -141,15 +152,22 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
       <Group mb="md" wrap="wrap">
         <Switch label="Dry run (read-only, no approval needed)" checked={dryRun} onChange={(e) => setDryRun(e.currentTarget.checked)} />
         <Group gap="xs"><Text size="sm">Apply mode</Text>
-          <SegmentedControl size="xs" aria-label="How the file is applied" value={mode} onChange={setMode} data={[{ value: 'merge', label: 'Merge' }, { value: 'replace', label: 'Replace' }]} /></Group>
+          <SegmentedControl size="xs" aria-label="How the file is applied" value={effectiveMode} onChange={setMode} disabled={!!forced}
+            data={[{ value: 'merge', label: 'Additions' }, { value: 'replace', label: 'Complete file' }]} />
+          {forced && <Text size="xs" c="dimmed">set by the chosen file</Text>}</Group>
       </Group>
-      {mode === 'replace' && (
+      {required.length > 1 && (
+        <Alert color="red" icon={<IconInfoCircle size={16} />} mb="md">
+          The chosen files need different modes (a complete file and a script). Make one plan per kind of file.
+        </Alert>
+      )}
+      {effectiveMode === 'replace' && (
         <Alert color="yellow" icon={<IconInfoCircle size={16} />} mb="md">
           Replace makes the running configuration equal to the chosen one, removing everything else. For a FortiGate full backup or a
           complete 2930F file, the device fetches the file over TFTP and restarts. Drivers that cannot replace are rejected at validation.
         </Alert>
       )}
-      <Button disabled={sel.length === 0} loading={create.isPending}
+      <Button disabled={sel.length === 0 || required.length > 1} loading={create.isPending}
         onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(`/deployments/${d.id}`) })}>
         Validate and preview
       </Button>

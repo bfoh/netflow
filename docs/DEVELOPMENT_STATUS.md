@@ -72,7 +72,7 @@ library; intent beyond the first slice; project export/import; persistent job ru
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (77 files) |
-| Frontend Vitest | 39 passed |
+| Frontend Vitest | 40 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 4 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box) |
 
@@ -101,8 +101,8 @@ FortiGate 101F staging.
 **Plan A — UI/UX for colleagues** (product owner, 2026-11-24; plan B, the portable Windows
 app, is deferred). Done: A0 baseline screenshots, A1a words, A1b safety switches, A2
 navigation, A1c feedback and confirmations (D-084), A3 the **Stage a system** wizard on a
-generalised staging engine (D-085; bench run through the wizard still to do). Next: A4
-page-by-page fixes; A5 export/import of
+generalised staging engine (D-085; bench run through the wizard still to do), A4
+page-by-page fixes (D-086). Next: A5 export/import of
 a system without secrets. Bench items below stay open.
 
 1. **Bench runs** (product owner): 2930F console bootstrap and firmware

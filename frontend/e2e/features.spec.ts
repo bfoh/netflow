@@ -88,7 +88,7 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   await page.getByRole('option', { name: project }).click();
   await page.getByLabel(`Upgrade sw-${id}`).check();
   await page.getByRole('button', { name: 'Check compatibility (offline)' }).click();
-  await expect(page.getByText('compatible', { exact: true })).toBeVisible();
+  await expect(page.getByText('Compatible', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Create upgrade plan' }).click();
   await expect(page.getByText('Waiting for approval').first()).toBeVisible();
   const planUrl = page.url();

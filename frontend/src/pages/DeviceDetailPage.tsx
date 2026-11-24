@@ -1,8 +1,10 @@
 import { Accordion, Alert, Anchor, Badge, Button, Card, Code, Group, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
-import { IconAlertTriangle, IconEdit, IconLock, IconPlugConnected, IconTerminal2 } from '@tabler/icons-react';
+import { IconAlertTriangle, IconEdit, IconLock, IconPlugConnected, IconTerminal2, IconTrash } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import type { ReactNode } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
+
+import { useConfirm } from '../hooks/useConfirm';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
@@ -197,6 +199,9 @@ export function DeviceDetailPage() {
   const device = useDevice(deviceId);
   const system = useProject(device.data?.project_id ?? '');
   const [editing, { open: openEdit, close: closeEdit }] = useDisclosure();
+  const [ask, confirmDialog] = useConfirm();
+  const navigate = useNavigate();
+  const del = useAction(() => api.deleteDevice(deviceId), 'Device deleted', { errorInDialog: true });
   if (!device.data) return <QueryState isLoading={device.isLoading} error={device.error} />;
   const d = device.data;
   return (
@@ -206,7 +211,14 @@ export function DeviceDetailPage() {
         actions={<>
           <ConsoleBootstrapLink d={d} />
           <Button variant="default" leftSection={<IconEdit size={16} />} onClick={openEdit} disabled={!!d.locked_by_deployment_id}>Edit device</Button>
+          <Button variant="subtle" color="red" leftSection={<IconTrash size={16} />} disabled={!!d.locked_by_deployment_id}
+            onClick={() => ask({
+              title: `Delete ${d.name}?`, confirmLabel: 'Delete device', typed: d.name,
+              message: 'The device, its files, backups and history are removed from UNDM. The device itself is not touched. Its login stays on the system page.',
+              onConfirm: async () => { await del.mutateAsync(); void navigate(`/projects/${d.project_id}`); },
+            })}>Delete</Button>
         </>} />
+      {confirmDialog}
       <RealDeviceNotice d={d} />
       {editing && <EditDeviceModal device={d} opened={editing} onClose={closeEdit} />}
       {d.locked_by_deployment_id && (
