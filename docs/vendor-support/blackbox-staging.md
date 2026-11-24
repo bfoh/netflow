@@ -70,3 +70,9 @@ load is verified. Cable the PC to **port 1/3**: the file keeps management on tha
   that loads either file can be rehearsed. No real-device driver yet.
 - LE2700A XML: files that declare a document type or entities are refused (no XML-based
   attack can reach the backend through an import).
+
+## Bench log
+| Date | Unit | Step | Result | Notes |
+|---|---|---|---|---|
+| 2026-11-24 | — | Second team file (LIG1014A, another system) checked offline | **recognised** | Same format as the first sample. UNDM's import check reported it correctly: complete configuration → replace; 14 ports, 9 shut down; after loading the switch answers only on VLAN 222 (untagged on port 1/3) and on the site VLAN (trunk ports 1/10 and 1/14, native VLAN tagged); VLAN 1 loses its address and is forbidden on every port; `access management` allows web and telnet only (whether that covers SSH is the key bench question, Q-27); telnet off; HTTPS only; one base64 "encrypted" password. The file is not stored in UNDM's repository. |
+
