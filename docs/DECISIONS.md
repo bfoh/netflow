@@ -624,3 +624,20 @@ with the approved login before it continues (identity, verification). The device
 approved login; the change is audited as `device.password_set` (no password values). Only
 the drivers that know the questions act on the offer (`answers_password_change`); others
 leave the change to a person (D-065).
+
+### D-067 Text read during the login dialogue is handed back to Netmiko (2026-11-24)
+Bench, second base restore with v39 (101F v7.6.5): the restart after "File check OK." and
+the prompt was recognised (D-064 confirmed on hardware); after the restart the unit
+demanded the password change over SSH and accepted UNDM's answers (the base file's password
+was refused afterwards). Over SSH it showed "... New Password:", "Confirm Password:",
+"Verifying password..." and then its prompt, without the "Welcome!" seen in the CLI capture.
+But every login on that path then ended in a Netmiko ReadTimeout, also the plain login with
+the approved password, and the plan seemed stuck: Netmiko's FortinetSSH prepares the session
+without pressing Enter first (`_try_session_preparation(force_data=False)`), and waits for
+the prompt the unit printed by itself, which UNDM's dialogue had already read. Fix: the
+dialogue hands what it read since its last answer back to Netmiko (`_read_buffer`, the
+buffer Netmiko itself uses for unread text). The fake connection now behaves like
+Netmiko here (prompt must still be readable), and three tests fail with the old code as on
+the bench. Also: if a password change succeeded but the prompt is still missed, the driver
+switches to the new login anyway (`password_changed` on the failure), and every further
+attempt in the wait shows an event ("still waiting for a working login (attempt N of M)").

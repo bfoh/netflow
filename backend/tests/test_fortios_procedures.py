@@ -442,3 +442,18 @@ def test_ordinary_login_with_the_offer_changes_nothing(rig):
     rig.driver.offer_password_change(Credentials("admin", "Example-Only-Approved-1"))
     r = rig.driver.connect()
     assert r.ok and not r.data and rig.fg.password == "Example-Only-1" and rig.fg.keys == []
+
+
+def test_a_missed_prompt_after_the_change_still_switches_to_the_new_login(rig, monkeypatch):
+    """Bench 2026-11-24 (v39): the unit accepted UNDM's answers, then Netmiko missed the
+    prompt UNDM had already read. If that happens, the driver still knows the device now has
+    the new password."""
+    monkeypatch.setattr(SshCliDriver, "_hand_back", staticmethod(lambda conn, text: None))
+    rig.fg.must_change_password = rig.fg.change_dialogue = True
+    rig.driver.offer_password_change(Credentials("admin", "Example-Only-Approved-1"))
+    r = rig.driver.connect()
+    assert not r.ok and r.diagnostics["password_changed"] is True, r.message
+    assert "after UNDM set the new password it demanded" in r.message
+    assert "Example-Only-Approved-1" not in r.message
+    assert rig.fg.password == "Example-Only-Approved-1"
+    assert rig.driver.connect().ok  # the next login uses the new password

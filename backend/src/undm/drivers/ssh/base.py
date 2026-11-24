@@ -135,6 +135,20 @@ class SshCliDriver(DeviceDriver):
         """Answer a demanded password change right after login; True if one was made."""
         return False
 
+    @staticmethod
+    def _hand_back(conn: Any, text: str) -> None:
+        """Give text read during the login dialogue back to Netmiko.
+
+        Netmiko's session preparation waits for the prompt the device printed by itself
+        (for FortiOS without pressing Enter first, bench 2026-11-24), so a prompt UNDM has
+        already read must be handed back or the login times out."""
+        if not text:
+            return
+        if hasattr(conn, "_read_buffer"):
+            conn._read_buffer = text + conn._read_buffer
+        else:  # pragma: no cover - other Netmiko versions: ask for a fresh prompt
+            conn.write_channel(conn.RETURN)
+
     # -- helpers ------------------------------------------------------------------
     def _need(self, op: DeviceOperation) -> OperationResult | None:
         if self._conn is None:
@@ -326,12 +340,18 @@ class SshCliDriver(DeviceDriver):
                 op, f"Timed out connecting to {self.target.management_address}:"
                     f"{self.target.port or 22} (unreachable, filtered, or SSH disabled)")
         except ReadTimeout:
-            shown = redact_text(seen.getvalue().decode("utf-8", "replace")).strip()
-            shown = " ".join(shown.split())[-300:]
+            shown = self._scrub(seen.getvalue().decode("utf-8", "replace"), change_to)[-300:]
+            done: dict[str, object] = {}
+            if changed and change_to is not None:
+                # The password was changed before the prompt was missed: the device now
+                # has the new one, so it is the login from here on.
+                self._credentials, self._password_change_to = change_to, None
+                done = {"password_changed": True}
             return OperationResult.failed(
                 op, "Logged in, but the device did not show its command prompt"
+                    + (" (after UNDM set the new password it demanded)" if done else "")
                     + (f"; it showed: “{shown}”" if shown else "") + f". {self.prompt_hint}",
-                {"device_output": shown, "login_accepted": True})
+                {"device_output": shown, "login_accepted": True, **done})
         except Exception as e:  # noqa: BLE001 - report any transport error cleanly
             return self._fail(op, e)
         with contextlib.suppress(Exception):

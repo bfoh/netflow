@@ -220,11 +220,19 @@ class DeploymentOrchestrator:
                            "refused now; trying the device's previous login", t)
                 t.driver.disconnect()
                 last = t.driver.connect()
-            if not last.ok and not hinted and (last.diagnostics.get("login_accepted")
-                                               or last.diagnostics.get("login_refused")):
+            if not last.ok and last.diagnostics.get("password_changed"):
+                t.kept_previous_login = t.password_set = True  # the device has it now
+            login_problem = not last.ok and (last.diagnostics.get("login_accepted")
+                                             or last.diagnostics.get("login_refused"))
+            if login_problem and not hinted:
                 hinted = True
                 limit = attempt + self.restart_wait_attempts  # a person needs time
                 self._emit(dep, "deploy", "warning", self._login_hint(t, last, fallback), t)
+            elif login_problem:  # show that the wait goes on (bench: it looked stuck)
+                why = ("the login is refused" if last.diagnostics.get("login_refused")
+                       else "the device shows no command prompt after the login")
+                self._emit(dep, "deploy", "ok", f"still waiting for a working login "
+                           f"(attempt {attempt} of {limit}): {why}", t)
             if last.ok and isinstance(last.data, dict) and last.data.get("password_changed"):
                 t.kept_previous_login = t.password_set = True
                 t.driver.offer_password_change(None)

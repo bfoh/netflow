@@ -386,6 +386,7 @@ class FortiOSSsh(SshCliDriver):
                     if answered and "confirm" not in answered:
                         raise LoginDialogueError(
                             "the password change ended before it was confirmed", text)
+                    self._hand_back(conn, pending)  # Netmiko still needs to see the prompt
                     return "confirm" in answered
                 continue
             if not text and now - last > self.login_dialogue_quiet:

@@ -7,6 +7,7 @@ are not captured from real devices and do not prove parser accuracy on hardware.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from netmiko.exceptions import ConfigInvalidException
@@ -59,9 +60,14 @@ class FakeConnection:
     def establish_connection(self) -> None:
         pass
 
-    def _try_session_preparation(self) -> None:
+    def _try_session_preparation(self, force_data: bool = False) -> None:
+        from netmiko.exceptions import ReadTimeout
         if getattr(self.s.device, "awaiting_login_answers", False):
-            from netmiko.exceptions import ReadTimeout
+            raise ReadTimeout("Pattern not detected: 'to accept|[#$]' in output.")
+        # Like Netmiko's FortinetSSH: Enter is not pressed first, so the prompt the device
+        # printed by itself must still be readable (bench, 2026-11-24).
+        if self.kwargs.get("auto_connect") is False and not re.search(r"[#$]",
+                                                                      self.read_channel()):
             raise ReadTimeout("Pattern not detected: 'to accept|[#$]' in output.")
 
     @property
@@ -86,16 +92,20 @@ class FakeConnection:
             return self.s.device.prompt_text().strip()
         return self.s.prompt
 
-    # Raw channel, used for commands that ask questions.
+    # Raw channel, used for commands that ask questions. Like Netmiko, text handed back
+    # (``_read_buffer``) is returned before new output.
+    _read_buffer = ""
+
     def clear_buffer(self) -> str:
-        return self.s.device.read()
+        return self.read_channel()
 
     def write_channel(self, data: str) -> None:
         self.s.calls.append(("write_channel", data))
         self.s.device.write(data)
 
     def read_channel(self) -> str:
-        return self.s.device.read()
+        out, self._read_buffer = self._read_buffer + self.s.device.read(), ""
+        return out
 
     def send_config_set(self, lines, error_pattern: str = "", read_timeout: int = 0) -> str:
         self.s.calls.append(("send_config_set", list(lines)))
