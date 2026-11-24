@@ -5,7 +5,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
-import { fmtDate } from '../services/format';
+import { fmtDate, planKind } from '../services/format';
 import { useAction, useAllDeployments, useConfig, useConfigs, useCredentialRefs, useProjectDevices, useProjects } from '../hooks/queries';
 import type { ConfigVersion } from '../types/api';
 
@@ -165,6 +165,7 @@ function NewStagingPlan({ projectId }: { projectId: string }) {
   const [site, setSite] = useState<string | null>(null);
   const [loginAfter, setLoginAfter] = useState<string | null>(null);
   const [secrets, setSecrets] = useState<Record<string, string>>({});
+  const [firstLogin, setFirstLogin] = useState(false);
   const navigate = useNavigate();
   const versions = configs.data ?? [];
   const options = (mode: string) => {
@@ -175,6 +176,7 @@ function NewStagingPlan({ projectId }: { projectId: string }) {
     device_id: deviceId!, base_version_id: base!, site_version_id: site!,
     credential_after_ref_id: loginAfter,
     secrets: Object.keys(secrets).length ? secrets : undefined,
+    first_login: firstLogin,
   }), (p) => `Staging plan created: step 1 ${p.steps[0]?.state.replaceAll('_', ' ')}`);
   const ignoreMode = useCallback(() => undefined, []);
 
@@ -190,6 +192,9 @@ function NewStagingPlan({ projectId }: { projectId: string }) {
         <Select label="Device" placeholder="Choose a device" data={(devices.data ?? []).map((d) => ({ value: d.id, label: `${d.name} (${d.model})` }))}
           value={deviceId} onChange={(v) => { setDeviceId(v); setBase(null); setSite(null); setLoginAfter(null); setSecrets({}); }} />
         {deviceId && <>
+          <Checkbox label="New unit: start with the first login" checked={firstLogin}
+            onChange={(e) => setFirstLogin(e.currentTarget.checked)}
+            description="The unit still has its factory login (admin, no password). Step 1 sets the device's login when the unit asks for a new password; the base file follows." />
           <Select label="Step 1 · base file" placeholder="Choose the base file" data={options('replace')}
             value={base} onChange={(v) => { setBase(v); setLoginAfter(null); }} />
           {base && <FileNeeds projectId={projectId} versionId={base} secrets={{}} onSecrets={() => undefined}
@@ -206,6 +211,34 @@ function NewStagingPlan({ projectId }: { projectId: string }) {
           </Button>
         </Group>
       </Stack>
+    </Card>
+  );
+}
+
+/** A new unit's first login, as an approved plan (D-073): before a firmware plan. */
+function NewFirstLogin({ projectId }: { projectId: string }) {
+  const devices = useProjectDevices(projectId);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const create = useAction(() => api.createFirstLogin(projectId, deviceId!),
+    (d) => `First login planned: ${d.state.replaceAll('_', ' ')}`);
+  return (
+    <Card withBorder>
+      <Title order={4} mb="xs">First login on a new unit</Title>
+      <Text size="sm" c="dimmed" mb="md">
+        A new FortiGate lets admin in without a password and then asks for a new one. UNDM checks this without answering
+        (preview); once approved it sets the device&apos;s login (the approved password stored with the device) and logs in with it.
+        Do this before the firmware plan. The staging plan can include it as its first step.
+      </Text>
+      <Group align="flex-end">
+        <Select label="Device" placeholder="Choose a device" w={320}
+          data={(devices.data ?? []).map((d) => ({ value: d.id, label: `${d.name} (${d.model})` }))}
+          value={deviceId} onChange={setDeviceId} />
+        <Button disabled={!deviceId} loading={create.isPending}
+          onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(`/deployments/${d.id}`) })}>
+          Check and plan the first login
+        </Button>
+      </Group>
     </Card>
   );
 }
@@ -230,6 +263,7 @@ export function DeploymentsPage() {
         </Card>
         {projectId && <NewPlan key={projectId + preselected.join() + (version ?? '')} projectId={projectId}
           preselected={preselected} version={version} />}
+        {projectId && <NewFirstLogin key={`first-${projectId}`} projectId={projectId} />}
         {projectId && <NewStagingPlan key={`staging-${projectId}`} projectId={projectId} />}
         <Card withBorder padding={0}>
           <Title order={5} p="md" pb={0}>All deployments</Title>
@@ -242,7 +276,7 @@ export function DeploymentsPage() {
                   <Table.Tr key={d.id}>
                     <Table.Td><Anchor component={Link} to={`/deployments/${d.id}`} size="sm">{fmtDate(d.created_at)}</Anchor></Table.Td>
                     <Table.Td>{names.get(d.project_id) ?? '—'}</Table.Td>
-                    <Table.Td>{d.kind === 'firmware' ? 'firmware' : `config · ${d.apply_mode}`}{d.dry_run ? ' · dry run' : ''}
+                    <Table.Td>{planKind(d)}
                       {d.staging_id && <> · <Anchor component={Link} to={`/staging/${d.staging_id}`} size="sm">staging step {d.staging_step}</Anchor></>}</Table.Td>
                     <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
                     <Table.Td><StateBadge state={d.state} /></Table.Td>

@@ -336,6 +336,12 @@ class StagingPlanIn(BaseModel):
     credential_after_ref_id: str | None = None
     # Secret slot id of the site file -> credential reference id (e.g. the tunnel key).
     secrets: dict[str, str] | None = None
+    # New unit: first set the device's login at its first login (D-073).
+    first_login: bool = False
+
+
+class FirstLoginIn(BaseModel):
+    device_id: str
 
 
 class StagingPlanOut(BaseModel):

@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 
 import { StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
-import { fmtDate } from '../services/format';
+import { fmtDate, planKind } from '../services/format';
 import { useAllDeployments, useAllDevices, useProjects } from '../hooks/queries';
 
 function Stat({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
@@ -77,7 +77,7 @@ export function DashboardPage() {
                     <Table.Tr key={x.id}>
                       <Table.Td><Anchor component={Link} to={`/deployments/${x.id}`} size="sm">{fmtDate(x.created_at)}</Anchor></Table.Td>
                       <Table.Td>{projectName.get(x.project_id) ?? '—'}</Table.Td>
-                      <Table.Td>{x.kind === 'firmware' ? 'firmware' : 'config'}{x.dry_run ? ' · dry run' : ''}</Table.Td>
+                      <Table.Td>{planKind(x)}</Table.Td>
                       <Table.Td><StateBadge state={x.state} /></Table.Td>
                     </Table.Tr>
                   ))}

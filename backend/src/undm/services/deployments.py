@@ -47,6 +47,7 @@ from undm.orchestration.deployment import (
     TargetState,
 )
 from undm.orchestration.firmware import FirmwareOrchestrator
+from undm.orchestration.first_login import FirstLoginOrchestrator
 from undm.security import credentials as creds
 from undm.services import audit
 from undm.services.devices import build_driver, inspect_config, latest_config
@@ -118,7 +119,8 @@ class DeploymentService:
                 sink=sink, reboot_wait_attempts=attempts, reboot_wait_delay_s=delay,
                 require_separate_approver=self.firmware_separate_approver)
         attempts, delay = self.firmware_reboot_wait
-        return DeploymentOrchestrator(
+        cls = FirstLoginOrchestrator if rec.kind == "first_login" else DeploymentOrchestrator
+        return cls(
             sink=sink, require_separate_approver=self.require_separate_approver,
             restart_wait_attempts=attempts, restart_wait_delay_s=delay,
         )
@@ -146,6 +148,9 @@ class DeploymentService:
             if project is not None and project.certificate_subject:
                 dt.settings["certificate_subject"] = dict(project.certificate_subject)
             dt.from_version, dt.target_version = t.from_version, t.to_version
+            if rec.kind == "first_login" and device.credential_ref_id:
+                # The login the first login sets on the unit (D-073).
+                dt.credentials_before = self._credentials_for(device, device.credential_ref_id)
             targets.append(dt)
         dep = Deployment(
             deployment_id=rec.id, targets=targets, created_by=rec.created_by,
@@ -271,11 +276,43 @@ class DeploymentService:
                          if staging else {})})
         return rec
 
+    # -- first login on a new unit (D-073) ---------------------------------------------
+    def create_first_login(self, project_id: str, device_id: str, actor: str, *,
+                           staging: tuple[str, int] | None = None) -> DeploymentRecord:
+        """A plan that sets the device's login on a new unit at its first login."""
+        device = self.s.get(Device, device_id)
+        if device is None or device.project_id != project_id:
+            raise NotFoundError(f"Device {device_id} not found in project")
+        problem = self._policy_problem(device, False)
+        if problem:
+            raise ForbiddenError(problem)
+        if not device.credential_ref_id:
+            raise ConflictError("Attach the device's login (user and the approved password) "
+                                "first: the first login sets that password on the unit")
+        rec = DeploymentRecord(
+            project_id=project_id, kind="first_login", state=S.DRAFT.value, dry_run=False,
+            apply_mode=ApplyMode.MERGE.value, created_by=actor,
+            staging_id=staging[0] if staging else None,
+            staging_step=staging[1] if staging else None)
+        rec.targets.append(DeploymentTargetRecord(
+            device_id=device_id, position=0, state=TargetState.PENDING.value))
+        self.s.add(rec)
+        self.s.flush()
+        dep = self._to_domain(rec)
+        self._orchestrator(rec).prepare(dep)
+        self._sync(rec, dep)
+        audit.record(self.s, actor, "deployment.create", "deployment", rec.id, rec.state,
+                     {"devices": [device_id], "kind": "first_login",
+                      **({"staging_id": staging[0], "staging_step": staging[1]}
+                         if staging else {})})
+        return rec
+
     # -- staging plans (D-071) ----------------------------------------------------------
     def create_staging(self, project_id: str, device_id: str, actor: str, *,
                        base_version_id: str, site_version_id: str,
                        credential_after_ref_id: str | None = None,
-                       secrets: dict[str, str] | None = None) -> list[DeploymentRecord]:
+                       secrets: dict[str, str] | None = None,
+                       first_login: bool = False) -> list[DeploymentRecord]:
         """Base file (replace), then site file (merge), for one device, as one plan.
 
         Step 2 is previewed at its run, once the base file is on the device: a site file
@@ -288,25 +325,37 @@ class DeploymentService:
         site = self._choose_config(device, site_version_id)
         self._check_file_can_be_applied(device, site, ApplyMode.MERGE)  # before any preview
         staging_id = str(uuid.uuid4())
+        steps: list[DeploymentRecord] = []
+        if first_login:
+            steps.append(self.create_first_login(project_id, device_id, actor,
+                                                 staging=(staging_id, 1)))
+        n = len(steps)
         base_rec = self.create(
             project_id, [device_id], actor, dry_run=False, apply_mode=ApplyMode.REPLACE,
             config_versions={device_id: base_version_id},
             credentials_after=({device_id: credential_after_ref_id}
                                if credential_after_ref_id else None),
-            staging=(staging_id, 1))
+            staging=(staging_id, n + 1),
+            defer_preview=("it is made at the run, after the first login has set the "
+                           "device's login" if first_login else None))
         site_rec = self.create(
             project_id, [device_id], actor, dry_run=False, apply_mode=ApplyMode.MERGE,
             config_versions={device_id: site_version_id},
             secrets={device_id: secrets} if secrets else None,
-            staging=(staging_id, 2),
-            defer_preview="it is made at the run, after step 1 has restored the base file")
-        if base_rec.state == S.FAILED.value:
-            self.cancel_rest_of_staging(staging_id, 1, actor,
-                                        "step 1 (base file) failed its validation or preview")
+            staging=(staging_id, n + 2),
+            defer_preview=f"it is made at the run, after step {n + 1} has restored the base "
+                          "file")
+        steps += [base_rec, site_rec]
+        failed = next((r for r in steps if r.state == S.FAILED.value), None)
+        if failed is not None:
+            self.cancel_rest_of_staging(staging_id, failed.staging_step or 0, actor,
+                                        f"step {failed.staging_step} failed its validation "
+                                        "or preview")
         audit.record(self.s, actor, "staging.create", "staging_plan", staging_id,
-                     details={"device": device_id, "steps": [base_rec.id, site_rec.id],
+                     details={"device": device_id, "steps": [r.id for r in steps],
+                              "first_login": first_login,
                               "base_version": base_version_id, "site_version": site_version_id})
-        return [base_rec, site_rec]
+        return steps
 
     def staging_steps(self, staging_id: str) -> list[DeploymentRecord]:
         steps = list(self.s.scalars(
@@ -697,6 +746,8 @@ class DeploymentService:
                 device.credential_ref_id = after
             if t.backup is not None:
                 device.last_backup_at = now
+            if rec.kind == "first_login":
+                continue  # no configuration was deployed
             if rec.kind == "firmware":
                 if t.current_version:  # observed, not declared
                     device.observed_facts = {**(device.observed_facts or {}),

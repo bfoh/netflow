@@ -133,9 +133,11 @@ export const api = {
   stopDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/stop`),
   createStaging: (pid: string, body: {
     device_id: string; base_version_id: string; site_version_id: string;
-    credential_after_ref_id?: string | null; secrets?: Record<string, string>;
+    credential_after_ref_id?: string | null; secrets?: Record<string, string>; first_login?: boolean;
   }) => request<StagingPlan>('POST', `/projects/${pid}/staging-plans`, body),
   staging: (id: string) => request<StagingPlan>('GET', `/staging-plans/${id}`),
+  createFirstLogin: (pid: string, deviceId: string) =>
+    request<Deployment>('POST', `/projects/${pid}/first-login`, { device_id: deviceId }),
   approveStaging: (id: string) => request<StagingPlan>('POST', `/staging-plans/${id}/approve`),
   executeStaging: (id: string) => request<StagingPlan>('POST', `/staging-plans/${id}/execute?background=true`),
   stopStaging: (id: string) => request<StagingPlan>('POST', `/staging-plans/${id}/stop`),

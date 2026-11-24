@@ -62,10 +62,11 @@ driver has passed acceptance tests for the exact model and firmware.
   any network other than an isolated lab, and only after approval.
 - Firmware is never downloaded from unverified sources and never installed on real
   equipment during development.
-- UNDM sets a device password only in two cases: the console bootstrap of a factory-default
-  unit (D-043), and when a device demands a new password at login after a planned load; it
-  then sets the device's own stored (approved) login, and only for questions recorded from
-  the bench (D-066). Audited as `device.password_set`; values never logged or shown.
+- UNDM sets a device password only in three cases: the console bootstrap of a
+  factory-default unit (D-043); when a device demands a new password at login after a
+  planned load (D-066); and the approved first-login plan of a new unit (D-073). It always
+  sets the device's own stored (approved) login, and only answers questions recorded from
+  the bench. Audited as `device.password_set`; values never logged or shown.
 - UNDM approves a firmware image only when its checksum matches the vendor's published
   SHA-256 or SHA-512, or when the approver writes a reason for approving it without one
   (D-062). Such an image stays marked "not verified" in the repository, the planner and

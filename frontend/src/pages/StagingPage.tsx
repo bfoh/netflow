@@ -10,17 +10,21 @@ import { api } from '../services/api';
 import { fmtDate } from '../services/format';
 import type { Deployment } from '../types/api';
 
-const STEP_TITLE: Record<number, string> = {
-  1: 'Step 1 · base file (replace): the device fetches it, restarts and comes back with it',
-  2: 'Step 2 · site file (merge): sent statement by statement once step 1 has succeeded',
-};
+function stepTitle(step: Deployment): string {
+  const what = step.kind === 'first_login'
+    ? 'first login: sets the device\'s login when the new unit asks for a new password'
+    : step.apply_mode === 'replace'
+      ? 'base file (replace): the device fetches it, restarts and comes back with it'
+      : 'site file (merge): sent statement by statement once the steps before it have succeeded';
+  return `Step ${step.staging_step} · ${what}`;
+}
 
 function StepCard({ step }: { step: Deployment }) {
   const events = step.events.slice(-6);
   return (
     <Card withBorder>
       <Group justify="space-between" mb={4} wrap="nowrap">
-        <Text fw={600} size="sm">{STEP_TITLE[step.staging_step ?? 0] ?? `Step ${step.staging_step}`}</Text>
+        <Text fw={600} size="sm">{stepTitle(step)}</Text>
         <StateBadge state={step.state} />
       </Group>
       <Stack gap={2}>
@@ -56,7 +60,7 @@ export function StagingPage() {
         description={steps[0] ? `Created by ${steps[0].created_by} · ${fmtDate(steps[0].created_at)}${steps[0].approved_by ? ` · approved by ${steps[0].approved_by}` : ''}` : ''}
         actions={<Group gap="xs">
           {canApprove && <Button leftSection={<IconShieldCheck size={16} />} loading={approve.isPending}
-            onClick={() => approve.mutate(undefined)}>Approve both steps</Button>}
+            onClick={() => approve.mutate(undefined)}>{steps.length > 2 ? 'Approve all steps' : 'Approve both steps'}</Button>}
           {canRun && <Button leftSection={<IconPlayerPlay size={16} />} loading={execute.isPending}
             onClick={() => execute.mutate(undefined, { onSuccess: () => setStarted(true) })}>Execute</Button>}
           {running && <Button color="red" variant="light" leftSection={<IconPlayerStop size={16} />} loading={stop.isPending}
@@ -70,8 +74,8 @@ export function StagingPage() {
           A step did not succeed, so the steps after it did not run. Open the step for its events. To start again, create a new
           staging plan: it restores the base file first, so the site file never lands on an earlier one.</Alert>}
         {running && <Alert color="blue" title="In progress">
-          The run continues on the server even if you leave this page. Step 1 restarts the device (several minutes); step 2 starts
-          by itself when step 1 has succeeded. Stop ends the running step at its next safe point, and the later steps do not run.</Alert>}
+          The run continues on the server even if you leave this page. The base file restarts the device (several minutes); each step starts
+          by itself when the one before it has succeeded. Stop ends the running step at its next safe point, and the later steps do not run.</Alert>}
         {!running && !done && !ended && <Text size="sm" c="dimmed">
           One approval covers both steps. Step 2 is previewed when it runs, after the base file is on the device; running it on its
           own is refused until step 1 has succeeded.</Text>}

@@ -73,7 +73,7 @@ class FortiOSSsh(SshCliDriver):
         simulated=False,
         capabilities=SSH_CAPABILITIES | {
             Capability.FIRMWARE_UPGRADE, Capability.REBOOT, Capability.CONFIGURATION_REPLACE,
-            Capability.CONFIGURATION_CHECKPOINT},
+            Capability.CONFIGURATION_CHECKPOINT, Capability.FIRST_LOGIN_SETUP},
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
         notes=(

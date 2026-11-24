@@ -14,6 +14,7 @@ from undm.api.schemas import (
     DeploymentOut,
     DeploymentSummary,
     FirmwareDeploymentIn,
+    FirstLoginIn,
     StagingPlanIn,
     StagingPlanOut,
 )
@@ -164,8 +165,18 @@ def create_staging_plan(project_id: str, body: StagingPlanIn, session: SessionDe
     steps = svc.create_staging(
         project_id, body.device_id, actor, base_version_id=body.base_version_id,
         site_version_id=body.site_version_id,
-        credential_after_ref_id=body.credential_after_ref_id, secrets=body.secrets)
+        credential_after_ref_id=body.credential_after_ref_id, secrets=body.secrets,
+        first_login=body.first_login)
     return _staging(str(steps[0].staging_id), steps)
+
+
+@router.post("/api/projects/{project_id}/first-login", response_model=DeploymentOut,
+             status_code=status.HTTP_201_CREATED)
+def create_first_login(project_id: str, body: FirstLoginIn, session: SessionDep,
+                       svc: ServiceDep, actor: ActorDep) -> DeploymentRecord:
+    """Plan the first login on a new unit: set the device's login (D-073)."""
+    get_project(session, project_id)
+    return svc.create_first_login(project_id, body.device_id, actor)
 
 
 @router.get("/api/staging-plans/{staging_id}", response_model=StagingPlanOut)

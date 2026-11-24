@@ -38,6 +38,8 @@ class Capability(StrEnum):
     # A second image slot the driver can write (e.g. ArubaOS-Switch secondary flash).
     FIRMWARE_SECONDARY_IMAGE = "supports_firmware_secondary_image"
     REBOOT = "supports_reboot"
+    # Answers a new unit's demanded password change at its first login (D-073).
+    FIRST_LOGIN_SETUP = "supports_first_login_setup"
 
 
 # Capabilities an operation needs before a driver may be asked to perform it.

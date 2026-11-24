@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 
 import { StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
-import { fmtDate } from '../services/format';
+import { fmtDate, planKind } from '../services/format';
 import { AddDeviceModal } from '../features/devices/AddDeviceModal';
 import { CredentialsPanel } from '../features/devices/CredentialsPanel';
 import { DeviceTable } from '../features/devices/DeviceTable';
@@ -112,7 +112,7 @@ export function ProjectDetailPage() {
                 {(deployments.data ?? []).map((d) => (
                   <Table.Tr key={d.id}>
                     <Table.Td><Anchor component={Link} to={`/deployments/${d.id}`}>{fmtDate(d.created_at)}</Anchor></Table.Td>
-                    <Table.Td>{d.kind === 'firmware' ? 'firmware' : `config · ${d.apply_mode}`}{d.dry_run ? ' · dry run' : ''}</Table.Td>
+                    <Table.Td>{planKind(d)}</Table.Td>
                     <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
                     <Table.Td><StateBadge state={d.state} /></Table.Td>
                   </Table.Tr>

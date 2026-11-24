@@ -624,3 +624,56 @@ def test_reply_ignores_control_codes_and_a_repeated_statement():
         "new entry 'x' added")
     assert FortiOSSsh._reply("set x 1", "set x 1\r\n\x1b[Kentry not found\r\nlab-fw # ") == (
         "entry not found")
+
+
+# -- first login on a new unit (D-073) ------------------------------------------------------
+def _new_unit(fg):
+    """Factory state as on the bench: admin with an empty password, change demanded."""
+    fg.password, fg.must_change_password, fg.change_dialogue = "", True, True
+
+
+def test_api_first_login_sets_the_devices_login_on_a_new_unit(api):
+    client, pid, did, fg, refs = api
+    _new_unit(fg)
+    plan = client.post(f"/api/projects/{pid}/first-login", json={"device_id": did}).json()
+    assert plan["kind"] == "first_login" and plan["state"] == "awaiting_approval", plan
+    assert "asks for something before its prompt; nothing was answered" in _events(plan)
+    assert fg.password == "" and fg.keys == []  # the preview answered nothing
+    client.post(f"/api/deployments/{plan['id']}/approve")
+    out = client.post(f"/api/deployments/{plan['id']}/execute").json()
+    assert out["state"] == "succeeded", _events(out)
+    assert "UNDM answered its questions with the device's login" in _events(out)
+    assert "logged in with the device's login: FortiGate-101F" in _events(out)
+    assert fg.password == APPROVED and fg.keys[-3:] == ["", APPROVED, APPROVED]
+    assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == refs["approved"]
+    audit = client.get("/api/audit?limit=50").json()
+    assert any(a["action"] == "device.password_set" for a in audit)
+    assert APPROVED not in repr(out) + repr(audit)
+
+
+def test_api_first_login_on_a_unit_that_is_not_new_changes_nothing(api):
+    client, pid, did, fg, refs = api  # the unit already has the approved password
+    plan = client.post(f"/api/projects/{pid}/first-login", json={"device_id": did}).json()
+    assert plan["state"] == "failed"
+    assert "the empty password is refused" in _events(plan)
+    assert fg.password == APPROVED and fg.keys == []
+
+
+def test_api_staging_plan_for_a_new_unit_starts_with_the_first_login(api):
+    client, pid, did, fg, refs = api
+    _new_unit(fg)
+    fg.restore_sets_password, fg.restore_forces_password_change = BASE_PW, True
+    base = client.post(f"/api/devices/{did}/configs/import",
+                       json={"filename": "base.conf", "text": BACKUP}).json()
+    site = client.post(f"/api/devices/{did}/configs/import",
+                       json={"filename": "site.txt", "text": SCRIPT}).json()
+    plan = client.post(f"/api/projects/{pid}/staging-plans", json={
+        "device_id": did, "base_version_id": base["id"], "site_version_id": site["id"],
+        "credential_after_ref_id": refs["base"], "first_login": True}).json()
+    sid, steps = plan["staging_id"], plan["steps"]
+    assert [s["kind"] for s in steps] == ["first_login", "configuration", "configuration"]
+    assert "after the first login has set the device's login" in _events(steps[1])
+    client.post(f"/api/staging-plans/{sid}/approve")
+    steps = client.post(f"/api/staging-plans/{sid}/execute?background=false").json()["steps"]
+    assert [s["state"] for s in steps] == ["succeeded"] * 3, [_events(s) for s in steps]
+    assert fg.hostname == "lab-fw-site" and fg.password == APPROVED

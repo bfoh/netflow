@@ -41,6 +41,11 @@ hardware. Order agreed 2026-11-19: firmware → base file → site file (D-034).
   was sent** show what the unit runs.
 
 ## Steps
+A new unit's first login (admin, no password, new password demanded) is done by UNDM:
+Deployment Center → "First login on a new unit" (before the firmware plan), or "New unit:
+start with the first login" in the staging plan (D-073). The device's own login must be the
+approved one.
+
 Steps 6 and 7 can be done as one **staging plan** (Deployment Center → "New staging plan
 (base file, then site file)": device, base file, login after loading, site file, tunnel key;
 Approve both steps; Execute). It always restores the base file first (D-071).

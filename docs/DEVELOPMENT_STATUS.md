@@ -17,7 +17,8 @@ manager, topology._
 | Real devices (experimental) | SSH drivers for ArubaOS-Switch (2930F), AOS-CX, FortiOS, IOS-XE: test connection, facts (best-effort parsing, raw output kept), backup, merge apply + save. Gated by policy switches (see SECURITY_BOUNDARIES) |
 | Intent & generation | Hostname, VLANs, L3 interfaces, static routes → AOS-CX / FortiOS / IOS-XE templates; validation; platform support checks |
 | Configuration import | Upload a file per device; normalised, versioned, labelled unvalidated; selectable per device in deployment plans |
-| Staging plan | Base file (replace), then site file (merge) for one device as one plan: one approval, one Execute, step 2 previewed at its run and run only after step 1 succeeded, shared Stop (D-071). API and fake FortiGate tests; **not yet run on hardware** |
+| First login | New unit's first login as an approved plan (kind `first_login`): read-only check of the empty password, then the device's login set when the unit demands a new password, verified by a fresh login (D-073). Fake FortiGate only; factory SSH wording not yet seen (Q-41) |
+| Staging plan | Base file (replace), then site file (merge) for one device as one plan (optionally after the first login): one approval, one Execute, step 2 previewed at its run and run only after step 1 succeeded, shared Stop (D-071). API and fake FortiGate tests; **not yet run on hardware** |
 | Deployments | Lifecycle with directive-15 states; dry runs; approval; preflight with identity check; backup; verification by read-back (platform-aware for SSH drivers); rollback or manual recovery; device locks; crash recovery on restart |
 | Firmware | Repository with SHA-256 or SHA-512 vs vendor checksum (addable after upload); approval only when verified or with a written, audited reason (D-062); retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery. Simulated devices, plus **one experimental real procedure: Aruba 2930F** (switch pulls the image from UNDM by TFTP into primary flash, restarts, version verified) behind `UNDM_ENABLE_REAL_DEVICE_FIRMWARE`. Experimental: **one successful run on hardware** (2026-11-19, spare JL260A, approved downgrade WC.16.11.0001 → WC.16.10.0025, verified) |
 | File transfer | Built-in TFTP server: read-only, per-job, per-device allowlist, transfer records; a transfer under way is cancelled when its file is withdrawn or the job ends (D-063); tested with an independent client |
@@ -62,7 +63,7 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-24)
 | Suite | Result |
 |---|---|
-| Backend pytest | 409 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 413 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (74 files) |

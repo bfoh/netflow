@@ -701,3 +701,26 @@ six warnings, three were empty (terminal control codes only), one was the statem
 FortiOS's note on entering a VDOM. Replies now drop control codes and any line that only
 repeats the statement (spacing ignored), and "current vf=<name>" is not listed. Everything
 else is listed as before; error-looking replies still stop the script.
+
+### D-073 First login on a new unit is an approved plan (2026-11-24)
+Product owner: the first login of a new FortiGate (admin with an empty password, then a
+demanded new password) must not be done by hand. Setting a password changes the device, so
+it goes through the deployment lifecycle (no new exception to the CLAUDE.md rule): a plan
+of kind `first_login` for one device (`POST /api/projects/{id}/first-login`; Deployment
+Center → "First login on a new unit"; or "New unit: start with the first login" in the
+staging plan, which then runs first login → base → site).
+- Validation: the driver must declare `FIRST_LOGIN_SETUP` (FortiOS) and the device must
+  have its own login, whose password is the one set.
+- Preview (read-only): log in as that user with an empty password through Netmiko's normal
+  path, which sends nothing at FortiOS's login (D-067); the unit's text is recorded and
+  nothing is answered. The empty password refused (not a new unit) or reaching the prompt
+  without a demand fails the plan; nothing is changed.
+- Run after approval: preflight repeats the probe; the backup step records that a new
+  unit shows no configuration before its first login; deploy logs in with the empty
+  password and answers only the known questions (D-066: old = empty, new and confirm =
+  the device's login); verification logs in afresh with the device's login and reads its
+  facts. Audited as `device.password_set`. A change that does not complete ends as
+  recovery required with the unit's text.
+- The SSH wording of a factory unit's first login is not yet seen (Q-41): the questions
+  answered are those captured after the base restore. Different wording stops the step
+  with the unit's text, and nothing is guessed.

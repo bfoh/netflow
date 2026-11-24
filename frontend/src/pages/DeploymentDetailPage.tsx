@@ -190,6 +190,8 @@ export function DeploymentDetailPage() {
   };
   const outcome = d.dry_run && dryText[d.state] && OUTCOME[d.state]
     ? { ...OUTCOME[d.state], ...dryText[d.state] }
+    : d.kind === 'first_login' && d.state === 'succeeded'
+      ? { ...OUTCOME[d.state], text: 'The unit now has the device\'s login, and UNDM logged in with it. Next: the firmware plan, then the staging plan (base and site files).' }
     : d.kind === 'firmware' && firmwareText[d.state]
       ? { ...OUTCOME[d.state], title: d.state === 'rolled_back' ? 'Upgrade did not complete' : OUTCOME[d.state].title, text: firmwareText[d.state] }
       : OUTCOME[d.state];
@@ -199,9 +201,9 @@ export function DeploymentDetailPage() {
 
   return (
     <>
-      <PageHeader title={`${d.kind === 'firmware' ? 'Firmware upgrade' : 'Configuration deployment'}${d.dry_run ? ' (dry run)' : ''} · ${fmtDate(d.created_at)}`}
+      <PageHeader title={`${d.kind === 'firmware' ? 'Firmware upgrade' : d.kind === 'first_login' ? 'First login (new unit)' : 'Configuration deployment'}${d.dry_run ? ' (dry run)' : ''} · ${fmtDate(d.created_at)}`}
         description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
-          ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : ` · ${d.apply_mode} mode`}`}
+          ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : d.kind === 'first_login' ? '' : ` · ${d.apply_mode} mode`}`}
         actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
       {d.staging_id && (
         <Alert color="grape" mb="md" p="xs" title={`Step ${d.staging_step} of a staging plan`}>
