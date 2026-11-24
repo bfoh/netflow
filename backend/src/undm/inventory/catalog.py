@@ -50,11 +50,12 @@ CATALOG: tuple[DeviceModel, ...] = (
                       "on 2930F-48G-4SFP (JL260A) WC.16.10.0025: connect, facts, backup. "
                       "Configuration changes not yet validated."),
     DeviceModel("blackbox-lig1014a", "Black Box", "Industrial managed switch", "LIG1014A",
-                DeviceCategory.SWITCH, "Black Box managed switch", ("mock.blackbox.switch",),
+                DeviceCategory.SWITCH, "Black Box managed switch",
+                ("mock.blackbox.switch", "ssh.blackbox.lig1014a"),
                 SupportLevel.SIMULATED_ONLY,
-                notes="Staging target. Configuration files are recognised offline; no "
-                      "real-device driver yet (access method and load command to confirm on "
-                      "a spare unit)."),
+                notes="Staging target. Configuration files are recognised offline. SSH driver "
+                      "(experimental, read-only): connection, device information, backup; "
+                      "loading the team's file is still being confirmed on a bench unit."),
     DeviceModel("blackbox-le2700a", "Black Box", "LE2700 series", "LE2700A",
                 DeviceCategory.SWITCH, "Black Box managed switch", ("mock.blackbox.switch",),
                 SupportLevel.SIMULATED_ONLY,

@@ -31,6 +31,7 @@ from undm.drivers.base import (
     FirmwareImageRef,
     OperationResult,
 )
+from undm.drivers.blackbox.lig1014a_ssh import BlackBoxLig1014aSsh
 from undm.drivers.fortinet.fortios_ssh import FortiOSSsh
 from undm.drivers.ssh.base import SSH_CAPABILITIES, SshCliDriver
 
@@ -555,5 +556,5 @@ class ArubaOSSwitchSsh(SshCliDriver):
 
 
 SSH_DRIVERS: tuple[type[SshCliDriver], ...] = (
-    ArubaAOSCXSsh, ArubaOSSwitchSsh, CiscoIOSXESsh, FortiOSSsh,
+    ArubaAOSCXSsh, ArubaOSSwitchSsh, BlackBoxLig1014aSsh, CiscoIOSXESsh, FortiOSSsh,
 )

@@ -108,7 +108,8 @@ def client():
 def test_simulated_lig1014a_imports_and_loads_the_file_as_a_whole(client):
     assert MockBlackBoxSwitchDriver.inspect_config_file(SAMPLE).file_type == "full_config"
     models = {m["model_id"]: m for m in client.get("/api/device-models").json()}
-    assert models["blackbox-lig1014a"]["drivers"] == ["mock.blackbox.switch"]
+    assert models["blackbox-lig1014a"]["drivers"] == [
+        "mock.blackbox.switch", "ssh.blackbox.lig1014a"]
     pid = client.post("/api/projects", json={"name": "BB"}).json()["id"]
     did = client.post(f"/api/projects/{pid}/devices", json={
         "name": "lab-bbsw01", "manufacturer": "Black Box", "category": "switch",

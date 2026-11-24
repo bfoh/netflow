@@ -78,4 +78,4 @@ the load: no re-cabling, and the device address in UNDM does not change.
 | Date | Unit | Step | Result | Notes |
 |---|---|---|---|---|
 | 2026-11-24 | — | Second team file (LIG1014A, another system) checked offline | **recognised** | Same format as the first sample. UNDM's import check reported it correctly: complete configuration → replace; 14 ports, 9 shut down; after loading the switch answers only on VLAN 222 (untagged on port 1/3) and on the site VLAN (trunk ports 1/10 and 1/14, native VLAN tagged); VLAN 1 loses its address and is forbidden on every port; `access management` allows web and telnet only (whether that covers SSH is the key bench question, Q-27); telnet off; HTTPS only; one base64 "encrypted" password. The file is not stored in UNDM's repository. |
-
+| 2026-11-24 | factory-default LIG1014A (v00.01.00) | SSH by hand: `show version`, `show running-config`, `?`, `copy ?`, `reload ?` | **captured** | SSH with `admin` and the empty password works; bare `#` prompt; no serial number (MAC address used as identity); facts and layout in D-074. UNDM's read-only SSH driver built from it. |

@@ -724,3 +724,25 @@ staging plan, which then runs first login → base → site).
 - The SSH wording of a factory unit's first login is not yet seen (Q-41): the questions
   answered are those captured after the base restore. Different wording stops the step
   with the unit's text, and nothing is guessed.
+
+### D-074 Black Box LIG1014A over SSH: read-only driver from the switch's own output (2026-11-24)
+Bench, factory-default LIG1014A v00.01.00 (Q-28 answered): SSH as `admin` with the empty
+password lands at a bare `#` prompt, with no password demand; `show version` gives
+`MAC Address`, an empty `Serial Number`, `System Name`, active and alternate images, and
+`Board Type`, `Port Count`, `Software Version`; `show running-config` starts with
+"Building configuration..." and ends with `end`; `copy ?` lists `tftp://server/path-and-
+filename` (also `flash:`, `ftp://`), `running-config` and `startup-config` as sources, with
+file names of letters, digits, `.`, `-`, `_`, at most 63, not starting with `-`;
+`reload ?` lists `cold` and `defaults` (factory settings without restarting).
+Driver `ssh.blackbox.lig1014a` (experimental), capabilities SSH and backup only:
+- Netmiko type `generic` (sends nothing at login), so no paging or terminal command whose
+  syntax is unconfirmed is ever sent; every command is read by UNDM up to the prompt (a
+  bare `#` would end Netmiko's default read at the first `#` of the output).
+- Facts from `show version`; the unit reports no serial number, so its base MAC address
+  is its identity (`serial_number` carries it, `extra.identity` says so) and is what UNDM
+  compares after a restart.
+- Backup = `show running-config` without the banner; a read that does not end with `end`
+  (for example stopped at a page break) is refused, never stored.
+- Loading the team's file is not offered (plans are refused at validation) until the bench
+  confirms: the destination of `copy` with a TFTP source, what `reload cold` asks, and
+  whether SSH is allowed by the file's `access management` (Q-42, Q-27).
