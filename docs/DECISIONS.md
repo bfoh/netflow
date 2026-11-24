@@ -570,6 +570,8 @@ Changes:
   just ended stays complete.
 - FortiOS procedures withdraw the file as soon as the exchange ends, before deciding the
   result, so a step reported as failed cannot complete later. `FileServer.withdraw`.
+Confirmed the same day: the unit finished that fetch after UNDM had closed its SSH
+session, installed 7.6.5 and restarted, so the plan's "rolled back" record is wrong.
 Regression tests: the fake FortiGate now fetches in the background and prints the bench's
 lines and '#' marks; the old code fails that test with the bench's result. Still unknown
 (Q-39): what the unit prints when the fetch ends, and what it does when the TFTP server
