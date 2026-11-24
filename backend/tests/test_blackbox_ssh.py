@@ -89,3 +89,19 @@ def test_registered_and_listed_for_the_lig1014a():
     from undm.inventory.catalog import CATALOG
     model = next(m for m in CATALOG if m.model == "LIG1014A")
     assert "ssh.blackbox.lig1014a" in model.drivers
+
+
+def test_a_failed_ssh_handshake_is_not_reported_as_unreachable(monkeypatch):
+    """Bench 2026-11-24: Test connection said "Timed out ... unreachable" although PuTTY
+    logged in: Netmiko reports a failed handshake (no common SSH method) as a timeout."""
+    from netmiko.exceptions import NetmikoTimeoutException
+
+    def factory(**kwargs):
+        raise NetmikoTimeoutException(
+            "A paramiko SSHException occurred during connection creation:\n\n"
+            "Incompatible ssh peer (no acceptable kex algorithm)")
+    monkeypatch.setattr(SshCliDriver, "connection_factory", staticmethod(factory))
+    r = driver().connect()
+    assert r.status is ResultStatus.FAILED and r.diagnostics.get("ssh_handshake") is True
+    assert "SSH handshake failed" in r.message and "no acceptable kex algorithm" in r.message
+

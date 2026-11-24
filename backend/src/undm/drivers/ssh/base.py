@@ -335,10 +335,18 @@ class SshCliDriver(DeviceDriver):
         except NetmikoAuthenticationException:
             return OperationResult.failed(op, "Authentication failed (check the credential)",
                                           {"login_refused": True})
-        except NetmikoTimeoutException:
+        except NetmikoTimeoutException as e:
+            where = f"{self.target.management_address}:{self.target.port or 22}"
+            detail = " ".join(redact_text(str(e)).split())
+            if "SSHException" in detail or "Incompatible" in detail or "no acceptable" in detail:
+                # Netmiko reports a failed SSH handshake as a timeout too (bench, LIG1014A).
+                return OperationResult.failed(
+                    op, f"The device at {where} answered, but the SSH handshake failed: "
+                        f"{detail[-300:]}. It may offer only older SSH methods that this PC's "
+                        "SSH library no longer accepts.", {"ssh_handshake": True})
             return OperationResult.failed(
-                op, f"Timed out connecting to {self.target.management_address}:"
-                    f"{self.target.port or 22} (unreachable, filtered, or SSH disabled)")
+                op, f"Timed out connecting to {where} (unreachable, filtered, or SSH "
+                    f"disabled){': ' + detail[-200:] if detail else ''}")
         except ReadTimeout:
             shown = self._scrub(seen.getvalue().decode("utf-8", "replace"), change_to)[-300:]
             done: dict[str, object] = {}
