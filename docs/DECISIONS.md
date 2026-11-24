@@ -817,3 +817,20 @@ lines shown. Q-27 answered: the file's `access management` ("web telnet" from VL
 `vlan 168,222,1001,1006`, is listed in the switch's own form; `vlan` list lines are now
 compared as sets of VLANs (ranges understood), so a VLAN that is really missing is still
 reported.
+
+### D-080 LIG1014A firmware: `firmware upgrade tftp://<pc>/<file>`, then the switch's own restart (2026-11-24)
+From the switch's help (Q-42 (4) answered): `firmware ?` lists `swap` ("Swap between Active
+and Alternate firmware image", no arguments) and `upgrade`, whose argument is a URL
+`<protocol>://[<user>[:<password>]@]<host>[:<port>][/<path>]/<file_name>` with the same
+file-name rules as `copy`. What the upgrade prints, whether it asks anything, which slot it
+writes and whether it restarts by itself are not known yet, so the driver learns them
+safely: the image is offered by TFTP to this switch only (under its own name if the switch
+accepts it, else `undm-<hash>.dat`); nothing is answered; no prompt counts while the image
+is fetched; the whole image must arrive; a `%` line other than progress is a refusal; the
+restart must come from the switch (session closed, or SSH port down; after a clean return
+to the prompt UNDM waits up to 180 s for it). Then the firmware orchestrator's usual wait,
+identity (MAC address) and check that the active image runs the new version. If the switch
+returns to its prompt and does not restart, the step fails with its text and both image
+slots: UNDM sends no `firmware swap` and no `reload`, because which image they would start
+is not known. Firmware page: platform "Black Box LIG1014A" (`blackbox_lig1014a`). Not yet
+run on hardware.

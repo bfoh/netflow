@@ -46,9 +46,11 @@ from undm.drivers.base import (
     DeviceFacts,
     DriverInfo,
     DriverMaturity,
+    FirmwareImageRef,
     OperationResult,
 )
 from undm.drivers.blackbox.config_files import inspect_blackbox_config
+from undm.drivers.ssh import base as ssh_base
 from undm.drivers.ssh.base import SshCliDriver
 from undm.security.redaction import redact_text
 
@@ -84,6 +86,10 @@ class BlackBoxLig1014aSsh(SshCliDriver):
     legacy_ssh_algorithms = True
     command_timeout: ClassVar[float] = 60.0
     load_timeout: ClassVar[float] = 300.0  # TFTP fetch of the file into the startup config
+    firmware_timeout: ClassVar[float] = 1200.0  # image transfer and flash write
+    restart_probe_interval: ClassVar[float] = 10.0
+    restart_grace: ClassVar[float] = 180.0  # back at the prompt after an upgrade: wait this
+    #                                         long for a restart the switch starts by itself
     command_quiet: ClassVar[float] = 20.0
     info = DriverInfo(
         driver_id="ssh.blackbox.lig1014a",
@@ -95,7 +101,8 @@ class BlackBoxLig1014aSsh(SshCliDriver):
         simulated=False,
         capabilities=frozenset({Capability.SSH, Capability.CONFIGURATION_BACKUP,
                                 Capability.CONFIGURATION_APPLY,
-                                Capability.CONFIGURATION_REPLACE}),
+                                Capability.CONFIGURATION_REPLACE,
+                                Capability.FIRMWARE_UPGRADE, Capability.REBOOT}),
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
         notes=(
@@ -109,8 +116,16 @@ class BlackBoxLig1014aSsh(SshCliDriver):
             "'reload cold'; UNDM waits, logs in (login after loading), checks the MAC address, "
             "the hostname and the file's lines. Passed once on hardware (factory unit, "
             "2026-11-24).",
+            "Firmware: 'firmware upgrade tftp://<pc>/<file>' (syntax from the switch's help); "
+            "nothing is answered, the whole image must arrive and the switch must restart by "
+            "itself; the active image's version is checked afterwards. UNDM never swaps images "
+            "or restarts the switch for an upgrade. Not yet run on hardware.",
         ),
     )
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self._restarting = False
 
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
@@ -197,7 +212,149 @@ class BlackBoxLig1014aSsh(SshCliDriver):
     # -- loading the team's file (D-077) ------------------------------------------------
     @classmethod
     def needs_file_server(cls, kind: str, mode: ApplyMode | None = None) -> bool:
-        return kind == "configuration" and mode is ApplyMode.REPLACE
+        return kind == "firmware" or (kind == "configuration" and mode is ApplyMode.REPLACE)
+
+    # -- firmware (D-080) -----------------------------------------------------------------
+    def get_firmware_information(self) -> OperationResult:
+        op = Op.GET_FIRMWARE_INFORMATION
+        if r := self._need(op):
+            return r
+        try:
+            text = self._send("show version")
+        except Exception as e:  # noqa: BLE001
+            return self._fail(op, e)
+        active = _image_version("Active Image", text) or _field("Software Version", text)
+        if not active:
+            return OperationResult.failed(op, "Could not read the active image's version")
+        return OperationResult.success(op, {
+            "running": active, "alternate": _image_version("Alternate Image", text),
+            "raw": {"show version": text[:2000]}})
+
+    def stage_firmware(self, image: FirmwareImageRef) -> OperationResult:
+        """'firmware upgrade tftp://<pc>/<file>' (syntax from the switch's help). Nothing is
+        answered; success needs the whole transfer and then a restart the switch starts by
+        itself. 'firmware swap' and 'reload' are not used: which image they would start is
+        not known yet."""
+        op = Op.STAGE_FIRMWARE
+        if r := self._need(op):
+            return r
+        files = self.file_server
+        if files is None:
+            return OperationResult.failed(op, "No file server is available for this job")
+        client = self.target.management_address
+        name = image.filename
+        if not _SWITCH_FILE_NAME.fullmatch(name):
+            name = f"undm-{image.sha256[:10]}.dat"  # a name the switch accepts
+        down, next_probe = [False], [0.0]
+
+        def fetching(_: str) -> bool:
+            record = files.last_transfer(name, client)
+            return record is not None and not record.completed and not record.error
+
+        def patient(_: str) -> bool:
+            # Silence is normal while the image is fetched and written to flash, unless the
+            # switch went down without closing the session (its SSH port stops answering).
+            record = files.last_transfer(name, client)
+            if record is None or record.error:
+                return False
+            if not record.completed:
+                return True
+            now = time.monotonic()
+            if now >= next_probe[0]:
+                next_probe[0] = now + self.restart_probe_interval
+                down[0] = not ssh_base.tcp_port_open(client, self.target.port or 22)
+            return not down[0]
+
+        self._restarting = False
+        try:
+            server_ip = files.offer(Path(image.local_path), name, client)
+            talk = self._dialogue(f"firmware upgrade tftp://{server_ip}/{name}", [],
+                                  timeout=self.firmware_timeout,
+                                  idle_timeout=self.command_quiet, patient=patient,
+                                  prompt_ok=lambda out: not fetching(out))
+        except Exception as e:  # noqa: BLE001
+            files.withdraw(name)
+            return self._fail(op, e)
+        files.withdraw(name)  # a fetch still running is cut off (D-063)
+        transfer = self._settled_transfer(name)
+        reply = _answer(talk.output)
+        diagnostics: dict[str, object] = {
+            "device_output": " ".join(redact_text(reply).split())[-600:]}
+        notes = [f"switch: {ln.strip()}" for ln in reply.splitlines() if ln.strip()][-6:]
+        if transfer is None:
+            return OperationResult.failed(
+                op, "The switch did not request the image from UNDM's TFTP server "
+                    f"({talk.detail or 'it returned to its prompt'}). Its answer is below; "
+                    "check this PC's firewall (inbound UDP 69). Nothing was changed.",
+                diagnostics)
+        if not transfer.completed:
+            return OperationResult.failed(
+                op, f"Transfer incomplete ({transfer.bytes_sent} of {transfer.size} bytes; "
+                    "UNDM has withdrawn the image).", diagnostics)
+        how = ""
+        if talk.ended == "closed" or (talk.ended == "timeout" and down[0]):
+            how = ("closed the session to restart" if talk.ended == "closed"
+                   else "is restarting (its SSH port stopped answering)")
+        elif talk.ended == "prompt":
+            complaint = _complaint(reply)
+            if complaint:
+                return OperationResult.failed(
+                    op, f"The switch fetched the image but refused it: \"{complaint}\".",
+                    diagnostics)
+            after = self._await_restart()
+            if after:
+                how = f"returned to its prompt, then {after}"
+            else:
+                slots = self.get_firmware_information()
+                state = (f"active {slots.data['running']}, alternate "
+                         f"{slots.data.get('alternate') or '?'}" if slots.ok else "unknown")
+                return OperationResult.failed(
+                    op, "The switch fetched the image and returned to its prompt, but did not "
+                        f"restart within {self.restart_grace:.0f} s (images: {state}). UNDM "
+                        "does not swap images or restart it before the switch's behaviour is "
+                        "known; its answer is below.", diagnostics)
+        else:
+            return OperationResult.failed(
+                op, f"The switch fetched the image but neither restarted nor returned to its "
+                    f"prompt ({talk.detail or talk.ended}); check it on the console.",
+                diagnostics)
+        self._restarting = True
+        self.disconnect()
+        return OperationResult.success(
+            op, {"bytes": transfer.bytes_sent, "notes": notes},
+            f"the switch fetched the image ({transfer.bytes_sent} bytes) and {how}")
+
+    def _await_restart(self) -> str:
+        """After a clean return to the prompt: wait for a restart the switch starts by
+        itself (session closed, or SSH port down). Empty if none within restart_grace."""
+        start = next_probe = time.monotonic()
+        while time.monotonic() - start <= self.restart_grace:
+            try:
+                self._conn.read_channel()
+            except Exception:  # noqa: BLE001 - the session closed: restarting
+                return "closed the session to restart"
+            now = time.monotonic()
+            if now >= next_probe:
+                next_probe = now + self.restart_probe_interval
+                if not ssh_base.tcp_port_open(self.target.management_address,
+                                              self.target.port or 22):
+                    return "restarted (its SSH port stopped answering)"
+            if self.should_stop is not None and self.should_stop():
+                return ""
+            time.sleep(self.poll_interval)
+        return ""
+
+    def install_firmware(self) -> OperationResult:
+        return OperationResult.success(
+            Op.INSTALL_FIRMWARE,
+            message="nothing to do: the switch writes the image itself after the transfer")
+
+    def reboot(self) -> OperationResult:
+        if self._restarting:
+            self._restarting = False
+            return OperationResult.success(
+                Op.REBOOT, message="the switch restarts by itself after the upgrade")
+        return OperationResult.failed(Op.REBOOT, "No restart was started by the previous step")
 
     def restart_notice(self, mode: ApplyMode) -> str | None:
         if mode is not ApplyMode.REPLACE:
@@ -382,6 +539,15 @@ def _image(section: str, text: str) -> str:
     if not m:
         return ""
     return f"{_field('Image', m.group(1))} {_field('Version', m.group(1))}".strip()
+
+
+def _image_version(section: str, text: str) -> str:
+    m = re.search(rf"^{section}\s*\n-+\s*\n(.*?)(?:\n\s*\n|\Z)", text, re.M | re.S)
+    return _field("Version", m.group(1)) if m else ""
+
+
+# File names the switch accepts in a URL ('copy ?', 'firmware upgrade ?').
+_SWITCH_FILE_NAME = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_.-]{0,62}")
 
 
 def _active_image(text: str) -> str:

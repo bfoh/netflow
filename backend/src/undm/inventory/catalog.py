@@ -56,7 +56,8 @@ CATALOG: tuple[DeviceModel, ...] = (
                 notes="Read-only checks passed 2026-11-24 on a factory-default LIG1014A "
                       "v00.01.00: connect, facts (MAC address as identity), backup. "
                       "Loading the team's complete file (TFTP into the startup configuration, "
-                      "'reload cold') passed once on hardware 2026-11-24."),
+                      "'reload cold') passed once on hardware 2026-11-24. Firmware upgrade by "
+                      "TFTP built, not yet run on hardware."),
     DeviceModel("blackbox-le2700a", "Black Box", "LE2700 series", "LE2700A",
                 DeviceCategory.SWITCH, "Black Box managed switch", ("mock.blackbox.switch",),
                 SupportLevel.SIMULATED_ONLY,

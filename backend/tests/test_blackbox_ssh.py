@@ -245,3 +245,70 @@ def test_vlan_lists_are_compared_as_sets():
                                ApplyMode.REPLACE)
     assert r.ok and "2 of 2 lines" in r.message and not r.data["warnings"]
 
+
+# -- firmware (D-080): 'firmware upgrade tftp://<pc>/<file>' (syntax from the switch's help) --
+@pytest.fixture
+def fw(monkeypatch, tmp_path):
+    from fake_lig1014a import IMAGE_HEADER
+
+    from undm.drivers.base import FirmwareImageRef
+    from undm.drivers.ssh import base as ssh_base
+    from undm.transfer.hub import TransferHub
+    monkeypatch.setattr(SshCliDriver, "poll_interval", 0.005)
+    monkeypatch.setattr(BlackBoxLig1014aSsh, "command_quiet", 0.5)
+    monkeypatch.setattr(BlackBoxLig1014aSsh, "restart_probe_interval", 0.0)
+    monkeypatch.setattr(BlackBoxLig1014aSsh, "restart_grace", 0.3)
+    monkeypatch.setattr(ssh_base, "tcp_port_open", lambda host, port, timeout=3.0: True)
+    hub = TransferHub("127.0.0.1", 0)
+    sw = FakeLig1014A(tftp_port=lambda: hub.port)
+    monkeypatch.setattr(SshCliDriver, "connection_factory",
+                        staticmethod(factory_for(Scenario(device=sw))))
+    data = IMAGE_HEADER + b"v00.01.01\n" + b"\0" * 50_000
+    path = tmp_path / "LIG1014A_v00.01.01.dat"
+    path.write_bytes(data)
+    import hashlib
+    img = FirmwareImageRef("v00.01.01", path.name, hashlib.sha256(data).hexdigest(),
+                           len(data), str(path))
+    with hub.session() as files:
+        d = BlackBoxLig1014aSsh(DeviceTarget("bb1", "127.0.0.1", None),
+                                Credentials("admin", ""))  # the fake fetches from here
+        d.file_server = files
+        assert d.connect().ok
+        yield d, sw, img
+
+
+def test_firmware_is_fetched_and_the_switch_restarts_by_itself(fw):
+    d, sw, img = fw
+    assert d.get_firmware_information().data["running"] == "v00.01.00"
+    r = d.stage_firmware(img)
+    assert r.ok, (r.message, r.diagnostics)
+    assert sw.fetched == ["LIG1014A_v00.01.01.dat"]  # the name the switch accepts is kept
+    assert "closed the session to restart" in r.message
+    assert d.install_firmware().ok and d.reboot().ok and not d.reboot().ok
+    assert not d.connect().ok and d.connect().ok  # down while restarting, then back
+    info = d.get_firmware_information().data
+    assert info["running"] == "v00.01.01" and info["alternate"] == "v00.01.00"
+
+
+def test_a_prompt_before_the_restart_is_waited_through(fw):
+    d, sw, img = fw
+    sw.upgrade_mode = "prompt_then_restart"
+    r = d.stage_firmware(img)
+    assert r.ok and "returned to its prompt, then closed the session" in r.message
+
+
+def test_no_restart_is_reported_with_both_images_and_nothing_else_is_sent(fw):
+    d, sw, img = fw
+    sw.upgrade_mode = "prompt_only"
+    r = d.stage_firmware(img)
+    assert not r.ok and "did not restart" in r.message
+    assert "active v00.01.00, alternate v00.01.01" in r.message
+    assert not any(c.startswith(("firmware swap", "reload")) for c in sw.commands)
+
+
+def test_a_refused_image_is_reported(fw):
+    d, sw, img = fw
+    sw.upgrade_mode = "refuse"
+    r = d.stage_firmware(img)
+    assert not r.ok and "refused it" in r.message and sw.restarts == 0
+

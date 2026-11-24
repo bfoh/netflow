@@ -34,8 +34,8 @@ Date             : 2021-01-29T19:32:27+08:00
 
 Alternate Image
 ---------------
-Image            : LIG1014A_v00.01.00.dat (backup)
-Version          : v00.01.00
+Image            : LIG1014A_{alternate}.dat (backup)
+Version          : {alternate}
 Date             : 2021-01-29T19:32:27+08:00
 
 ------------------
@@ -69,6 +69,7 @@ UNKNOWN = "% Invalid word detected"  # synthetic
 # The page prompt as the switch showed it (bench, 2026-11-24); how it is erased: synthetic.
 MORE = "-- more --, next page: Space, continue: g, quit: ^C"
 RELOAD = "% Cold reload in progress, please stand by."  # bench wording
+IMAGE_HEADER = b"SYNTHETIC LIG1014A IMAGE "  # + version + newline
 
 
 @dataclass
@@ -87,6 +88,11 @@ class FakeLig1014A:
     startup: str | None = None  # file loaded into the startup configuration
     running_file: str | None = None  # file the switch runs after the restart
     restarts: int = 0
+    alternate: str = "v00.01.00"
+    # firmware upgrade behaviour (wording SYNTHETIC until seen on the bench):
+    # restart | prompt_then_restart | prompt_only | refuse
+    upgrade_mode: str = "restart"
+    _close_after: int = 0
     fetched: list[str] = field(default_factory=list)
     _closing: bool = False
     _down: int = 0
@@ -134,7 +140,7 @@ class FakeLig1014A:
             self.commands.append(text)
         if text == "show version":
             self._emit(SHOW_VERSION.format(
-                mac=self.mac, version=self.version,
+                mac=self.mac, version=self.version, alternate=self.alternate,
                 serial=f" {self.serial}" if self.serial else "",
                 name=f" {self.hostname}" if self.hostname else ""))
         elif m := re.fullmatch(r"copy tftp://([^/\s]+)/(\S+) startup-config", text):
@@ -151,6 +157,30 @@ class FakeLig1014A:
                           f"% Saving {len(data)} bytes to flash:startup-config\r\n"
                           "Import Done! Configuration will become active after reboot!\r\n"
                           + self.prompt_text())  # bench wording
+        elif m := re.fullmatch(r"firmware upgrade tftp://([^/\s]+)/(\S+)", text):
+            port = self.tftp_port() if callable(self.tftp_port) else self.tftp_port
+            buf = io.BytesIO()
+            tftpy.TftpClient(m.group(1), port, {}).download(m.group(2), buf, timeout=2)
+            self.fetched.append(m.group(2))
+            data = buf.getvalue()
+            if self.upgrade_mode == "refuse" or not data.startswith(IMAGE_HEADER):
+                self._out += "% Image check failed\r\n" + self.prompt_text()  # synthetic
+                return
+            new = data[len(IMAGE_HEADER):].split(b"\n", 1)[0].decode()
+            self.alternate = new  # written to the alternate slot (synthetic behaviour)
+            if self.upgrade_mode == "prompt_only":
+                self._out += self.prompt_text()
+                return
+            self.alternate, self.version = self.version, new
+            if self.upgrade_mode == "prompt_then_restart":
+                self._out += self.prompt_text()
+                self.restarts += 1
+                self._down = self.down_for_connects
+                self._close_after = 3
+                return
+            self.restarts += 1
+            self._down = self.down_for_connects
+            self._closing = True
         elif text == "reload cold":
             if self.reload_ignored:
                 self._out += self.prompt_text()
@@ -182,6 +212,9 @@ class FakeLig1014A:
                 self.password = self.password_after_load
 
     def read(self) -> str:
+        if self._close_after:
+            self._close_after -= 1
+            self._closing = self._close_after == 0
         out, self._out = self._out, ""
         if self._closing and not out:
             raise OSError("Software caused connection abort")
