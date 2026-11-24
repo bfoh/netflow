@@ -591,3 +591,36 @@ step at once as "did not accept it"; no restart within the grace is reported as 
 and checked ... but did not restart within 180 s" with the unit's text. Applies to image
 and configuration fetches alike. Regression test: the fake FortiGate prints the bench's
 wording and its prompt before restarting; the old code fails it with the bench's result.
+
+### D-065 After a restart, a login problem gets a clear instruction and time for a person (2026-11-24)
+Bench (product owner): the FortiGate base file sets its own admin password; logging in
+with it after the restore, the unit demands a new one ("Your password does not conform to
+the password policy", rules: 12 characters, one upper case, lower case, number and special
+character) and the team sets the approved password again. While waiting for a device after
+its restart, UNDM now tells a login that is accepted without reaching the prompt, or
+refused, apart from an unreachable device (`login_accepted` / `login_refused` from the SSH
+drivers). On the first such answer it emits one warning with what to do and allows a
+further full wait (30 × 20 s) for a person. With a login after loading in the plan, UNDM
+keeps using it (accepted logins do not fail, so the unit is not provoked into a lockout)
+until it is refused, then tries the device's previous login once; if that works the device
+keeps it (no `device.credential_changed`). Failing that, the step ends with "the device
+answers after its restart, but no login reached its prompt".
+
+### D-066 A demanded password change is answered with the device's approved login (FortiOS) (2026-11-24)
+The product owner supplied the FortiGate's SSH CLI text of the demanded change: "You are
+forced to change your password. Old password:", "Verifying password...", the policy
+("Your password doesn't conform to the password policy enforced on this device. ... New
+password must conform to the following policy: minimum-length=12 upper-case-letter=1
+lower-case-letter=1 number=1 non-alphanumeric=1"), "New Password:", "Confirm Password:",
+"Verifying password...", "Welcome!" and the prompt. During the wait after a restart, when
+the plan names a login after loading (the base file's password) and the device has its own
+login (the approved one), the FortiOS driver logs in with Netmiko's own steps
+(`auto_connect=False`: connect, then the dialogue, then Netmiko's session preparation) and
+answers exactly these questions, each at most once: old = the login after loading, new and
+confirm = the device's own login. Anything else ends the login with the unit's text
+(passwords removed) and the D-065 instruction; a question asked again (new password not
+accepted) is never answered twice. Success needs independent evidence: UNDM logs in again
+with the approved login before it continues (identity, verification). The device keeps its
+approved login; the change is audited as `device.password_set` (no password values). Only
+the drivers that know the questions act on the offer (`answers_password_change`); others
+leave the change to a person (D-065).

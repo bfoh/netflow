@@ -35,6 +35,7 @@ from undm.drivers.base import (
     ApplyMode,
     Capability,
     ConfigFileReport,
+    Credentials,
     DeviceFacts,
     DriverInfo,
     DriverMaturity,
@@ -49,7 +50,7 @@ from undm.drivers.fortinet.config_files import (
     script_statements,
 )
 from undm.drivers.ssh import base as ssh_base
-from undm.drivers.ssh.base import SSH_CAPABILITIES, Dialogue, SshCliDriver
+from undm.drivers.ssh.base import SSH_CAPABILITIES, Dialogue, LoginDialogueError, SshCliDriver
 from undm.security.redaction import redact_text
 
 Op = DeviceOperation
@@ -114,9 +115,18 @@ class FortiOSSsh(SshCliDriver):
     # serial number, VDOM mode.
     parser_validated_on = ("FortiGate-101F v7.2.6",)
     prompt_hint: ClassVar[str] = (
-        "A new FortiGate asks for a new admin password at the first login: log in once by "
-        "hand (browser at its address, or SSH) as admin, set the approved password, then try "
-        "again with that login.")
+        "A FortiGate asks for a new admin password at the first login, and when the password "
+        "does not meet its password policy (bench: after a base file is restored): log in by "
+        "hand (browser at its address, or SSH) and set the approved password.")
+    # Demanded password change at login, as a 101F showed it after a base restore (bench,
+    # v7.6.5, 2026-11-24): "You are forced to change your password. Old password:", then
+    # the policy, "New Password:", "Confirm Password:", "Verifying password...", "Welcome!".
+    answers_password_change: ClassVar[bool] = True
+    _OLD_PASSWORD: ClassVar[re.Pattern[str]] = re.compile(r"(?i)Old password:\s*$")
+    _NEW_PASSWORD: ClassVar[re.Pattern[str]] = re.compile(r"(?i)New Password:\s*$")
+    _CONFIRM_PASSWORD: ClassVar[re.Pattern[str]] = re.compile(r"(?i)Confirm Password:\s*$")
+    login_dialogue_quiet: ClassVar[float] = 5.0     # no text at all: an ordinary login
+    login_dialogue_timeout: ClassVar[float] = 30.0  # silence after text: unknown question
     statement_timeout: ClassVar[float] = 60.0    # per script statement
     script_poll_interval: ClassVar[float] = 0.02
 
@@ -345,6 +355,45 @@ class FortiOSSsh(SshCliDriver):
             op, {"bytes": transfer.bytes_sent},
             f"the FortiGate fetched the {what} ({transfer.bytes_sent} bytes), accepted it "
             f"and {how}")
+
+    def _login_dialogue(self, conn: Any, new: Credentials) -> bool:
+        """Answer the bench's forced password change; each question at most once."""
+        assert self._credentials is not None
+        steps = ((self._OLD_PASSWORD, "old", self._credentials.password),
+                 (self._NEW_PASSWORD, "new", new.password),
+                 (self._CONFIRM_PASSWORD, "confirm", new.password))
+        prompt = re.compile(self._prompt_pattern())
+        text, mark, answered = "", 0, set()
+        last = time.monotonic()
+        while True:
+            chunk = str(conn.read_channel() or "")
+            now = time.monotonic()
+            if chunk:
+                text, last = text + chunk, now
+                pending = text[mark:]
+                step = next((s for s in steps if s[0].search(pending)), None)
+                if step is not None:
+                    if step[1] in answered:
+                        raise LoginDialogueError(
+                            "the device asked again for its "
+                            f"{'old' if step[1] == 'old' else 'new'} password: it did not "
+                            "accept UNDM's answer", text)
+                    conn.write_channel(step[2] + "\n")
+                    answered.add(step[1])
+                    mark = len(text)
+                elif "Welcome!" in pending or prompt.search("\n" + pending) \
+                        or "to accept" in pending:
+                    if answered and "confirm" not in answered:
+                        raise LoginDialogueError(
+                            "the password change ended before it was confirmed", text)
+                    return "confirm" in answered
+                continue
+            if not text and now - last > self.login_dialogue_quiet:
+                return False  # nothing printed yet: Netmiko prompts for the prompt itself
+            if text and now - last > self.login_dialogue_timeout:
+                raise LoginDialogueError(
+                    "it asked something UNDM does not answer at login", text)
+            time.sleep(self.poll_interval)
 
     def _complaint(self, answer: str) -> bool:
         """Whether the unit's answer has an error-looking line (prompt lines ignored)."""

@@ -52,6 +52,18 @@ class FakeConnection:
 
     RETURN = "\n"
 
+    # Netmiko's connection steps (BaseConnection._open), used with auto_connect=False.
+    def _modify_connection_params(self) -> None:
+        pass
+
+    def establish_connection(self) -> None:
+        pass
+
+    def _try_session_preparation(self) -> None:
+        if getattr(self.s.device, "awaiting_login_answers", False):
+            from netmiko.exceptions import ReadTimeout
+            raise ReadTimeout("Pattern not detected: 'to accept|[#$]' in output.")
+
     @property
     def base_prompt(self) -> str:
         if hasattr(self.s.device, "hostname"):
@@ -115,7 +127,10 @@ def factory_for(scenario: Scenario):
                 scenario.device.accept_connection(str(kwargs.get("password", "")))
             else:
                 scenario.device.accept_connection()
-        return FakeConnection(scenario, **kwargs)
+        conn = FakeConnection(scenario, **kwargs)
+        if kwargs.get("auto_connect", True):
+            conn._try_session_preparation()
+        return conn
     return factory
 
 # ArubaOS-Switch (e.g. 2930F): two-column "show system" layout. SYNTHETIC.

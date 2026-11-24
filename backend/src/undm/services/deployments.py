@@ -458,6 +458,9 @@ class DeploymentService:
                 if tr.credential_after_ref_id:
                     by_id[tr.device_id].credentials_after = self._credentials_for(
                         device, tr.credential_after_ref_id)
+                    if device.credential_ref_id:
+                        by_id[tr.device_id].credentials_before = self._credentials_for(
+                            device, device.credential_ref_id)
         mode = ApplyMode(rec.apply_mode)
         needs_files = not rec.dry_run and any(
             not t.driver.info.simulated and t.driver.needs_file_server(rec.kind, mode)
@@ -582,8 +585,14 @@ class DeploymentService:
                              details={"from": device.management_address, "to": reached,
                                       "deployment": rec.id})
                 device.management_address = reached
+            if t.password_set:
+                # UNDM answered a demanded password change with the device's own login.
+                audit.record(self.s, actor, "device.password_set", "device", device.id,
+                             details={"credential": device.credential_ref_id,
+                                      "reason": "the device demanded a new password after "
+                                                "loading", "deployment": rec.id})
             after = tr.credential_after_ref_id
-            if (after and after != device.credential_ref_id
+            if (after and after != device.credential_ref_id and not t.kept_previous_login
                     and t.state in (TargetState.VERIFIED, TargetState.VERIFY_FAILED)):
                 # The device was reached with the login chosen for after loading: keep it.
                 audit.record(self.s, actor, "device.credential_changed", "device", device.id,

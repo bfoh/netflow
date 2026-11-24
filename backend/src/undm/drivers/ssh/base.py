@@ -33,6 +33,7 @@ from undm.drivers.base import (
     ApplyMode,
     Capability,
     ConfigurationBackup,
+    Credentials,
     DeviceDriver,
     DeviceFacts,
     OperationResult,
@@ -88,6 +89,14 @@ def _default_factory(**kwargs: Any) -> Any:
     return ConnectHandler(**kwargs)
 
 
+class LoginDialogueError(Exception):
+    """The device asked something at login that UNDM does not answer, or refused an answer."""
+
+    def __init__(self, message: str, shown: str) -> None:
+        super().__init__(message)
+        self.shown = shown
+
+
 class SshCliDriver(DeviceDriver):
     netmiko_device_type: ClassVar[str]
     facts_commands: ClassVar[tuple[str, ...]]
@@ -110,9 +119,21 @@ class SshCliDriver(DeviceDriver):
     # Replaced in tests with a fake connection factory.
     connection_factory: ClassVar[Callable[..., Any]] = staticmethod(_default_factory)
 
+    # Whether the driver knows the device's questions when it demands a new password at
+    # login (``_login_dialogue``); only then is ``offer_password_change`` acted on.
+    answers_password_change: ClassVar[bool] = False
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._conn: Any = None
+        self._password_change_to: Credentials | None = None
+
+    def offer_password_change(self, credentials: Credentials | None) -> None:
+        self._password_change_to = credentials if self.answers_password_change else None
+
+    def _login_dialogue(self, conn: Any, new: Credentials) -> bool:
+        """Answer a demanded password change right after login; True if one was made."""
+        return False
 
     # -- helpers ------------------------------------------------------------------
     def _need(self, op: DeviceOperation) -> OperationResult | None:
@@ -262,8 +283,10 @@ class SshCliDriver(DeviceDriver):
         # What the device printed while the session was prepared, to explain a login that
         # did not reach a prompt (Netmiko scrubs the password; redacted again below).
         seen = io.BytesIO()
+        change_to = self._password_change_to
+        changed = False
         try:
-            self._conn = self.connection_factory(
+            conn = self.connection_factory(
                 session_log=seen,
                 device_type=self.netmiko_device_type,
                 host=self.target.management_address,
@@ -275,9 +298,29 @@ class SshCliDriver(DeviceDriver):
                 banner_timeout=self.connect_timeout,
                 fast_cli=False,
                 **self._connect_kwargs(),
+                **({"auto_connect": False} if change_to is not None else {}),
             )
+            if change_to is not None:
+                # Netmiko's own steps, with the demanded password change answered between
+                # the login and the wait for the prompt.
+                try:
+                    conn._modify_connection_params()
+                    conn.establish_connection()
+                    changed = self._login_dialogue(conn, change_to)
+                    conn._try_session_preparation()
+                except Exception:
+                    with contextlib.suppress(Exception):
+                        conn.disconnect()
+                    raise
+            self._conn = conn
+        except LoginDialogueError as e:
+            shown = self._scrub(e.shown, change_to)
+            return OperationResult.failed(
+                op, f"Logged in, but {e}; it showed: “{shown}”. {self.prompt_hint}",
+                {"device_output": shown, "login_accepted": True})
         except NetmikoAuthenticationException:
-            return OperationResult.failed(op, "Authentication failed (check the credential)")
+            return OperationResult.failed(op, "Authentication failed (check the credential)",
+                                          {"login_refused": True})
         except NetmikoTimeoutException:
             return OperationResult.failed(
                 op, f"Timed out connecting to {self.target.management_address}:"
@@ -288,13 +331,26 @@ class SshCliDriver(DeviceDriver):
             return OperationResult.failed(
                 op, "Logged in, but the device did not show its command prompt"
                     + (f"; it showed: “{shown}”" if shown else "") + f". {self.prompt_hint}",
-                {"device_output": shown})
+                {"device_output": shown, "login_accepted": True})
         except Exception as e:  # noqa: BLE001 - report any transport error cleanly
             return self._fail(op, e)
         with contextlib.suppress(Exception):
             self._conn.session_log = None  # only the login is recorded
+        if changed and change_to is not None:
+            self._credentials, self._password_change_to = change_to, None
+            return OperationResult.success(
+                op, {"password_changed": True},
+                f"SSH session established ({self.info.os_family}) after setting the new "
+                "password the device demanded")
         return OperationResult.success(
             op, message=f"SSH session established ({self.info.os_family})")
+
+    def _scrub(self, text: str, *more: Credentials | None) -> str:
+        """Device text for messages: passwords removed, then the usual redaction."""
+        for creds in (self._credentials, *more):
+            if creds is not None and creds.password:
+                text = text.replace(creds.password, "<password>")
+        return " ".join(redact_text(text).split())[-600:]
 
     def disconnect(self) -> None:
         if self._conn is not None:

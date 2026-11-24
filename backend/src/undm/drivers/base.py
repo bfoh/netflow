@@ -341,6 +341,12 @@ class DeviceDriver:
         """Log in with these from the next connection on (a loaded file changed the login)."""
         self._credentials = credentials
 
+    def offer_password_change(self, credentials: Credentials | None) -> None:
+        """If the device demands a new password at the next logins, set this one (D-066).
+
+        Only drivers that know the device's exact questions act on it; others ignore it
+        and the person changes the password by hand (D-065). ``None`` withdraws the offer."""
+
     def create_checkpoint(self, label: str) -> OperationResult:
         """Keep a named restore point of the current configuration on the device."""
         return self._unsupported(DeviceOperation.CREATE_CHECKPOINT)

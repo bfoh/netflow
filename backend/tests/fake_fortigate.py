@@ -47,6 +47,18 @@ class FakeFortiGate:
     # prompt_only (prompt, never restarts)
     restart_mode: str = "close"
     restore_sets_password: str | None = None
+    # Bench 2026-11-24: after the base restore the unit demanded a new admin password at
+    # login (its password policy); a person then set the approved one by hand.
+    restore_forces_password_change: bool = False
+    must_change_password: bool = False
+    hand_change_after: int | None = None  # logins needing the change before a person acts
+    hand_password: str = ""
+    logins_needing_change: int = 0
+    # True: the demanded change is the bench dialogue on the channel (2026-11-24, 101F
+    # v7.6.5, wording below as captured); False: the login just hangs (unknown wording).
+    change_dialogue: bool = False
+    awaiting_login_answers: bool = False
+    _new_password: str = ""
     bad_statements: set[str] = field(default_factory=set)
     info_replies: dict[str, str] = field(default_factory=dict)
     question_on: dict[str, str] = field(default_factory=dict)  # statement -> question text
@@ -84,11 +96,25 @@ class FakeFortiGate:
         if self._down > 0:
             self._down -= 1
             raise OSError("connection timed out (unit restarting)")
+        if (self.must_change_password and self.hand_change_after is not None
+                and self.logins_needing_change >= self.hand_change_after):
+            self.password, self.must_change_password = self.hand_password, False
         if password is not None and password != self.password:
             from netmiko.exceptions import NetmikoAuthenticationException
             raise NetmikoAuthenticationException("Authentication failed")
+        if self.must_change_password and not self.change_dialogue:
+            from netmiko.exceptions import ReadTimeout
+            self.logins_needing_change += 1
+            raise ReadTimeout("Pattern not detected: 'to accept|[#$]' in output.")
         self._closed, self._closing, self._out, self._pending = False, False, "", ""
         self._stack = []
+        self.awaiting_login_answers = self.must_change_password
+        if self.must_change_password:
+            self.logins_needing_change += 1
+            self._ask("old_password", "\r\nYou are forced to change your password. Old "
+                                      "password: ")
+        else:
+            self._out = self.prompt_text()
 
     def prompt_text(self) -> str:
         ctx = f" ({self._stack[-1]})" if self._stack else ""
@@ -292,8 +318,37 @@ class FakeFortiGate:
                         if ln.strip() and not ln.startswith("#")]
         if self.restore_sets_password is not None:
             self.password = self.restore_sets_password
+        self.must_change_password = self.restore_forces_password_change
         self._out += "\r\nGet file from TFTP server OK.\r\nFile check OK.\r\n"
         self._restart(before)
+
+    def _answer_old_password(self, key: str) -> None:
+        self._out += "\r\nVerifying password...\r\n"
+        if key != self.password:
+            self._out += "[synthetic] Old password is incorrect.\r\n"
+            self._closing = True
+            return
+        self._ask("new_password",
+                  "Your password doesn't conform to the password policy enforced on this "
+                  "device.\r\nAccording to the password policy enforced on this device, "
+                  "please change your password!\r\nNew password must conform to the following "
+                  "policy:\r\nminimum-length=12 upper-case-letter=1 lower-case-letter=1 "
+                  "number=1 non-alphanumeric=1\r\n\r\nNew Password: ")
+
+    def _answer_new_password(self, key: str) -> None:
+        self._new_password = key
+        self._ask("confirm_password", "\r\nConfirm Password: ")
+
+    def _answer_confirm_password(self, key: str) -> None:
+        conforms = (len(key) >= 12 and re.search(r"[A-Z]", key) and re.search(r"[a-z]", key)
+                    and re.search(r"[0-9]", key) and re.search(r"[^A-Za-z0-9]", key))
+        if key != self._new_password or not conforms:
+            self._ask("new_password", "\r\n[synthetic] The new password was not accepted."
+                                      "\r\n\r\nNew Password: ")
+            return
+        self.password, self.must_change_password = key, False
+        self.awaiting_login_answers = False
+        self._out += "\r\nVerifying password...\r\nWelcome!\r\n\r\n" + self.prompt_text()
 
     def _answer_unknown(self, key: str) -> None:
         self._reply("")

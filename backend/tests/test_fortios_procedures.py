@@ -303,4 +303,142 @@ def test_login_without_a_prompt_says_what_the_unit_showed(monkeypatch):
     assert r.status is ResultStatus.FAILED
     assert r.message.startswith("Logged in, but the device did not show its command prompt")
     assert "New Password:" in r.message
-    assert "A new FortiGate asks for a new admin password at the first login" in r.message
+    assert "A FortiGate asks for a new admin password at the first login" in r.message
+    assert r.diagnostics["login_accepted"] is True
+
+
+# -- base restore through the API: the unit demands a new password afterwards ----------
+APPROVED, BASE_PW = "Example-Only-Approved-1", "Example-Only-Base-1"
+
+
+@pytest.fixture
+def api(monkeypatch, tmp_path):
+    import keyring
+    from api_helpers import make_client
+    from memory_keyring import MemoryKeyring
+
+    previous = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    tune(monkeypatch)
+    client, _ = make_client(data_dir=str(tmp_path), tftp_host="127.0.0.1", tftp_port=0,
+                            firmware_reboot_wait_seconds=0, firmware_reboot_wait_attempts=4,
+                            enable_real_device_writes=True)
+    with client:
+        hub = client.app.state.transfer_hub
+        fg = FakeFortiGate(tftp_port=lambda: hub.port, password=APPROVED)
+        monkeypatch.setattr(SshCliDriver, "connection_factory",
+                            staticmethod(factory_for(Scenario(device=fg))))
+        pid = client.post("/api/projects", json={"name": "FortiGate"}).json()["id"]
+        refs = {}
+        for name, pw in (("approved", APPROVED), ("base", BASE_PW)):
+            refs[name] = client.post(f"/api/projects/{pid}/credential-refs",
+                                     json={"name": name}).json()["id"]
+            client.put(f"/api/credential-refs/{refs[name]}/secret",
+                       json={"username": "admin", "password": pw})
+        did = client.post(f"/api/projects/{pid}/devices", json={
+            "name": "lab-fw", "manufacturer": "Fortinet", "category": "firewall",
+            "model": "FortiGate-101F", "os_family": "FortiOS",
+            "driver_id": "ssh.fortinet.fortios", "environment": "lab",
+            "management_address": "127.0.0.1", "credential_ref_id": refs["approved"]}).json()
+        assert "id" in did, did
+        yield client, pid, did["id"], fg, refs
+    keyring.set_keyring(previous)
+
+
+def _restore_base(client, pid, did, after=None):
+    v = client.post(f"/api/devices/{did}/configs/import",
+                    json={"filename": "base.conf", "text": BACKUP}).json()
+    assert v["inspection"]["apply_mode"] == "replace", v
+    body = {"device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]}}
+    if after:
+        body["credentials_after"] = {did: after}
+    dep = client.post(f"/api/projects/{pid}/deployments", json=body).json()
+    assert dep["state"] == "awaiting_approval", dep
+    client.post(f"/api/deployments/{dep['id']}/approve")
+    out = client.post(f"/api/deployments/{dep['id']}/execute").json()
+    return out, " | ".join(e["message"] for e in out["events"])
+
+
+def test_api_password_set_by_hand_after_the_base_restore_is_waited_for(api):
+    """Bench 2026-11-24 (product owner): the base file sets another admin password; logging
+    in with it, the unit demands a new one (password policy), and the team sets the approved
+    password again. UNDM logs in with the base password (accepted, no prompt), says what to
+    do, and continues with the approved login once a person has set it (D-065)."""
+    client, pid, did, fg, refs = api
+    fg.restore_sets_password, fg.restore_forces_password_change = BASE_PW, True
+    fg.hand_change_after, fg.hand_password = 2, APPROVED
+    out, events = _restore_base(client, pid, did, after=refs["base"])
+    assert out["state"] == "succeeded", events
+    assert "If it asks for a new password, set the device's approved password" in events
+    assert "refused now; trying the device's previous login" in events
+    assert "logged in with the device's previous login" in events
+    device = client.get(f"/api/devices/{did}").json()
+    assert device["credential_ref_id"] == refs["approved"]  # not the base file's login
+    assert fg.hostname == "lab-fw-base" and fg.vdoms
+    assert APPROVED not in repr(out) and BASE_PW not in repr(out)
+
+
+def test_api_nobody_sets_the_password_the_run_says_why(api):
+    client, pid, did, fg, refs = api
+    fg.restore_sets_password, fg.restore_forces_password_change = BASE_PW, True
+    out, events = _restore_base(client, pid, did, after=refs["base"])
+    assert out["state"] == "recovery_required", events
+    assert "no login reached its prompt" in out["targets"][0]["message"]
+    assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == refs["approved"]
+
+
+def test_api_demanded_password_change_is_answered_with_the_approved_login(api):
+    """Bench 2026-11-24 (SSH CLI capture by the product owner): after the base restore the
+    unit asks "You are forced to change your password. Old password:", shows its policy,
+    then "New Password:" and "Confirm Password:". With the base file's password as login
+    after loading, UNDM answers with that (old) and the device's approved login (new),
+    logs in again to prove it, and the device keeps its approved login (D-066)."""
+    client, pid, did, fg, refs = api
+    fg.restore_sets_password, fg.restore_forces_password_change = BASE_PW, True
+    fg.change_dialogue = True
+    out, events = _restore_base(client, pid, did, after=refs["base"])
+    assert out["state"] == "succeeded", events
+    assert "UNDM answered its questions and set the password" in events
+    assert "logged in again with the device's login" in events
+    assert fg.password == APPROVED and not fg.must_change_password
+    assert fg.keys[-3:] == [BASE_PW, APPROVED, APPROVED]  # old, new, confirm: once each
+    assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == refs["approved"]
+    audit = client.get("/api/audit?limit=50").json()
+    assert any(a["action"] == "device.password_set" for a in audit)
+    assert APPROVED not in repr(out) + repr(audit) and BASE_PW not in repr(out) + repr(audit)
+
+
+def test_a_refused_new_password_is_not_offered_twice(rig):
+    """The unit asks again when it does not accept the new password (synthetic reply):
+    UNDM stops instead of guessing, and never shows a password."""
+    rig.fg.must_change_password = rig.fg.change_dialogue = True
+    rig.driver.offer_password_change(Credentials("admin", "short"))
+    r = rig.driver.connect()
+    assert r.status is ResultStatus.FAILED and r.diagnostics["login_accepted"] is True
+    assert "asked again for its new password" in r.message
+    assert "short" not in r.message and "Example-Only-1" not in r.message
+    assert rig.fg.password == "Example-Only-1" and rig.fg.keys.count("short") == 2
+
+
+def test_an_unknown_question_at_login_is_not_answered(rig, monkeypatch):
+    monkeypatch.setattr(FortiOSSsh, "login_dialogue_timeout", 0.2)
+    rig.fg.must_change_password = rig.fg.change_dialogue = True
+    rig.fg.password = "Example-Only-1"
+    # A different first question than the one seen on the bench.
+    monkeypatch.setattr(type(rig.fg), "accept_connection", _asks_something_else)
+    rig.driver.offer_password_change(Credentials("admin", "Example-Only-Approved-1"))
+    r = rig.driver.connect()
+    assert r.status is ResultStatus.FAILED and "does not answer at login" in r.message
+    assert rig.fg.keys == []
+
+
+def _asks_something_else(self, password=None):
+    self._closed, self._closing, self._pending = False, False, "unknown"
+    self.awaiting_login_answers = True
+    self._out = "\r\n[synthetic] Please accept the disclaimer (yes/no): "
+
+
+def test_ordinary_login_with_the_offer_changes_nothing(rig):
+    rig.driver.offer_password_change(Credentials("admin", "Example-Only-Approved-1"))
+    r = rig.driver.connect()
+    assert r.ok and not r.data and rig.fg.password == "Example-Only-1" and rig.fg.keys == []

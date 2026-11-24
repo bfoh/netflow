@@ -119,6 +119,12 @@ class DeploymentTarget:
     observed_serial: str | None = None
     # Login valid once the configuration is applied (the file changes the password).
     credentials_after: Credentials | None = field(default=None, repr=False)
+    # The device's own login before loading. Used after a restart when the unit, on the
+    # login chosen for after loading, demands a new password and a person sets this one
+    # on it by hand (D-065); the device then keeps this login.
+    credentials_before: Credentials | None = field(default=None, repr=False)
+    kept_previous_login: bool = False
+    password_set: bool = False  # UNDM answered a demanded password change (D-066)
     # Project settings a driver may need before applying (e.g. certificate_subject).
     settings: dict[str, Any] = field(default_factory=dict)
 
@@ -179,18 +185,64 @@ class DeploymentOrchestrator:
             raise StopRequested
 
     def _wait_until_available(self, dep: Deployment, t: DeploymentTarget) -> OperationResult:
-        last = OperationResult.failed(DeviceOperation.CHECK_REACHABILITY, "not attempted")
         if not t.driver.info.simulated:
             self._emit(dep, "deploy", "ok",
                        f"waiting for the device to answer at {t.driver.target.management_address}"
                        f" (up to {self.restart_wait_attempts} attempts, "
                        f"{self.restart_wait_delay_s:.0f} s apart; Stop ends the wait)", t)
-        for attempt in range(1, self.restart_wait_attempts + 1):
+        fallback = t.credentials_before if t.credentials_after is not None else None
+        # A unit that demands a new password on the login chosen for after loading gets the
+        # device's previous (approved) one, where the driver knows the questions (D-066).
+        t.driver.offer_password_change(fallback)
+        try:
+            return self._wait_for_login(dep, t, fallback)
+        finally:
+            t.driver.offer_password_change(None)
+
+    def _wait_for_login(self, dep: Deployment, t: DeploymentTarget,
+                        fallback: Credentials | None) -> OperationResult:
+        last = OperationResult.failed(DeviceOperation.CHECK_REACHABILITY, "not attempted")
+        hinted, attempt, limit = False, 0, self.restart_wait_attempts
+        while attempt < limit:
+            attempt += 1
             if not t.driver.info.simulated and dep.stop.wait(self.restart_wait_delay_s):
                 raise StopRequested
             self._check_stop(dep)
             t.driver.disconnect()
             last = t.driver.connect()
+            if (not last.ok and last.diagnostics.get("login_refused") and fallback is not None
+                    and not t.kept_previous_login):
+                # The login chosen for after loading no longer works: typically a person
+                # has just set the device's previous (approved) password on the unit.
+                t.driver.use_credentials(fallback)
+                t.kept_previous_login = True
+                self._emit(dep, "deploy", "ok", "the login chosen for after loading is "
+                           "refused now; trying the device's previous login", t)
+                t.driver.disconnect()
+                last = t.driver.connect()
+            if not last.ok and not hinted and (last.diagnostics.get("login_accepted")
+                                               or last.diagnostics.get("login_refused")):
+                hinted = True
+                limit = attempt + self.restart_wait_attempts  # a person needs time
+                self._emit(dep, "deploy", "warning", self._login_hint(t, last, fallback), t)
+            if last.ok and isinstance(last.data, dict) and last.data.get("password_changed"):
+                t.kept_previous_login = t.password_set = True
+                t.driver.offer_password_change(None)
+                self._emit(dep, "deploy", "ok", "the device demanded a new password at login "
+                           "with the login chosen for after loading; UNDM answered its "
+                           "questions and set the password of the device's previous "
+                           "(approved) login", t)
+                t.driver.disconnect()  # independent evidence: log in again with it
+                last = t.driver.connect()
+                if not last.ok:
+                    return OperationResult.failed(
+                        DeviceOperation.CHECK_REACHABILITY,
+                        f"the new password was set, but logging in again with it failed: "
+                        f"{last.message}")
+                self._emit(dep, "deploy", "ok", "logged in again with the device's login", t)
+            elif last.ok and t.kept_previous_login:
+                self._emit(dep, "deploy", "ok", "logged in with the device's previous "
+                           "login (set on the unit by hand); the device keeps it", t)
             if last.ok:
                 facts = t.driver.get_device_facts() if t.observed_serial else None
                 seen = facts.data.serial_number if facts is not None and facts.ok else None
@@ -204,10 +256,29 @@ class DeploymentOrchestrator:
                 self._emit(dep, "deploy", "ok", f"device reachable again (attempt {attempt}"
                            + (", same serial number" if seen else "") + ")", t)
                 return last
+        if last.diagnostics.get("login_accepted") or last.diagnostics.get("login_refused"):
+            return OperationResult.failed(
+                DeviceOperation.CHECK_REACHABILITY,
+                f"the device answers after its restart, but no login reached its prompt "
+                f"({attempt} attempts): {last.message}")
         return OperationResult.failed(
             DeviceOperation.CHECK_REACHABILITY,
-            f"device not reachable after its restart ({self.restart_wait_attempts} attempts): "
-            f"{last.message}")
+            f"device not reachable after its restart ({attempt} attempts): {last.message}")
+
+    def _login_hint(self, t: DeploymentTarget, last: OperationResult,
+                    fallback: Credentials | None) -> str:
+        minutes = self.restart_wait_attempts * self.restart_wait_delay_s / 60
+        keep = f"UNDM keeps trying for up to {minutes:.0f} more minutes"
+        if last.diagnostics.get("login_accepted"):
+            then = (" with the login chosen for after loading, and switches to the device's "
+                    "previous login as soon as that one is refused (that is, once the "
+                    "password was changed)" if fallback is not None else "")
+            return (f"{last.message} If it asks for a new password, set the device's approved "
+                    f"password on the unit by hand now. {keep}{then}.")
+        return (f"The device answers after its restart but refuses the login ({last.message}). "
+                "If the loaded file sets another password, either set the device's login on "
+                f"the unit by hand now ({keep}), or choose that password as 'login after "
+                "loading' in the plan next time.")
 
     def _emit_notes(self, dep: Deployment, t: DeploymentTarget, stage: str,
                     result: OperationResult) -> None:

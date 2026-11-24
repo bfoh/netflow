@@ -61,8 +61,8 @@ function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode, loginAfte
       {report.apply_mode === 'replace' && (
         <Select size="xs" w={320} clearable label="Login after loading (optional)"
           description={loginAfter
-            ? 'UNDM logs in with this after the restart and keeps it for the device.'
-            : 'Choose it if the file changes the login (the 2930F files set the approved password).'}
+            ? 'UNDM logs in with this after the restart and keeps it for the device. If the unit then demands a new password, UNDM sets the device\'s current (approved) login where it knows the questions (FortiGate), otherwise it waits for you to set it by hand; the device then keeps its current login.'
+            : 'Choose it if the file changes the login (2930F files: the approved password; FortiGate base file: the password it sets).'}
           placeholder={refs.data?.length ? 'Same login as now' : 'Add one on the project Credentials tab'}
           data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
           value={loginAfter} onChange={onLoginAfter} />
