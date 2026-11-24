@@ -65,13 +65,30 @@ def test_backup_is_the_running_configuration_without_the_banner(switch):
     assert text.rstrip().endswith("end") and "Building configuration" not in text
 
 
+def test_long_output_continues_at_the_switchs_page_prompt(switch):
+    """Bench 2026-11-24: 'show version' paused at "-- more --, next page: Space, continue:
+    g, quit: ^C". UNDM presses 'g' (the switch's own option) and removes the pager line."""
+    switch.page_after = 12
+    d = driver()
+    d.connect()
+    f = d.get_device_facts()
+    assert f.ok, f.message
+    assert f.data.model == "LIG1014A" and f.data.serial_number == "00-11-22-33-44-55"
+    assert switch.keys == ["g"]
+    r = d.backup_configuration()
+    assert r.ok, r.message
+    text = r.data.text
+    assert "more" not in text and "\x08" not in text
+    assert "\ninterface GigabitEthernet 1/3\n description Port-3\n" in text  # indentation kept
+    assert text.rstrip().endswith("end")
+
+
 def test_an_incomplete_read_is_never_stored(switch):
-    switch.truncate_config = True
+    switch.stall_config = True
     d = driver()
     d.connect()
     r = d.backup_configuration()
-    assert r.status is ResultStatus.FAILED
-    assert "page break" in r.message or "incomplete" in r.message
+    assert r.status is ResultStatus.FAILED and "no prompt" in r.message
 
 
 def test_loading_is_not_offered_yet(switch):

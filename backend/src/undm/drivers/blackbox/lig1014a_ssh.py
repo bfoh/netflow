@@ -27,6 +27,7 @@ TFTP source, what ``reload cold`` asks, and whether SSH is allowed by the team's
 from __future__ import annotations
 
 import re
+import time
 from typing import ClassVar
 
 from undm.domain.operations import DeviceOperation
@@ -44,6 +45,16 @@ from undm.drivers.ssh.base import SshCliDriver
 from undm.security.redaction import redact_text
 
 Op = DeviceOperation
+
+
+# The switch's page prompt, as it showed it (bench, v00.01.00, 2026-11-24).
+_MORE = re.compile(r"-- ?more ?--, next page: Space, continue: g, quit: \^C[ \t]*")
+# What a terminal uses to erase a line: CR + spaces + CR, backspaces, ANSI sequences.
+_ERASE = re.compile(r"\r[ \t]*\r|(?:\x08 \x08)+|\x08|\x1b\[[0-9;?]*[ -/]*[@-~]")
+
+
+def _clean(output: str) -> str:
+    return _ERASE.sub("", output).replace("\r", "")
 
 
 def _field(name: str, text: str) -> str:
@@ -97,15 +108,40 @@ class BlackBoxLig1014aSsh(SshCliDriver):
         return r"(?:^|\n)[^\n#]*#\s*$"
 
     def _send(self, command: str) -> str:
-        """Run a read command and return its output (echo and prompt removed)."""
-        talk = self._dialogue(command, [], timeout=self.command_timeout,
-                              idle_timeout=self.command_quiet)
-        if talk.ended != "prompt":
-            shown = " ".join(redact_text(talk.output).split())[-300:]
-            raise RuntimeError(
-                f"no prompt after '{command}' ({talk.detail or talk.ended}); it showed: "
-                f"“{shown}”. The switch may be waiting at a page break or a question.")
-        lines = talk.output.replace("\r", "").split("\n")
+        """Run a read command and return its output (echo, pager and prompt removed).
+
+        At the switch's page prompt ("-- more --, next page: Space, continue: g, quit: ^C",
+        bench 2026-11-24) UNDM presses 'g', the switch's own option for the rest of the
+        output without further pauses; nothing else is ever answered."""
+        conn = self._conn
+        prompt = re.compile(self._prompt_pattern())
+        conn.clear_buffer()
+        conn.write_channel(command + str(getattr(conn, "RETURN", "\n")))
+        output, pages = "", 0
+        start = last = time.monotonic()
+        while True:
+            chunk = str(conn.read_channel() or "")
+            now = time.monotonic()
+            if chunk:
+                output, last = output + chunk, now
+                if _MORE.search(output):
+                    pages += 1
+                    if pages > 3:  # 'g' leaves no further pauses: something else is going on
+                        raise RuntimeError(f"the switch kept pausing the output of '{command}'")
+                    output = _MORE.sub("", output)
+                    conn.write_channel("g")
+                    continue
+                if prompt.search(output):
+                    break
+                continue
+            if now - start > self.command_timeout or now - last > self.command_quiet:
+                shown = " ".join(redact_text(output).split())[-300:]
+                raise RuntimeError(
+                    f"no prompt after '{command}' (no output for {self.command_quiet:.0f} s); "
+                    f"it showed: “{shown}”. The switch may be waiting for an answer UNDM "
+                    "does not give.")
+            time.sleep(self.poll_interval)
+        lines = _clean(output).split("\n")
         if lines and command in lines[0]:
             lines = lines[1:]  # the echo
         if lines and re.fullmatch(r"[^#]*#\s*", lines[-1]):

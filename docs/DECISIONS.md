@@ -760,3 +760,15 @@ Scope: every SSH driver passes `disabled_algorithms` for the SHA-1 key exchanges
 that way), except the LIG1014A driver (`legacy_ssh_algorithms = True`) and FortiOS, where
 Netmiko's FortinetSSH keeps choosing the key exchanges itself as on the bench 101F. Even
 for the LIG1014A the older methods are only used if the switch offers nothing newer.
+
+### D-076 LIG1014A: long output continues at the switch's own page prompt (2026-11-24)
+Bench with paramiko 3.5.1 (D-075): Test connection works; Retrieve information and Back up
+stopped at the switch's page prompt "-- more --, next page: Space, continue: g, quit: ^C"
+(Q-42 (2) answered: output is paged). The driver reads each command itself; at exactly that
+prompt it presses `g`, the switch's own option for the rest without further pauses, and
+removes the prompt and the characters a terminal uses to erase it (CR + spaces + CR,
+backspaces, ANSI sequences), so a backup keeps each line's indentation. Nothing else is
+answered; more than three pauses for one command, or silence without the prompt, ends the
+read with the switch's text, and a backup that does not end with `end` is never stored. No
+paging command (whose syntax is unconfirmed) is sent. The old reader fails the new test
+with the bench's message.

@@ -62,6 +62,8 @@ interface vlan 1
 end"""
 
 UNKNOWN = "% Invalid word detected"  # synthetic
+# The page prompt as the switch showed it (bench, 2026-11-24); how it is erased: synthetic.
+MORE = "-- more --, next page: Space, continue: g, quit: ^C"
 
 
 @dataclass
@@ -71,9 +73,12 @@ class FakeLig1014A:
     mac: str = "00-11-22-33-44-55"
     serial: str = ""
     version: str = "v00.01.00"
-    truncate_config: bool = False  # output stops before 'end' (e.g. a page break)
+    page_after: int | None = None  # pause long output after this many lines (bench)
+    stall_config: bool = False  # 'show running-config' stops part-way, no prompt
     commands: list[str] = field(default_factory=list)
     _out: str = ""
+    _rest: str | None = None
+    keys: list[str] = field(default_factory=list)
 
     def accept_connection(self, password: str | None = None) -> None:
         if password is not None and password != self.password:
@@ -87,26 +92,41 @@ class FakeLig1014A:
     def show(self, command: str) -> str:  # Netmiko send_command is not used by the driver
         raise AssertionError(f"send_command used for {command!r}")
 
+    def _emit(self, text: str) -> None:
+        """Command output, paused once at the page prompt if page_after is set."""
+        lines = text.split("\n")
+        if self.page_after is not None and len(lines) > self.page_after:
+            self._out += "\r\n".join(lines[:self.page_after]) + "\r\n" + MORE
+            self._rest = "\r\n".join(lines[self.page_after:]) + "\r\n"
+            return
+        self._out += "\r\n".join(lines) + "\r\n" + self.prompt_text()
+
     def write(self, data: str) -> None:
+        if self._rest is not None:  # at the page prompt: one key, no Enter
+            self.keys.append(data)
+            if data == "g":
+                self._out += "\r" + " " * len(MORE) + "\r" + self._rest + self.prompt_text()
+                self._rest = None
+            return
         text = data.strip()
         self._out += data.rstrip("\n") + "\r\n"
         if text:
             self.commands.append(text)
         if text == "show version":
-            self._out += SHOW_VERSION.format(
+            self._emit(SHOW_VERSION.format(
                 mac=self.mac, version=self.version,
                 serial=f" {self.serial}" if self.serial else "",
-                name=f" {self.hostname}" if self.hostname else "").replace("\n", "\r\n")
+                name=f" {self.hostname}" if self.hostname else ""))
         elif text == "show running-config":
             body = FACTORY_CONFIG.format(mac=self.mac)
-            if self.truncate_config:
-                body = body.rsplit("\n", 3)[0] + "\n -- more --, next page: Space, continue: g"
-                self._out += body.replace("\n", "\r\n")
-                return  # waits at the page break: no prompt
-            self._out += body.replace("\n", "\r\n") + "\r\n"
+            if self.stall_config:
+                self._out += body.rsplit("\n", 3)[0].replace("\n", "\r\n")
+                return  # stops part-way: no prompt
+            self._emit(body)
         elif text:
-            self._out += UNKNOWN + "\r\n"
-        self._out += self.prompt_text()
+            self._out += UNKNOWN + "\r\n" + self.prompt_text()
+        else:
+            self._out += self.prompt_text()
 
     def read(self) -> str:
         out, self._out = self._out, ""
