@@ -834,3 +834,13 @@ returns to its prompt and does not restart, the step fails with its text and bot
 slots: UNDM sends no `firmware swap` and no `reload`, because which image they would start
 is not known. Firmware page: platform "Black Box LIG1014A" (`blackbox_lig1014a`). Not yet
 run on hardware.
+
+### D-081 LIG1014A firmware upgrade passed on hardware; device text shown for firmware steps (2026-11-24)
+With v52 the bench unit was upgraded v00.01.00 → v00.01.01: the switch fetched the 5.5 MB
+image, wrote it and restarted by itself about 4½ minutes after the command (its SSH port
+stopped answering), answered again after 26 s (same MAC address) and runs v00.01.01. No
+`firmware swap` or `reload` was needed. The pre-upgrade backup comparison reported two lines
+of the team's file no longer shown afterwards: `ip http secure-server` and `ip http
+secure-redirect` (Q-44). Staging order for this switch: firmware first, then the team's
+file. The firmware orchestrator now also shows what a driver reports the device printed
+during a step (as configuration loads already did).

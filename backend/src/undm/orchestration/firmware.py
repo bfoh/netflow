@@ -288,6 +288,7 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
                         failed = (name, result)
                         break
                     self._emit(dep, "deploy", "ok", f"{name}: {result.message or 'done'}", t)
+                    self._emit_notes(dep, t, "deploy", result)  # what the device printed
                 if failed is None:
                     back = self._wait_until_available(dep, t)
                     if not back.ok:

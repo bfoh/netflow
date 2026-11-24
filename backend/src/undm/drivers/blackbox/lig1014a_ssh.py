@@ -80,7 +80,7 @@ class BlackBoxLig1014aSsh(SshCliDriver):
     running_config_command = "show running-config"
     skip_line_patterns = (r"^\s*!", r"^Building configuration")
     # 'show version' layout checked against the switch's own output (bench, 2026-11-24).
-    parser_validated_on = ("LIG1014A v00.01.00",)
+    parser_validated_on = ("LIG1014A v00.01.00", "LIG1014A v00.01.01")
     # Its SSH server offers no host key type that paramiko 5 still has ("Incompatible ssh
     # peer (no acceptable host key)", bench 2026-11-24); needs paramiko 3.5 (D-075).
     legacy_ssh_algorithms = True
@@ -119,7 +119,8 @@ class BlackBoxLig1014aSsh(SshCliDriver):
             "Firmware: 'firmware upgrade tftp://<pc>/<file>' (syntax from the switch's help); "
             "nothing is answered, the whole image must arrive and the switch must restart by "
             "itself; the active image's version is checked afterwards. UNDM never swaps images "
-            "or restarts the switch for an upgrade. Not yet run on hardware.",
+            "or restarts the switch for an upgrade. Passed once on hardware (v00.01.00 -> "
+            "v00.01.01, 2026-11-24): the switch restarted by itself after the write.",
         ),
     )
 
