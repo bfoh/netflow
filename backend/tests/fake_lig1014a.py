@@ -145,8 +145,12 @@ class FakeLig1014A:
             if self.copy_refusal:  # fetched, then refused: the startup config is unchanged
                 self._out += self.copy_refusal + "\r\n" + self.prompt_text()
                 return
-            self.startup = buf.getvalue().decode()
-            self._out += self.prompt_text()  # success wording unknown: nothing (synthetic)
+            data = buf.getvalue()
+            self.startup = data.decode()
+            self._out += (f"% Loading /{m.group(2)} from TFTP server {m.group(1)}\r\n"
+                          f"% Saving {len(data)} bytes to flash:startup-config\r\n"
+                          "Import Done! Configuration will become active after reboot!\r\n"
+                          + self.prompt_text())  # bench wording
         elif text == "reload cold":
             if self.reload_ignored:
                 self._out += self.prompt_text()

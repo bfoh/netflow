@@ -795,3 +795,15 @@ the session closes; error replies start with `%` ("% Invalid word detected at '^
 Saving is not needed: the file was loaded as the startup configuration. Merge mode is not
 offered. Not yet run on hardware; whether the file's `access management` still lets SSH in
 afterwards (Q-27) decides whether step 4 can log in.
+
+### D-078 LIG1014A load: "Import Done!" is the evidence; its '%' progress lines are not errors (2026-11-24)
+First load on hardware: the switch fetched the team's file and answered "% Loading /<file>
+from TFTP server <pc>", "% Saving 5997 bytes to flash:startup-config", "Import Done!
+Configuration will become active after reboot!". UNDM (D-077) took the first `%` line for a
+refusal and stopped before `reload cold`, so the file was in the startup configuration but
+the switch still ran its factory configuration. Now the switch's own confirmation is the
+evidence: "Import Done!" must appear; the "% Loading … from TFTP server" and "% Saving <n>
+bytes to …" lines are progress; any other `%` line is a refusal. The saved byte count is
+compared with what UNDM sent (reported, not a failure, as the switch may store the file in
+its own form), and the switch's lines are kept as events. The fake switch prints the
+bench wording; the old code fails that test with the bench's message.

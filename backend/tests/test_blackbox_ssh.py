@@ -195,6 +195,9 @@ def test_api_team_file_is_loaded_into_the_startup_config_and_the_switch_restarts
     assert sw.fetched and sw.fetched[0].startswith("undm-") and sw.restarts == 1
     assert "fetches it from this PC into its startup configuration and restarts" in events
     assert "into its startup configuration and is restarting with it" in events
+    # Bench 2026-11-24: the switch's '%' progress lines are not refusals.
+    assert "switch: Import Done! Configuration will become active after reboot!" in events
+    assert "switch: % Saving" in events and "UNDM sent" not in events
     assert "same serial number" in events  # the MAC address, checked after the restart
     assert "restarted with the file: name lab-bbsw01" in events
     assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == refs["approved"]

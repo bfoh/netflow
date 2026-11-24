@@ -265,10 +265,18 @@ class BlackBoxLig1014aSsh(SshCliDriver):
                     f"({talk.detail or talk.ended}). It was not restarted; check it.",
                 diagnostics)
         complaint = _complaint(reply)
-        if complaint:
+        if complaint or not _IMPORTED.search(reply):
+            why = (f"refused it: \"{complaint}\"" if complaint
+                   else "did not confirm it (no \"Import Done!\")")
             return OperationResult.failed(
-                op, f"The switch fetched the file but refused it: \"{complaint}\". It was not "
-                    "restarted; its startup configuration may be unchanged.", diagnostics)
+                op, f"The switch fetched the file but {why}. It was not restarted; its "
+                    "startup configuration may be unchanged.", diagnostics)
+        saved = re.search(r"Saving (\d+) bytes to flash:startup-config", reply)
+        notes = [f"switch: {ln.strip()}" for ln in reply.splitlines()
+                 if ln.strip().startswith("%") or _IMPORTED.search(ln)]
+        if saved and int(saved.group(1)) != transfer.size:
+            notes.append(f"the switch saved {saved.group(1)} bytes; UNDM sent "
+                         f"{transfer.size} (it may store the file in its own form)")
         # 'reload cold' asks nothing: "% Cold reload in progress, please stand by." and the
         # session closes (bench, factory unit, 2026-11-24).
         # The prompt can still appear after that line (bench): it does not end the step.
@@ -283,7 +291,7 @@ class BlackBoxLig1014aSsh(SshCliDriver):
                 {"device_output": " ".join(redact_text(_clean(talk2.output)).split())[-600:]})
         self.disconnect()
         return OperationResult.success(
-            op, {"restarting": True},
+            op, {"restarting": True, "notes": notes},
             f"the switch fetched the file ({transfer.bytes_sent} bytes) into its startup "
             "configuration and is restarting with it ('reload cold')")
 
@@ -334,12 +342,20 @@ def _answer(output: str, command: str | None = None) -> str:
     return "\n".join(lines).strip("\n")
 
 
+# A successful load (bench, 2026-11-24): "% Loading /<file> from TFTP server <pc>",
+# "% Saving <n> bytes to flash:startup-config", "Import Done! Configuration will become
+# active after reboot!". The '%' lines there are progress, not errors.
+_IMPORTED = re.compile(r"Import Done!")
+_PROGRESS = re.compile(r"^% (?:Loading \S+ from TFTP server|Saving \d+ bytes to )")
+
+
 def _complaint(reply: str) -> str:
-    """The switch's error lines start with '%' (bench: "% Invalid word detected at '^'
+    """A '%' line that is not progress (bench errors: "% Invalid word detected at '^'
     marker.", "% Incomplete command.")."""
     for line in reply.splitlines():
-        if line.strip().startswith("%"):
-            return line.strip()[:200]
+        text = line.strip()
+        if text.startswith("%") and not _PROGRESS.match(text):
+            return text[:200]
     return ""
 
 
