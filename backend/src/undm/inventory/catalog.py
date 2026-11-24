@@ -55,8 +55,9 @@ CATALOG: tuple[DeviceModel, ...] = (
                 SupportLevel.LAB_READ_ONLY,
                 notes="Read-only checks passed 2026-11-24 on a factory-default LIG1014A "
                       "v00.01.00: connect, facts (MAC address as identity), backup. "
-                      "Configuration files are recognised offline; loading them is not built "
-                      "yet."),
+                      "Configuration files are recognised offline; loading a complete file "
+                      "(TFTP into the startup configuration, then 'reload cold') is built, not "
+                      "yet run on hardware."),
     DeviceModel("blackbox-le2700a", "Black Box", "LE2700 series", "LE2700A",
                 DeviceCategory.SWITCH, "Black Box managed switch", ("mock.blackbox.switch",),
                 SupportLevel.SIMULATED_ONLY,

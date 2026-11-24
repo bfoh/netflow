@@ -772,3 +772,26 @@ answered; more than three pauses for one command, or silence without the prompt,
 read with the switch's text, and a backup that does not end with `end` is never stored. No
 paging command (whose syntax is unconfirmed) is sent. The old reader fails the new test
 with the bench's message.
+
+### D-077 LIG1014A: the team's file is loaded by TFTP into the startup configuration, then `reload cold` (2026-11-24)
+Bench, factory unit (Q-42 (1) and (3) answered): `copy tftp://<pc>/<file> ?` lists
+`<url_file>`, `running-config` and `startup-config` as destinations; `reload cold` asks
+nothing, prints "% Cold reload in progress, please stand by." (the prompt still follows) and
+the session closes; error replies start with `%` ("% Invalid word detected at '^' marker.",
+"% Incomplete command."). Procedure (replace mode, complete file only):
+1. the file is offered on UNDM's TFTP server to this switch only, under a name the switch
+   accepts (`undm-<hash>.txt`), and the switch runs `copy tftp://<pc>/<name>
+   startup-config`; no prompt counts while the fetch is under way, and the file is withdrawn
+   as soon as the exchange ends (D-063);
+2. the whole file must have been fetched, and a `%` line in the answer stops the step: the
+   switch is not restarted;
+3. `reload cold`: the reload line (not the prompt after it) or the closed session is the
+   restart; a switch that does not restart is reported (the file then takes effect at its
+   next restart);
+4. the usual wait, login after loading (the approved password the file sets), identity by
+   MAC address, then verification: the name must be the file's hostname; how many of the
+   file's lines `show running-config` shows is reported, with up to ten missing lines as
+   warnings (the switch may show some lines differently: to be learnt from the first run).
+Saving is not needed: the file was loaded as the startup configuration. Merge mode is not
+offered. Not yet run on hardware; whether the file's `access management` still lets SSH in
+afterwards (Q-27) decides whether step 4 can log in.

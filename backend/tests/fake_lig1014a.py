@@ -7,7 +7,11 @@ placeholders (MAC address, times). The refusal text for unknown commands is SYNT
 
 from __future__ import annotations
 
+import io
+import re
 from dataclasses import dataclass, field
+
+import tftpy
 
 SHOW_VERSION = """
 MEMORY           : Total=88302 KBytes, Free=71456 KBytes, Max=70517 KBytes
@@ -64,6 +68,7 @@ end"""
 UNKNOWN = "% Invalid word detected"  # synthetic
 # The page prompt as the switch showed it (bench, 2026-11-24); how it is erased: synthetic.
 MORE = "-- more --, next page: Space, continue: g, quit: ^C"
+RELOAD = "% Cold reload in progress, please stand by."  # bench wording
 
 
 @dataclass
@@ -74,6 +79,17 @@ class FakeLig1014A:
     serial: str = ""
     version: str = "v00.01.00"
     page_after: int | None = None  # pause long output after this many lines (bench)
+    tftp_port: object = 69  # callable returning UNDM's TFTP port, for 'copy tftp://'
+    password_after_load: str | None = None  # admin password the loaded file sets
+    copy_refusal: str = ""  # e.g. a synthetic '% ...' line: the file is refused
+    reload_ignored: bool = False
+    down_for_connects: int = 1
+    startup: str | None = None  # file loaded into the startup configuration
+    running_file: str | None = None  # file the switch runs after the restart
+    restarts: int = 0
+    fetched: list[str] = field(default_factory=list)
+    _closing: bool = False
+    _down: int = 0
     stall_config: bool = False  # 'show running-config' stops part-way, no prompt
     commands: list[str] = field(default_factory=list)
     _out: str = ""
@@ -81,6 +97,10 @@ class FakeLig1014A:
     keys: list[str] = field(default_factory=list)
 
     def accept_connection(self, password: str | None = None) -> None:
+        if self._down > 0:
+            self._down -= 1
+            raise OSError("connection timed out (switch restarting)")
+        self._closing = False
         if password is not None and password != self.password:
             from netmiko.exceptions import NetmikoAuthenticationException
             raise NetmikoAuthenticationException("Authentication failed")
@@ -117,6 +137,24 @@ class FakeLig1014A:
                 mac=self.mac, version=self.version,
                 serial=f" {self.serial}" if self.serial else "",
                 name=f" {self.hostname}" if self.hostname else ""))
+        elif m := re.fullmatch(r"copy tftp://([^/\s]+)/(\S+) startup-config", text):
+            port = self.tftp_port() if callable(self.tftp_port) else self.tftp_port
+            buf = io.BytesIO()
+            tftpy.TftpClient(m.group(1), port, {}).download(m.group(2), buf, timeout=2)
+            self.fetched.append(m.group(2))
+            if self.copy_refusal:  # fetched, then refused: the startup config is unchanged
+                self._out += self.copy_refusal + "\r\n" + self.prompt_text()
+                return
+            self.startup = buf.getvalue().decode()
+            self._out += self.prompt_text()  # success wording unknown: nothing (synthetic)
+        elif text == "reload cold":
+            if self.reload_ignored:
+                self._out += self.prompt_text()
+                return
+            self._out += RELOAD + "\r\n" + self.prompt_text()  # the prompt still appears
+            self._restart()
+        elif text == "show running-config" and self.running_file is not None:
+            self._emit("Building configuration...\n" + self.running_file.strip("\n"))
         elif text == "show running-config":
             body = FACTORY_CONFIG.format(mac=self.mac)
             if self.stall_config:
@@ -128,6 +166,19 @@ class FakeLig1014A:
         else:
             self._out += self.prompt_text()
 
+    def _restart(self) -> None:
+        self.restarts += 1
+        self._down = self.down_for_connects
+        self._closing = True
+        if self.startup is not None:
+            self.running_file = self.startup
+            m = re.search(r"^hostname (\S+)", self.startup, re.M)
+            self.hostname = m.group(1) if m else ""
+            if self.password_after_load is not None:
+                self.password = self.password_after_load
+
     def read(self) -> str:
         out, self._out = self._out, ""
+        if self._closing and not out:
+            raise OSError("Software caused connection abort")
         return out

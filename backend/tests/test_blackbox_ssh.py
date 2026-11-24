@@ -91,16 +91,6 @@ def test_an_incomplete_read_is_never_stored(switch):
     assert r.status is ResultStatus.FAILED and "no prompt" in r.message
 
 
-def test_loading_is_not_offered_yet(switch):
-    d = driver()
-    d.connect()
-    assert d.apply_configuration("hostname x\nend\n", ApplyMode.REPLACE).status \
-        is ResultStatus.UNSUPPORTED
-    assert d.missing_capabilities(  # plans that load a file are refused at validation
-        __import__("undm.domain.operations", fromlist=["DeviceOperation"])
-        .DeviceOperation.APPLY_CONFIGURATION)
-
-
 def test_registered_and_listed_for_the_lig1014a():
     assert "ssh.blackbox.lig1014a" in default_registry()
     from undm.inventory.catalog import CATALOG
@@ -141,4 +131,95 @@ def test_older_ssh_methods_only_for_the_lig1014a(monkeypatch):
     assert seen["FortiOSSsh"] is None  # Netmiko's own FortiGate choice is kept
     assert "ssh-rsa" in seen["ArubaOSSwitchSsh"]["keys"]
     assert "diffie-hellman-group14-sha1" in seen["ArubaOSSwitchSsh"]["kex"]
+
+
+# -- loading the team's file (D-077) --------------------------------------------------------
+APPROVED = "Example-Only-Approved-9"
+
+
+@pytest.fixture
+def api(monkeypatch, tmp_path):
+    import keyring
+    from api_helpers import make_client
+    from memory_keyring import MemoryKeyring
+
+    previous = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    monkeypatch.setattr(SshCliDriver, "poll_interval", 0.005)
+    monkeypatch.setattr(BlackBoxLig1014aSsh, "command_quiet", 0.5)
+    client, _ = make_client(data_dir=str(tmp_path), tftp_host="127.0.0.1", tftp_port=0,
+                            firmware_reboot_wait_seconds=0, firmware_reboot_wait_attempts=4,
+                            enable_real_device_writes=True)
+    with client:
+        hub = client.app.state.transfer_hub
+        sw = FakeLig1014A(tftp_port=lambda: hub.port, password_after_load=APPROVED,
+                          page_after=20)
+        monkeypatch.setattr(SshCliDriver, "connection_factory",
+                            staticmethod(factory_for(Scenario(device=sw))))
+        pid = client.post("/api/projects", json={"name": "BB"}).json()["id"]
+        refs = {}
+        for name, pw in (("factory", ""), ("approved", APPROVED)):
+            refs[name] = client.post(f"/api/projects/{pid}/credential-refs",
+                                     json={"name": name}).json()["id"]
+            client.put(f"/api/credential-refs/{refs[name]}/secret",
+                       json={"username": "admin", "password": pw})
+        did = client.post(f"/api/projects/{pid}/devices", json={
+            "name": "lab-bb", "manufacturer": "Black Box", "category": "switch",
+            "model": "LIG1014A", "os_family": "Black Box managed switch",
+            "driver_id": "ssh.blackbox.lig1014a", "environment": "lab",
+            "management_address": "127.0.0.1", "credential_ref_id": refs["factory"]}).json()
+        assert "id" in did, did
+        yield client, pid, did["id"], sw, refs, hub
+    keyring.set_keyring(previous)
+
+
+def _load(client, pid, did, refs, after=True):
+    from test_blackbox_files import SAMPLE
+    v = client.post(f"/api/devices/{did}/configs/import",
+                    json={"filename": "lab-bbsw.txt", "text": SAMPLE}).json()
+    assert v["inspection"]["apply_mode"] == "replace", v
+    body = {"device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]}}
+    if after:
+        body["credentials_after"] = {did: refs["approved"]}
+    dep = client.post(f"/api/projects/{pid}/deployments", json=body).json()
+    assert dep["state"] == "awaiting_approval", dep
+    client.post(f"/api/deployments/{dep['id']}/approve")
+    out = client.post(f"/api/deployments/{dep['id']}/execute").json()
+    return out, " | ".join(e["message"] for e in out["events"])
+
+
+def test_api_team_file_is_loaded_into_the_startup_config_and_the_switch_restarts(api):
+    client, pid, did, sw, refs, hub = api
+    out, events = _load(client, pid, did, refs)
+    assert out["state"] == "succeeded", events
+    assert sw.fetched and sw.fetched[0].startswith("undm-") and sw.restarts == 1
+    assert "fetches it from this PC into its startup configuration and restarts" in events
+    assert "into its startup configuration and is restarting with it" in events
+    assert "same serial number" in events  # the MAC address, checked after the restart
+    assert "restarted with the file: name lab-bbsw01" in events
+    assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == refs["approved"]
+    assert not hub.running and APPROVED not in repr(out)
+
+
+def test_a_refused_file_does_not_restart_the_switch(api):
+    client, pid, did, sw, refs, hub = api
+    sw.copy_refusal = "% Invalid file content"  # synthetic
+    out, events = _load(client, pid, did, refs)
+    assert out["state"] != "succeeded" and sw.restarts == 0
+    assert "refused it" in events and "Invalid file content" in events
+
+
+def test_a_switch_that_does_not_restart_is_reported(api):
+    client, pid, did, sw, refs, hub = api
+    sw.reload_ignored = True
+    out, events = _load(client, pid, did, refs)
+    assert out["state"] != "succeeded" and sw.restarts == 0
+    assert "takes effect at its next restart" in events
+
+
+def test_merge_is_not_offered(switch):
+    d = driver()
+    d.connect()
+    assert d.apply_configuration("hostname x\nend\n", ApplyMode.MERGE).status \
+        is ResultStatus.UNSUPPORTED
 

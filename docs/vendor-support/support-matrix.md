@@ -30,7 +30,7 @@ Checklist: `aruba-2930f-acceptance.md`.
 |---|---|---|
 | ArubaOS-Switch (2930F) | Serial console: out-of-band management VLAN, one untagged port, address, `write memory` | Simulated-tested; **hardware validation pending** (`aruba-2930f-console-bootstrap.md`) |
 | FortiOS (FortiGate 101F) | Forced first-login password change | By hand in the browser (Q-24). Firmware, base restore, site script and revisions: built, experimental (`fortigate-101f-bench.md`) |
-| Black Box LIG1014A / LE2700A | Default address | No bootstrap needed for the LIG1014A: its factory address is the one the team's file keeps, and SSH works with the factory login. LIG1014A SSH driver (experimental, read-only: connection, facts, backup; D-074); loading the file still to confirm (Q-42, Q-27). LE2700A: file recognition and a simulated driver only |
+| Black Box LIG1014A / LE2700A | Default address | No bootstrap needed for the LIG1014A: its factory address is the one the team's file keeps, and SSH works with the factory login. LIG1014A SSH driver (experimental): connection, facts and backup checked on hardware (D-074 to D-076); loading the team's file by TFTP into the startup configuration + `reload cold` built (D-077), not yet run on hardware; SSH after loading to confirm (Q-27). LE2700A: file recognition and a simulated driver only |
 
 ## Templates (generation)
 | Template | Intent features rendered | Verification |

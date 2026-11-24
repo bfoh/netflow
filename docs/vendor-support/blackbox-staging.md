@@ -74,6 +74,20 @@ the load: no re-cabling, and the device address in UNDM does not change.
 - LE2700A XML: files that declare a document type or entities are refused (no XML-based
   attack can reach the backend through an import).
 
+## Loading the team's file with UNDM (D-077, not yet run on hardware)
+1. PC on port 1/3 with a fixed address in 192.0.2.0/24 (not .1); Windows firewall lets
+   UDP 69 in (as for the 2930F and the FortiGate).
+2. Device: model LIG1014A, driver "Black Box LIG1014A over SSH", its own login = the factory
+   one (`admin`, empty password); a second credential with the approved password.
+3. Configurations tab: import the team's file (it is recognised: complete file → replace).
+4. Deployments → new plan → the device → that file (Replace) → **Login after loading**: the
+   approved credential → Validate → Approve → Execute.
+5. Expected events: the restart notice; "the switch fetched the file (… bytes) into its
+   startup configuration and is restarting with it ('reload cold')"; the wait; "device
+   reachable again (same serial number)" (the MAC address); "restarted with the file: name
+   <hostname>; N of M lines …". If the login after the restart fails, SSH is probably not
+   allowed by the file's `access management` (Q-27): UNDM says so; check it by hand.
+
 ## Bench log
 | Date | Unit | Step | Result | Notes |
 |---|---|---|---|---|
@@ -85,3 +99,4 @@ the load: no re-cabling, and the device address in UNDM does not change.
 | 2026-11-24 | same unit | Retrieve information, Back up (v47) | **failed: paged output** | Both stopped at "-- more --, next page: Space, continue: g, quit: ^C". Fixed: UNDM presses `g` at that prompt (D-076). |
 | 2026-11-24 | same unit | Retrieve information (v48) | **passed** | Vendor Black Box, model LIG1014A, v00.01.00, 14 ports, active and alternate images; no hostname (factory); identity = base MAC address (no serial number). The page prompt was answered with `g` (D-076). |
 | 2026-11-24 | same unit | Back up (v48) | **passed** | Factory configuration stored (the page prompt answered with `g`). Read-only checks complete: the LIG1014A is listed as lab-checked for reading (connect, facts, backup). |
+| 2026-11-24 | factory unit | `copy tftp://<pc>/test.txt ?`, `reload cold` | **captured** | Destinations `<url_file>`, `running-config`, `startup-config`; `reload cold` asks nothing ("% Cold reload in progress, please stand by.", prompt, session closed); errors start with `%`. Load procedure built (D-077). |
