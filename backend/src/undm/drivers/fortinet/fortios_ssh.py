@@ -127,6 +127,9 @@ class FortiOSSsh(SshCliDriver):
     _CONFIRM_PASSWORD: ClassVar[re.Pattern[str]] = re.compile(r"(?i)Confirm Password:\s*$")
     login_dialogue_quiet: ClassVar[float] = 5.0     # no text at all: an ordinary login
     login_dialogue_timeout: ClassVar[float] = 30.0  # silence after text: unknown question
+    # FortiOS's answer to 'edit' of an entry that does not exist yet (bench, site script on
+    # a 101F v7.6.5, 2026-11-24): normal, counted instead of listed as a warning.
+    _NEW_ENTRY: ClassVar[re.Pattern[str]] = re.compile(r"^new entry '[^'\n]*' added$")
     statement_timeout: ClassVar[float] = 60.0    # per script statement
     script_poll_interval: ClassVar[float] = 0.02
 
@@ -518,6 +521,7 @@ class FortiOSSsh(SshCliDriver):
         total = len(statements)
         warnings: list[str] = []
         seen_config = False
+        created = 0
         for idx, (number, statement) in enumerate(statements):
             talk = self._dialogue(statement, [], timeout=self.statement_timeout,
                                   idle_timeout=self.statement_timeout, clear=idx == 0,
@@ -541,6 +545,9 @@ class FortiOSSsh(SshCliDriver):
                 warnings.append(f"line {number} 'end': {reply[:200]} (expected, before the "
                                 "first block)")
                 continue
+            if statement.split()[0] == "edit" and self._NEW_ENTRY.match(reply):
+                created += 1
+                continue
             if self._ERROR_REPLY.search(reply):
                 return OperationResult.failed(
                     op, f"The FortiGate rejected line {number} ('{shown}'): {reply[:300]}. "
@@ -549,8 +556,9 @@ class FortiOSSsh(SshCliDriver):
         with contextlib.suppress(Exception):  # the hostname may have changed
             self._conn.set_base_prompt()
         return OperationResult.success(
-            op, {"warnings": warnings, "statements": total},
+            op, {"warnings": warnings, "statements": total, "new_entries": created},
             f"{total} statements sent, every one accepted"
+            + (f"; {created} new entries created ('new entry … added')" if created else "")
             + (f"; {len(warnings)} message(s) listed as warnings" if warnings else ""))
 
     def save_configuration(self) -> OperationResult:

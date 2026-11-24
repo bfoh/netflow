@@ -226,6 +226,19 @@ def test_script_runs_statement_by_statement_through_a_hostname_change(rig):
     assert v.ok and "hostname lab-fw-site" in v.message and "appear in 'show'" in v.message
 
 
+def test_new_entry_notices_are_counted_not_listed(rig):
+    """Bench, site script on a 101F v7.6.5 (2026-11-24): 191 of 192 warnings were FortiOS's
+    normal "new entry '<name>' added" after 'edit'; they hid the one that mattered."""
+    multi_vdom(rig)
+    rig.fg.info_replies['edit "port5"'] = "new entry 'port5' added"
+    rig.fg.info_replies['edit "example-tunnel"'] = "new entry 'example-tunnel' added"
+    r = rig.driver.apply_configuration(SCRIPT, ApplyMode.MERGE)
+    assert r.ok and r.data["new_entries"] == 2, r.message
+    assert "2 new entries created" in r.message
+    assert not any("new entry" in w for w in r.data["warnings"])
+    assert any("'end'" in w and "expected" in w for w in r.data["warnings"])
+
+
 def test_script_stops_at_the_first_rejected_line(rig):
     multi_vdom(rig)
     rig.fg.bad_statements.add('set ip 203.0.113.1 255.255.255.0')

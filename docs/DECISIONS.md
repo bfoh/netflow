@@ -641,3 +641,11 @@ Netmiko here (prompt must still be readable), and three tests fail with the old 
 the bench. Also: if a password change succeeded but the prompt is still missed, the driver
 switches to the new login anyway (`password_changed` on the failure), and every further
 attempt in the wait shows an event ("still waiting for a working login (attempt N of M)").
+
+### D-068 FortiOS "new entry '…' added" is counted, not listed as a warning (2026-11-24)
+Bench, first site script on a 101F v7.6.5 (1784 statements, every one accepted): 192
+messages were listed as warnings, 191 of them FortiOS's normal answer to `edit` of an
+entry that does not exist yet ("new entry '<name>' added"). They hid the one expected
+warning (the bare `end` before the first block). A reply that is exactly that line, after
+an `edit`, is now counted ("N new entries created") instead of listed. Anything else is
+listed as before; error-looking replies still stop the script.
