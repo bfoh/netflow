@@ -63,7 +63,7 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-24)
 | Suite | Result |
 |---|---|
-| Backend pytest | 421 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 423 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (74 files) |

@@ -105,3 +105,23 @@ def test_a_failed_ssh_handshake_is_not_reported_as_unreachable(monkeypatch):
     assert r.status is ResultStatus.FAILED and r.diagnostics.get("ssh_handshake") is True
     assert "SSH handshake failed" in r.message and "no acceptable kex algorithm" in r.message
 
+
+def test_older_ssh_methods_only_for_the_lig1014a(monkeypatch):
+    """Bench 2026-11-24: "Incompatible ssh peer (no acceptable host key)" with paramiko 5.
+    The LIG1014A may use the older methods; other drivers keep them switched off."""
+    from fake_netmiko import Scenario as Sc
+    from fake_netmiko import factory_for as ff
+
+    from undm.drivers.fortinet.fortios_ssh import FortiOSSsh
+    from undm.drivers.ssh.platforms import ArubaOSSwitchSsh
+    seen = {}
+    for cls in (BlackBoxLig1014aSsh, ArubaOSSwitchSsh, FortiOSSsh):
+        sc = Sc()
+        monkeypatch.setattr(SshCliDriver, "connection_factory", staticmethod(ff(sc)))
+        cls(DeviceTarget("d", "192.0.2.1", None), Credentials("admin", "x")).connect()
+        seen[cls.__name__] = sc.calls[0][1].get("disabled_algorithms")
+    assert seen["BlackBoxLig1014aSsh"] is None
+    assert seen["FortiOSSsh"] is None  # Netmiko's own FortiGate choice is kept
+    assert "ssh-rsa" in seen["ArubaOSSwitchSsh"]["keys"]
+    assert "diffie-hellman-group14-sha1" in seen["ArubaOSSwitchSsh"]["kex"]
+

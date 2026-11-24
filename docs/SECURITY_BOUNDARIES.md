@@ -67,6 +67,9 @@ driver has passed acceptance tests for the exact model and firmware.
   planned load (D-066); and the approved first-login plan of a new unit (D-073). It always
   sets the device's own stored (approved) login, and only answers questions recorded from
   the bench. Audited as `device.password_set`; values never logged or shown.
+- Older SSH methods (SHA-1 key exchanges, `ssh-rsa`/`ssh-dss` host keys) are switched off
+  for every device except the Black Box LIG1014A, whose SSH server needs them, and are used
+  there only if it offers nothing newer (D-075).
 - UNDM approves a firmware image only when its checksum matches the vendor's published
   SHA-256 or SHA-512, or when the approver writes a reason for approving it without one
   (D-062). Such an image stays marked "not verified" in the repository, the planner and

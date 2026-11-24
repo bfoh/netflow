@@ -746,3 +746,17 @@ Driver `ssh.blackbox.lig1014a` (experimental), capabilities SSH and backup only:
 - Loading the team's file is not offered (plans are refused at validation) until the bench
   confirms: the destination of `copy` with a TFTP source, what `reload cold` asks, and
   whether SSH is allowed by the file's `access management` (Q-42, Q-27).
+
+### D-075 Older SSH methods for the LIG1014A only; paramiko 3.5 (2026-11-24)
+Bench: UNDM's Test connection to the LIG1014A failed with "Incompatible ssh peer (no
+acceptable host key)" while PuTTY logged in from the same PC: the key exchange was agreed,
+but the switch offers no host key type that paramiko 5.1 still has (5.x removed the SHA-1
+key exchanges and the `ssh-rsa` and `ssh-dss` host keys; 4.0 keeps `ssh-rsa` but not DSA;
+3.5.1 keeps both). The probe could not read the switch's offer (it closed new connections
+then, probably while its few SSH sessions were taken), so the version that covers both
+possibilities is used: `paramiko>=3.5.1,<4` (Netmiko 4.8's own minimum is 3.5.1).
+Scope: every SSH driver passes `disabled_algorithms` for the SHA-1 key exchanges and the
+`ssh-rsa`/`ssh-dss` host keys, which is what paramiko 5 gave them (the 2930F was validated
+that way), except the LIG1014A driver (`legacy_ssh_algorithms = True`) and FortiOS, where
+Netmiko's FortinetSSH keeps choosing the key exchanges itself as on the bench 101F. Even
+for the LIG1014A the older methods are only used if the switch offers nothing newer.

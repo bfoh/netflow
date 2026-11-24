@@ -15,6 +15,9 @@ dependencies = [
   "uvicorn>=0.30",
   "keyring>=25",
   "netmiko>=4.8,<5",
+  # 3.5 still has the SHA-1/DSA SSH methods older devices need (LIG1014A, D-075); drivers
+  # switch them off unless their devices need them.
+  "paramiko>=3.5.1,<4",
   "pyserial>=3.5",
   "python-multipart>=0.0.9",
 ]

@@ -273,6 +273,19 @@ class SshCliDriver(DeviceDriver):
         """Extra Netmiko arguments for a platform (never logged)."""
         return {}
 
+    # Older SSH methods (SHA-1 key exchanges, SHA-1 RSA and DSA host keys) are offered by
+    # some older device firmware only (bench: LIG1014A, D-075). They stay switched off
+    # unless a driver's devices need them; a device offering anything newer gets that.
+    legacy_ssh_algorithms: ClassVar[bool] = False
+
+    def _algorithm_kwargs(self) -> dict[str, object]:
+        if self.legacy_ssh_algorithms:
+            return {}
+        return {"disabled_algorithms": {
+            "kex": ["diffie-hellman-group-exchange-sha1", "diffie-hellman-group14-sha1",
+                    "diffie-hellman-group1-sha1"],
+            "keys": ["ssh-rsa", "ssh-dss"]}}
+
     def parse_facts(self, outputs: dict[str, str], prompt: str) -> DeviceFacts:
         raise NotImplementedError
 
@@ -311,6 +324,7 @@ class SshCliDriver(DeviceDriver):
                 auth_timeout=self.connect_timeout,
                 banner_timeout=self.connect_timeout,
                 fast_cli=False,
+                **self._algorithm_kwargs(),
                 **self._connect_kwargs(),
                 **({"auto_connect": False} if change_to is not None else {}),
             )

@@ -60,6 +60,9 @@ class BlackBoxLig1014aSsh(SshCliDriver):
     skip_line_patterns = (r"^\s*!", r"^Building configuration")
     # 'show version' layout checked against the switch's own output (bench, 2026-11-24).
     parser_validated_on = ("LIG1014A v00.01.00",)
+    # Its SSH server offers no host key type that paramiko 5 still has ("Incompatible ssh
+    # peer (no acceptable host key)", bench 2026-11-24); needs paramiko 3.5 (D-075).
+    legacy_ssh_algorithms = True
     command_timeout: ClassVar[float] = 60.0
     command_quiet: ClassVar[float] = 20.0
     info = DriverInfo(

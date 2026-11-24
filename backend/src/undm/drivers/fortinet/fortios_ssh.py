@@ -166,6 +166,11 @@ class FortiOSSsh(SshCliDriver):
         # FortiOS displays secrets encrypted, so they can never be compared as written.
         return [ln for ln in super().expected_lines(config) if not is_secret_setting(ln)]
 
+    def _algorithm_kwargs(self) -> dict[str, object]:
+        # Netmiko's FortinetSSH chooses the key exchanges itself (unless it is given some);
+        # that choice works on the bench 101F, so it is left as it is.
+        return {}
+
     def _prompt_pattern(self) -> str:
         # Any prompt on a new line: the hostname and the "(context)" change while a
         # script runs, so the prompt seen at login cannot be relied on. The line must hold
