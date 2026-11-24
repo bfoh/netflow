@@ -15,6 +15,8 @@ class ImageRules:
     approved: bool
     integrity_verified: bool
     retired: bool
+    # Set when the image was approved without a matching vendor checksum (D-062).
+    unverified_reason: str | None = None
 
 
 def compatibility_issues(
@@ -35,7 +37,12 @@ def compatibility_issues(
         err("image_retired", "image is retired")
     elif not rules.approved:
         err("image_not_approved", "image has not been approved for use")
-    if not rules.integrity_verified:
+    if not rules.integrity_verified and rules.unverified_reason:
+        issues.append(ValidationIssue(
+            Severity.WARNING, "integrity_not_verified",
+            "image approved WITHOUT the vendor's checksum; reason given: "
+            f"{rules.unverified_reason}"))
+    elif not rules.integrity_verified:
         err("integrity_not_verified",
             "image checksum has not been verified against the vendor's published "
             "SHA-256 or SHA-512")

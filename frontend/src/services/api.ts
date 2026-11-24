@@ -117,7 +117,8 @@ export const api = {
     request<Deployment>('POST', `/deployments/${id}/approve`, window),
   firmwareImages: () => request<FirmwareImage[]>('GET', '/firmware/images'),
   uploadFirmware: (form: FormData) => request<FirmwareImage>('POST', '/firmware/images', form),
-  approveFirmware: (id: string) => request<FirmwareImage>('POST', `/firmware/images/${id}/approve`),
+  approveFirmware: (id: string, unverifiedReason?: string) => request<FirmwareImage>('POST', `/firmware/images/${id}/approve`,
+    unverifiedReason ? { unverified_reason: unverifiedReason } : undefined),
   /** Verify an uploaded image against the vendor's SHA-256 or SHA-512. */
   addFirmwareChecksum: (id: string, checksum: string) =>
     request<FirmwareImage>('POST', `/firmware/images/${id}/checksum`, { checksum }),

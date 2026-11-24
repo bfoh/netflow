@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from undm.api.deps import ActorDep, RegistryDep, SessionDep, SettingsDep
 from undm.api.schemas import (
+    ApproveImageIn,
     CompatibilityIn,
     CompatibilityOut,
     FirmwareImageOut,
@@ -12,6 +13,7 @@ from undm.api.schemas import (
     VendorChecksumIn,
 )
 from undm.db.models import Device, FirmwareImage
+from undm.domain.validation import Severity
 from undm.services.errors import NotFoundError
 from undm.services.firmware import FirmwareRepository, device_compatibility
 
@@ -62,8 +64,9 @@ def add_checksum(image_id: str, body: VendorChecksumIn, session: SessionDep,
 
 @router.post("/images/{image_id}/approve", response_model=FirmwareImageOut)
 def approve_image(image_id: str, session: SessionDep, settings: SettingsDep,
-                  actor: ActorDep) -> FirmwareImage:
-    return _repo(session, settings).approve(image_id, actor)
+                  actor: ActorDep, body: ApproveImageIn | None = None) -> FirmwareImage:
+    return _repo(session, settings).approve(
+        image_id, actor, unverified_reason=body.unverified_reason if body else None)
 
 
 @router.post("/images/{image_id}/retire", response_model=FirmwareImageOut)
@@ -90,7 +93,8 @@ def check_compatibility(image_id: str, body: CompatibilityIn, session: SessionDe
             raise NotFoundError(f"Device {did} not found")
         issues = device_compatibility(img, device, registry)
         out.append(CompatibilityOut(
-            device_id=did, device_name=device.name, compatible=not issues,
+            device_id=did, device_name=device.name,
+            compatible=not any(i.severity is Severity.ERROR for i in issues),
             issues=[IssueOut(severity=i.severity.value, code=i.code, message=i.message,
                              path=i.path) for i in issues]))
     return out

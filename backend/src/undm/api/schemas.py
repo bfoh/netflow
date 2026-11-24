@@ -383,6 +383,7 @@ class FirmwareImageOut(ORM):
     vendor_sha256: str | None
     vendor_sha512: str | None = None
     integrity_verified: bool
+    unverified_reason: str | None = None
     compatible_models: list[str]
     min_from_version: str | None
     release_notes: str
@@ -391,6 +392,11 @@ class FirmwareImageOut(ORM):
     approved_at: datetime | None
     created_by: str
     created_at: datetime
+
+
+class ApproveImageIn(BaseModel):
+    # Required only for an image without a matching vendor checksum (D-062).
+    unverified_reason: str | None = Field(default=None, max_length=500)
 
 
 class VendorChecksumIn(BaseModel):

@@ -62,6 +62,10 @@ driver has passed acceptance tests for the exact model and firmware.
   any network other than an isolated lab, and only after approval.
 - Firmware is never downloaded from unverified sources and never installed on real
   equipment during development.
+- UNDM approves a firmware image only when its checksum matches the vendor's published
+  SHA-256 or SHA-512, or when the approver writes a reason for approving it without one
+  (D-062). Such an image stays marked "not verified" in the repository, the planner and
+  every firmware plan, and the reason is audited.
 - Telnet is not offered (plaintext). Interactive terminal access is not planned until
   a security review.
 

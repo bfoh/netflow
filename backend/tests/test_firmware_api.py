@@ -161,3 +161,40 @@ def test_vendor_checksum_can_be_added_after_upload(client):
     audit = client.get("/api/audit?limit=20").json()
     outcomes = [a["outcome"] for a in audit if a["action"] == "firmware.verify"]
     assert outcomes == ["success", "failed"]  # newest first
+
+
+def test_unverified_image_needs_a_written_reason_and_stays_marked(client):
+    """Product owner (2026-11-24): the vendor checksum may be unobtainable; approval without
+    it is allowed only with a reason, recorded and shown wherever the image is used."""
+    img = upload(client, sha=None).json()
+    refused = client.post(f"/api/firmware/images/{img['id']}/approve")
+    assert refused.status_code == 409 and "unless you give a reason" in refused.json()["error"]
+    short = client.post(f"/api/firmware/images/{img['id']}/approve",
+                        json={"unverified_reason": "ok"})
+    assert short.status_code == 409
+    reason = "taken from the team's approved software store"
+    ok = client.post(f"/api/firmware/images/{img['id']}/approve",
+                     json={"unverified_reason": reason}).json()
+    assert ok["status"] == "approved" and ok["integrity_verified"] is False
+    assert ok["unverified_reason"] == reason
+    # Plans warn instead of refusing.
+    pid, did = setup_switch(client)
+    comp = client.post(f"/api/firmware/images/{img['id']}/compatibility",
+                       json={"device_ids": [did]}).json()[0]
+    assert comp["compatible"] is True
+    assert any(i["severity"] == "warning" and "WITHOUT the vendor's checksum" in i["message"]
+               for i in comp["issues"])
+    dep = client.post(f"/api/projects/{pid}/firmware-upgrades",
+                      json={"device_ids": [did], "image_id": img["id"]}).json()
+    assert dep["state"] == "awaiting_approval", dep
+    assert any(e["status"] == "warning" and reason in e["message"] for e in dep["events"])
+    audit = client.get("/api/audit?limit=20").json()
+    approve = next(a for a in audit if a["action"] == "firmware.approve")
+    assert approve["details"]["unverified_reason"] == reason
+    assert approve["details"]["integrity_verified"] is False
+
+
+def test_verified_image_needs_no_reason(client):
+    img = upload(client).json()
+    ok = client.post(f"/api/firmware/images/{img['id']}/approve").json()
+    assert ok["status"] == "approved" and ok["unverified_reason"] is None

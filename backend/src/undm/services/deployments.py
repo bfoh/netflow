@@ -33,6 +33,7 @@ from undm.domain.lifecycle import (
     DeploymentState,
     interrupted_outcome,
 )
+from undm.domain.validation import Severity
 from undm.drivers.base import ApplyMode, Credentials
 from undm.drivers.registry import DriverRegistry
 from undm.orchestration.deployment import (
@@ -386,7 +387,8 @@ class DeploymentService:
             problem = self._policy_problem(device, dry_run, firmware=True)
             if problem:
                 raise ForbiddenError(problem)
-            issues = device_compatibility(img, device, self.registry)
+            issues = [i for i in device_compatibility(img, device, self.registry)
+                      if i.severity is Severity.ERROR]
             if issues:
                 problems[device.name] = [i.message for i in issues]
             rec.targets.append(DeploymentTargetRecord(
@@ -400,8 +402,15 @@ class DeploymentService:
         dep = self._to_domain(rec)
         self._orchestrator(rec).prepare(dep)
         self._sync(rec, dep)
+        if not img.integrity_verified:
+            rec.events.append(DeploymentEventRecord(
+                seq=len(rec.events), timestamp=datetime.now(UTC), stage="validate",
+                status="warning",
+                message=f"The image {img.version} was approved by {img.approved_by} WITHOUT the "
+                        f"vendor's checksum; reason given: {img.unverified_reason}"))
         audit.record(self.s, actor, "firmware_deployment.create", "deployment", rec.id,
                      rec.state, {"devices": device_ids, "image": img.id, "version": img.version,
+                                 "image_verified": img.integrity_verified,
                                  "dry_run": dry_run, "allow_downgrade": allow_downgrade,
                                  "also_secondary": also_secondary})
         return rec

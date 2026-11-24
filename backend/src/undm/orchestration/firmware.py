@@ -10,8 +10,9 @@ rollback only where the driver declares it; otherwise the device is reported as
 needing manual (possibly console/physical) recovery.
 
 Firmware deployments always need: an approved image with verified integrity
-(checked by the service), a maintenance window, and an approver who is not the
-creator.
+(checked by the service) or, by product owner decision D-062, an image approved with a
+written reason for the missing vendor checksum (reported as a warning in the plan), a
+maintenance window, and an approver who is not the creator.
 """
 
 from __future__ import annotations

@@ -154,18 +154,29 @@ class FirmwareRepository:
                      details={"algorithm": algorithm, "version": img.version})
         return img
 
-    def approve(self, image_id: str, actor: str) -> FirmwareImage:
+    def approve(self, image_id: str, actor: str,
+                unverified_reason: str | None = None) -> FirmwareImage:
         img = self.get(image_id)
         if img.status == "retired":
             raise ConflictError("Retired images cannot be approved")
+        reason = " ".join((unverified_reason or "").split())
         if not img.integrity_verified:
-            raise ConflictError("Only images whose checksum matched the vendor's published "
-                                "SHA-256 or SHA-512 can be approved")
+            # Product owner decision (D-062): allowed only with a written reason, recorded
+            # and shown wherever the image is used.
+            if len(reason) < 10:
+                raise ConflictError(
+                    "Only images whose checksum matched the vendor's published SHA-256 or "
+                    "SHA-512 can be approved, unless you give a reason for approving it "
+                    "without one (at least 10 characters)")
+            img.unverified_reason = reason[:500]
         if not Path(img.storage_path).is_file():
             raise ConflictError("Image file is missing from the repository storage")
         img.status, img.approved_by, img.approved_at = "approved", actor, datetime.now(UTC)
         audit.record(self.s, actor, "firmware.approve", "firmware_image", img.id,
-                     details={"version": img.version})
+                     details={"version": img.version,
+                              "integrity_verified": img.integrity_verified,
+                              "unverified_reason": None if img.integrity_verified
+                              else img.unverified_reason})
         return img
 
     def retire(self, image_id: str, actor: str) -> FirmwareImage:
@@ -189,7 +200,8 @@ class FirmwareRepository:
     def rules(img: FirmwareImage) -> ImageRules:
         return ImageRules(img.platform, img.version, tuple(img.compatible_models),
                           img.status == "approved", img.integrity_verified,
-                          img.status == "retired")
+                          img.status == "retired",
+                          None if img.integrity_verified else img.unverified_reason)
 
     @staticmethod
     def ref(img: FirmwareImage) -> FirmwareImageRef:

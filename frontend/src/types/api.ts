@@ -252,6 +252,8 @@ export interface FirmwareImage {
   vendor_sha256: string | null;
   vendor_sha512?: string | null;
   integrity_verified: boolean;
+  /** Written reason for approving without the vendor's checksum (D-062). */
+  unverified_reason?: string | null;
   compatible_models: string[];
   min_from_version: string | null;
   release_notes: string;

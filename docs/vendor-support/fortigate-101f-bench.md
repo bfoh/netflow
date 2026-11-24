@@ -43,9 +43,9 @@ hardware. Order agreed 2026-11-19: firmware → base file → site file (D-034).
 ## Steps
 | # | Step | Expected |
 |---|---|---|
-| 1 | Device page → **Test connection**, **Retrieve information** | model FortiGate-101F, version v7.2.7 |
-| 2 | Firmware → upload the 7.6.5 image: platform **FortiOS**, version `7.6.5`, compatible model `FortiGate-101F`, vendor SHA-256 → **Approve** | integrity verified, approved |
-| 3 | Upgrade planning → device → **dry run** | `v7.2.7 -> 7.6.5`, nothing changed |
+| 1 | Device page → **Test connection**, **Retrieve information** | model FortiGate-101F, version v7.2.6 (bench unit) |
+| 2 | Firmware → upload the 7.6.5 image: platform **FortiOS**, version `7.6.5`, compatible model `FortiGate-101F`, Fortinet's SHA-512 → **Approve**. Without the SHA-512: **Approve without checksum…** with a reason (where the file came from) | verified and approved; or "not verified · approved with reason" |
+| 3 | Before planning: check Fortinet's upgrade path for 101F 7.2.6 → 7.6.5 (Q-38); if intermediate versions are required, upload and run those first. Upgrade planning → device → **dry run** | `v7.2.6 -> 7.6.5`, nothing changed; a warning if the image was approved without a checksum |
 | 4 | Real firmware plan → approve with a window → **Execute** | events: "fetched the image (… bytes), accepted it and closed the session to restart", "device reachable again", "running v7.6.5" |
 | 5 | Device → Configurations → import the **base** file and the **site** file | base: "Full FortiOS configuration backup … → replace"; site: "FortiOS CLI script … multi-VDOM", one secret setting (psksecret) |
 | 6 | Deployments → new plan → device → choose the **base** file (mode switches to Replace) → Validate → Approve → Execute | "fetched the configuration file …, accepted it and closed the session to restart", "device reachable again", "back after the restore: hostname …, VDOMs multiple, running v7.6.5", "revision 'base-vNN' saved" |
@@ -78,3 +78,4 @@ addresses as usual), especially any "device output" event, and the time each ste
 | 2026-11-24 | spare 101F | First login (by hand, browser) | done | GUI after `admin` with an empty password: page "Change Password" with "You are required to change the default password.", fields Old Password / New Password / Confirm Password, buttons OK / Logout; after OK the login page returns. Confirms the forced change behind the SSH "no prompt" result. The SSH wording of the same step is not yet seen (needed before UNDM can do it). |
 | 2026-11-24 | same unit | Test connection, Retrieve information | **passed** | SSH with the approved admin login; facts read correctly: hostname and model FortiGate-101F, FortiOS **v7.2.6** (as shipped; the checklist expected v7.2.7), serial number (not recorded here), VDOM mode disabled. The FortiOS facts parser is now listed as checked on FortiGate-101F v7.2.6. |
 | 2026-11-24 | same unit | Firmware image upload | not verified | Uploaded without a checksum; Fortinet publishes MD5 and SHA-512, which UNDM did not accept. Fixed: SHA-512 accepted, checksum can be added after upload (D-061). |
+| 2026-11-24 | same unit | Firmware image approval | decision | Fortinet's SHA-512 could not be obtained; product owner decided to allow approval with a written reason (D-062). |

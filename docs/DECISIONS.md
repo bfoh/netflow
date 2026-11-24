@@ -533,3 +533,20 @@ during the upload. An uploaded image can be verified later ("Add vendor checksum
 mismatch is refused and its audit record kept. MD5 is refused with an explanation: it
 cannot show that a file is genuine. New column `firmware_images.vendor_sha512`
 (migration d75f9b5c5360).
+
+### D-062 Approving an image without the vendor's checksum needs a written reason (2026-11-24)
+Bench: the FortiOS 7.6.5 image for the 101F was uploaded without a checksum, and the
+product owner could not obtain Fortinet's SHA-512 (the checksums are behind the support
+portal). Product owner decision: allow approval without the checksum. Rule: an image whose
+checksum was not matched can be approved only with a written reason (at least 10
+characters, e.g. where the file came from); `POST /api/firmware/images/{id}/approve` with
+`{"unverified_reason": "..."}`. The reason and the approver are stored with the image
+(`firmware_images.unverified_reason`, migration 6cd026e18a31) and recorded in the audit
+log (`integrity_verified: false`, `unverified_reason`). Wherever the image is used it stays
+marked: the repository shows "not verified · approved with reason" (reason in the tooltip),
+the planner labels it "NOT VERIFIED" and shows the reason, the compatibility check returns
+a warning instead of an error, and every firmware plan with it carries a warning event
+naming the approver and the reason (audit `image_verified: false`). The vendor's checksum
+can still be added later, which makes the image verified. Without a reason the approval is
+refused as before. Everything else about firmware plans (maintenance window, second
+approver, firmware safety switch) is unchanged.

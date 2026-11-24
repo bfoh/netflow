@@ -173,6 +173,8 @@ class FirmwareImage(Base):
     vendor_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Vendors such as Fortinet publish SHA-512 (and MD5, not accepted) instead of SHA-256.
     vendor_sha512: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Approved although no vendor checksum could be matched: the approver's written reason.
+    unverified_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     integrity_verified: Mapped[bool] = mapped_column(default=False)
     storage_path: Mapped[str] = mapped_column(String(500))
     compatible_models: Mapped[list[Any]] = mapped_column(default=list)

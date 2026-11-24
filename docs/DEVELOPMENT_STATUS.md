@@ -18,7 +18,7 @@ manager, topology._
 | Intent & generation | Hostname, VLANs, L3 interfaces, static routes → AOS-CX / FortiOS / IOS-XE templates; validation; platform support checks |
 | Configuration import | Upload a file per device; normalised, versioned, labelled unvalidated; selectable per device in deployment plans |
 | Deployments | Lifecycle with directive-15 states; dry runs; approval; preflight with identity check; backup; verification by read-back (platform-aware for SSH drivers); rollback or manual recovery; device locks; crash recovery on restart |
-| Firmware | Repository with SHA-256 vs vendor checksum, approval/retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery. Simulated devices, plus **one experimental real procedure: Aruba 2930F** (switch pulls the image from UNDM by TFTP into primary flash, restarts, version verified) behind `UNDM_ENABLE_REAL_DEVICE_FIRMWARE`. Experimental: **one successful run on hardware** (2026-11-19, spare JL260A, approved downgrade WC.16.11.0001 → WC.16.10.0025, verified) |
+| Firmware | Repository with SHA-256 or SHA-512 vs vendor checksum (addable after upload); approval only when verified or with a written, audited reason (D-062); retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery. Simulated devices, plus **one experimental real procedure: Aruba 2930F** (switch pulls the image from UNDM by TFTP into primary flash, restarts, version verified) behind `UNDM_ENABLE_REAL_DEVICE_FIRMWARE`. Experimental: **one successful run on hardware** (2026-11-19, spare JL260A, approved downgrade WC.16.11.0001 → WC.16.10.0025, verified) |
 | File transfer | Built-in TFTP server: read-only, per-job, per-device allowlist, transfer records; tested with an independent client |
 | FortiGate 101F staging | Firmware by TFTP; base file restored by TFTP (replace mode, checked by hostname/VDOM/version, wrong-model backups refused); site script statement by statement (multi-VDOM, hostname change, error-looking reply stops the run); tunnel key inserted from the credential store, never stored or shown; revision named after each file. **Tested against a fake FortiGate only; not yet run on hardware** |
 | Database check | Startup comparison of the database with the migrations; banner with the exact command; clear database errors |
@@ -58,14 +58,14 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-19)
+## Test results (2026-11-24)
 | Suite | Result |
 |---|---|
-| Backend pytest | 382 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 384 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
-| ruff / mypy --strict | clean / clean (73 files) |
-| Frontend Vitest | 24 passed |
+| ruff / mypy --strict | clean / clean (74 files) |
+| Frontend Vitest | 26 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
 

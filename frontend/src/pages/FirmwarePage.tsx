@@ -71,6 +71,11 @@ function UploadForm() {
 
 function ImageTable({ images }: { images: FirmwareImage[] }) {
   const approve = useAction((id: string) => api.approveFirmware(id), 'Image approved');
+  const [overriding, setOverriding] = useState<FirmwareImage | null>(null);
+  const [reason, setReason] = useState('');
+  const reasonText = reason.trim().replace(/\s+/g, ' ');
+  const approveUnverified = useAction(() => api.approveFirmware(overriding!.id, reasonText),
+    'Image approved without the vendor checksum; the reason is recorded');
   const retire = useAction((id: string) => api.retireFirmware(id), 'Image retired');
   const del = useAction((id: string) => api.deleteFirmware(id), 'Image deleted');
   const [checking, setChecking] = useState<FirmwareImage | null>(null);
@@ -90,6 +95,26 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
         </Group>
       </Stack>
     </Modal>
+    <Modal opened={overriding !== null} onClose={() => setOverriding(null)} title={`Approve ${overriding?.filename ?? ''} without a vendor checksum`}>
+      <Stack>
+        <Alert color="orange" icon={<IconAlertTriangle size={16} />}>
+          UNDM cannot show that this file is the vendor's genuine, undamaged image. Approve it only if you obtained it from
+          a source you trust. The reason and your name are recorded in the audit log, shown with the image, and repeated
+          as a warning in every firmware plan that uses it.
+        </Alert>
+        <Text size="sm">If you can still get the vendor's SHA-256 or SHA-512, use "Add vendor checksum…" instead.</Text>
+        <Textarea label="Reason for approving without the checksum" description="At least 10 characters, e.g. where the file came from."
+          placeholder="e.g. taken from our approved software store" autosize minRows={2} maxLength={500}
+          value={reason} onChange={(e) => setReason(e.currentTarget.value)} />
+        <Group justify="flex-end">
+          <Button variant="default" onClick={() => setOverriding(null)}>Cancel</Button>
+          <Button color="orange" disabled={reasonText.length < 10} loading={approveUnverified.isPending}
+            onClick={() => approveUnverified.mutate(undefined, { onSuccess: () => { setOverriding(null); setReason(''); } })}>
+            Approve without checksum
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
     <Card withBorder padding={0}>
       <Table.ScrollContainer minWidth={900}>
         <Table verticalSpacing="xs" horizontalSpacing="md">
@@ -105,14 +130,19 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
                 <Table.Td>{i.integrity_verified
                   ? <Tooltip label={`${i.vendor_sha512 ? 'SHA-512' : 'SHA-256'} matched the vendor-published checksum`}><Badge color="teal" variant="light" leftSection={<IconShieldCheck size={12} />}>verified</Badge></Tooltip>
                   : <Group gap={4} wrap="nowrap">
-                      <Tooltip label="No vendor checksum was supplied, so the file cannot be approved"><Badge color="yellow" variant="light">not verified</Badge></Tooltip>
-                      <Button size="compact-xs" variant="light" onClick={() => { setChecksum(''); setChecking(i); }}>Add vendor checksum…</Button>
+                      {i.status === 'approved' && i.unverified_reason
+                        ? <Tooltip multiline w={320} label={`Approved by ${i.approved_by ?? '?'} without the vendor's checksum. Reason: ${i.unverified_reason}`}>
+                            <Badge color="orange" variant="light" leftSection={<IconAlertTriangle size={12} />}>not verified · approved with reason</Badge></Tooltip>
+                        : <Tooltip label="No vendor checksum was supplied. Add it, or approve the image with a written reason."><Badge color="yellow" variant="light">not verified</Badge></Tooltip>}
+                      {i.status !== 'retired' && <Button size="compact-xs" variant="light" onClick={() => { setChecksum(''); setChecking(i); }}>Add vendor checksum…</Button>}
                     </Group>}</Table.Td>
                 <Table.Td><Badge color={i.status === 'approved' ? 'teal' : i.status === 'retired' ? 'gray' : 'blue'} variant="light">{i.status}</Badge>
                   {i.approved_by && <Text size="xs" c="dimmed">by {i.approved_by}</Text>}</Table.Td>
                 <Table.Td>
                   <Group gap={4}>
-                    {i.status === 'uploaded' && <Button size="compact-xs" onClick={() => approve.mutate(i.id)} disabled={!i.integrity_verified}>Approve</Button>}
+                    {i.status === 'uploaded' && (i.integrity_verified
+                      ? <Button size="compact-xs" onClick={() => approve.mutate(i.id)}>Approve</Button>
+                      : <Button size="compact-xs" color="orange" variant="light" onClick={() => { setReason(''); setOverriding(i); }}>Approve without checksum…</Button>)}
                     {i.status === 'approved' && <Button size="compact-xs" variant="default" onClick={() => retire.mutate(i.id)}>Retire</Button>}
                     <Button size="compact-xs" variant="subtle" color="red" onClick={() => { if (window.confirm(`Delete ${i.filename}?`)) del.mutate(i.id); }}>Delete</Button>
                   </Group>
@@ -143,6 +173,7 @@ function Planner({ images }: { images: FirmwareImage[] }) {
   const create = useAction(() => api.createFirmwareDeployment(projectId!, { device_ids: sel, image_id: imageId!, dry_run: dryRun, allow_downgrade: allowDowngrade, also_secondary: alsoSecondary }),
     (d) => `Upgrade plan created: ${d.state.replaceAll('_', ' ')}`);
   const approved = images.filter((i) => i.status === 'approved');
+  const chosen = approved.find((i) => i.id === imageId);
   const allOk = !!results && results.length === sel.length && results.every((r) => r.compatible);
 
   return (
@@ -150,11 +181,16 @@ function Planner({ images }: { images: FirmwareImage[] }) {
       <Card withBorder>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <Select label="Approved image" placeholder={approved.length ? 'Choose an image' : 'Approve an image first'}
-            data={approved.map((i) => ({ value: i.id, label: `${i.platform} ${i.version} (${i.filename})` }))}
+            data={approved.map((i) => ({ value: i.id, label: `${i.platform} ${i.version} (${i.filename})${i.integrity_verified ? '' : ' · NOT VERIFIED'}` }))}
             value={imageId} onChange={(v) => { setImageId(v); setResults(null); }} />
           <Select label="Project" data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
             value={projectId} onChange={(v) => { setProjectId(v); setSel([]); setResults(null); }} />
         </SimpleGrid>
+        {chosen && !chosen.integrity_verified && (
+          <Alert mt="md" color="orange" icon={<IconAlertTriangle size={16} />} title="This image is not verified against the vendor's checksum">
+            Approved by {chosen.approved_by ?? '?'} with the reason: “{chosen.unverified_reason ?? ''}”. The plan records this as a warning.
+          </Alert>
+        )}
       </Card>
       {projectId && (
         <Card withBorder>
@@ -169,7 +205,8 @@ function Planner({ images }: { images: FirmwareImage[] }) {
                       onChange={() => { setResults(null); setSel((s) => (s.includes(d.id) ? s.filter((x) => x !== d.id) : [...s, d.id])); }} /></Table.Td>
                     <Table.Td>{d.name}</Table.Td><Table.Td>{d.model}</Table.Td><Table.Td><Text size="xs" ff="monospace">{d.driver_id}</Text></Table.Td>
                     <Table.Td>{String(d.observed_facts?.os_version ?? '— (retrieve information)')}</Table.Td>
-                    <Table.Td>{r && (r.compatible ? <Badge color="teal" variant="light" leftSection={<IconCheck size={12} />}>compatible</Badge>
+                    <Table.Td>{r && (r.compatible ? <Stack gap={2}><Badge color="teal" variant="light" leftSection={<IconCheck size={12} />}>compatible</Badge>
+                        {r.issues.map((i) => <Text key={i.code} size="xs" c="orange">{i.message}</Text>)}</Stack>
                       : <Stack gap={2}><Badge color="red" variant="light" leftSection={<IconX size={12} />}>not compatible</Badge>
                         {r.issues.map((i) => <Text key={i.code} size="xs" c="red">{i.message}</Text>)}</Stack>)}</Table.Td>
                   </Table.Tr>

@@ -313,3 +313,39 @@ describe('firmware repository', () => {
       && JSON.parse(String(c.init?.body)).checksum === 'ab'.repeat(64))).toBe(true));
   });
 });
+
+describe('firmware approval without a vendor checksum', () => {
+  it('needs a written reason and is shown as not verified afterwards', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const img = { id: 'fg', vendor: 'Fortinet', platform: 'fortios', version: '7.6.5', filename: 'FGT_101F.out',
+      size_bytes: 1024, sha256: 'f3'.repeat(32), vendor_sha256: null, vendor_sha512: null, integrity_verified: false,
+      unverified_reason: null, compatible_models: ['FortiGate-101F'], min_from_version: null, release_notes: '',
+      status: 'uploaded', approved_by: null, approved_at: null, created_by: 'tester', created_at: '2026-11-24T08:00:00Z' };
+    const reason = 'taken from our approved software store';
+    const calls = mockApi({ '/firmware/images': [img],
+      '/firmware/images/fg/approve': { ...img, status: 'approved', approved_by: 'tester', unverified_reason: reason } });
+    renderAt('/firmware');
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve without checksum…' }));
+    const dialog = await screen.findByRole('dialog');
+    const confirm = within(dialog).getByRole('button', { name: 'Approve without checksum' });
+    await userEvent.type(within(dialog).getByLabelText(/Reason for approving without the checksum/), 'short');
+    expect(confirm).toBeDisabled();
+    await userEvent.clear(within(dialog).getByLabelText(/Reason for approving without the checksum/));
+    await userEvent.type(within(dialog).getByLabelText(/Reason for approving without the checksum/), reason);
+    await userEvent.click(confirm);
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/firmware/images/fg/approve'
+      && JSON.parse(String(c.init?.body)).unverified_reason === reason)).toBe(true));
+  });
+
+  it('marks an image approved with a reason', async () => {
+    const img = { id: 'fg', vendor: 'Fortinet', platform: 'fortios', version: '7.6.5', filename: 'FGT_101F.out',
+      size_bytes: 1024, sha256: 'f3'.repeat(32), vendor_sha256: null, vendor_sha512: null, integrity_verified: false,
+      unverified_reason: 'taken from our approved software store', compatible_models: ['FortiGate-101F'],
+      min_from_version: null, release_notes: '', status: 'approved', approved_by: 'tester',
+      approved_at: '2026-11-24T08:10:00Z', created_by: 'tester', created_at: '2026-11-24T08:00:00Z' };
+    mockApi({ '/firmware/images': [img] });
+    renderAt('/firmware');
+    expect(await screen.findByText('not verified · approved with reason')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add vendor checksum…' })).toBeInTheDocument();
+  });
+});
