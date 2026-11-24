@@ -110,7 +110,8 @@ def test_fortios_save_is_not_claimed_as_device_save(scenario):
     f = drv(FortiOSSsh)
     f.connect()
     r = f.save_configuration()
-    assert r.ok and "not checked" in r.message
+    # The save mode could not be read here: UNDM says it assumed it, never that it checked.
+    assert r.ok and "assumed automatic, not readable" in r.message
 
 
 def test_no_rollback_declared_and_firmware_only_where_implemented():

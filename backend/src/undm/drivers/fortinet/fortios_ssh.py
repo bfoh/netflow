@@ -359,6 +359,19 @@ class FortiOSSsh(SshCliDriver):
             f"the FortiGate fetched the {what} ({transfer.bytes_sent} bytes), accepted it "
             f"and {how}")
 
+    _IN_USE: ClassVar[re.Pattern[str]] = re.compile(r"Cannot change .+ while .+ is used")
+
+    def merge_rerun_note(self, already: int, checked: int) -> str | None:
+        # Bench 2026-11-24: a corrected site file run over the earlier site configuration
+        # stopped at "Cannot change 'extintf' while the VIP entry is used."
+        if checked < 20 or already * 3 < checked * 2:
+            return None
+        return (f"{already} of {checked} lines of this file are already on the FortiGate: a "
+                "site configuration was probably loaded before. FortiOS refuses some changes "
+                "to objects that are in use (bench: \"Cannot change 'extintf' while the VIP "
+                "entry is used\"), so loading over it can stop part-way. For a clean load, "
+                "restore the base file first, then load this file.")
+
     def _login_dialogue(self, conn: Any, new: Credentials) -> bool:
         """Answer the bench's forced password change; each question at most once."""
         assert self._credentials is not None
@@ -549,9 +562,12 @@ class FortiOSSsh(SshCliDriver):
                 created += 1
                 continue
             if self._ERROR_REPLY.search(reply):
+                in_use = (" The object exists already and is in use: a site configuration "
+                          "was probably loaded before. Restore the base file, then load "
+                          "this file again." if self._IN_USE.search(reply) else "")
                 return OperationResult.failed(
                     op, f"The FortiGate rejected line {number} ('{shown}'): {reply[:300]}. "
-                        f"{done}.", diagnostics)
+                        f"{done}.{in_use}", diagnostics)
             warnings.append(f"line {number}: {reply[:200]}")
         with contextlib.suppress(Exception):  # the hostname may have changed
             self._conn.set_base_prompt()
@@ -561,13 +577,39 @@ class FortiOSSsh(SshCliDriver):
             + (f"; {created} new entries created ('new entry … added')" if created else "")
             + (f"; {len(warnings)} message(s) listed as warnings" if warnings else ""))
 
+    # 'get system global' in the global context on a multi-VDOM unit (outside it: "command
+    # parse error before 'global'"); bench, 101F v7.6.5 after the base file, 2026-11-24:
+    # "cfg-save             : automatic".
+    _CFG_SAVE: ClassVar[re.Pattern[str]] = re.compile(r"^\s*cfg-save\s*:\s*(\S+)", re.M)
+
     def save_configuration(self) -> OperationResult:
+        """FortiOS saves each change on 'end' when cfg-save is automatic: check that it is."""
         op = Op.SAVE_CONFIGURATION
         if r := self._need(op):
             return r
-        return OperationResult.success(
-            op, message="FortiOS commits on 'end' (assumes default cfg-save automatic; "
-                        "not checked)")
+        command = "get system global | grep cfg-"
+        try:
+            with self._global_context():
+                talk = self._dialogue(command, [], timeout=30, idle_timeout=15)
+        except Exception as e:  # noqa: BLE001
+            return self._fail(op, e)
+        m = self._CFG_SAVE.search(talk.output) if talk.ended == "prompt" else None
+        if m is None:
+            return OperationResult.success(
+                op, {"notes": ["could not read the unit's configuration save mode (cfg-save); "
+                               "assumed automatic, the FortiOS default"]},
+                "saved automatically (cfg-save assumed automatic, not readable)")
+        mode = m.group(1)
+        if mode == "automatic":
+            return OperationResult.success(
+                op, {"notes": ["configuration save mode on the unit: automatic (checked); "
+                               "each change was saved when applied"]},
+                "saved automatically (cfg-save automatic, checked)")
+        undone = " and are undone after a timeout" if mode == "revert" else ""
+        return OperationResult.failed(
+            op, f"The unit's configuration save mode is '{mode}' (cfg-save): the changes are "
+                f"applied but not saved automatically{undone}. Save the configuration on the "
+                "unit now, before it restarts; UNDM does not run a save command for this mode.")
 
     def verify_configuration(self, intended: str, mode: ApplyMode) -> OperationResult | None:
         op = Op.GET_FACTS

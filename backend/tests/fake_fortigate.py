@@ -60,10 +60,12 @@ class FakeFortiGate:
     awaiting_login_answers: bool = False
     _new_password: str = ""
     bad_statements: set[str] = field(default_factory=set)
+    bad_replies: dict[str, str] = field(default_factory=dict)  # statement -> refusal text
     info_replies: dict[str, str] = field(default_factory=dict)
     question_on: dict[str, str] = field(default_factory=dict)  # statement -> question text
     revisions_supported: bool = True
     down_for_connects: int = 1
+    cfg_save: str = "automatic"  # 'get system global' value (bench: automatic)
     progress_marks: bool = False  # fetch in the background, printing '#' marks (bench)
     fetch_delay: float = 0.0      # seconds per received block, to slow the fetch down
     # Observations.
@@ -173,6 +175,14 @@ class FakeFortiGate:
                                     "could possibly reboot the system!\r\nDo you want to "
                                     "continue? (y/n)")
             return
+        if text == "get system global | grep cfg-":
+            # Bench wording: only in the global context on a multi-VDOM unit.
+            if self.vdoms and self.prompt_context() != "global":
+                self._reply("command parse error before 'global'\r\nCommand fail. Return "
+                            "code -61")
+            else:
+                self._reply(f"cfg-save             : {self.cfg_save}")
+            return
         m = re.match(r'execute backup config flash "([^"]*)"$', text)
         if m:
             if self.revisions_supported:
@@ -204,7 +214,7 @@ class FakeFortiGate:
 
     def _statement(self, text: str) -> None:
         if text in self.bad_statements:
-            self._reply(FAIL)
+            self._reply(self.bad_replies.get(text, FAIL))
             return
         verb, _, rest = text.partition(" ")
         if verb == "end":

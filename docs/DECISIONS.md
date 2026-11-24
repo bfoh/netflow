@@ -649,3 +649,24 @@ entry that does not exist yet ("new entry '<name>' added"). They hid the one exp
 warning (the bare `end` before the first block). A reply that is exactly that line, after
 an `edit`, is now counted ("N new entries created") instead of listed. Anything else is
 listed as before; error-looking replies still stop the script.
+
+### D-069 The FortiOS save mode is checked, not assumed (2026-11-24)
+Bench (Q-40): on the multi-VDOM unit `get system global | grep cfg-` fails at the top
+("command parse error before 'global'") and inside `config global` shows
+"cfg-save             : automatic". The FortiOS save step now reads it there after every
+load: automatic → "saved automatically (cfg-save automatic, checked)" with a note event;
+manual or revert → the step fails with what to do (save on the unit before it restarts;
+UNDM has no save command for these modes yet); unreadable → success that says it was
+assumed, never "checked". The orchestrator now shows the save step's notes as events.
+
+### D-070 A FortiOS site file over an existing site configuration is cautioned before approval (2026-11-24)
+Bench: a corrected site file run over the earlier site configuration stopped at line 918,
+"Cannot change 'extintf' while the VIP entry is used. Command fail. Return code -23", after
+879 of 1784 statements. FortiOS protects objects in use, so a site script cannot simply be
+run again over itself. Drivers may now add a caution to a merge preview
+(`merge_rerun_note(already, checked)`); FortiOS does when at least two thirds of at least 20
+checked lines are already on the unit (first site run on the bench: about a quarter;
+second: about nine tenths): restore the base file first, then load the file. The refusal
+"Cannot change … while … is used" now carries the same advice. Other platforms add no
+caution, since a mostly unchanged merge is a normal update there. Re-running from a clean
+base is done with UNDM alone: the base plan (replace), then the site plan.

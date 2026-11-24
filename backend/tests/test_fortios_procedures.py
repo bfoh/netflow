@@ -226,6 +226,24 @@ def test_script_runs_statement_by_statement_through_a_hostname_change(rig):
     assert v.ok and "hostname lab-fw-site" in v.message and "appear in 'show'" in v.message
 
 
+def test_save_mode_is_checked_in_the_global_context(rig):
+    """Bench 2026-11-24: on the multi-VDOM unit 'get system global' works only inside
+    'config global' and showed "cfg-save : automatic"; UNDM no longer just assumes it."""
+    multi_vdom(rig)
+    r = rig.driver.save_configuration()
+    assert r.ok and "automatic, checked" in r.message, r.message
+    assert "automatic (checked)" in r.data["notes"][0]
+    assert rig.fg.commands[-3:] == ["config global", "get system global | grep cfg-", "end"]
+
+
+@pytest.mark.parametrize("mode", ["manual", "revert"])
+def test_a_unit_that_does_not_save_by_itself_is_reported(rig, mode):
+    rig.fg.cfg_save = mode
+    r = rig.driver.save_configuration()
+    assert r.status is ResultStatus.FAILED and f"save mode is '{mode}'" in r.message
+    assert ("undone after a timeout" in r.message) is (mode == "revert")
+
+
 def test_new_entry_notices_are_counted_not_listed(rig):
     """Bench, site script on a 101F v7.6.5 (2026-11-24): 191 of 192 warnings were FortiOS's
     normal "new entry '<name>' added" after 'edit'; they hid the one that mattered."""
@@ -413,6 +431,7 @@ def test_api_demanded_password_change_is_answered_with_the_approved_login(api):
     assert out["state"] == "succeeded", events
     assert "UNDM answered its questions and set the password" in events
     assert "logged in again with the device's login" in events
+    assert "configuration save mode on the unit: automatic (checked)" in events
     assert fg.password == APPROVED and not fg.must_change_password
     assert fg.keys[-3:] == [BASE_PW, APPROVED, APPROVED]  # old, new, confirm: once each
     assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == refs["approved"]
@@ -470,3 +489,38 @@ def test_a_missed_prompt_after_the_change_still_switches_to_the_new_login(rig, m
     assert "Example-Only-Approved-1" not in r.message
     assert rig.fg.password == "Example-Only-Approved-1"
     assert rig.driver.connect().ok  # the next login uses the new password
+
+
+def test_api_site_file_over_an_existing_site_configuration_is_cautioned(api):
+    """Bench 2026-11-24: a corrected site file run over the earlier site configuration
+    stopped at "Cannot change 'extintf' while the VIP entry is used." The preview now says
+    so before approval, and that refusal explains what to do."""
+    client, pid, did, fg, refs = api
+    fg.vdoms = True
+    v = client.post(f"/api/devices/{did}/configs/import",
+                    json={"filename": "site.txt", "text": SCRIPT}).json()
+
+    def plan():
+        dep = client.post(f"/api/projects/{pid}/deployments", json={
+            "device_ids": [did], "apply_mode": "merge",
+            "config_versions": {did: v["id"]}}).json()
+        return dep, " | ".join(e["message"] for e in dep["events"])
+
+    first, events = plan()
+    assert first["state"] == "awaiting_approval", events
+    assert "already on the FortiGate" not in events
+    client.post(f"/api/deployments/{first['id']}/approve")
+    assert client.post(f"/api/deployments/{first['id']}/execute").json()["state"] == "succeeded"
+    second, events = plan()
+    assert "lines of this file are already on the FortiGate" in events
+    assert "restore the base file first" in events
+
+
+def test_in_use_refusal_says_to_start_from_the_base(rig):
+    multi_vdom(rig)
+    line = 'set hostname "lab-fw-site"'
+    rig.fg.bad_statements.add(line)
+    rig.fg.bad_replies[line] = ("Cannot change 'extintf' while the VIP entry is used.\r\n"
+                                "Command fail. Return code -23")  # bench wording
+    r = rig.driver.apply_configuration(SCRIPT, ApplyMode.MERGE)
+    assert r.status is ResultStatus.FAILED and "Restore the base file, then load" in r.message

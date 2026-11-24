@@ -18,7 +18,7 @@ public documentation and Netmiko's source, tested only against fake connections.
 ¹ If console paging (`set output more`) is enabled, Netmiko temporarily sets
 `config system console / set output standard` and restores it on disconnect.
 Multi-VDOM units: `execute` commands are issued inside `config global` (community guidance).
-² Relies on the default `cfg-save automatic`; not checked on the device.
+² Checks `cfg-save` on the device after each load (D-069); manual or revert mode is reported, not saved by UNDM.
 ³ Requires a privilege-15 login; enable-password prompts are not handled.
 ⁵ Netmiko `aruba_osswitch`: passes the "Press any key" banner, runs `enable` (the login
 password is sent if an enable password is requested), then `terminal width 511` and

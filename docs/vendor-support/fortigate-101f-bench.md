@@ -63,6 +63,9 @@ hardware. Order agreed 2026-11-19: firmware → base file → site file (D-034).
   now"** — UNDM could not answer the unit's questions itself (unexpected wording, or no login
   after loading in the plan). Log in with the base file's password in a browser or SSH, set
   the approved password; UNDM continues by itself.
+- **"lines of this file are already on the FortiGate"** (preview) or **"Cannot change … while
+  … is used"** — a site configuration is on the unit already. Run the base plan again, then
+  the site plan.
 - **"fetched and checked … but did not restart within 180 s"** — the unit took the file
   without complaint but did not restart; check on the unit whether it applied it.
 - **"Transfer incomplete … UNDM has withdrawn the file"** — the fetch was cut off by UNDM (or
@@ -95,3 +98,5 @@ addresses as usual), especially any "device output" event, and the time each ste
 | 2026-11-24 | same unit | Base file restore (v40) | **passed** | Fetched (387193 bytes), "returned to its prompt, then restarted"; back after about 2 min; the unit demanded the password change on the base file's login and UNDM answered it with the approved login, then logged in again with it; same serial number; verified: hostname, VDOMs multiple, v7.6.5; revision saved on the unit. Device keeps the approved login. First complete FortiGate configuration load by UNDM on hardware. |
 | 2026-11-24 | same unit | Site script (Merge, tunnel key from the credential store) | **passed** | 1784 statements sent, every one accepted; the expected warning at the first bare `end` ("Unknown action 0 / Command fail. Return code -1"); 191 "new entry '<name>' added" notices (now counted, D-068); verified: hostname as set by the file, 1363 of 1498 lines shown by `show` (defaults hidden); revision named after the file saved. Note: the hostname set by the file did not match the system number in the file's name; product owner to check the file. |
 | 2026-11-24 | same unit | Revisions in the GUI | **passed** | Both revisions listed under 7.6.5 build 3651 (base, then site), user admin. The toolbar showed "Save Changes" with a warning sign: whether the unit saves changes automatically (cfg-save) is not yet known (Q-40). |
+| 2026-11-24 | same unit | Save mode (Q-40) | automatic | `get system global \| grep cfg-` fails at the top of a multi-VDOM unit ("command parse error before 'global'"); inside `config global`: "cfg-save : automatic". UNDM now checks it after every load (D-069). |
+| 2026-11-24 | same unit | Corrected site file over the earlier site configuration | **refused at line 918** | "Cannot change 'extintf' while the VIP entry is used. Command fail. Return code -23" after 879 of 1784 statements; preview had shown only +136 lines. Not a UNDM fault: FortiOS protects objects in use. Procedure: base plan again, then the site plan. UNDM now cautions before approval (D-070). |

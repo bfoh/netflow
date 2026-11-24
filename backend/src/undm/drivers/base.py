@@ -341,6 +341,12 @@ class DeviceDriver:
         """Log in with these from the next connection on (a loaded file changed the login)."""
         self._credentials = credentials
 
+    def merge_rerun_note(self, already: int, checked: int) -> str | None:
+        """A caution for a merge whose lines are mostly on the device already, if loading
+        a file over itself is known to fail on this platform (``already`` of ``checked``
+        lines present). Shown as a warning in the plan preview."""
+        return None
+
     def offer_password_change(self, credentials: Credentials | None) -> None:
         """If the device demands a new password at the next logins, set this one (D-066).
 

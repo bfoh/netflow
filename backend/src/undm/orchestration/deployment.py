@@ -376,6 +376,14 @@ class DeploymentOrchestrator:
                 t.diff = self._preview_diff(dep, t, running.data)
                 t.state = TargetState.PREVIEWED
                 self._emit(dep, "preview", "ok", f"+{t.diff.added} -{t.diff.removed} lines", t)
+                if dep.apply_mode is ApplyMode.MERGE:
+                    present = t.driver.present_lines(running.data)
+                    keys = [k[0] for raw in t.intended_config.splitlines() if raw.strip()
+                            if (k := t.driver.expected_lines(raw))]
+                    note = t.driver.merge_rerun_note(sum(1 for k in keys if k in present),
+                                                     len(keys))
+                    if note:
+                        self._emit(dep, "preview", "warning", note, t)
             finally:
                 t.driver.disconnect()
         return ok
@@ -596,6 +604,8 @@ class DeploymentOrchestrator:
                     applied_message = ("back after the restart; configuration saved"
                                        if restarting else result.message)
                     result = t.driver.save_configuration()
+                    if result.ok:
+                        self._emit_notes(dep, t, "deploy", result)
                     if result.ok and applied_message:
                         result = OperationResult.success(result.operation, result.data,
                                                          applied_message)
