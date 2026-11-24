@@ -390,6 +390,11 @@ class StagingApproveIn(BaseModel):
     window_end: datetime | None = None
 
 
+class SystemImportOut(BaseModel):
+    project: ProjectOut
+    summary: dict[str, Any]
+
+
 class StagingIndexOut(BaseModel):
     staging_id: str
     device_id: str

@@ -7,6 +7,7 @@ import { Link, useNavigate } from 'react-router';
 import { PageHeader, QueryState } from '../components/Page';
 import { fmtDate } from '../services/format';
 import { DialogError } from '../components/ConfirmDialog';
+import { ImportSystemButton } from '../features/systems/SystemPackage';
 import { useAction, useAllDevices, useProjects } from '../hooks/queries';
 import { api } from '../services/api';
 
@@ -28,7 +29,7 @@ export function ProjectsPage() {
       <PageHeader
         title="Systems"
         description="A system is the set of devices you stage together, with their files, logins and plans."
-        actions={<Button leftSection={<IconPlus size={16} />} onClick={open}>New system</Button>}
+        actions={<><ImportSystemButton /><Button leftSection={<IconPlus size={16} />} onClick={open}>New system</Button></>}
       />
       <QueryState isLoading={projects.isLoading} error={projects.error} />
       <Card withBorder padding={0}>

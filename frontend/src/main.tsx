@@ -24,7 +24,7 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MantineProvider theme={theme} defaultColorScheme="auto">
-      <Notifications position="top-right" autoClose={4000} />
+      <Notifications position="top-center" autoClose={4000} />
       <QueryClientProvider client={queryClient}>
         <App />
       </QueryClientProvider>

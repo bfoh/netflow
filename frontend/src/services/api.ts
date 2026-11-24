@@ -65,7 +65,36 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
+/** Download a file the backend makes (e.g. a system package) under the name it gives. */
+async function download(path: string, fallbackName: string): Promise<string> {
+  const res = await fetch(`/api${path}`, { headers: { 'X-UNDM-Actor': getActor() } });
+  if (!res.ok) {
+    const data: unknown = await res.json().catch(() => null);
+    throw new ApiError(res.status, describe(data, res.status));
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await res.blob());
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return name;
+}
+
+export interface SystemImport {
+  project: Project;
+  summary: { devices: number; files: number; logins: string[]; links: number; firmware_added: number;
+    firmware_already_here: number; exported_by?: string; exported_at?: string };
+}
+
 export const api = {
+  exportSystem: (pid: string, includeFirmware: boolean) =>
+    download(`/projects/${pid}/export?include_firmware=${includeFirmware}`, 'system.undm'),
+  importSystem: (file: File, name?: string) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (name?.trim()) form.append('name', name.trim());
+    return request<SystemImport>('POST', '/systems/import', form);
+  },
   health: () => request<{ status: string; version: string; problem?: string | null }>('GET', '/health'),
   drivers: () => request<Driver[]>('GET', '/drivers'),
   policy: () => request<Policy>('GET', '/policy'),

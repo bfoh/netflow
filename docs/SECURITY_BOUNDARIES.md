@@ -132,3 +132,12 @@ Real-device output shared with the developer must go through **Sanitized diagnos
   memory or traffic unless the six authorization conditions of directive section 6 are
   documented in `docs/REFERENCE_ANALYSIS.md`. Current status: **not authorized**.
 - Reference material is not sent to services other than this development assistant.
+
+## System packages (`.undm`, D-087)
+A package never contains a password, user name or key: logins travel by name only and arrive
+empty. It does contain the system's configuration files as written, which can hold passwords
+or keys (e.g. base64 "encrypted" passwords in Black Box files, FortiGate files with secrets):
+treat a package as confidential, like those files; never commit one or attach it to a ticket.
+Import checks every file against the manifest's SHA-256 and refuses unsafe names before
+anything is created; firmware arrives unapproved.
+

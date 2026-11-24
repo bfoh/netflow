@@ -18,6 +18,7 @@ from undm.api.routers import (
     projects,
     provisioning,
     system,
+    systems,
     topology,
 )
 from undm.config import Settings, get_settings
@@ -103,7 +104,8 @@ def create_app(
                      "window shows the details.", "details": None})
 
     for r in (system.router, projects.router, projects.credentials_router, devices.router,
-              deployments.router, firmware.router, topology.router, provisioning.router):
+              deployments.router, firmware.router, topology.router, provisioning.router,
+              systems.router):
         app.include_router(r)
     return app
 

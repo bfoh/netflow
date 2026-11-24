@@ -918,7 +918,8 @@ durations); 5 report (per device: firmware and identity read last, each step's r
 duration, approver, warnings; print or save as HTML). Choices are kept in the browser only;
 the plans made are the record. The simulated FortiGate now also restores a base file, so the
 whole run can be practised on simulated devices (no statement about real units). Messages
-moved to the top right so they never cover the wizard's buttons. Catalog notes for the
+moved to the top centre so they never cover a page's buttons (bottom right hid
+the wizard's Next, top right the plan's Run). Catalog notes for the
 FortiGate 101F and 2930F brought up to date with the bench results.
 
 ### D-086 Page-by-page fixes (2026-11-24)
@@ -933,4 +934,23 @@ both kinds in one plan are refused with a reason); audit details are shown as na
 (raw JSON one click away); the topology has a legend and an "Add link…" dialog that works
 without dragging; a plan's page shows its latest 40 events with the earlier ones one click
 away, warnings marked, and the staging note no longer assumes base and site files.
+
+### D-087 Export and import of a system (`.undm`) (2026-11-24)
+Plan A, A5 (product owner decision: each colleague runs their own copy and shares prepared
+systems by export/import). `GET /api/projects/{id}/export[?include_firmware=true]` gives
+one zip: `manifest.json` (format `undm-system-package`, version 1, who and when) and the
+files it lists with their SHA-256: the system's settings, its devices as entered (no
+retrieved facts, no plans or history), the names of its logins (never a user name,
+password or key), its imported and generated configuration files, its topology and, on
+request, the approved firmware images that fit its models. Backups are not exported (they
+hold a device's running configuration). The team's files are exported as written and can
+hold passwords (Black Box base64): the package is confidential, and the Export dialog says
+so. `POST /api/systems/import` checks everything before creating anything: zip and format
+version, every listed file against its checksum, plain file names inside the package (no
+paths), sizes, driver ids known to this copy, links and files pointing at listed devices,
+a free system name (another one can be given). Logins are created by name without a
+password (the dialog lists them: store them on the Logins tab); firmware images arrive
+"uploaded", their vendor checksum re-checked, never approved. Both are audited
+(`system.export`, `system.import`). Not yet: mapping a package's login to an existing login
+of another system (logins belong to their system).
 

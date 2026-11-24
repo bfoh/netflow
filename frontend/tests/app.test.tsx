@@ -487,3 +487,23 @@ describe('Stage a system', () => {
     expect(screen.getByRole('button', { name: 'Create and continue' })).toBeDisabled();
   });
 });
+
+describe('system packages', () => {
+  it('after an import, says which logins need their passwords', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({
+      '/projects': [],
+      '/systems/import': { project: { id: 'p9', name: 'Site 12', description: '', site: '', purpose: '', created_at: '', updated_at: '' },
+        summary: { devices: 4, files: 5, logins: ['approved', 'factory'], links: 0, firmware_added: 0, firmware_already_here: 0 } },
+    });
+    renderAt('/projects');
+    await userEvent.click(await screen.findByRole('button', { name: 'Import…' }));
+    const dialog = await screen.findByRole('dialog');
+    const input = dialog.querySelector('input[type=file]') as HTMLInputElement;
+    await userEvent.upload(input, new File(['PK'], 'site12.undm', { type: 'application/zip' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
+    expect(await within(dialog).findByText('Next: store the passwords')).toBeInTheDocument();
+    expect(within(dialog).getByText('factory')).toBeInTheDocument();
+    expect(calls.some((c) => c.url === '/api/systems/import' && c.init?.body instanceof FormData)).toBe(true);
+  });
+});
