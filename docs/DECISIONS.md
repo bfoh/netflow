@@ -576,3 +576,18 @@ Regression tests: the fake FortiGate now fetches in the background and prints th
 lines and '#' marks; the old code fails that test with the bench's result. Still unknown
 (Q-39): what the unit prints when the fetch ends, and what it does when the TFTP server
 cancels a fetch or the SSH session closes during one.
+
+### D-064 After a clean file check, a returning FortiGate prompt means "wait for the restart" (2026-11-24)
+Bench, first base restore (101F v7.6.5): after "y" the unit printed "Please wait...",
+"Connect to TFTP server <PC> ...", "Get file from TFTP server OK.", "File check OK." and
+then its prompt (twice). UNDM concluded "did not accept it: it returned to its prompt
+without restarting" three seconds later and stopped. FortiOS prints the prompt before it
+restarts. Rule now: when the whole file was fetched, "y" was answered and the unit's
+answer has no error-looking line, a returning prompt starts a wait of up to 180 s
+(`restart_grace`) for the restart, i.e. the unit closing the session or its SSH port
+stopping answering (checked every 10 s). A restart then continues as before (wait for the
+unit, identity, verification of hostname/VDOM/version). An error-looking line ends the
+step at once as "did not accept it"; no restart within the grace is reported as "fetched
+and checked ... but did not restart within 180 s" with the unit's text. Applies to image
+and configuration fetches alike. Regression test: the fake FortiGate prints the bench's
+wording and its prompt before restarting; the old code fails it with the bench's result.

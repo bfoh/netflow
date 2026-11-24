@@ -152,6 +152,37 @@ def test_full_backup_is_restored_by_tftp_and_checked_by_facts(rig):
     assert v.ok and "VDOMs multiple" in v.message
 
 
+def test_base_restore_prompt_then_restart_is_waited_for(rig, monkeypatch):
+    """Bench, 101F v7.6.5 (2026-11-24): after "File check OK." the unit showed its prompt;
+    UNDM reported "did not accept it" within 3 s. The prompt after a clean check now means
+    waiting for the restart."""
+    from undm.drivers.ssh import base as ssh_base
+    monkeypatch.setattr(ssh_base, "tcp_port_open", lambda host, port, timeout=3.0: True)
+    rig.fg.restart_mode = "prompt_then_close"
+    r = rig.driver.apply_configuration(BACKUP, ApplyMode.REPLACE)
+    assert r.ok and r.data == {"restarting": True}, (r.message, r.diagnostics)
+    assert "returned to its prompt, then closed the session to restart" in r.message
+    assert rig.fg.restarts == 1 and rig.fg.hostname == "lab-fw-base"
+
+
+def test_prompt_then_ssh_port_down_is_a_restart(rig, monkeypatch):
+    from undm.drivers.ssh import base as ssh_base
+    monkeypatch.setattr(ssh_base, "tcp_port_open", lambda host, port, timeout=3.0: False)
+    rig.fg.restart_mode = "prompt_only"
+    r = rig.driver.apply_configuration(BACKUP, ApplyMode.REPLACE)
+    assert r.ok and "then restarted (its SSH port stopped answering)" in r.message
+
+
+def test_prompt_without_a_restart_is_reported_after_the_grace(rig, monkeypatch):
+    from undm.drivers.ssh import base as ssh_base
+    monkeypatch.setattr(ssh_base, "tcp_port_open", lambda host, port, timeout=3.0: True)
+    monkeypatch.setattr(FortiOSSsh, "restart_grace", 0.3)
+    rig.fg.restart_mode = "prompt_only"
+    r = rig.driver.apply_configuration(BACKUP, ApplyMode.REPLACE)
+    assert r.status is ResultStatus.FAILED and "did not restart within 0 s" in r.message
+    assert "File check OK." in r.diagnostics["device_output"]
+
+
 def test_backup_from_another_model_is_refused(rig):
     rig.fg.model = "FortiGate-60F"
     r = rig.driver.apply_configuration(BACKUP, ApplyMode.REPLACE)

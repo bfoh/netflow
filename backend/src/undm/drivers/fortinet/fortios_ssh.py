@@ -106,6 +106,10 @@ class FortiOSSsh(SshCliDriver):
     # After a complete transfer and a quiet minute, check the SSH port this often: a unit
     # that restarts without closing the session (as a 2930F did, D-054) is noticed.
     restart_probe_interval: ClassVar[float] = 10.0
+    # After fetching and checking a file without complaint the unit may show its prompt
+    # again before it restarts (bench, base restore on a 101F v7.6.5, 2026-11-24: "File
+    # check OK." then the prompt). UNDM then waits this long for the restart.
+    restart_grace: ClassVar[float] = 180.0
     # Facts read correctly from a real unit (bench, 2026-11-24): hostname, model, version,
     # serial number, VDOM mode.
     parser_validated_on = ("FortiGate-101F v7.2.6",)
@@ -285,6 +289,12 @@ class FortiOSSsh(SshCliDriver):
         files.withdraw(name)
         diagnostics: dict[str, object] = {"device_output": self._redact(talk.output)[-1500:]}
         transfer = self._settled_transfer(name)
+        after_prompt = ""
+        if (talk.ended == "prompt" and "y" in talk.replies and transfer is not None
+                and transfer.completed and not self._complaint(talk.output[talk.answered_at:])):
+            after_prompt, output = self._await_restart(talk.output)
+            diagnostics["device_output"] = self._redact(output)[-1500:]
+            self._restarting = after_prompt in ("closed", "down")
         if self._restarting:
             self.disconnect()
         if transfer is None:
@@ -303,7 +313,18 @@ class FortiOSSsh(SshCliDriver):
             return OperationResult.failed(
                 op, "The FortiGate did not ask the expected question, so nothing was "
                     "confirmed. Its output is below.", diagnostics)
-        if talk.ended == "prompt":
+        if after_prompt == "stopped":
+            return OperationResult.failed(
+                op, f"The FortiGate fetched and checked the {what} and returned to its "
+                    "prompt; UNDM stopped waiting for its restart on request. It may still "
+                    "restart with the file: check it.", diagnostics)
+        if after_prompt == "no_restart":
+            return OperationResult.failed(
+                op, f"The FortiGate fetched and checked the {what} and returned to its "
+                    f"prompt, but did not restart within {self.restart_grace:.0f} s. Check on "
+                    "the unit whether it took the file (hostname, version). Its answer is "
+                    "below.", diagnostics)
+        if talk.ended == "prompt" and not self._restarting:
             return OperationResult.failed(
                 op, f"The FortiGate fetched the {what} but did not accept it: it returned to "
                     "its prompt without restarting. Its answer is below.", diagnostics)
@@ -312,12 +333,53 @@ class FortiOSSsh(SshCliDriver):
                 op, f"The FortiGate fetched the {what} but neither restarted nor returned to "
                     f"its prompt ({talk.detail}). It may be waiting for an answer UNDM does not "
                     "give; check it on the console.", diagnostics)
-        how = ("closed the session to restart" if talk.ended == "closed"
-               else "is restarting (its SSH port stopped answering)")
+        if after_prompt == "closed":
+            how = "returned to its prompt, then closed the session to restart"
+        elif after_prompt == "down":
+            how = "returned to its prompt, then restarted (its SSH port stopped answering)"
+        elif talk.ended == "closed":
+            how = "closed the session to restart"
+        else:
+            how = "is restarting (its SSH port stopped answering)"
         return OperationResult.success(
             op, {"bytes": transfer.bytes_sent},
             f"the FortiGate fetched the {what} ({transfer.bytes_sent} bytes), accepted it "
             f"and {how}")
+
+    def _complaint(self, answer: str) -> bool:
+        """Whether the unit's answer has an error-looking line (prompt lines ignored)."""
+        return any(self._ERROR_REPLY.search(ln) for ln in answer.replace("\r", "").split("\n")
+                   if ln.strip() and not re.search(r"[#$]\s*$", ln))
+
+    def _await_restart(self, output: str) -> tuple[str, str]:
+        """The unit returned to its prompt after taking a file: wait for its restart.
+
+        Returns how the wait ended - "closed" (the unit closed the session), "down" (its
+        SSH port stopped answering), "refused" (it printed an error-looking line),
+        "stopped" (stop requested) or "no_restart" (``restart_grace`` passed) - and the
+        session output including what came after the prompt."""
+        start = next_probe = time.monotonic()
+        while True:
+            try:
+                chunk = str(self._conn.read_channel() or "")
+            except Exception:  # noqa: BLE001 - a closed session is what UNDM waits for
+                return "closed", output
+            if chunk:
+                output += chunk
+                if self._complaint(chunk):
+                    return "refused", output
+                continue
+            now = time.monotonic()
+            if now >= next_probe:
+                next_probe = now + self.restart_probe_interval
+                if not ssh_base.tcp_port_open(self.target.management_address,
+                                              self.target.port or 22):
+                    return "down", output
+            if self.should_stop is not None and self.should_stop():
+                return "stopped", output
+            if now - start > self.restart_grace:
+                return "no_restart", output
+            time.sleep(self.poll_interval)
 
     def stage_firmware(self, image: FirmwareImageRef) -> OperationResult:
         op = Op.STAGE_FIRMWARE

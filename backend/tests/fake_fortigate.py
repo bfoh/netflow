@@ -7,7 +7,9 @@ What IS real: the fake fetches files from UNDM's TFTP server with an independent
 client (tftpy), so publishing, the per-device allowlist and transfer records are
 exercised end to end. Taken from the bench (101F v7.2.6, 2026-11-24): after the image
 question the unit prints "Please wait...", "Connect to tftp server <address> ..." and
-then lines of '#' progress marks while it fetches (``progress_marks``).
+then lines of '#' progress marks while it fetches (``progress_marks``). Base restore on
+the bench (101F v7.6.5): "Please wait...", "Connect to TFTP server <address> ...", "Get file
+from TFTP server OK.", "File check OK." and then its prompt (``restart_mode`` "prompt_*").
 """
 
 from __future__ import annotations
@@ -41,7 +43,9 @@ class FakeFortiGate:
     password: str = ""  # admin password the unit accepts
     # Behaviour switches for tests.
     image_rejected: bool = False
-    restart_mode: str = "close"  # close | silent
+    # close | silent | prompt_then_close (prompt, then closes after a few reads) |
+    # prompt_only (prompt, never restarts)
+    restart_mode: str = "close"
     restore_sets_password: str | None = None
     bad_statements: set[str] = field(default_factory=set)
     info_replies: dict[str, str] = field(default_factory=dict)
@@ -68,6 +72,7 @@ class FakeFortiGate:
     _out: str = ""
     _pending: str = ""
     _closing: bool = False
+    _close_after: int = 0
     _closed: bool = False
     _down: int = 0
     _stack: list[str] = field(default_factory=list)
@@ -157,6 +162,9 @@ class FakeFortiGate:
             raise OSError("Socket is closed")
         with self._lock:
             out, self._out = self._out, ""
+        if self._close_after:
+            self._close_after -= 1
+            self._closing = self._close_after == 0
         if self._closing and not out:
             self._closed = True
             raise OSError("Socket is closed")
@@ -223,7 +231,13 @@ class FakeFortiGate:
         self.fetched.append(name)
         return buf.getvalue()
 
-    def _restart(self) -> None:
+    def _restart(self, prompt: str = "") -> None:
+        if self.restart_mode.startswith("prompt_"):
+            self._out += "\r\n" + (prompt or self.prompt_text()) + "\r\n" + (
+                prompt or self.prompt_text())
+            if self.restart_mode == "prompt_only":
+                return
+            self._close_after = 5
         self.restarts += 1
         self._down = self.down_for_connects
         if self.restart_mode == "close":
@@ -264,6 +278,8 @@ class FakeFortiGate:
         if key != "y":
             self._reply("")
             return
+        before = self.prompt_text()  # the bench unit showed its old prompt after the check
+        self._out += (f"\r\nPlease wait...\r\nConnect to TFTP server {self._args[1]} ...\r\n")
         data = self._fetch(*self._args).decode()
         if not data.startswith("#config-version="):
             self._reply("Invalid config file.")
@@ -276,8 +292,8 @@ class FakeFortiGate:
                         if ln.strip() and not ln.startswith("#")]
         if self.restore_sets_password is not None:
             self.password = self.restore_sets_password
-        self._out += "Get config file from tftp server OK.\r\nFile check OK.\r\n"
-        self._restart()
+        self._out += "\r\nGet file from TFTP server OK.\r\nFile check OK.\r\n"
+        self._restart(before)
 
     def _answer_unknown(self, key: str) -> None:
         self._reply("")

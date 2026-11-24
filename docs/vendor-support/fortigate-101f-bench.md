@@ -59,6 +59,8 @@ hardware. Order agreed 2026-11-19: firmware → base file → site file (D-034).
 - **"did not accept it: it returned to its prompt"** — the unit refused the file (for example
   a licence or image check message, shown in the events).
 - **"neither restarted nor returned to its prompt"** — check the unit on the console.
+- **"fetched and checked … but did not restart within 180 s"** — the unit took the file
+  without complaint but did not restart; check on the unit whether it applied it.
 - **"Transfer incomplete … UNDM has withdrawn the file"** — the fetch was cut off by UNDM (or
   the unit stopped acknowledging); the unit cannot finish it later. Check its output in the
   events and that it still runs the old version.
@@ -83,3 +85,4 @@ addresses as usual), especially any "device output" event, and the time each ste
 | 2026-11-24 | same unit | Firmware image upload | not verified | Uploaded without a checksum; Fortinet publishes MD5 and SHA-512, which UNDM did not accept. Fixed: SHA-512 accepted, checksum can be added after upload (D-061). |
 | 2026-11-24 | same unit | Firmware image approval | decision | Fortinet's SHA-512 could not be obtained; product owner decided to allow approval with a written reason (D-062). |
 | 2026-11-24 | same unit | Firmware 7.2.6 → 7.6.5 (real plan) | **failed, UNDM fault** | After "y": "Please wait...", "Connect to tftp server <PC> ...", then '#' progress marks. UNDM took the '#' line for the prompt and failed after 5 s: "Transfer incomplete (5581824 of 101271832 bytes)"; recovery found v7.2.6. The TFTP server did not stop the fetch that was under way, and **the unit finished it, installed 7.6.5 and restarted** (product owner, same day), although UNDM had closed the SSH session that started the fetch and recorded the plan as rolled back. That plan's record is therefore wrong about the outcome. Fixed (D-063): a fetch under way is now cancelled when UNDM ends the step. |
+| 2026-11-24 | same unit (v7.6.5) | Base file restore | **failed, UNDM fault** | After "y": "Please wait...", "Connect to TFTP server <PC> ...", "Get file from TFTP server OK.", "File check OK.", then the prompt (twice). UNDM took the prompt for a refusal after 3 s; plan ended in recovery required. Whether the unit then restarted with the base file: to be checked. Fixed (D-064): UNDM now waits up to 180 s for the restart. |
