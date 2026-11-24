@@ -9,10 +9,12 @@ import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { DiffView } from '../components/DiffView';
 import { PageHeader, QueryState } from '../components/Page';
 import { fmtDate } from '../services/format';
-import { RUNNING_STATES, useAction, useDeployment, useProjectDevices } from '../hooks/queries';
+import { RUNNING_STATES, useAction, useDeployment, usePolicy, useProjectDevices } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Deployment } from '../types/api';
-import { stageLabel, stateLabel } from '../services/labels';
+import { applyModeLabel, stageLabel, stateLabel } from '../services/labels';
+import { DialogError } from '../components/ConfirmDialog';
+import { useConfirm } from '../hooks/useConfirm';
 
 const STEPS = ['Validate & preview', 'Approve', 'Preflight', 'Back up', 'Deploy', 'Verify', 'Complete'];
 const STEP_OF: Record<string, number> = {
@@ -45,13 +47,16 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
   const [end, setEnd] = useState(() => toUtcInput(new Date(Date.now() + 2 * 3600 * 1000)));
   const firmware = dep.kind === 'firmware';
   const approve = useAction(() => api.approveDeployment(dep.id, firmware
-    ? { window_start: fromUtcInput(start), window_end: fromUtcInput(end) } : undefined), 'Plan approved');
+    ? { window_start: fromUtcInput(start), window_end: fromUtcInput(end) } : undefined), 'Plan approved',
+    { errorInDialog: firmware });
+  const policy = usePolicy();
+  const [ask, confirmDialog] = useConfirm();
   const [started, setStarted] = useState(false);
   const [stopOpen, { open: openStop, close: closeStop }] = useDisclosure();
   const execute = useAction(() => api.executeDeployment(dep.id),
     'Run started on the server; the events below show each step');
   const stop = useAction(() => api.stopDeployment(dep.id), 'Stop requested');
-  const cancel = useAction(() => api.cancelDeployment(dep.id), 'Plan cancelled');
+  const cancel = useAction(() => api.cancelDeployment(dep.id), 'Plan cancelled', { errorInDialog: true });
   // Between the start request and the first stored step the plan still reads "ready".
   const running = execute.isPending || (started && dep.state === 'ready');
   const active = running || RUNNING_STATES.has(dep.state);
@@ -62,10 +67,12 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
       {dep.state === 'awaiting_approval' && <Button onClick={() => (firmware ? openWindow() : approve.mutate())} loading={approve.isPending}>Approve</Button>}
       <Modal opened={windowOpen} onClose={closeWindow} title="Approve firmware upgrade">
         <Stack>
-          <Text size="sm">Firmware upgrades can only run inside an approved maintenance window (maximum 24 hours). The approver must be
-            a different person from the plan's creator.</Text>
+          <Text size="sm">Firmware upgrades can only run inside an approved maintenance window (maximum 24 hours).
+            {policy.data?.firmware_require_separate_approver !== false
+              ? ` The approver must be a different person from the plan's maker (${dep.created_by}).` : ''}</Text>
           <TextInput type="datetime-local" label="Window start (UTC)" value={start} onChange={(e) => setStart(e.currentTarget.value)} />
           <TextInput type="datetime-local" label="Window end (UTC)" value={end} onChange={(e) => setEnd(e.currentTarget.value)} />
+          <DialogError error={approve.error} />
           <Group justify="flex-end">
             <Button variant="default" onClick={closeWindow}>Back</Button>
             <Button loading={approve.isPending} onClick={() => approve.mutate(undefined, { onSuccess: closeWindow })}>Approve with this window</Button>
@@ -73,7 +80,12 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
         </Stack>
       </Modal>
       {dep.state === 'ready' && !started && <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={open} loading={running}>{dep.dry_run ? 'Run dry run' : 'Run plan'}</Button>}
-      {canCancel && !active && <Button variant="default" onClick={() => cancel.mutate()} loading={cancel.isPending}>Cancel</Button>}
+      {canCancel && !active && <Button variant="default" loading={cancel.isPending} onClick={() => ask({
+        title: 'Cancel this plan?', confirmLabel: 'Cancel plan',
+        message: 'The plan will not run and cannot be approved or run later. No device has been changed by it. Make a new plan if you need it again.',
+        onConfirm: () => cancel.mutateAsync(),
+      })}>Cancel plan</Button>}
+      {confirmDialog}
       {active && <Button color="red" variant="light" onClick={openStop} loading={stop.isPending}
         disabled={stop.isSuccess}>{stop.isSuccess ? 'Stopping…' : 'Stop'}</Button>}
       <Modal opened={stopOpen} onClose={closeStop} title="Stop this plan?">
@@ -81,8 +93,8 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
           <Text size="sm">UNDM stops at the next safe point: between steps, while waiting for a device to come back, or
             while waiting for a device's answer. A command a device is already carrying out (a transfer, a restart) is not
             undone, and no rollback is started.</Text>
-          <Text size="sm">If a device may already have been changed, the plan ends as <b>manual recovery required</b> and names
-            it: check that device before making further changes. If nothing was changed yet, it ends as <b>failed</b>.</Text>
+          <Text size="sm">If a device may already have been changed, the plan ends as <b>Needs attention</b> and names
+            it: check that device before making further changes. If nothing was changed yet, it ends as <b>Failed</b>.</Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={closeStop}>Back</Button>
             <Button color="red" onClick={() => { closeStop(); stop.mutate(); }}>Stop</Button>
@@ -98,9 +110,9 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
                 : `Upgrades ${dep.targets.length} device(s) one at a time: back up configuration, stage, install, reboot, wait for the device, verify the version. Stops at the first failure.`)
               : dep.dry_run
                 ? `Connects to ${dep.targets.length} device(s), checks identity and compares configurations. Nothing is changed.`
-                : `Backs up and then changes ${dep.targets.length} device(s) in ${dep.apply_mode} mode, verifies the result and rolls back where supported if anything fails.`}
+                : `Backs up and then changes ${dep.targets.length} device(s) with ${applyModeLabel(dep.apply_mode)}, verifies the result and puts the device back where it can if anything fails.`}
           </Text>
-          <Alert color="violet" icon={<IconFlask size={16} />} p="xs">Check the environment badge of every target below: simulated devices exist only in UNDM; lab devices are real equipment.</Alert>
+          <Alert color="violet" icon={<IconFlask size={16} />} p="xs">Check the badge of every device below: Simulated devices exist only in UNDM; Real devices are equipment on your bench.</Alert>
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Back</Button>
             <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={() => { close(); setStarted(true); execute.mutate(undefined, { onError: () => setStarted(false) }); }}>Confirm</Button>
@@ -222,7 +234,7 @@ export function DeploymentDetailPage() {
         </Stepper>
       </Card>
 
-      <Title order={4} mb="xs">Targets</Title>
+      <Title order={2} size="h4" mb="xs">Targets</Title>
       <Accordion variant="separated" multiple mb="lg">
         {d.targets.map((t) => {
           const dev = byId.get(t.device_id);
@@ -263,7 +275,7 @@ export function DeploymentDetailPage() {
       </Accordion>
 
       <Group justify="space-between" mb="xs">
-        <Title order={4}>Events ({d.events.length})</Title>
+        <Title order={2} size="h4">Events ({d.events.length})</Title>
         <CopyButton value={d.events.map((e) => `${fmtDate(e.timestamp)}  ${e.stage}${e.device_id ? ` · ${byId.get(e.device_id)?.name ?? ''}` : ''} — ${e.status}: ${e.message}`).join('\n')}>
           {({ copied, copy }) => <Button size="xs" variant="light" onClick={copy}>{copied ? 'Copied' : 'Copy events as text'}</Button>}
         </CopyButton>

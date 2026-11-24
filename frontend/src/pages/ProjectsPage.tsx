@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router';
 
 import { PageHeader, QueryState } from '../components/Page';
 import { fmtDate } from '../services/format';
+import { DialogError } from '../components/ConfirmDialog';
 import { useAction, useAllDevices, useProjects } from '../hooks/queries';
 import { api } from '../services/api';
 
@@ -15,7 +16,7 @@ export function ProjectsPage() {
   const [opened, { open, close }] = useDisclosure();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', description: '', site: '', purpose: '' });
-  const create = useAction(api.createProject, 'System created');
+  const create = useAction(api.createProject, 'System created', { errorInDialog: true });
 
   const submit = () =>
     create.mutate(form, {
@@ -62,6 +63,7 @@ export function ProjectsPage() {
             onChange={(e) => setForm({ ...form, purpose: e.currentTarget.value })} />
           <Textarea label="Description" autosize minRows={2} value={form.description}
             onChange={(e) => setForm({ ...form, description: e.currentTarget.value })} />
+          <DialogError error={create.error} />
           <Button onClick={submit} loading={create.isPending} disabled={!form.name.trim()}>Create system</Button>
         </Stack>
       </Modal>

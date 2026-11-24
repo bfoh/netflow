@@ -68,9 +68,20 @@ def update_project(
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project(project_id: str, session: SessionDep, actor: ActorDep) -> None:
     p = get_project(session, project_id)
+    # The system's logins go with it, so their passwords leave the credential store too.
+    removed, kept = 0, []
+    for ref in p.credential_refs:
+        if ref.provider != "keyring":
+            continue
+        try:
+            creds.delete_secret(ref.provider, ref.locator)
+            removed += 1
+        except creds.CredentialStoreError:
+            kept.append(ref.name)
     session.delete(p)
     audit.record(session, actor, "project.delete", "project", project_id,
-                 details={"name": p.name})
+                 details={"name": p.name, "stored_logins_removed": removed,
+                          "stored_logins_not_removed": kept})
 
 
 def _ref_out(ref: CredentialRef) -> CredentialRefOut:

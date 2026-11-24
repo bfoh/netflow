@@ -43,7 +43,7 @@ function Step({ done, children }: { done: boolean; children: ReactNode }) {
 function GettingStarted({ hasSystems, hasDevices }: { hasSystems: boolean; hasDevices: boolean }) {
   return (
     <Card withBorder mb="lg">
-      <Title order={3} mb="xs">Getting started</Title>
+      <Title order={2} size="h3" mb="xs">Getting started</Title>
       <Text size="sm" c="dimmed" mb="sm">Staging a system takes four steps. UNDM checks every change and asks for approval before it touches a device.</Text>
       <List spacing="xs" size="sm" center>
         <Step done={hasSystems}><Anchor component={Link} to="/projects">Create a system</Anchor>: the set of devices you stage together.</Step>
@@ -81,7 +81,7 @@ export function DashboardPage() {
       </SimpleGrid>
       {waiting.length > 0 && (
         <Card withBorder mb="lg">
-          <Title order={3} mb="xs">Waiting for you</Title>
+          <Title order={2} size="h3" mb="xs">Waiting for you</Title>
           <Stack gap={6}>
             {waiting.slice(0, 8).map((x) => (
               <Group key={x.id} justify="space-between" wrap="nowrap">
@@ -101,7 +101,7 @@ export function DashboardPage() {
       )}
       <SimpleGrid cols={{ base: 1, lg: 2 }}>
         <Card withBorder>
-          <Title order={3} mb="xs">Recent plans</Title>
+          <Title order={2} size="h3" mb="xs">Recent plans</Title>
           {deps.length === 0 ? <Text c="dimmed" size="sm">No plans yet. A plan is one approved piece of work on devices, such as loading a file or upgrading firmware.</Text> : (
             <Table.ScrollContainer minWidth={420}>
               <Table verticalSpacing={6}>
@@ -121,7 +121,7 @@ export function DashboardPage() {
           )}
         </Card>
         <Card withBorder>
-          <Title order={3} mb="xs">Systems</Title>
+          <Title order={2} size="h3" mb="xs">Systems</Title>
           {systems.length === 0 ? <Text c="dimmed" size="sm">No systems yet. <Anchor component={Link} to="/projects">Create one</Anchor>.</Text> : (
             <Stack gap={6}>
               {systems.map((p) => {

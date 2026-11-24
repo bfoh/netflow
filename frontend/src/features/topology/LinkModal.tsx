@@ -21,7 +21,7 @@ export function LinkModal({ initial, names, onSave, onDelete, onClose, busy }: {
         </SimpleGrid>
         <div>
           <Text size="sm" fw={500} mb={4}>Link mode</Text>
-          <SegmentedControl value={l.mode} onChange={(v) => setL({ ...l, mode: v as TopologyLinkInput['mode'], vlans: v === 'routed' ? [] : l.vlans })}
+          <SegmentedControl aria-label="Link mode" value={l.mode} onChange={(v) => setL({ ...l, mode: v as TopologyLinkInput['mode'], vlans: v === 'routed' ? [] : l.vlans })}
             data={[{ value: 'routed', label: 'Routed (L3)' }, { value: 'access', label: 'Access (1 VLAN)' }, { value: 'trunk', label: 'Trunk' }]} />
         </div>
         {l.mode !== 'routed' && (

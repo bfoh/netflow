@@ -79,7 +79,7 @@ export function StagingPage() {
         {!running && !done && !ended && <Text size="sm" c="dimmed">
           One approval covers both steps. Step 2 is previewed when it runs, after the base file is on the device; running it on its
           own is refused until step 1 has succeeded.</Text>}
-        <Title order={4}>Steps</Title>
+        <Title order={2} size="h4">Steps</Title>
         {steps.map((s) => <StepCard key={s.id} step={s} />)}
       </Stack>
     </>

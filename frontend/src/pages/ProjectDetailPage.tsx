@@ -10,6 +10,7 @@ import { fmtDate, planKind } from '../services/format';
 import { AddDeviceModal } from '../features/devices/AddDeviceModal';
 import { CredentialsPanel } from '../features/devices/CredentialsPanel';
 import { DeviceTable } from '../features/devices/DeviceTable';
+import { useConfirm } from '../hooks/useConfirm';
 import { useAction, useDeployments, useProject, useProjectDevices } from '../hooks/queries';
 import { api } from '../services/api';
 import type { CertificateSubject, Project } from '../types/api';
@@ -17,18 +18,23 @@ import type { CertificateSubject, Project } from '../types/api';
 function ProjectSettings({ project }: { project: Project }) {
   const [form, setForm] = useState(project);
   const save = useAction((p: Partial<Project>) => api.updateProject(project.id, p), 'System saved');
-  const del = useAction(() => api.deleteProject(project.id), 'System deleted');
+  const del = useAction(() => api.deleteProject(project.id), 'System deleted', { errorInDialog: true });
   const navigate = useNavigate();
+  const [ask, confirmDialog] = useConfirm();
   return (
     <Card withBorder maw={640}>
+      {confirmDialog}
       <Stack>
         <TextInput label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.currentTarget.value })} />
         <TextInput label="Site or location" value={form.site} onChange={(e) => setForm({ ...form, site: e.currentTarget.value })} />
-        <TextInput label="Network purpose" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.currentTarget.value })} />
+        <TextInput label="Purpose" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.currentTarget.value })} />
         <Textarea label="Description" autosize minRows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.currentTarget.value })} />
         <Group justify="space-between">
           <Button color="red" variant="subtle" loading={del.isPending}
-            onClick={() => { if (window.confirm(`Delete system "${project.name}" and all its devices and history?`)) del.mutate(undefined, { onSuccess: () => void navigate('/projects') }); }}>
+            onClick={() => ask({
+              title: `Delete system "${project.name}"?`, confirmLabel: 'Delete system', typed: project.name,
+              message: 'Its devices, files, logins (with their passwords in Credential Manager), plans and their history are removed from UNDM. The devices themselves are not touched.',
+              onConfirm: async () => { await del.mutateAsync(); void navigate('/projects'); } })}>
             Delete system
           </Button>
           <Button loading={save.isPending} onClick={() => save.mutate({ name: form.name, site: form.site, purpose: form.purpose, description: form.description })}>Save</Button>
@@ -54,7 +60,7 @@ function CertificateSettings({ project }: { project: Project }) {
   return (
     <Card withBorder maw={640}>
       <Stack>
-        <Title order={5}>HTTPS certificate (Aruba 2930F)</Title>
+        <Title order={2} size="h5">HTTPS certificate (Aruba 2930F)</Title>
         <Text size="sm" c="dimmed">
           Before loading a 2930F file that makes the web interface HTTPS-only, UNDM creates the self-signed certificate with
           your team's commands and answers the switch's questions with these values. They are stored only in this UNDM
@@ -106,20 +112,22 @@ export function ProjectDetailPage() {
         </Tabs.Panel>
         <Tabs.Panel value="deployments">
           <Card withBorder padding={0}>
-            <Table verticalSpacing="xs" horizontalSpacing="md">
-              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead>
-              <Table.Tbody>
-                {(deployments.data ?? []).map((d) => (
-                  <Table.Tr key={d.id}>
-                    <Table.Td><Anchor component={Link} to={`/deployments/${d.id}`}>{fmtDate(d.created_at)}</Anchor></Table.Td>
-                    <Table.Td>{planKind(d)}</Table.Td>
-                    <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
-                    <Table.Td><StateBadge state={d.state} /></Table.Td>
-                  </Table.Tr>
-                ))}
-                {deployments.data?.length === 0 && <Table.Tr><Table.Td colSpan={5}><Text c="dimmed" ta="center" p="md">No plans yet. Make one on the Plans page.</Text></Table.Td></Table.Tr>}
-              </Table.Tbody>
-            </Table>
+            <Table.ScrollContainer minWidth={560}>
+              <Table verticalSpacing="xs" horizontalSpacing="md">
+                <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead>
+                <Table.Tbody>
+                  {(deployments.data ?? []).map((d) => (
+                    <Table.Tr key={d.id}>
+                      <Table.Td><Anchor component={Link} to={`/deployments/${d.id}`}>{fmtDate(d.created_at)}</Anchor></Table.Td>
+                      <Table.Td>{planKind(d)}</Table.Td>
+                      <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
+                      <Table.Td><StateBadge state={d.state} /></Table.Td>
+                    </Table.Tr>
+                  ))}
+                  {deployments.data?.length === 0 && <Table.Tr><Table.Td colSpan={5}><Text c="dimmed" ta="center" p="md">No plans yet. Make one on the Plans page.</Text></Table.Td></Table.Tr>}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
           </Card>
         </Tabs.Panel>
         <Tabs.Panel value="credentials"><CredentialsPanel projectId={projectId} /></Tabs.Panel>
@@ -127,7 +135,7 @@ export function ProjectDetailPage() {
           <SimpleGrid cols={1}>
             <ProjectSettings key={p.updated_at} project={p} />
             <CertificateSettings key={`cert-${p.updated_at}`} project={p} />
-            <Title order={6} c="dimmed">Created {fmtDate(p.created_at)} · updated {fmtDate(p.updated_at)}</Title>
+            <Title order={3} size="h6" c="dimmed">Created {fmtDate(p.created_at)} · updated {fmtDate(p.updated_at)}</Title>
           </SimpleGrid>
         </Tabs.Panel>
       </Tabs>

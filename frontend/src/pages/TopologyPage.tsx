@@ -128,7 +128,7 @@ function Side({ topo }: { topo: Topology }) {
     <Stack>
       <Card withBorder>
         <Group justify="space-between" mb="xs">
-          <Title order={5}>Validation</Title>
+          <Title order={2} size="h5">Validation</Title>
           {topo.issues.length === 0
             ? <Badge color="teal" variant="light" leftSection={<IconCircleCheck size={12} />}>no issues</Badge>
             : <Badge color={errors.length ? 'red' : 'yellow'} variant="light">{errors.length} errors · {topo.issues.length - errors.length} warnings</Badge>}
@@ -143,18 +143,20 @@ function Side({ topo }: { topo: Topology }) {
         </Stack>
       </Card>
       <Card withBorder padding={0}>
-        <Title order={5} p="sm" pb={0}>Links ({topo.links.length})</Title>
-        <Table verticalSpacing={4} horizontalSpacing="sm">
-          <Table.Tbody>
-            {topo.links.map((l) => (
-              <Table.Tr key={l.id}>
-                <Table.Td><Text size="xs">{names[l.a_device_id]}:{l.a_interface}</Text></Table.Td>
-                <Table.Td><Text size="xs">{names[l.b_device_id]}:{l.b_interface}</Text></Table.Td>
-                <Table.Td><Text size="xs">{l.mode}{l.vlans.length ? ` ${l.vlans.join(',')}` : ''}</Text></Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+        <Title order={2} size="h5" p="sm" pb={0}>Links ({topo.links.length})</Title>
+        <Table.ScrollContainer minWidth={520}>
+          <Table verticalSpacing={4} horizontalSpacing="sm">
+            <Table.Tbody>
+              {topo.links.map((l) => (
+                <Table.Tr key={l.id}>
+                  <Table.Td><Text size="xs">{names[l.a_device_id]}:{l.a_interface}</Text></Table.Td>
+                  <Table.Td><Text size="xs">{names[l.b_device_id]}:{l.b_interface}</Text></Table.Td>
+                  <Table.Td><Text size="xs">{l.mode}{l.vlans.length ? ` ${l.vlans.join(',')}` : ''}</Text></Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       </Card>
     </Stack>
   );
@@ -169,7 +171,7 @@ export function TopologyPage() {
     <>
       <PageHeader title="Topology" description="Design devices and the links between their interfaces. The graph, not the drawing, is what UNDM validates." />
       <Group mb="md">
-        <Select label="System" w={320} data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+        <Select label="System" w="100%" maw={320} data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
           value={projectId || null} onChange={(v) => v && setParams({ project: v })} allowDeselect={false} />
       </Group>
       <QueryState isLoading={topo.isLoading} error={topo.error} />

@@ -69,7 +69,7 @@ function Overview({ d }: { d: Device }) {
   return (
     <SimpleGrid cols={{ base: 1, lg: 2 }}>
       <Card withBorder>
-        <Title order={3} size="h5" mb="xs">What you entered</Title>
+        <Title order={2} size="h5" mb="xs">What you entered</Title>
         <Table verticalSpacing={4}><Table.Tbody>
           <Row k="Model" v={`${d.manufacturer} ${d.model}`} />
           <Row k="Role" v={d.role} />
@@ -96,7 +96,7 @@ function Overview({ d }: { d: Device }) {
       <Stack>
         <Card withBorder>
           <Group justify="space-between" mb="xs">
-            <Title order={3} size="h5">What the device reported</Title>
+            <Title order={2} size="h5">What the device reported</Title>
             <Group gap="xs">
               <Button size="xs" variant="light" leftSection={<IconPlugConnected size={14} />} loading={op.isPending} onClick={() => op.mutate('check_reachability')}>Test connection</Button>
               <Button size="xs" variant="light" loading={op.isPending} onClick={() => op.mutate('get_facts')}>Retrieve information</Button>
@@ -122,7 +122,7 @@ function Overview({ d }: { d: Device }) {
           )}
         </Card>
         <Card withBorder>
-          <Title order={3} size="h5" mb="xs">Status</Title>
+          <Title order={2} size="h5" mb="xs">Status</Title>
           <Table verticalSpacing={4}><Table.Tbody>
             <Row k="Status" v={<StateBadge state={d.deployment_status} />} />
             <Row k="Last connection" v={fmtDate(d.last_connection_at)} />
@@ -131,7 +131,7 @@ function Overview({ d }: { d: Device }) {
           </Table.Tbody></Table>
         </Card>
         <Card withBorder>
-          <Title order={3} size="h5" mb="xs">What UNDM can do with it</Title>
+          <Title order={2} size="h5" mb="xs">What UNDM can do with it</Title>
           <Group gap={6}>{d.capabilities.map((c) => <Badge key={c} variant="light" color="gray" tt="none">{capabilityLabel(c)}</Badge>)}</Group>
           <Text size="xs" c="dimmed" mt="xs">{d.environment === 'simulated'
             ? 'A simulated device: this says nothing about real hardware.'

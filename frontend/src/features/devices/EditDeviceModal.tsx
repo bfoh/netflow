@@ -2,6 +2,7 @@ import { Alert, Button, Group, Modal, NumberInput, Select, SimpleGrid, Stack, Ta
 import { IconAlertTriangle } from '@tabler/icons-react';
 import { useState } from 'react';
 
+import { DialogError } from '../../components/ConfirmDialog';
 import { useAction, useCredentialRefs, useDrivers } from '../../hooks/queries';
 import { api } from '../../services/api';
 import { driverLabel } from '../../services/labels';
@@ -16,7 +17,7 @@ export function EditDeviceModal({ device, opened, onClose }: { device: Device; o
   const drivers = useDrivers();
   const refs = useCredentialRefs(device.project_id);
   const [f, setF] = useState<DeviceInput>({ ...device });
-  const save = useAction((body: DeviceInput) => api.updateDevice(device.id, body), 'Device saved');
+  const save = useAction((body: DeviceInput) => api.updateDevice(device.id, body), 'Device saved', { errorInDialog: true });
   const driver = drivers.data?.find((d) => d.driver_id === f.driver_id);
   const vendorDrivers = (drivers.data ?? []).filter((d) => d.vendor === device.manufacturer);
   const set = (k: keyof DeviceInput) => (e: { currentTarget: { value: string } }) => setF({ ...f, [k]: e.currentTarget.value });
@@ -85,6 +86,7 @@ export function EditDeviceModal({ device, opened, onClose }: { device: Device; o
         </SimpleGrid>
         <TagsInput label="Tags" value={f.tags ?? []} onChange={(tags) => setF({ ...f, tags })} />
         <Textarea label="Notes" autosize minRows={2} value={f.notes ?? ''} onChange={set('notes')} />
+        <DialogError error={save.error} />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>Cancel</Button>
           <Button onClick={submit} loading={save.isPending} disabled={!f.name?.trim()}>Save</Button>

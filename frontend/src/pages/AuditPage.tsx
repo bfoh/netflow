@@ -22,7 +22,7 @@ export function AuditPage() {
       <PageHeader title="Audit log"
         description="Everything done in UNDM: who did it, when, on what, and the result. Passwords are never recorded." />
       <Group mb="md"><TextInput placeholder="Filter by name, action, device or details" leftSection={<IconSearch size={16} />}
-        value={q} onChange={(e) => setQ(e.currentTarget.value)} w={360} aria-label="Filter audit events" /></Group>
+        value={q} onChange={(e) => setQ(e.currentTarget.value)} w="100%" maw={360} aria-label="Filter audit events" /></Group>
       <QueryState isLoading={audit.isLoading} error={audit.error} />
       <Card withBorder padding={0}>
         <Table.ScrollContainer minWidth={820}>
@@ -43,7 +43,7 @@ export function AuditPage() {
                     </Group>)}</Table.Td>
                 </Table.Tr>
               ))}
-              {rows.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text c="dimmed" ta="center" p="md">No audit events.</Text></Table.Td></Table.Tr>}
+              {rows.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text c="dimmed" ta="center" p="md">Nothing recorded yet, or nothing matches the filter.</Text></Table.Td></Table.Tr>}
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>

@@ -20,7 +20,7 @@ function ConfigChoice({ deviceId, value, onChange }: { deviceId: string; value: 
     { value: DEFAULT_CHOICE, label: 'Latest generated (or latest imported)' },
     ...(configs.data ?? []).map((v) => ({ value: v.id, label: versionLabel(v) })),
   ];
-  return <Select size="xs" w={320} aria-label="Configuration to deploy" data={data} value={value}
+  return <Select size="xs" w="100%" maw={320} aria-label="Configuration to deploy" data={data} value={value}
     onChange={(v) => onChange(v ?? DEFAULT_CHOICE)} allowDeselect={false} />;
 }
 import { api } from '../services/api';
@@ -47,7 +47,7 @@ function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode, loginAfte
         {report.summary}{mode ? ` → loaded as ${applyModeLabel(mode)}` : ''}{report.blocked_reason ? `. ${report.blocked_reason}` : ''}
       </Text>
       {(report.secret_slots ?? []).map((slot) => (
-        <Select key={slot.slot_id} size="xs" w={320} clearable
+        <Select key={slot.slot_id} size="xs" w="100%" maw={320} clearable
           label={`Value for ${slot.setting} (line ${slot.line})`}
           description={secrets[slot.slot_id] ? 'Sent from Windows Credential Manager; never shown or stored with the plan.' : 'Not set: the value written in the file is sent.'}
           placeholder={refs.data?.length ? 'Choose a login' : 'Add one on the system\'s Logins tab'}
@@ -60,7 +60,7 @@ function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode, loginAfte
           }} />
       ))}
       {report.apply_mode === 'replace' && (
-        <Select size="xs" w={320} clearable label="Login after loading (optional)"
+        <Select size="xs" w="100%" maw={320} clearable label="Login after loading (optional)"
           description={loginAfter
             ? 'UNDM logs in with this after the restart and keeps it for the device. If the unit then demands a new password, UNDM sets the device\'s current (approved) login where it knows the questions (FortiGate), otherwise it waits for you to set it by hand; the device then keeps its current login.'
             : 'Choose it if the file changes the login (2930F files: the approved password; FortiGate base file: the password it sets).'}
@@ -98,7 +98,7 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
 
   return (
     <Card withBorder>
-      <Title order={4} mb="xs">New configuration plan</Title>
+      <Title order={2} size="h4" mb="xs">New configuration plan</Title>
       <Text size="sm" c="dimmed" mb="md">
         For each selected device choose which configuration to deploy (default: the latest generated one, or the latest
         imported file if nothing was generated). It is validated and previewed against the device.
@@ -141,7 +141,7 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
       <Group mb="md" wrap="wrap">
         <Switch label="Dry run (read-only, no approval needed)" checked={dryRun} onChange={(e) => setDryRun(e.currentTarget.checked)} />
         <Group gap="xs"><Text size="sm">Apply mode</Text>
-          <SegmentedControl size="xs" value={mode} onChange={setMode} data={[{ value: 'merge', label: 'Merge' }, { value: 'replace', label: 'Replace' }]} /></Group>
+          <SegmentedControl size="xs" aria-label="How the file is applied" value={mode} onChange={setMode} data={[{ value: 'merge', label: 'Merge' }, { value: 'replace', label: 'Replace' }]} /></Group>
       </Group>
       {mode === 'replace' && (
         <Alert color="yellow" icon={<IconInfoCircle size={16} />} mb="md">
@@ -183,7 +183,7 @@ function NewStagingPlan({ projectId }: { projectId: string }) {
 
   return (
     <Card withBorder>
-      <Title order={4} mb="xs">New staging plan (base file, then site file)</Title>
+      <Title order={2} size="h4" mb="xs">New staging plan (base file, then site file)</Title>
       <Text size="sm" c="dimmed" mb="md">
         For a FortiGate staged with two files: step 1 restores the base file (replace, the device restarts), step 2 loads the
         site file (merge) once step 1 has succeeded. The site file therefore always lands on a clean base, never on an earlier
@@ -225,14 +225,14 @@ function NewFirstLogin({ projectId }: { projectId: string }) {
     (d) => `First login planned: ${stateLabel(d.state).toLowerCase()}`);
   return (
     <Card withBorder>
-      <Title order={4} mb="xs">First login on a new unit</Title>
+      <Title order={2} size="h4" mb="xs">First login on a new unit</Title>
       <Text size="sm" c="dimmed" mb="md">
         A new FortiGate lets admin in without a password and then asks for a new one. UNDM checks this without answering
         (preview); once approved it sets the device&apos;s login (the approved password stored with the device) and logs in with it.
         Do this before the firmware plan. The staging plan can include it as its first step.
       </Text>
       <Group align="flex-end">
-        <Select label="Device" placeholder="Choose a device" w={320}
+        <Select label="Device" placeholder="Choose a device" w="100%" maw={320}
           data={(devices.data ?? []).map((d) => ({ value: d.id, label: `${d.name} (${d.model})` }))}
           value={deviceId} onChange={setDeviceId} />
         <Button disabled={!deviceId} loading={create.isPending}
@@ -267,7 +267,7 @@ export function DeploymentsPage() {
         {projectId && <NewFirstLogin key={`first-${projectId}`} projectId={projectId} />}
         {projectId && <NewStagingPlan key={`staging-${projectId}`} projectId={projectId} />}
         <Card withBorder padding={0}>
-          <Title order={5} p="md" pb={0}>All plans</Title>
+          <Title order={2} size="h5" p="md" pb={0}>All plans</Title>
           <QueryState isLoading={all.isLoading} error={all.error} />
           <Table.ScrollContainer minWidth={640}>
             <Table verticalSpacing="xs" horizontalSpacing="md" highlightOnHover>

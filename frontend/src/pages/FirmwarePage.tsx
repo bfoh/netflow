@@ -7,6 +7,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { PageHeader, QueryState } from '../components/Page';
+import { DialogError } from '../components/ConfirmDialog';
+import { useConfirm } from '../hooks/useConfirm';
 import { useAction, useDeviceModels, useFirmwareImages, usePolicy, useProjectDevices, useProjects } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Compatibility, FirmwareImage } from '../types/api';
@@ -76,12 +78,13 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
   const [reason, setReason] = useState('');
   const reasonText = reason.trim().replace(/\s+/g, ' ');
   const approveUnverified = useAction(() => api.approveFirmware(overriding!.id, reasonText),
-    'Image approved without the vendor checksum; the reason is recorded');
-  const retire = useAction((id: string) => api.retireFirmware(id), 'Image retired');
-  const del = useAction((id: string) => api.deleteFirmware(id), 'Image deleted');
+    'Image approved without the vendor checksum; the reason is recorded', { errorInDialog: true });
+  const retire = useAction((id: string) => api.retireFirmware(id), 'Image retired', { errorInDialog: true });
+  const del = useAction((id: string) => api.deleteFirmware(id), 'Image deleted', { errorInDialog: true });
+  const [ask, confirmDialog] = useConfirm();
   const [checking, setChecking] = useState<FirmwareImage | null>(null);
   const [checksum, setChecksum] = useState('');
-  const verify = useAction(() => api.addFirmwareChecksum(checking!.id, checksum.trim()), 'Checksum matched: image verified');
+  const verify = useAction(() => api.addFirmwareChecksum(checking!.id, checksum.trim()), 'Checksum matched: image verified', { errorInDialog: true });
   return (
     <>
     <Modal opened={checking !== null} onClose={() => setChecking(null)} title={`Vendor checksum for ${checking?.filename ?? ''}`}>
@@ -89,6 +92,7 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
         <Text size="sm">Paste the SHA-256 or SHA-512 the vendor publishes for this file (Fortinet: the SHA-512 under
           'Checksum' next to the download). UNDM computes the same checksum of the stored file and compares; MD5 is not accepted.</Text>
         <TextInput label="Vendor checksum" value={checksum} onChange={(e) => setChecksum(e.currentTarget.value)} ff="monospace" />
+        <DialogError error={verify.error} />
         <Group justify="flex-end">
           <Button variant="default" onClick={() => setChecking(null)}>Cancel</Button>
           <Button disabled={!checksum.trim()} loading={verify.isPending}
@@ -107,6 +111,7 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
         <Textarea label="Reason for approving without the checksum" description="At least 10 characters, e.g. where the file came from."
           placeholder="e.g. taken from our approved software store" autosize minRows={2} maxLength={500}
           value={reason} onChange={(e) => setReason(e.currentTarget.value)} />
+        <DialogError error={approveUnverified.error} />
         <Group justify="flex-end">
           <Button variant="default" onClick={() => setOverriding(null)}>Cancel</Button>
           <Button color="orange" disabled={reasonText.length < 10} loading={approveUnverified.isPending}
@@ -116,6 +121,7 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
         </Group>
       </Stack>
     </Modal>
+    {confirmDialog}
     <Card withBorder padding={0}>
       <Table.ScrollContainer minWidth={900}>
         <Table verticalSpacing="xs" horizontalSpacing="md">
@@ -144,8 +150,14 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
                     {i.status === 'uploaded' && (i.integrity_verified
                       ? <Button size="compact-xs" onClick={() => approve.mutate(i.id)}>Approve</Button>
                       : <Button size="compact-xs" color="orange" variant="light" onClick={() => { setReason(''); setOverriding(i); }}>Approve without checksum…</Button>)}
-                    {i.status === 'approved' && <Button size="compact-xs" variant="default" onClick={() => retire.mutate(i.id)}>Retire</Button>}
-                    <Button size="compact-xs" variant="subtle" color="red" onClick={() => { if (window.confirm(`Delete ${i.filename}?`)) del.mutate(i.id); }}>Delete</Button>
+                    {i.status === 'approved' && <Button size="compact-xs" variant="default" onClick={() => ask({
+                      title: `Retire ${i.filename}?`, confirmLabel: 'Retire image', color: 'orange',
+                      message: 'New upgrade plans can no longer use it. Plans already made keep their record. The file stays until you delete it.',
+                      onConfirm: () => retire.mutateAsync(i.id) })}>Retire</Button>}
+                    <Button size="compact-xs" variant="subtle" color="red" onClick={() => ask({
+                      title: `Delete ${i.filename}?`, confirmLabel: 'Delete image',
+                      message: 'The file is removed from this PC. Upload it again if you need it later.',
+                      onConfirm: () => del.mutateAsync(i.id) })}>Delete</Button>
                   </Group>
                 </Table.Td>
               </Table.Tr>
@@ -195,26 +207,28 @@ function Planner({ images }: { images: FirmwareImage[] }) {
       </Card>
       {projectId && (
         <Card withBorder>
-          <Table verticalSpacing={4}>
-            <Table.Thead><Table.Tr><Table.Th w={36} /><Table.Th>Device</Table.Th><Table.Th>Model</Table.Th><Table.Th>Driver</Table.Th><Table.Th>Running version (observed)</Table.Th><Table.Th>Compatibility</Table.Th></Table.Tr></Table.Thead>
-            <Table.Tbody>
-              {(devices.data ?? []).map((d) => {
-                const r = results?.find((x) => x.device_id === d.id);
-                return (
-                  <Table.Tr key={d.id}>
-                    <Table.Td><Checkbox aria-label={`Upgrade ${d.name}`} checked={sel.includes(d.id)}
-                      onChange={() => { setResults(null); setSel((s) => (s.includes(d.id) ? s.filter((x) => x !== d.id) : [...s, d.id])); }} /></Table.Td>
-                    <Table.Td>{d.name}</Table.Td><Table.Td>{d.model}</Table.Td><Table.Td><Text size="xs" ff="monospace">{d.driver_id}</Text></Table.Td>
-                    <Table.Td>{String(d.observed_facts?.os_version ?? '— (retrieve information)')}</Table.Td>
-                    <Table.Td>{r && (r.compatible ? <Stack gap={2}><Badge color="teal" variant="light" leftSection={<IconCheck size={12} />}>compatible</Badge>
-                        {r.issues.map((i) => <Text key={i.code} size="xs" c="orange">{i.message}</Text>)}</Stack>
-                      : <Stack gap={2}><Badge color="red" variant="light" leftSection={<IconX size={12} />}>not compatible</Badge>
-                        {r.issues.map((i) => <Text key={i.code} size="xs" c="red">{i.message}</Text>)}</Stack>)}</Table.Td>
-                  </Table.Tr>
-                );
-              })}
-            </Table.Tbody>
-          </Table>
+          <Table.ScrollContainer minWidth={520}>
+            <Table verticalSpacing={4}>
+              <Table.Thead><Table.Tr><Table.Th w={36} /><Table.Th>Device</Table.Th><Table.Th>Model</Table.Th><Table.Th>Driver</Table.Th><Table.Th>Running version (observed)</Table.Th><Table.Th>Compatibility</Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>
+                {(devices.data ?? []).map((d) => {
+                  const r = results?.find((x) => x.device_id === d.id);
+                  return (
+                    <Table.Tr key={d.id}>
+                      <Table.Td><Checkbox aria-label={`Upgrade ${d.name}`} checked={sel.includes(d.id)}
+                        onChange={() => { setResults(null); setSel((s) => (s.includes(d.id) ? s.filter((x) => x !== d.id) : [...s, d.id])); }} /></Table.Td>
+                      <Table.Td>{d.name}</Table.Td><Table.Td>{d.model}</Table.Td><Table.Td><Text size="xs" ff="monospace">{d.driver_id}</Text></Table.Td>
+                      <Table.Td>{String(d.observed_facts?.os_version ?? '— (retrieve information)')}</Table.Td>
+                      <Table.Td>{r && (r.compatible ? <Stack gap={2}><Badge color="teal" variant="light" leftSection={<IconCheck size={12} />}>compatible</Badge>
+                          {r.issues.map((i) => <Text key={i.code} size="xs" c="orange">{i.message}</Text>)}</Stack>
+                        : <Stack gap={2}><Badge color="red" variant="light" leftSection={<IconX size={12} />}>not compatible</Badge>
+                          {r.issues.map((i) => <Text key={i.code} size="xs" c="red">{i.message}</Text>)}</Stack>)}</Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
           <Group mt="md">
             <Button variant="default" disabled={!imageId || sel.length === 0} loading={check.isPending}
               onClick={() => check.mutate(undefined, { onSuccess: setResults })}>Check compatibility (offline)</Button>

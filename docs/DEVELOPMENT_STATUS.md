@@ -41,6 +41,7 @@ manager, topology._
 | Topology | Canvas (React Flow), interface links with mode/VLANs, saved layout, auto-arrange, validation (interface reuse, self links, subnet mismatch, VLANs, duplicate IPs, isolated devices) |
 | Audit & logging | All significant actions, redacted details and device output; actions shown in words (raw action name kept below) |
 | Safety switches in Settings | Real-device changes, Firmware changes and the second approver for firmware can be changed in Settings → Safety: confirmation before the less safe position, one audit event per change, kept in `settings.json` in the data folder, `.env`/environment values win and are shown as fixed, production switches start-up only, in force at once (an approved plan not yet started is stopped by turning a switch off) (D-082) |
+| Feedback and confirmations | Errors shown inside the dialog that caused them; other errors stay until closed, with Copy details; one confirmation dialog for cancel plan, retire/delete image, delete login, delete system (typed name); deleting a system removes its stored passwords; tables scroll inside their cards; no sideways page scroll at 390 px (D-084) |
 | Plain words and navigation | One glossary (device, system, plan, login, file); states, drivers, platforms, facts, capabilities shown in words; internals under "Technical details"; sidebar Home · Systems · Devices · Files · Firmware · Console setup · Plans · Advanced (Topology, Audit log) · Settings; Home page with what is waiting for the user and each system's progress (D-083) |
 | Console bootstrap (provisioning) | ArubaOS-Switch over a serial console from the PC running UNDM: new units' mandatory first-login credentials set to the device's attached login (D-043); per-device settings (VLAN, port, address), command preview, factory-default check, stop on first error, read-back before `write memory`, idempotent re-run, transcript (raw + sanitized). Experimental: **one complete run on hardware** (spare 2930F JL260A, WC.16.11.0001, new unit, 2026-11-19: credentials set, VLAN/address verified and saved); re-run and network check on that unit pending |
 | Sanitized diagnostics | Shareable report of last retrieved device output with IPs, MACs, serials, names and secrets masked |
@@ -63,14 +64,14 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-24, v54)
+## Test results (2026-11-24, v55)
 | Suite | Result |
 |---|---|
-| Backend pytest | 439 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
+| Backend pytest | 440 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (77 files) |
-| Frontend Vitest | 31 passed |
+| Frontend Vitest | 33 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
 
@@ -98,8 +99,7 @@ FortiGate 101F staging.
 ## Next milestone
 **Plan A — UI/UX for colleagues** (product owner, 2026-11-24; plan B, the portable Windows
 app, is deferred). Done: A0 baseline screenshots, A1a words, A1b safety switches, A2
-navigation. Next: A1c feedback (errors inside dialogs, lasting error messages with "Copy
-details", one confirmation dialog, empty/loading states, narrow screens); A3 the **Stage a
+navigation, A1c feedback and confirmations (D-084). Next: A3 the **Stage a
 system** wizard on a generalised staging engine; A4 page-by-page fixes; A5 export/import of
 a system without secrets. Bench items below stay open.
 

@@ -64,18 +64,20 @@ export function SettingsPage() {
         </Tabs.Panel>
         <Tabs.Panel value="models">
           <Card withBorder padding={0}>
-            <Table verticalSpacing="sm" horizontalSpacing="md">
-              <Table.Thead><Table.Tr><Table.Th>Model</Table.Th><Table.Th>Category</Table.Th><Table.Th>OS</Table.Th><Table.Th>Connects by</Table.Th><Table.Th>Support</Table.Th></Table.Tr></Table.Thead>
-              <Table.Tbody>
-                {(models.data ?? []).map((m) => (
-                  <Table.Tr key={m.model_id}>
-                    <Table.Td>{m.manufacturer} {m.model}</Table.Td><Table.Td>{humanize(m.category)}</Table.Td><Table.Td>{m.os_family}</Table.Td>
-                    <Table.Td><Text size="xs">{m.drivers.map((x) => driverLabel(x, drivers.data)).join(' · ')}</Text></Table.Td>
-                    <Table.Td><Badge variant="light" color={m.support === 'simulated_only' ? 'violet' : 'teal'}>{SUPPORT[m.support] ?? humanize(m.support)}</Badge></Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
+            <Table.ScrollContainer minWidth={640}>
+              <Table verticalSpacing="sm" horizontalSpacing="md">
+                <Table.Thead><Table.Tr><Table.Th>Model</Table.Th><Table.Th>Category</Table.Th><Table.Th>OS</Table.Th><Table.Th>Connects by</Table.Th><Table.Th>Support</Table.Th></Table.Tr></Table.Thead>
+                <Table.Tbody>
+                  {(models.data ?? []).map((m) => (
+                    <Table.Tr key={m.model_id}>
+                      <Table.Td>{m.manufacturer} {m.model}</Table.Td><Table.Td>{humanize(m.category)}</Table.Td><Table.Td>{m.os_family}</Table.Td>
+                      <Table.Td><Text size="xs">{m.drivers.map((x) => driverLabel(x, drivers.data)).join(' · ')}</Text></Table.Td>
+                      <Table.Td><Badge variant="light" color={m.support === 'simulated_only' ? 'violet' : 'teal'}>{SUPPORT[m.support] ?? humanize(m.support)}</Badge></Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
           </Card>
           <Text size="xs" c="dimmed" mt="xs">Listing a model is not a compatibility claim. “Simulated only” means no real-device driver exists or has been validated.</Text>
         </Tabs.Panel>

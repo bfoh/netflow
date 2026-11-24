@@ -2,6 +2,7 @@ import { Alert, Button, Group, Modal, SegmentedControl, Select, SimpleGrid, Stac
 import { IconAlertTriangle, IconFlask } from '@tabler/icons-react';
 import { useState } from 'react';
 
+import { DialogError } from '../../components/ConfirmDialog';
 import { useAction, useCredentialRefs, useDeviceModels, useDrivers } from '../../hooks/queries';
 import { api } from '../../services/api';
 import { driverLabel } from '../../services/labels';
@@ -22,7 +23,7 @@ export function AddDeviceModal({ projectId, opened, onClose }:
   const [kind, setKind] = useState<'simulated' | 'real'>('simulated');
   const [credentialRef, setCredentialRef] = useState<string | null>(null);
   const [form, setForm] = useState(empty);
-  const create = useAction((body: Parameters<typeof api.createDevice>[1]) => api.createDevice(projectId, body), 'Device added');
+  const create = useAction((body: Parameters<typeof api.createDevice>[1]) => api.createDevice(projectId, body), 'Device added', { errorInDialog: true });
   const model = models.data?.find((m) => m.model_id === modelId);
   const isSim = (id: string) => drivers.data?.find((d) => d.driver_id === id)?.simulated ?? id.startsWith('mock.');
   const driverId = model?.drivers.find((id) => (kind === 'simulated' ? isSim(id) : !isSim(id)));
@@ -86,6 +87,7 @@ export function AddDeviceModal({ projectId, opened, onClose }:
           )}
         </SimpleGrid>
         <Textarea label="Notes" autosize minRows={2} value={form.notes} onChange={set('notes')} />
+        <DialogError error={create.error} />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>Cancel</Button>
           <Button onClick={submit} loading={create.isPending} disabled={!model || !driverId || !form.name.trim() || (kind === 'real' && !form.management_address.trim())}>Add device</Button>

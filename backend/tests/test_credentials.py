@@ -70,3 +70,22 @@ def test_env_provider_requires_locator(client):
     r = client.put(f"/api/credential-refs/{ok['id']}/secret",
                    json={"username": "u", "password": "p"})
     assert r.status_code == 400 and "read-only" in r.json()["error"]
+
+
+def test_deleting_a_system_removes_its_passwords_from_the_store(client, mem_keyring):
+    pid = _project(client)
+    for name in ("factory", "approved"):
+        ref = client.post(f"/api/projects/{pid}/credential-refs", json={"name": name}).json()
+        client.put(f"/api/credential-refs/{ref['id']}/secret",
+                   json={"username": "admin", "password": f"Example-{name}"})
+    other = client.post("/api/projects", json={"name": "Other"}).json()["id"]  # its login stays
+    keep = client.post(f"/api/projects/{other}/credential-refs", json={"name": "x"}).json()
+    client.put(f"/api/credential-refs/{keep['id']}/secret",
+               json={"username": "admin", "password": "Example-other"})
+    assert len(mem_keyring.store) == 3
+    assert client.delete(f"/api/projects/{pid}").status_code == 204
+    assert len(mem_keyring.store) == 1
+    assert all("Example-other" in v for v in mem_keyring.store.values())
+    event = next(a for a in client.get("/api/audit").json() if a["action"] == "project.delete")
+    assert event["details"]["stored_logins_removed"] == 2
+    assert "Example-" not in str(event["details"])

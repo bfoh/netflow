@@ -188,8 +188,7 @@ describe('intent editor hostname safety', () => {
   });
 });
 
-describe('deployment outcome', () => {
-  const plan = (over: Record<string, unknown>) => ({
+const plan = (over: Record<string, unknown>) => ({
     id: 'dep1', project_id: 'p1', kind: 'firmware', state: 'succeeded', dry_run: true, allow_downgrade: true, also_secondary: true,
     apply_mode: 'merge', created_by: 'tester', approved_by: null, created_at: '', firmware_image_id: 'i1',
     window_start: null, window_end: null, approved_at: null, updated_at: '',
@@ -200,6 +199,7 @@ describe('deployment outcome', () => {
     ...over,
   });
 
+describe('deployment outcome', () => {
   it('a successful dry run says nothing was changed and shows no deploy steps', async () => {
     mockApi({ '/deployments/dep1': plan({}), '/projects/p1/devices': [device({})] });
     renderAt('/deployments/dep1');
@@ -423,5 +423,35 @@ describe('plain words', () => {
     expect(driverLabel('ssh.blackbox.lig1014a')).toBe('Black Box LIG1014A over SSH');
     expect(driverLabel('mock.aruba.aoscx')).toMatch(/^Simulated/);
     expect(capabilityLabel('supports_firmware_upgrade')).toBe('Upgrade its firmware');
+  });
+});
+
+describe('confirmations', () => {
+  it('cancelling a plan asks first, and an error stays inside the dialog', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/deployments/dep1': plan({ dry_run: false, state: 'awaiting_approval' }),
+      '/projects/p1/devices': [device({})] });
+    renderAt('/deployments/dep1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel plan' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Cancel this plan?' });
+    expect(calls.some((c) => c.url.endsWith('/cancel'))).toBe(false);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'Synthetic refusal' }),
+      { status: 409, headers: { 'Content-Type': 'application/json' } })));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel plan' }));
+    expect(await within(dialog).findByText('Synthetic refusal')).toBeInTheDocument();
+  });
+
+  it('deleting a system needs its name typed', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/projects/p1': { id: 'p1', name: 'Lab A', description: '', site: '', purpose: '', created_at: '', updated_at: '', certificate_subject: null } });
+    renderAt('/projects/p1');
+    await userEvent.click(await screen.findByRole('tab', { name: 'System settings' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete system' }));
+    const dialog = await screen.findByRole('dialog');
+    const go = within(dialog).getByRole('button', { name: 'Delete system' });
+    expect(go).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText('Type Lab A to confirm'), 'Lab A');
+    expect(go).toBeEnabled();
+    expect(calls.some((c) => c.init?.method === 'DELETE')).toBe(false);
   });
 });

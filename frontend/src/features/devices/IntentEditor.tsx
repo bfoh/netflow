@@ -47,7 +47,7 @@ export function IntentEditor({ device }: { device: Device }) {
       </Card>
 
       <Card withBorder>
-        <Group justify="space-between" mb="xs"><Title order={5}>VLANs</Title>
+        <Group justify="space-between" mb="xs"><Title order={2} size="h5">VLANs</Title>
           <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={() => update('vlans', [...intent.vlans, { vlan_id: 1, name: '' }])}>Add VLAN</Button></Group>
         <Table>
           <Table.Thead><Table.Tr><Table.Th w={140}>VLAN ID</Table.Th><Table.Th>Name</Table.Th><Table.Th w={40} /></Table.Tr></Table.Thead>
@@ -64,7 +64,7 @@ export function IntentEditor({ device }: { device: Device }) {
       </Card>
 
       <Card withBorder>
-        <Group justify="space-between" mb="xs"><Title order={5}>Layer-3 interfaces</Title>
+        <Group justify="space-between" mb="xs"><Title order={2} size="h5">Layer-3 interfaces</Title>
           <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={() => update('interfaces', [...intent.interfaces, { interface: '', address: '', description: '', enabled: true }])}>Add interface</Button></Group>
         <Text size="xs" c="dimmed" mb="xs">Use the platform interface name (e.g. port1, GigabitEthernet1) or <code>vlanN</code> for a VLAN interface. Address in CIDR form.</Text>
         <Table.ScrollContainer minWidth={640}>
@@ -86,7 +86,7 @@ export function IntentEditor({ device }: { device: Device }) {
       </Card>
 
       <Card withBorder>
-        <Group justify="space-between" mb="xs"><Title order={5}>Static routes</Title>
+        <Group justify="space-between" mb="xs"><Title order={2} size="h5">Static routes</Title>
           <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={() => update('static_routes', [...intent.static_routes, { prefix: '0.0.0.0/0', next_hop: '', egress_interface: '' }])}>Add route</Button></Group>
         <Table.ScrollContainer minWidth={560}>
           <Table>

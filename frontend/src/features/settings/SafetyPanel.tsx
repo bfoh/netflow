@@ -2,6 +2,7 @@ import { Alert, Badge, Button, Card, Checkbox, Group, Modal, Stack, Switch, Text
 import { IconAlertTriangle, IconLock, IconShieldCheck } from '@tabler/icons-react';
 import { useState } from 'react';
 
+import { DialogError } from '../../components/ConfirmDialog';
 import { useAction, usePolicy } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { Policy, SafetySwitch } from '../../types/api';
@@ -30,7 +31,7 @@ export function SafetyPanel() {
   const policy = usePolicy();
   const [asked, setAsked] = useState<{ info: SwitchInfo; value: boolean } | null>(null);
   const [sure, setSure] = useState(false);
-  const change = useAction((c: Partial<Record<SafetySwitch, boolean>>) => api.changePolicy(c), 'Safety setting saved');
+  const change = useAction((c: Partial<Record<SafetySwitch, boolean>>) => api.changePolicy(c), 'Safety setting saved', { errorInDialog: !!asked });
   const p = policy.data;
   if (!p) return null;
 
@@ -54,7 +55,7 @@ export function SafetyPanel() {
             <Group justify="space-between" wrap="nowrap" align="flex-start">
               <Stack gap={4}>
                 <Group gap="xs">
-                  <Title order={3} size="h5">{info.label}</Title>
+                  <Title order={2} size="h5">{info.label}</Title>
                   <Badge radius="sm" variant={on === info.riskyValue ? 'filled' : 'light'} color={on === info.riskyValue ? 'red' : 'gray'}>
                     {on ? 'ON' : 'off'}
                   </Badge>
@@ -78,6 +79,7 @@ export function SafetyPanel() {
             <Alert color="orange" icon={<IconAlertTriangle size={18} />}>{asked.info.risky}</Alert>
             <Text size="sm">Plans still need approval before they run, and you can stop a running plan. Turn this back when you have finished.</Text>
             <Checkbox label="The devices are spare units on an isolated bench" checked={sure} onChange={(e) => setSure(e.currentTarget.checked)} />
+            <DialogError error={change.error} />
             <Group justify="flex-end">
               <Button variant="default" onClick={() => setAsked(null)}>Cancel</Button>
               <Button color="red" disabled={!sure} loading={change.isPending}

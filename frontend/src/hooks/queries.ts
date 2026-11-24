@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { notifications } from '@mantine/notifications';
 
 import { api } from '../services/api';
+import { showError, showSuccess } from '../services/notify';
 
 export const keys = {
   projects: ['projects'] as const,
@@ -78,6 +78,7 @@ export const useDeviceModels = () => useQuery({ queryKey: keys.models, queryFn: 
 export function useAction<TArgs, TResult>(
   fn: (args: TArgs) => Promise<TResult>,
   successMessage?: string | ((r: TResult) => string),
+  options: { errorInDialog?: boolean } = {},
 ) {
   const qc = useQueryClient();
   return useMutation({
@@ -85,10 +86,10 @@ export function useAction<TArgs, TResult>(
     onSuccess: (result) => {
       void qc.invalidateQueries();
       if (successMessage) {
-        const message = typeof successMessage === 'function' ? successMessage(result) : successMessage;
-        notifications.show({ color: 'teal', message });
+        showSuccess(typeof successMessage === 'function' ? successMessage(result) : successMessage);
       }
     },
-    onError: (err: Error) => notifications.show({ color: 'red', title: 'Action failed', message: err.message }),
+    // A dialog shows its own error (DialogError); everything else gets a message that stays.
+    onError: (err: Error) => { if (!options.errorInDialog) showError(err.message); },
   });
 }

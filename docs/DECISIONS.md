@@ -876,3 +876,17 @@ setup; the Home page lost "Firmware Manager is planned for Phase 7" and shows wh
 waiting for the user; the "port 8000" error text is gone. API paths and stored values are
 unchanged.
 
+### D-084 Feedback and confirmations: errors stay visible, one confirmation dialog (2026-11-24)
+Plan A, A1c. An error from an action inside a dialog is shown in that dialog (it stays
+open), not only in a passing message. Other errors stay on screen until closed and offer
+"Copy details" to pass the text to a colleague. One confirmation dialog (`useConfirm`)
+replaces `window.confirm` and the missing confirmations: cancel a plan, retire or delete a
+firmware image, delete a login, delete a system (its name must be typed). Deleting a system
+now also removes its logins' passwords from the credential store (before, they were left in
+Windows Credential Manager); the audit event counts them (`stored_logins_removed`) without
+any value. Layout: every table scrolls sideways inside its card, fields wider than 320 px
+shrink on narrow screens, one top-level heading per page, status badges carry an icon as
+well as a colour, the plan form's mode switch and the topology link mode have labels, and
+configuration versions can be chosen with the keyboard. Checked at 390 px and 1280 px: no
+page scrolls sideways.
+

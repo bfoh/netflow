@@ -83,7 +83,7 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
         <SimpleGrid cols={{ base: 1, lg: 2 }}>
           <Card withBorder>
             <Group justify="space-between" mb="xs">
-              <Title order={5}>Preview</Title>
+              <Title order={2} size="h5">Preview</Title>
               <Select size="xs" w={300} aria-label="Configuration version" data={list.map((v) => ({ value: v.id, label: label(v) }))} value={current} onChange={setSelected} />
             </Group>
             {shown.data && (
@@ -132,7 +132,7 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
           </Card>
           <Card withBorder>
             <Group justify="space-between" mb="xs">
-              <Title order={5}>Compare</Title>
+              <Title order={2} size="h5">Compare</Title>
               <Select size="xs" w={300} clearable placeholder="Compare with…" aria-label="Compare with version"
                 data={list.filter((v) => v.id !== current).map((v) => ({ value: v.id, label: label(v) }))} value={compareTo} onChange={setCompareTo} />
             </Group>
@@ -143,17 +143,21 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
       )}
       {list.length > 0 && (
         <Card withBorder padding={0}>
-          <Table verticalSpacing={6} horizontalSpacing="md">
-            <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Kind</Table.Th><Table.Th>SHA-256</Table.Th><Table.Th>By</Table.Th><Table.Th>Reference</Table.Th></Table.Tr></Table.Thead>
-            <Table.Tbody>
-              {list.map((v) => (
-                <Table.Tr key={v.id} onClick={() => setSelected(v.id)} style={{ cursor: 'pointer' }} bg={v.id === current ? 'var(--mantine-primary-color-light)' : undefined}>
-                  <Table.Td>{fmtDate(v.created_at)}</Table.Td><Table.Td>{v.kind}</Table.Td>
-                  <Table.Td ff="monospace">{v.sha256.slice(0, 16)}</Table.Td><Table.Td>{v.created_by}</Table.Td><Table.Td>{v.reference || '—'}</Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
+          <Table.ScrollContainer minWidth={560}>
+            <Table verticalSpacing={6} horizontalSpacing="md">
+              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Kind</Table.Th><Table.Th>By</Table.Th><Table.Th>From</Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>
+                {list.map((v) => (
+                  <Table.Tr key={v.id} onClick={() => setSelected(v.id)} tabIndex={0} aria-current={v.id === current ? 'true' : undefined}
+                    title={`SHA-256 ${v.sha256}`}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(v.id); } }} style={{ cursor: 'pointer' }} bg={v.id === current ? 'var(--mantine-primary-color-light)' : undefined}>
+                    <Table.Td>{fmtDate(v.created_at)}</Table.Td><Table.Td>{humanize(v.kind)}</Table.Td>
+                    <Table.Td>{v.created_by}</Table.Td><Table.Td>{v.reference || '—'}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
         </Card>
       )}
     </Stack>

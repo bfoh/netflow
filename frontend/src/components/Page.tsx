@@ -7,7 +7,7 @@ export function PageHeader({ title, description, actions }:
   return (
     <Group justify="space-between" align="flex-start" mb="lg" wrap="wrap">
       <Stack gap={4}>
-        <Title order={2}>{title}</Title>
+        <Title order={1} size="h2">{title}</Title>
         {description && <Text c="dimmed" size="sm">{description}</Text>}
       </Stack>
       {actions && <Group gap="sm">{actions}</Group>}

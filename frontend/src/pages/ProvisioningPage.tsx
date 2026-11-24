@@ -9,6 +9,7 @@ import { Link, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
+import { DialogError } from '../components/ConfirmDialog';
 import { useAction, useAllDevices, useCredentialRefs, useDrivers, usePolicy, useProjects, useSerialPorts } from '../hooks/queries';
 import { api } from '../services/api';
 import { downloadText } from '../services/format';
@@ -53,7 +54,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
     serial_port: serialPort!, baudrate: Number(baud), profile, confirm_device_name: confirm,
     allow_configured: allowConfigured && !erase,
     ...(erase ? { erase_existing: true, current_credential_ref_id: currentLogin, confirm_hostname: hostname.trim() } : {}),
-  }));
+  }), undefined, { errorInDialog: true });
   const blocked = !simulated && policy.data && !policy.data.enable_real_device_writes;
   const portOptions = (ports.data ?? [])
     .filter((p) => (simulated ? p.port === 'SIMULATED' : p.port !== 'SIMULATED'))
@@ -62,7 +63,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
   return (
     <Stack>
       <Card withBorder>
-        <Title order={5} mb="xs">1 · Management settings for this switch</Title>
+        <Title order={2} size="h5" mb="xs">1 · Management settings for this switch</Title>
         <Text size="sm" c="dimmed" mb="sm">
           An out-of-band management VLAN with one untagged port and an address. Saved per device, so each switch keeps its own
           port and (temporary) address.
@@ -88,9 +89,9 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
       </Card>
 
       <Card withBorder>
-        <Title order={5} mb="xs">2 · Console connection</Title>
+        <Title order={2} size="h5" mb="xs">2 · Console connection</Title>
         <Group align="flex-end">
-          <Select label="Serial port" w={380} placeholder={portOptions.length ? 'Choose the console cable’s port' : 'No serial ports found'}
+          <Select label="Serial port" w="100%" maw={380} placeholder={portOptions.length ? 'Choose the console cable’s port' : 'No serial ports found'}
             data={portOptions} value={serialPort} onChange={setSerialPort} />
           <Select label="Speed (baud)" w={130} data={BAUD} value={baud} onChange={(v) => setBaud(v ?? '9600')} disabled={simulated} allowDeselect={false} />
           <Button variant="default" leftSection={<IconRefresh size={14} />} onClick={() => void ports.refetch()} loading={ports.isFetching}>Refresh ports</Button>
@@ -179,6 +180,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
                 : 'Working on the console… keep the cable connected.'}</Text>
             </Alert>
           )}
+          <DialogError error={run.error} />
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Cancel</Button>
             <Button color={erase ? 'red' : 'orange'} disabled={confirm.trim() !== device.name || (erase && (!currentLogin || !hostname.trim()))}
@@ -209,7 +211,7 @@ export function ProvisioningPage() {
       <QueryState isLoading={devices.isLoading || drivers.isLoading} error={devices.error ?? drivers.error} />
       <Stack>
         <Card withBorder>
-          <Select label="Device" w={520} searchable
+          <Select label="Device" w="100%" maw={520} searchable
             placeholder={eligible.length ? 'Choose a switch' : 'No Aruba 2930F in your systems yet'}
             data={eligible.map((d) => ({ value: d.id, label: `${d.name} — ${d.manufacturer} ${d.model} (${names.get(d.project_id) ?? ''})` }))}
             value={device?.id ?? null} onChange={(v) => setParams(v ? { device: v } : {})} />
