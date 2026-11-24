@@ -52,10 +52,11 @@ CATALOG: tuple[DeviceModel, ...] = (
     DeviceModel("blackbox-lig1014a", "Black Box", "Industrial managed switch", "LIG1014A",
                 DeviceCategory.SWITCH, "Black Box managed switch",
                 ("mock.blackbox.switch", "ssh.blackbox.lig1014a"),
-                SupportLevel.SIMULATED_ONLY,
-                notes="Staging target. Configuration files are recognised offline. SSH driver "
-                      "(experimental, read-only): connection, device information, backup; "
-                      "loading the team's file is still being confirmed on a bench unit."),
+                SupportLevel.LAB_READ_ONLY,
+                notes="Read-only checks passed 2026-11-24 on a factory-default LIG1014A "
+                      "v00.01.00: connect, facts (MAC address as identity), backup. "
+                      "Configuration files are recognised offline; loading them is not built "
+                      "yet."),
     DeviceModel("blackbox-le2700a", "Black Box", "LE2700 series", "LE2700A",
                 DeviceCategory.SWITCH, "Black Box managed switch", ("mock.blackbox.switch",),
                 SupportLevel.SIMULATED_ONLY,

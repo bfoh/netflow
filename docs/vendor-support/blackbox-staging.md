@@ -84,3 +84,4 @@ the load: no re-cabling, and the device address in UNDM does not change.
 | 2026-11-24 | same unit | Test connection (v47, paramiko 3.5.1) | **passed** | SSH handshake works with the older methods (D-075). |
 | 2026-11-24 | same unit | Retrieve information, Back up (v47) | **failed: paged output** | Both stopped at "-- more --, next page: Space, continue: g, quit: ^C". Fixed: UNDM presses `g` at that prompt (D-076). |
 | 2026-11-24 | same unit | Retrieve information (v48) | **passed** | Vendor Black Box, model LIG1014A, v00.01.00, 14 ports, active and alternate images; no hostname (factory); identity = base MAC address (no serial number). The page prompt was answered with `g` (D-076). |
+| 2026-11-24 | same unit | Back up (v48) | **passed** | Factory configuration stored (the page prompt answered with `g`). Read-only checks complete: the LIG1014A is listed as lab-checked for reading (connect, facts, backup). |
