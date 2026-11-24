@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Button, Card, Group, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { Anchor, Badge, Button, Card, Group, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { IconAlertTriangle, IconClock, IconTerminal2 } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -13,6 +13,8 @@ import { type Choice, EMPTY_CHOICE, planSteps, wantsFirstLogin } from './choices
 import { type Role, STEP_TIME, STEP_WORDS, type StepKind } from './roles';
 import { StagingControls } from './StagingControls';
 import { stagingStatus } from './staging';
+import { EmptyState } from '../../components/EmptyState';
+import { Notice } from '../../components/Notice';
 
 const CONSOLE_DONE = new Set(['bootstrapped', 'managed']);
 
@@ -93,10 +95,10 @@ function DeviceRun({ projectId, role, device, choice, latest }: {
         <Stack gap="xs">
           <PlannedSteps role={role} choice={choice} device={device} />
           {consoleTodo && (
-            <Alert color="orange" p="xs" icon={<IconTerminal2 size={16} />}>
-              <Text size="xs">Do its console setup first, so it answers at {device.management_address}.{' '}
-                <Anchor component={Link} to={`/provisioning?device=${device.id}`} size="xs">Open console setup</Anchor></Text>
-            </Alert>
+            <Notice kind="caution" compact action={<Button size="xs" variant="light" component={Link} to={`/provisioning?device=${device.id}`}
+              leftSection={<IconTerminal2 size={14} />}>Open console setup</Button>}>
+              Do its console setup first, so it answers at {device.management_address}.
+            </Notice>
           )}
           {missing.length > 0 && <Text size="xs" c="orange"><IconAlertTriangle size={12} /> Still needed: {missing.join(', ')} (step 2).</Text>}
           <DialogError error={make.error} />
@@ -116,7 +118,7 @@ function DeviceRun({ projectId, role, device, choice, latest }: {
 export function RunStep({ projectId, roles, choices, stagings }: {
   projectId: string; roles: { role: Role; device: Device }[]; choices: Partial<Record<string, Choice>>; stagings: StagingIndex[];
 }) {
-  if (roles.length === 0) return <Alert color="gray">Add the devices first (step 1).</Alert>;
+  if (roles.length === 0) return <EmptyState>Add the devices first (step 1: System and devices).</EmptyState>;
   return (
     <Stack>
       <Text size="sm" c="dimmed">Devices run independently: start one while another restarts. The runs continue on the server if you

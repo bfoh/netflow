@@ -1,6 +1,7 @@
-import { Alert, Group, Loader, Stack, Text, Title } from '@mantine/core';
-import { IconAlertTriangle } from '@tabler/icons-react';
+import { Group, Loader, Stack, Text, Title } from '@mantine/core';
 import type { ReactNode } from 'react';
+
+import { Notice } from './Notice';
 
 export function PageHeader({ title, description, actions }:
   { title: string; description?: ReactNode; actions?: ReactNode }) {
@@ -19,9 +20,7 @@ export function QueryState({ isLoading, error }: { isLoading: boolean; error: Er
   if (isLoading) return <Group justify="center" p="xl"><Loader size="sm" /></Group>;
   if (error) {
     return (
-      <Alert color="red" icon={<IconAlertTriangle size={18} />} title="Could not load data">
-        {error.message}
-      </Alert>
+      <Notice kind="error" title="Could not load this page's data">{error.message}</Notice>
     );
   }
   return null;

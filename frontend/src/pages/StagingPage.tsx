@@ -1,9 +1,10 @@
-import { Alert, Anchor, Card, Group, Stack, Text, Title } from '@mantine/core';
-import { IconAlertTriangle, IconCheck } from '@tabler/icons-react';
+import { Anchor, Card, Group, Stack, Text, Title } from '@mantine/core';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 
 import { StateBadge } from '../components/Badges';
+import { Hint } from '../components/Hint';
+import { Notice } from '../components/Notice';
 import { PageHeader, QueryState } from '../components/Page';
 import { useDevice, useStaging } from '../hooks/queries';
 import { StagingControls } from '../features/stage/StagingControls';
@@ -47,18 +48,17 @@ export function StagingPage() {
         actions={<StagingControls stagingId={stagingId} steps={steps} onStarted={() => setStarted(true)} />} />
       <QueryState isLoading={plan.isLoading} error={plan.error} />
       <Stack>
-        {done && <Alert color="teal" icon={<IconCheck size={18} />} title="Every step succeeded">
-          Each step was checked on the device after it ran. Open a step for its events and the configuration read back.</Alert>}
-        {ended && <Alert color="red" icon={<IconAlertTriangle size={18} />} title="The plan did not complete">
-          A step did not succeed, so the steps after it did not run. Open the step for its events. To start again, make a new
-          staging plan: a site file must land on a freshly restored base file.</Alert>}
-        {running && <Alert color="blue" title="In progress">
-          The run continues on the server even if you leave this page. Firmware and complete files restart the device (several
-          minutes); each step starts by itself when the one before it has succeeded. Stop ends the running step at its next safe
-          point, and the later steps do not run.</Alert>}
-        {!running && !done && !ended && <Text size="sm" c="dimmed">
+        {done && <Notice kind="success" title="Every step succeeded">
+          Each step was checked on the device after it ran. Open a step for its events and the configuration read back.</Notice>}
+        {ended && <Notice kind="error" title="The plan did not complete"
+          details="To start again, make a new staging plan: a site file must land on a freshly restored base file.">
+          A step did not succeed, so the steps after it did not run. Open that step for the reason.</Notice>}
+        {running && <Notice kind="status" title="Running"
+          details="Firmware and complete files restart the device (several minutes). Stop ends the running step at its next safe point, and the later steps do not run.">
+          The steps run one after the other on the server, also if you leave this page.</Notice>}
+        {!running && !done && !ended && <Hint>
           One approval covers every step. Steps after the first are checked when they run, because the earlier steps change the
-          device; running a step on its own is refused until the steps before it have succeeded.</Text>}
+          device; running a step on its own is refused until the steps before it have succeeded.</Hint>}
         <Title order={2} size="h4">Steps</Title>
         {steps.map((s) => <StepCard key={s.id} step={s} />)}
       </Stack>

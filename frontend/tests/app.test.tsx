@@ -24,7 +24,8 @@ describe('application shell', () => {
       'Advanced', 'Settings']) {
       expect(within(nav).getByText(label)).toBeInTheDocument();
     }
-    expect(screen.getByText('Real-device changes off')).toBeInTheDocument();
+    // D-089: the safety switches are shown where they matter, not in the header.
+    expect(screen.queryByText(/Real-device changes/)).not.toBeInTheDocument();
   });
 
   it('dashboard summarises inventory and deployments', async () => {
@@ -110,11 +111,22 @@ describe('application shell', () => {
       current_credential_ref_id: 'old', confirm_hostname: 'lab-bhdmz-sw01', allow_configured: false });
   });
 
-  it('header shows when real-device changes are enabled', async () => {
-    mockApi({ '/policy': { enable_real_device_writes: true, enable_real_device_firmware: false, allow_production_read_only: false,
-      allow_production_deployments: false, require_separate_approver: false } });
-    renderAt('/');
-    expect(await screen.findByText('Real-device changes ON')).toBeInTheDocument();
+  it('the switch state is shown next to Run for a real device, and not for a simulated one (D-089)', async () => {
+    const pol = { enable_real_device_writes: false, enable_real_device_firmware: false, allow_production_read_only: false,
+      allow_production_deployments: false, require_separate_approver: false, firmware_require_separate_approver: true, locked: [] };
+    const dep = { id: 'dep1', project_id: 'p1', kind: 'configuration', state: 'ready', dry_run: false, apply_mode: 'merge',
+      created_by: 'a', approved_by: 'b', created_at: '', updated_at: '', firmware_image_id: null, window_start: null,
+      window_end: null, approved_at: null, targets: [{ device_id: 'd1', position: 0, config_version_id: null, backup_version_id: null,
+        state: 'previewed', diff: '', message: '' }], events: [] };
+    mockApi({ '/policy': pol, '/deployments/dep1': dep, '/projects/p1/devices': [device({ environment: 'lab', driver_id: 'ssh.aruba.aoscx' })] });
+    const view = renderAt('/deployments/dep1');
+    expect(await screen.findByText(/Real-device changes are off: real devices can only be read/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings → Safety' })).toHaveAttribute('href', '/settings');
+    view.unmount();
+    mockApi({ '/policy': pol, '/deployments/dep1': dep, '/projects/p1/devices': [device({})] });  // simulated
+    renderAt('/deployments/dep1');
+    expect(await screen.findByRole('button', { name: 'Run plan' })).toBeInTheDocument();
+    expect(screen.queryByText(/Real-device changes are/)).not.toBeInTheDocument();
   });
 
   it('firmware page lists images with integrity status', async () => {
@@ -181,10 +193,10 @@ describe('intent editor hostname safety', () => {
     await userEvent.click(await screen.findByRole('tab', { name: 'Intent' }));
     const field = await screen.findByLabelText(/Hostname/);
     expect(field).toHaveValue('switch-real-name');
-    expect(screen.queryByText('This intent renames the device')).not.toBeInTheDocument();
+    expect(screen.queryByText('This renames the device')).not.toBeInTheDocument();
     await userEvent.clear(field);
     await userEvent.type(field, 'other');
-    expect(screen.getByText('This intent renames the device')).toBeInTheDocument();
+    expect(screen.getByText('This renames the device')).toBeInTheDocument();
   });
 });
 

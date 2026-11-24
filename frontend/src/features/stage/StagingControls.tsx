@@ -4,7 +4,8 @@ import { IconPlayerPlay, IconPlayerStop, IconShieldCheck } from '@tabler/icons-r
 import { useState } from 'react';
 
 import { DialogError } from '../../components/ConfirmDialog';
-import { useAction, usePolicy } from '../../hooks/queries';
+import { SafetyHint } from '../../components/SafetyHint';
+import { useAction, useDevice, usePolicy } from '../../hooks/queries';
 import { useConfirm } from '../../hooks/useConfirm';
 import { api } from '../../services/api';
 import type { Deployment } from '../../types/api';
@@ -32,7 +33,11 @@ export function StagingControls({ stagingId, steps, onStarted, size = 'sm' }: {
   const s = stagingStatus(steps);
   const maker = steps[0]?.created_by;
   const second = firmware && policy.data?.firmware_require_separate_approver !== false;
+  const device = useDevice(steps[0]?.targets[0]?.device_id ?? '');
+  const real = !!device.data && device.data.environment !== 'simulated';
+  const fwPending = steps.some((x) => x.kind === 'firmware' && x.state !== 'succeeded');
   return (
+    <Stack gap={4}>
     <Group gap="xs">
       {confirmDialog}
       {s.canApprove && <Button size={size} leftSection={<IconShieldCheck size={16} />} loading={approve.isPending}
@@ -59,5 +64,7 @@ export function StagingControls({ stagingId, steps, onStarted, size = 'sm' }: {
         </Stack>
       </Modal>
     </Group>
+    {(s.canApprove || s.canRun) && <SafetyHint real={real} firmware={fwPending} />}
+    </Stack>
   );
 }

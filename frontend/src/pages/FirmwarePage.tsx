@@ -1,15 +1,18 @@
 import {
-  Alert, Badge, Button, Card, Checkbox, FileInput, Group, Modal, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput,
+  Badge, Box, Button, Card, Checkbox, FileInput, Group, Modal, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput,
   Text, Textarea, TextInput, Tooltip,
 } from '@mantine/core';
 import { IconAlertTriangle, IconCheck, IconShieldCheck, IconUpload, IconX } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
+import { Hint } from '../components/Hint';
+import { Notice } from '../components/Notice';
 import { PageHeader, QueryState } from '../components/Page';
+import { SafetyHint } from '../components/SafetyHint';
 import { DialogError } from '../components/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
-import { useAction, useDeviceModels, useFirmwareImages, usePolicy, useProjectDevices, useProjects } from '../hooks/queries';
+import { useAction, useDeviceModels, useFirmwareImages, useProjectDevices, useProjects } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Compatibility, FirmwareImage } from '../types/api';
 import { driverLabel, platformLabel, stateLabel } from '../services/labels';
@@ -102,11 +105,10 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
     </Modal>
     <Modal opened={overriding !== null} onClose={() => setOverriding(null)} title={`Approve ${overriding?.filename ?? ''} without a vendor checksum`}>
       <Stack>
-        <Alert color="orange" icon={<IconAlertTriangle size={16} />}>
-          UNDM cannot show that this file is the vendor's genuine, undamaged image. Approve it only if you obtained it from
-          a source you trust. The reason and your name are recorded in the audit log, shown with the image, and repeated
-          as a warning in every firmware plan that uses it.
-        </Alert>
+        <Notice kind="caution" details="The reason and your name are recorded in the audit log, shown with the image, and repeated as a warning in every firmware plan that uses it.">
+          UNDM cannot show that this file is the vendor's genuine, undamaged image. Approve it only if you obtained it from a
+          source you trust.
+        </Notice>
         <Text size="sm">If you can still get the vendor's SHA-256 or SHA-512, use "Add vendor checksum…" instead.</Text>
         <Textarea label="Reason for approving without the checksum" description="At least 10 characters, e.g. where the file came from."
           placeholder="e.g. taken from our approved software store" autosize minRows={2} maxLength={500}
@@ -200,9 +202,9 @@ function Planner({ images }: { images: FirmwareImage[] }) {
             value={projectId} onChange={(v) => { setProjectId(v); setSel([]); setResults(null); }} />
         </SimpleGrid>
         {chosen && !chosen.integrity_verified && (
-          <Alert mt="md" color="orange" icon={<IconAlertTriangle size={16} />} title="This image is not verified against the vendor's checksum">
+          <Notice mt="md" kind="caution" title="This image is not verified against the vendor's checksum">
             Approved by {chosen.approved_by ?? '?'} with the reason: “{chosen.unverified_reason ?? ''}”. The plan records this as a warning.
-          </Alert>
+          </Notice>
         )}
       </Card>
       {projectId && (
@@ -242,6 +244,7 @@ function Planner({ images }: { images: FirmwareImage[] }) {
             <Button disabled={!allOk} loading={create.isPending}
               onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(`/deployments/${d.id}`) })}>Create upgrade plan</Button>
           </Group>
+          {!dryRun && <Box mt="xs"><SafetyHint firmware real={(devices.data ?? []).some((d) => sel.includes(d.id) && d.environment !== 'simulated')} /></Box>}
           {!allOk && <Text size="xs" c="dimmed" mt="xs">{!imageId ? 'Choose an approved image.' : sel.length === 0 ? 'Tick the devices to upgrade.'
             : !results || results.length !== sel.length ? 'Check compatibility first: the plan is made only for devices the image fits.'
               : 'An image that does not fit every ticked device cannot be planned: untick those devices.'}</Text>}
@@ -253,20 +256,15 @@ function Planner({ images }: { images: FirmwareImage[] }) {
 
 export function FirmwarePage() {
   const images = useFirmwareImages();
-  const policy = usePolicy();
-  const realFirmware = !!policy.data?.enable_real_device_writes && !!policy.data?.enable_real_device_firmware;
   return (
     <>
       <PageHeader title="Firmware" description="Upload firmware images, approve them, then make an upgrade plan for the devices that need them." />
-      <Alert color={realFirmware ? 'red' : 'gray'} icon={<IconAlertTriangle size={18} />} mb="md"
-        title={realFirmware ? 'Firmware changes are ON: approved plans may upgrade real devices' : 'Firmware changes are OFF: real devices get dry runs only'}>
-        Real devices with an upgrade procedure: Aruba 2930F, FortiGate 101F and Black Box LIG1014A. Each has been run on
-        bench units and stays marked experimental. The device fetches the image from this PC and restarts into it, so use
-        a spare unit on an isolated bench. {realFirmware
-          ? 'Turn firmware changes off in Settings → Safety when you are done.'
-          : 'A dry run reads the running version and changes nothing. To upgrade, turn on device and firmware changes in Settings → Safety.'}{' '}
-        Other real models are shown as not compatible. Simulated devices can always be upgraded.
-      </Alert>
+      <Hint mb="md" more={<>Real devices with an upgrade procedure: Aruba 2930F, FortiGate 101F and Black Box LIG1014A. Each has
+        been run on bench units and stays marked experimental. The device fetches the image from this PC and restarts into
+        it, so use a spare unit on an isolated bench. Other real models are shown as not compatible. A dry run only reads the
+        running version.</>}>
+        Simulated devices can always be upgraded; real devices need Firmware changes on (Settings → Safety).
+      </Hint>
       <QueryState isLoading={images.isLoading} error={images.error} />
       <Tabs defaultValue="repo" keepMounted={false}>
         <Tabs.List mb="md">

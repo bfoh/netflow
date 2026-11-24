@@ -1,6 +1,4 @@
-import {
-  Alert, Anchor, Badge, Button, Card, Group, SegmentedControl, Select, SimpleGrid, Stack, Stepper, Text, TextInput, Title,
-} from '@mantine/core';
+import { Anchor, Badge, Button, Card, Group, SegmentedControl, Select, SimpleGrid, Stack, Stepper, Text, TextInput, Title } from '@mantine/core';
 import { IconCheck, IconPlus } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -19,6 +17,7 @@ import {
 } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Device } from '../types/api';
+import { Hint } from '../components/Hint';
 
 const STEPS = ['System and devices', 'Files and firmware', 'Bench check', 'Run', 'Report'];
 
@@ -146,7 +145,7 @@ function StageSystem({ projectId }: { projectId: string }) {
               data={[{ value: 'real', label: 'Real devices on the bench' }, { value: 'simulated', label: 'Practice (simulated)' }]} />
           </Group>
           {(devices.data ?? []).length > roles.length && (
-            <Alert color="gray" p="xs"><Text size="xs">This system also has devices that play no staging role; they are left out here.</Text></Alert>
+            <Hint>This system also has devices that play no staging role; they are left out here.</Hint>
           )}
           <SimpleGrid cols={{ base: 1, md: 2 }}>
             {ROLES.map((role) => (

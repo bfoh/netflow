@@ -101,7 +101,8 @@ For the Aruba 2930F follow `docs/vendor-support/aruba-2930f-acceptance.md`.
    `config system console / set output standard` for the session and restores it afterwards.)
 4. Plan **dry runs** are allowed. To let approved plans change lab devices, turn on
    **Settings → Safety → Real-device changes** (confirmed and recorded in the audit log; kept
-   in `settings.json` in the data folder). The header then shows **Real-device changes ON**.
+   in `settings.json` in the data folder). The state is shown next to Approve and Run of every plan
+   for a real device, and on the device's page.
    A switch set in `backend\.env` (`UNDM_ENABLE_REAL_DEVICE_WRITES=...`) still works, wins,
    and is shown as fixed on the Settings page (D-082).
 5. Production devices are blocked entirely unless `UNDM_ALLOW_PRODUCTION_READ_ONLY` /

@@ -1,10 +1,11 @@
-import { Alert, Anchor, Badge, Button, Card, Code, Group, List, Stack, Table, Text, Title } from '@mantine/core';
-import { IconPlugConnected, IconShieldCheck, IconTerminal2 } from '@tabler/icons-react';
+import { Anchor, Badge, Button, Card, Code, Group, List, Stack, Table, Text, Title } from '@mantine/core';
+import { IconPlugConnected, IconTerminal2 } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../../components/Badges';
-import { useAction, usePolicy } from '../../hooks/queries';
+import { SafetyHint } from '../../components/SafetyHint';
+import { useAction } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { Device, OperationResult } from '../../types/api';
 import type { Role } from './roles';
@@ -13,7 +14,6 @@ const CONSOLE_DONE = new Set(['bootstrapped', 'managed']);
 
 /** Step 3: cabling, safety switches, and whether each device answers. */
 export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }) {
-  const policy = usePolicy();
   const [results, setResults] = useState<Record<string, OperationResult>>({});
   const test = useAction(async (d: Device) => {
     const r = await api.runOperation(d.id, 'check_reachability');
@@ -21,8 +21,6 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
     return r;
   });
   const real = roles.some(({ device }) => device.environment !== 'simulated');
-  const writes = policy.data?.enable_real_device_writes;
-  const firmware = policy.data?.enable_real_device_firmware;
   return (
     <Stack>
       <Card withBorder>
@@ -34,15 +32,7 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
           <List.Item>Allow incoming TFTP on this PC (UDP port 69): devices fetch firmware and files from UNDM. A blocked transfer is reported as such.</List.Item>
         </List>
       </Card>
-      {real && (
-        <Alert color={writes ? 'orange' : 'gray'} icon={<IconShieldCheck size={18} />}
-          title={writes ? 'Real-device changes are on' : 'Real-device changes are off'}>
-          <Text size="sm">
-            {writes ? 'Approved plans may change the real devices below. ' : 'Plans for real devices can be made and approved, but will not run until you turn on Real-device changes. '}
-            Firmware changes are {firmware ? 'on' : 'off'}. <Anchor component={Link} to="/settings" size="sm">Settings → Safety</Anchor>
-          </Text>
-        </Alert>
-      )}
+      {real && <><SafetyHint real /><SafetyHint real firmware /></>}
       <Card withBorder padding={0}>
         <Table.ScrollContainer minWidth={640}>
           <Table verticalSpacing="sm" horizontalSpacing="md">

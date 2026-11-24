@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Badge, Button, Card, Checkbox, Group, Modal, PasswordInput, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
+import { ActionIcon, Badge, Button, Card, Checkbox, Group, Modal, PasswordInput, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconKey, IconPlus, IconShieldLock, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -8,6 +8,7 @@ import { useConfirm } from '../../hooks/useConfirm';
 import { useAction, useCredentialRefs } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { CredentialRef } from '../../types/api';
+import { Hint } from '../../components/Hint';
 
 /** Username/password entry. The password goes straight to the backend, which writes it to
  *  the OS credential store; it is never shown again or stored in the UNDM database. */
@@ -47,10 +48,10 @@ export function CredentialsPanel({ projectId }: { projectId: string }) {
   return (
     <Stack>
       {confirmDialog}
-      <Alert color="blue" icon={<IconShieldLock size={18} />}>
+      <Hint icon={<IconShieldLock size={14} />}>
         A login is a user name and password for a device. Passwords are kept in your Windows Credential Manager, not in UNDM,
         and cannot be viewed again here. Choose a device's login on its <b>Edit device</b> form.
-      </Alert>
+      </Hint>
       <Group><Button leftSection={<IconPlus size={16} />} onClick={() => { setName(''); open(); }}>Add login</Button></Group>
       <Card withBorder padding={0}>
         <Table.ScrollContainer minWidth={480}>

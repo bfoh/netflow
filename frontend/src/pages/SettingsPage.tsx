@@ -1,7 +1,7 @@
-import { Alert, Badge, Button, Card, Group, Stack, Table, Tabs, Text, TextInput } from '@mantine/core';
+import { Badge, Button, Card, Group, Stack, Table, Tabs, Text, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useQuery } from '@tanstack/react-query';
-import { IconInfoCircle } from '@tabler/icons-react';
+
 import { useState } from 'react';
 
 import { PageHeader } from '../components/Page';
@@ -9,6 +9,7 @@ import { useDeviceModels, useDrivers } from '../hooks/queries';
 import { api, getActor, setActor } from '../services/api';
 import { SafetyPanel } from '../features/settings/SafetyPanel';
 import { capabilityLabel, driverLabel, humanize, stateLabel } from '../services/labels';
+import { Hint } from '../components/Hint';
 
 const SUPPORT: Record<string, string> = {
   simulated_only: 'Simulated only', lab_read_only: 'Checked on real hardware', lab_validated: 'Validated on real hardware',
@@ -34,10 +35,10 @@ export function SettingsPage() {
         <Tabs.Panel value="identity">
           <Card withBorder maw={560}>
             <Stack>
-              <Alert color="yellow" icon={<IconInfoCircle size={16} />}>
+              <Hint>
                 Your name is written in the audit log next to everything you do, and a second person approving a plan is
                 told apart by it. It is not a login: UNDM has no user accounts yet, so use it only on your own PC.
-              </Alert>
+              </Hint>
               <TextInput label="Your name" value={actor} onChange={(e) => setActorState(e.currentTarget.value)} />
               <Group><Button onClick={() => { setActor(actor.trim() || 'local-user'); notifications.show({ message: 'Saved. Reloading…' }); window.location.reload(); }}>Save</Button></Group>
             </Stack>

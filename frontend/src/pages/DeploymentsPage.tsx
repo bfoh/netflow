@@ -1,9 +1,11 @@
-import { ActionIcon, Alert, Anchor, Button, Card, Checkbox, Group, SegmentedControl, Select, Stack, Switch, Table, Text, Title, Tooltip } from '@mantine/core';
-import { IconInfoCircle, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Anchor, Button, Card, Checkbox, Group, SegmentedControl, Select, Stack, Switch, Table, Text, Title, Tooltip } from '@mantine/core';
+import { IconTrash } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
+import { Hint } from '../components/Hint';
+import { Notice } from '../components/Notice';
 import { PageHeader, QueryState } from '../components/Page';
 import { PlanStatus } from '../features/plans/AttentionBadge';
 import { usePlanDelete } from '../hooks/usePlanDelete';
@@ -159,15 +161,14 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
           {forced && <Text size="xs" c="dimmed">set by the chosen file</Text>}</Group>
       </Group>
       {required.length > 1 && (
-        <Alert color="red" icon={<IconInfoCircle size={16} />} mb="md">
+        <Notice kind="error" mb="md">
           The chosen files need different modes (a complete file and a script). Make one plan per kind of file.
-        </Alert>
+        </Notice>
       )}
       {effectiveMode === 'replace' && (
-        <Alert color="yellow" icon={<IconInfoCircle size={16} />} mb="md">
-          Replace makes the running configuration equal to the chosen one, removing everything else. For a FortiGate full backup or a
-          complete 2930F file, the device fetches the file over TFTP and restarts. Drivers that cannot replace are rejected at validation.
-        </Alert>
+        <Hint mb="md" more="For a FortiGate full backup or a complete 2930F or Black Box file, the device fetches the file from this PC and restarts. Devices that cannot load a complete file are refused when the plan is checked.">
+          A complete file makes the device's configuration equal to it: everything else is removed.
+        </Hint>
       )}
       <Button disabled={sel.length === 0 || required.length > 1} loading={create.isPending}
         onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(`/deployments/${d.id}`) })}>

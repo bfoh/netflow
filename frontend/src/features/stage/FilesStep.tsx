@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Card, Checkbox, FileButton, Group, Select, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { Badge, Button, Card, Checkbox, FileButton, Group, Select, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { IconAlertTriangle, IconCheck, IconUpload } from '@tabler/icons-react';
 
 import { useAction, useConfig, useConfigs, useCredentialRefs, useFirmwareImages } from '../../hooks/queries';
@@ -7,6 +7,7 @@ import { fmtDate } from '../../services/format';
 import type { Device } from '../../types/api';
 import { type Choice, EMPTY_CHOICE, planSteps } from './choices';
 import type { Role } from './roles';
+import { EmptyState } from '../../components/EmptyState';
 
 /** Choose one of the device's imported files, or import one; shows what UNDM found in it. */
 function FilePick({ device, label, description, value, onChange, secrets, onSecrets, logins }: {
@@ -112,7 +113,7 @@ export function FilesStep({ roles, choices, onChange }: {
   choices: Partial<Record<string, Choice>>;
   onChange: (key: string, c: Choice) => void;
 }) {
-  if (roles.length === 0) return <Alert color="gray">Add the devices first (step 1).</Alert>;
+  if (roles.length === 0) return <EmptyState>Add the devices first (step 1: System and devices).</EmptyState>;
   return (
     <SimpleGrid cols={{ base: 1, lg: 2 }}>
       {roles.map(({ role, device }) => (

@@ -1,9 +1,11 @@
-import { Alert, Badge, Button, Card, Code, CopyButton, FileButton, Group, List, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
-import { IconAlertTriangle, IconCopy, IconDownload, IconFileImport, IconInfoCircle, IconRocket, IconWand } from '@tabler/icons-react';
+import { Badge, Button, Card, Code, CopyButton, FileButton, Group, List, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { IconCopy, IconDownload, IconFileImport, IconRocket, IconWand } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { DiffView } from '../../components/DiffView';
+import { Hint } from '../../components/Hint';
+import { Notice } from '../../components/Notice';
 import { QueryState } from '../../components/Page';
 import { downloadText, fmtDate } from '../../services/format';
 import { useAction, useConfig, useConfigDiff, useConfigs } from '../../hooks/queries';
@@ -20,13 +22,13 @@ const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 function FileReport({ report }: { report: ConfigInspection }) {
   const blocked = report.problems.length > 0 || !!report.blocked_reason;
   return (
-    <Alert color={blocked ? 'red' : 'blue'} variant="light" mb="xs" p="xs" title={report.summary}
-      icon={blocked ? <IconAlertTriangle size={16} /> : <IconInfoCircle size={16} />}>
+    <Notice kind={blocked ? 'error' : 'settled'} compact mb="xs" title={report.summary}
+      details={report.notes.length > 0 ? <List size="xs" spacing={2}>{report.notes.map((n) => <List.Item key={n}>{n}</List.Item>)}</List> : undefined}>
       {report.apply_mode && (
         <Text size="xs" mb={4}>
           {report.apply_mode === 'replace'
-            ? 'This kind of file is restored as a whole (replace mode). It is never sent line by line.'
-            : 'This kind of file is a list of changes (merge mode): it changes what it names and leaves the rest of the configuration alone.'}
+            ? 'Loaded as a whole (complete file); never sent line by line.'
+            : 'A list of changes (additions): it changes what it names and leaves the rest alone.'}
         </Text>
       )}
       {report.blocked_reason && <Text size="xs" fw={600} mb={4}>Cannot be applied yet: {report.blocked_reason}</Text>}
@@ -36,8 +38,7 @@ function FileReport({ report }: { report: ConfigInspection }) {
           <List size="xs" mb={4}>{report.problems.map((p) => <List.Item key={p}>{p}</List.Item>)}</List>
         </>
       )}
-      {report.notes.length > 0 && <List size="xs" spacing={2}>{report.notes.map((n) => <List.Item key={n}>{n}</List.Item>)}</List>}
-    </Alert>
+    </Notice>
   );
 }
 
@@ -73,11 +74,11 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
         {!device.intent && <Text size="sm" c="dimmed">No intent defined: import a configuration file, or define the intent to generate one.</Text>}
       </Group>
       {issues && issues.length > 0 && (
-        <Alert color={issues.some((i) => i.severity === 'error') ? 'red' : 'yellow'} icon={<IconAlertTriangle size={18} />} title="Validation results">
+        <Notice kind={issues.some((i) => i.severity === 'error') ? 'error' : 'caution'} title="Validation results">
           <List size="sm">{issues.map((i, n) => <List.Item key={n}><b>{i.severity}</b> {i.path && <code>{i.path}</code>} — {i.message}</List.Item>)}</List>
-        </Alert>
+        </Notice>
       )}
-      {issues && issues.length === 0 && <Alert color="teal" title="Validation passed">No errors or warnings.</Alert>}
+      {issues && issues.length === 0 && <Notice kind="success" title="Validation passed">No errors or warnings.</Notice>}
       <QueryState isLoading={versions.isLoading} error={versions.error} />
       {list.length === 0 ? <Text c="dimmed" size="sm">No configuration versions yet.</Text> : (
         <SimpleGrid cols={{ base: 1, lg: 2 }}>
@@ -94,9 +95,8 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
                   {shown.data.verification && <Badge variant="light" color="yellow">{humanize(shown.data.verification)}</Badge>}
                 </Group>
                 {shown.data.kind === 'imported' && (
-                  <Alert color="orange" variant="light" icon={<IconInfoCircle size={16} />} mb="xs" p="xs">
-                    <Text size="xs">Imported from <b>{shown.data.reference}</b>. It is sent exactly as written and is not checked against the device's settings. Review it, and compare it with the latest backup, before making a plan.</Text>
-                  </Alert>
+                  <Hint mb="xs">Imported from <b>{shown.data.reference}</b>: sent exactly as written, not checked against the
+                    device's settings. Compare it with the latest backup before making a plan.</Hint>
                 )}
                 {shown.data.inspection && <FileReport report={shown.data.inspection} />}
                 {(shown.data.kind === 'generated' || shown.data.kind === 'imported') && (() => {
@@ -115,9 +115,7 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
                   );
                 })()}
                 {shown.data.verification === 'docs_reviewed_not_lab_verified' && (
-                  <Alert color="yellow" variant="light" icon={<IconInfoCircle size={16} />} mb="xs" p="xs">
-                    <Text size="xs">Template syntax follows public vendor documentation but has not been verified on lab equipment.</Text>
-                  </Alert>
+                  <Hint mb="xs">Generated from a template that follows public vendor documentation; not yet verified on lab equipment.</Hint>
                 )}
                 <Code block mah={420} style={{ overflow: 'auto', fontSize: 12 }}>{shown.data.text}</Code>
                 <Group gap="xs" mt="xs">

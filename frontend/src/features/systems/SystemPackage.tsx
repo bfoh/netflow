@@ -1,12 +1,13 @@
-import { Alert, Button, Checkbox, FileInput, Group, List, Modal, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, FileInput, Group, List, Modal, Stack, Text, TextInput } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconDownload, IconFileImport, IconLock } from '@tabler/icons-react';
+import { IconDownload, IconFileImport } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { DialogError } from '../../components/ConfirmDialog';
 import { useAction } from '../../hooks/queries';
 import { api, type SystemImport } from '../../services/api';
+import { Notice } from '../../components/Notice';
 
 /** Export a system to one .undm file (D-087): no passwords, files as written. */
 export function ExportSystemButton({ projectId }: { projectId: string }) {
@@ -20,11 +21,10 @@ export function ExportSystemButton({ projectId }: { projectId: string }) {
         <Stack>
           <Text size="sm">One <code>.undm</code> file with the system's settings, its devices, the names of its logins, its
             configuration files and its topology. A colleague imports it on their copy of UNDM.</Text>
-          <Alert color="orange" icon={<IconLock size={16} />} p="xs">
-            <Text size="xs">Passwords are never exported: the logins arrive empty. But the team's configuration files are
-              included as written, and they can hold passwords (for example Black Box files). Keep the file confidential,
-              as you keep those files.</Text>
-          </Alert>
+          <Notice kind="caution" compact title="Keep the file confidential"
+            details="Passwords are never exported: the logins arrive empty. But the team's configuration files are included as written.">
+            The configuration files in it can hold passwords (for example Black Box files).
+          </Notice>
           <Checkbox label="Include the approved firmware images for these devices (a much larger file)"
             checked={firmware} onChange={(e) => setFirmware(e.currentTarget.checked)} />
           <DialogError error={run.error} />
@@ -57,10 +57,10 @@ export function ImportSystemButton() {
             <Text size="sm">Imported <b>{done.project.name}</b>: {done.summary.devices} devices, {done.summary.files} files
               {done.summary.firmware_added ? `, ${done.summary.firmware_added} firmware images (to approve on the Firmware page)` : ''}.</Text>
             {done.summary.logins.length > 0 && (
-              <Alert color="blue" p="xs" title="Next: store the passwords">
-                <Text size="xs" mb={4}>These logins came without passwords. Open the system, Logins tab, and set each one:</Text>
-                <List size="xs">{done.summary.logins.map((l) => <List.Item key={l}>{l}</List.Item>)}</List>
-              </Alert>
+              <Notice kind="settled" compact title="Next: store the passwords">
+                These logins came without passwords. Open the system, Logins tab, and set each one:
+                <List size="xs" mt={4}>{done.summary.logins.map((l) => <List.Item key={l}>{l}</List.Item>)}</List>
+              </Notice>
             )}
             <Group justify="flex-end">
               <Button variant="default" onClick={reset}>Close</Button>

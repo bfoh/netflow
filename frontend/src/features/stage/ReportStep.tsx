@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Group, Stack, Table, Text, Title } from '@mantine/core';
+import { Button, Card, Group, Stack, Table, Text, Title } from '@mantine/core';
 import { IconDownload, IconPrinter } from '@tabler/icons-react';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -8,6 +8,7 @@ import { api } from '../../services/api';
 import { downloadText, fmtDate } from '../../services/format';
 import type { Device, Project, StagingIndex, StagingPlan } from '../../types/api';
 import type { Role } from './roles';
+import { EmptyState } from '../../components/EmptyState';
 
 const minutes = (a: string, b: string) => {
   const ms = new Date(b).getTime() - new Date(a).getTime();
@@ -43,7 +44,7 @@ export function ReportStep({ project, roles, stagings }: {
         <Button variant="default" leftSection={<IconPrinter size={16} />} onClick={() => window.print()}>Print</Button>
         <Button variant="default" leftSection={<IconDownload size={16} />} onClick={html}>Save as HTML</Button>
       </Group>
-      {roles.length === 0 && <Alert color="gray">No devices yet.</Alert>}
+      {roles.length === 0 && <EmptyState>No devices yet: add them in step 1.</EmptyState>}
       <div id="staging-report">
         <Title order={2} size="h4" mb="xs">Staging report · {project.name}</Title>
         <Text size="sm" c="dimmed" mb="md">Made {fmtDate(madeAt)}. One section per device: its latest staging plan.</Text>

@@ -975,3 +975,23 @@ step order can never be bypassed. Every deletion is audited with what the plan w
 devices themselves are never touched. The device-kind badge is no longer cut short in
 narrow columns.
 
+### D-089 One message vocabulary; the safety switches shown only where they matter (2026-11-24)
+Product owner, on the header pills "REAL-DEVICE CHANGES ON / FIRMWARE CHANGES ON" (solid red):
+review every banner and present them better. The inventory found 50 banners in 25 files in 8
+colours with no consistent meaning (red for a normal bench state as well as for errors, long
+explanations as permanent banners, the same safety text on five pages, empty lists as grey
+banners). Now there are four kinds of message, each with one colour and icon, drawn only by
+`components/Notice.tsx`:
+- Problem (red): something is wrong or blocks you; the fix is the action.
+- Caution (amber): a risk to weigh at the point of action.
+- Status (blue while running, grey when settled, teal when it worked).
+- Help is not a box: `Hint` (small dimmed text, "More" for the rest); empty lists use
+  `EmptyState`.
+A Vitest guard fails if any other file draws a banner. Product owner decision: the safety
+switches left the header; `SafetyHint` shows their state in one quiet line only where it
+matters (next to Approve/Run of plans and staging plans for real devices, the console setup
+Run, the firmware planner, the wizard's bench check, a real device's page), with a link to
+Settings → Safety; nothing for simulated devices. The plan page shows one outcome message (a
+plan that needs attention carries "Mark as checked…" as its action); the Run dialog names the
+real devices that will change.
+

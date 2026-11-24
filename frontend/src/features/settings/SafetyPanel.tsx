@@ -1,11 +1,13 @@
-import { Alert, Badge, Button, Card, Checkbox, Group, Modal, Stack, Switch, Text, Title } from '@mantine/core';
-import { IconAlertTriangle, IconLock, IconShieldCheck } from '@tabler/icons-react';
+import { Badge, Button, Card, Checkbox, Group, Modal, Stack, Switch, Text, Title } from '@mantine/core';
+import { IconLock, IconShieldCheck } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import { DialogError } from '../../components/ConfirmDialog';
 import { useAction, usePolicy } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { Policy, SafetySwitch } from '../../types/api';
+import { Notice } from '../../components/Notice';
+import { Hint } from '../../components/Hint';
 
 interface SwitchInfo {
   key: SafetySwitch;
@@ -42,10 +44,10 @@ export function SafetyPanel() {
 
   return (
     <Stack maw={720}>
-      <Alert color="blue" icon={<IconShieldCheck size={18} />}>
-        These switches decide whether UNDM may change <b>real</b> devices. They start off. Simulated devices can always be
-        changed. Every change is recorded in the audit log, and it applies to this copy of UNDM only.
-      </Alert>
+      <Hint icon={<IconShieldCheck size={14} />}>
+        These switches decide whether UNDM may change <b>real</b> devices; they start off. Simulated devices can always be
+        changed. Every change is recorded in the audit log and applies to this copy of UNDM only.
+      </Hint>
       {SWITCHES.map((info) => {
         const on = Boolean(p[info.key as keyof Policy]);
         const locked = p.locked.includes(info.key);
@@ -76,7 +78,7 @@ export function SafetyPanel() {
       <Modal opened={!!asked} onClose={() => setAsked(null)} title={asked ? `${asked.info.label}: turn ${asked.value ? 'on' : 'off'}?` : ''}>
         {asked && (
           <Stack>
-            <Alert color="orange" icon={<IconAlertTriangle size={18} />}>{asked.info.risky}</Alert>
+            <Notice kind="caution">{asked.info.risky}</Notice>
             <Text size="sm">Plans still need approval before they run, and you can stop a running plan. Turn this back when you have finished.</Text>
             <Checkbox label="The devices are spare units on an isolated bench" checked={sure} onChange={(e) => setSure(e.currentTarget.checked)} />
             <DialogError error={change.error} />

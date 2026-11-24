@@ -1,11 +1,12 @@
-import { ActionIcon, Alert, Button, Card, Group, NumberInput, Stack, Switch, Table, Text, TextInput, Title } from '@mantine/core';
-import { IconAlertTriangle, IconPlus, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Button, Card, Group, NumberInput, Stack, Switch, Table, Text, TextInput, Title } from '@mantine/core';
+import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import { useAction } from '../../hooks/queries';
 import { api } from '../../services/api';
 import { normalizeIntent } from '../../services/intent';
 import type { Device, DeviceIntent } from '../../types/api';
+import { Notice } from '../../components/Notice';
 
 const orNull = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
 
@@ -38,11 +39,10 @@ export function IntentEditor({ device }: { device: Device }) {
       <Card withBorder>
         <TextInput label="Hostname" required maw={320} value={intent.hostname} onChange={(e) => update('hostname', e.currentTarget.value)} />
         {renames && (
-          <Alert color="orange" mt="sm" icon={<IconAlertTriangle size={16} />} title="This intent renames the device">
-            The device currently reports hostname <b>{observedHostname}</b>. A plan with these settings sets it to <b>{intent.hostname}</b>.
-            Keep the current name unless you mean to rename it.
-            <Button size="xs" variant="light" ml="sm" onClick={() => update('hostname', observedHostname!)}>Use {observedHostname}</Button>
-          </Alert>
+          <Notice kind="caution" mt="sm" compact title="This renames the device"
+            action={<Button size="xs" variant="light" onClick={() => update('hostname', observedHostname!)}>Keep {observedHostname}</Button>}>
+            The device reports hostname <b>{observedHostname}</b>; a plan with these settings sets it to <b>{intent.hostname}</b>.
+          </Notice>
         )}
       </Card>
 

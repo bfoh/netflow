@@ -1,14 +1,15 @@
-import { Alert, Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core';
-import { IconAlertTriangle } from '@tabler/icons-react';
+import { Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core';
 import { type ReactNode, useState } from 'react';
+
+import { Notice } from './Notice';
 
 /** An error shown inside the dialog that caused it, so it cannot be missed or lost. */
 export function DialogError({ error }: { error: Error | null | undefined }) {
   if (!error) return null;
   return (
-    <Alert color="red" icon={<IconAlertTriangle size={16} />} title="That did not work" role="alert">
-      <Text size="sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{error.message}</Text>
-    </Alert>
+    <Notice kind="error" title="That did not work" compact>
+      <span style={{ whiteSpace: 'pre-wrap' }}>{error.message}</span>
+    </Notice>
   );
 }
 

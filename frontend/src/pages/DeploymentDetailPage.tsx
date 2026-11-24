@@ -1,13 +1,16 @@
-import { Accordion, Alert, Anchor, Badge, Button, Card, Code, CopyButton, Group, Modal, Stack, Stepper, Text, Textarea, TextInput, Timeline, Title } from '@mantine/core';
+import { Accordion, Anchor, Badge, Button, Card, Code, CopyButton, Group, Modal, Stack, Stepper, Text, Textarea, TextInput, Timeline, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { IconAlertTriangle, IconCheck, IconFlask, IconTrash, IconX } from '@tabler/icons-react';
+import { IconAlertTriangle, IconTrash, IconX } from '@tabler/icons-react';
 import { Link, useNavigate, useParams } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { DiffView } from '../components/DiffView';
 import { PageHeader, QueryState } from '../components/Page';
+import { Hint } from '../components/Hint';
+import { Notice, type NoticeKind } from '../components/Notice';
+import { SafetyHint } from '../components/SafetyHint';
 import { fmtDate } from '../services/format';
 import { RUNNING_STATES, useAction, useDeployment, usePolicy, useProjectDevices } from '../hooks/queries';
 import { api } from '../services/api';
@@ -28,12 +31,12 @@ const DRY_STEPS = ['Validate & preview', 'Preflight (read only)', 'Complete'];
 const DRY_STEP_OF: Record<string, number> = {
   draft: 0, validating: 0, ready: 1, preflight: 1, succeeded: 3, failed: 3, cancelled: 3,
 };
-const OUTCOME: Record<string, { color: string; title: string; text: string }> = {
-  succeeded: { color: 'teal', title: 'Plan succeeded', text: 'Every changed device was verified against its intended configuration.' },
-  failed: { color: 'red', title: 'Plan failed before any change', text: 'No device was changed. See events for the reason.' },
-  rolled_back: { color: 'orange', title: 'Plan failed and the device was put back', text: 'Every changed device was automatically restored from its backup.' },
-  recovery_required: { color: 'red', title: 'Needs attention', text: 'At least one device may be in an intermediate state. Check each target below before making further changes.' },
-  cancelled: { color: 'gray', title: 'Plan cancelled', text: 'No device was changed.' },
+const OUTCOME: Record<string, { kind: NoticeKind; title: string; text: string }> = {
+  succeeded: { kind: 'success', title: 'Plan succeeded', text: 'Every changed device was verified against its intended configuration.' },
+  failed: { kind: 'error', title: 'Plan failed before any change', text: 'No device was changed. The events below say why.' },
+  rolled_back: { kind: 'caution', title: 'Plan failed and the device was put back', text: 'Every changed device was automatically restored from its backup.' },
+  recovery_required: { kind: 'error', title: 'Needs attention', text: 'A device may be half-changed. Check each device below (for example on its console) before making further changes.' },
+  cancelled: { kind: 'settled', title: 'Plan cancelled', text: 'No device was changed.' },
 };
 
 /** datetime-local value in UTC for a Date (UNDM shows and takes times in UTC, like the network). */
@@ -65,7 +68,12 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
   const canCancel = ['draft', 'awaiting_approval', 'ready'].includes(dep.state);
   const [askToDelete, deleteDialog, canDelete] = usePlanDelete();
   const navigate = useNavigate();
+  const devices = useProjectDevices(dep.project_id);
+  const realNames = dep.targets.map((t) => devices.data?.find((x) => x.id === t.device_id))
+    .filter((x) => x && x.environment !== 'simulated').map((x) => x!.name);
+  const decide = !dep.dry_run && ['awaiting_approval', 'ready'].includes(dep.state) && !active;
   return (
+    <Stack gap={4} align="flex-end">
     <Group>
       {dep.state === 'awaiting_approval' && <Button onClick={() => (firmware ? openWindow() : approve.mutate())} loading={approve.isPending}>Approve</Button>}
       <Modal opened={windowOpen} onClose={closeWindow} title="Approve firmware upgrade">
@@ -118,7 +126,10 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
                 ? `Connects to ${dep.targets.length} device(s), checks identity and compares configurations. Nothing is changed.`
                 : `Backs up and then changes ${dep.targets.length} device(s) with ${applyModeLabel(dep.apply_mode)}, verifies the result and puts the device back where it can if anything fails.`}
           </Text>
-          <Alert color="violet" icon={<IconFlask size={16} />} p="xs">Check the badge of every device below: Simulated devices exist only in UNDM; Real devices are equipment on your bench.</Alert>
+          {realNames.length > 0 && !dep.dry_run
+            ? <Notice kind="caution" compact title={`${realNames.length === 1 ? 'A real device' : `${realNames.length} real devices`} will be changed`}>
+                {realNames.join(', ')}: equipment on your bench, not a simulation.</Notice>
+            : <Hint>{dep.dry_run ? 'A dry run only reads from the devices.' : 'Every device in this plan is simulated: nothing real is touched.'}</Hint>}
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Back</Button>
             <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={() => { close(); setStarted(true); execute.mutate(undefined, { onError: () => setStarted(false) }); }}>Confirm</Button>
@@ -126,6 +137,8 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
         </Stack>
       </Modal>
     </Group>
+    {decide && <SafetyHint real={realNames.length > 0} firmware={firmware} />}
+    </Stack>
   );
 }
 
@@ -168,18 +181,18 @@ function Progress({ d, names }: { d: Deployment; names: Map<string, { name: stri
   return (
     <Stack gap="xs" mb="md">
       {restarting && (
-        <Alert color="yellow" icon={<IconAlertTriangle size={18} />} title={`${device} is restarting: please wait (${fmtElapsed(since)})`}>
-          A restart takes about 1–2 minutes (2930F on the bench: about 1 minute). UNDM checks every 20 seconds and continues by
-          itself as soon as the device answers. <b>Do not power it off or unplug it.</b> If the device's management port changes
-          with the new configuration, connect this PC there now (the event below says where).
-        </Alert>
+        <Notice kind="caution" title={`${device} is restarting: please wait (${fmtElapsed(since)})`}
+          details={<>A restart takes about 1–2 minutes (2930F on the bench: about 1 minute). UNDM checks every 20 seconds and
+            continues by itself as soon as the device answers. If the device's management port changes with the new
+            configuration, connect this PC there now (the latest event says where).</>}>
+          Do not power it off or unplug it. UNDM continues by itself when it answers.
+        </Notice>
       )}
-      <Alert color="blue" title={`In progress: ${RUNNING_STATES.has(d.state) ? stateLabel(d.state).toLowerCase() : 'starting'}…`}>
-        {last && <Text size="sm" mb={4}>Latest step ({fmtElapsed(since)} ago): {last.message}</Text>}
-        The run continues on the server even if you leave this page; the events below update as each step finishes.
-        Use <b>Stop</b> to end it at the next safe point.
-        {d.kind === 'firmware' && !d.dry_run && ' A firmware upgrade takes several minutes per device: the image is transferred, written to flash, then the device restarts. Do not power off or unplug a device while this runs.'}
-      </Alert>
+      <Notice kind="status" title={`Running: ${RUNNING_STATES.has(d.state) ? stateLabel(d.state).toLowerCase() : 'starting'}…`}
+        details={<>The run continues on the server even if you leave this page. Use <b>Stop</b> to end it at the next safe
+          point.{d.kind === 'firmware' && !d.dry_run && ' A firmware upgrade takes several minutes per device: the image is transferred, written to flash, then the device restarts.'}</>}>
+        {last ? <>Latest step ({fmtElapsed(since)} ago): {last.message}</> : 'Starting…'}
+      </Notice>
     </Stack>
   );
 }
@@ -220,23 +233,22 @@ function AttentionPanel({ d }: { d: Deployment }) {
   const cleared = d.attention_cleared;
   if (cleared === 'checked') {
     const ev = [...d.events].reverse().find((e) => e.status === 'checked');
-    return <Alert color="gray" mb="md" icon={<IconCheck size={18} />} title="Checked">{ev?.message ?? 'A person checked the device.'}</Alert>;
+    return <Notice kind="settled" mb="md" title="Needs attention · checked">{ev?.message ?? 'A person checked the device.'}</Notice>;
   }
   if (cleared?.startsWith('superseded:')) {
     return (
-      <Alert color="gray" mb="md" icon={<IconCheck size={18} />} title="A later plan succeeded on this device">
+      <Notice kind="settled" mb="md" title="Needs attention · a later plan succeeded">
         <Anchor component={Link} to={`/deployments/${cleared.slice('superseded:'.length)}`} size="sm">That plan</Anchor> changed
         and verified the same device(s) afterwards, so this one no longer waits for a check.
-      </Alert>
+      </Notice>
     );
   }
   return (
-    <Card withBorder mb="md">
-      <Group justify="space-between" wrap="wrap">
-        <Text size="sm">When you have checked the device (for example on its console) and it is as it should be, record it:
-          the plan then no longer waits on the Home page. Its outcome stays as it was.</Text>
-        <Button variant="light" onClick={() => { setNote(''); mark.reset(); open(); }}>Mark as checked…</Button>
-      </Group>
+    <>
+      <Notice kind="error" mb="md" title={OUTCOME.recovery_required.title}
+        action={<Button size="xs" variant="white" color="red" onClick={() => { setNote(''); mark.reset(); open(); }}>Mark as checked…</Button>}>
+        {OUTCOME.recovery_required.text} When it is as it should be, mark the plan as checked: it then no longer waits on Home.
+      </Notice>
       <Modal opened={opened} onClose={close} title="Mark as checked">
         <Stack>
           <Textarea label="What did you check?" description="Kept in the plan's events and the audit log."
@@ -250,7 +262,7 @@ function AttentionPanel({ d }: { d: Deployment }) {
           </Group>
         </Stack>
       </Modal>
-    </Card>
+    </>
   );
 }
 
@@ -291,14 +303,12 @@ export function DeploymentDetailPage() {
           ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : d.kind === 'first_login' ? '' : ` · ${d.apply_mode} mode`}`}
         actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
       {d.staging_id && (
-        <Alert color="grape" mb="md" p="xs" title={`Step ${d.staging_step} of a staging plan`}>
-          {d.staging_step === 1 ? 'The first step: the next step runs only after this one has succeeded. '
-            : `It runs only after steps 1–${(d.staging_step ?? 2) - 1} have succeeded. `}
-          <Anchor component={Link} to={`/staging/${d.staging_id}`}>Open the staging plan</Anchor>
-        </Alert>
+        <Hint mb="md">Step {d.staging_step} of a <Anchor component={Link} to={`/staging/${d.staging_id}`} size="xs">staging plan</Anchor>
+          {d.staging_step === 1 ? ': the next step runs only after this one has succeeded.'
+            : `: it runs only after steps 1–${(d.staging_step ?? 2) - 1} have succeeded.`}</Hint>
       )}
       {working && <Progress d={d} names={byId} />}
-      {!working && outcome && <Alert color={outcome.color} title={outcome.title} mb="md" icon={d.state === 'succeeded' ? <IconCheck size={18} /> : <IconAlertTriangle size={18} />}>{outcome.text}</Alert>}
+      {!working && outcome && d.state !== 'recovery_required' && <Notice kind={outcome.kind} title={outcome.title} mb="md">{outcome.text}</Notice>}
       {!working && d.state === 'recovery_required' && <AttentionPanel d={d} />}
       <Card withBorder mb="md">
         <Stepper active={stepOf[d.state] ?? 0} size="xs" allowNextStepsSelect={false}

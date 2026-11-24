@@ -1,5 +1,5 @@
-import { Accordion, Alert, Anchor, Badge, Button, Card, Code, Group, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
-import { IconAlertTriangle, IconEdit, IconLock, IconPlugConnected, IconTerminal2, IconTrash } from '@tabler/icons-react';
+import { Accordion, Anchor, Badge, Button, Card, Code, Group, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
+import { IconEdit, IconPlugConnected, IconTerminal2, IconTrash } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import type { ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -7,13 +7,16 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { useConfirm } from '../hooks/useConfirm';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
+import { Hint } from '../components/Hint';
+import { Notice } from '../components/Notice';
 import { PageHeader, QueryState } from '../components/Page';
+import { SafetyHint } from '../components/SafetyHint';
 import { fmtDate } from '../services/format';
 import { ConfigWorkbench } from '../features/configurations/ConfigWorkbench';
 import { DiagnosticsButton } from '../features/devices/DiagnosticsButton';
 import { EditDeviceModal } from '../features/devices/EditDeviceModal';
 import { IntentEditor } from '../features/devices/IntentEditor';
-import { useAction, useAudit, useCredentialRefs, useDevice, useDrivers, usePolicy, useProject } from '../hooks/queries';
+import { useAction, useAudit, useCredentialRefs, useDevice, useDrivers, useProject } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Device } from '../types/api';
 import { auditActionLabel, capabilityLabel, driverLabel, factLabel, humanize, MAIN_FACTS, stateLabel } from '../services/labels';
@@ -170,27 +173,22 @@ function ConsoleBootstrapLink({ d }: { d: Device }) {
   return <Button variant="default" component={Link} to={`/provisioning?device=${d.id}`} leftSection={<IconTerminal2 size={16} />}>Console bootstrap</Button>;
 }
 
+/** For a real device: what may happen to it now, in one or two quiet lines (D-089). */
 function RealDeviceNotice({ d }: { d: Device }) {
   const drivers = useDrivers();
-  const policy = usePolicy();
   const driver = drivers.data?.find((x) => x.driver_id === d.driver_id);
   if (!driver || driver.simulated) return null;
-  const writes = policy.data?.enable_real_device_writes;
+  if (d.environment === 'production') {
+    return <Notice kind="error" mb="md" title="Production device">UNDM is for staging on the bench: production devices are blocked.</Notice>;
+  }
   return (
-    <Alert color={d.environment === 'production' ? 'red' : 'orange'} icon={<IconAlertTriangle size={18} />} mb="md"
-      title={driver.maturity === 'experimental' ? 'Real device · procedures still being proven on the bench' : 'Real device'}>
-      <Text size="sm">
-        UNDM connects to this device over {driver.transport.toUpperCase()}.{' '}
-        {d.environment === 'production'
-          ? 'Production devices are blocked: UNDM is for staging on the bench.'
-          : writes ? 'Real-device changes are ON: approved plans may change this device.'
-            : 'Real-device changes are OFF: you can read and back up this device, and run dry runs. Turn changes on in Settings → Safety.'}
-        {d.environment !== 'production' && driver.capabilities.includes('supports_firmware_upgrade') && (policy.data?.enable_real_device_firmware && writes
-          ? ' Firmware changes are ON (approved plan and time window needed).'
-          : ' Firmware changes are OFF (Settings → Safety).')}
-        {!d.credential_ref_id && ' No login chosen yet: use Edit device.'}
-      </Text>
-    </Alert>
+    <Stack gap={4} mb="md">
+      {!d.credential_ref_id && <Notice kind="caution" compact>No login chosen yet: UNDM cannot connect. Use Edit device.</Notice>}
+      <Hint>Real device on your bench, reached over {driver.transport.toUpperCase()}
+        {driver.maturity === 'experimental' ? '; its procedures are marked experimental until proven on the bench.' : '.'}</Hint>
+      <SafetyHint real />
+      {driver.capabilities.includes('supports_firmware_upgrade') && <SafetyHint real firmware />}
+    </Stack>
   );
 }
 
@@ -222,9 +220,10 @@ export function DeviceDetailPage() {
       <RealDeviceNotice d={d} />
       {editing && <EditDeviceModal device={d} opened={editing} onClose={closeEdit} />}
       {d.locked_by_deployment_id && (
-        <Alert color="orange" icon={<IconLock size={18} />} mb="md">
-          Locked by a running deployment. <Anchor component={Link} to={`/deployments/${d.locked_by_deployment_id}`}>View deployment</Anchor>
-        </Alert>
+        <Notice kind="status" mb="md" title="A plan is running on this device"
+          action={<Anchor component={Link} to={`/deployments/${d.locked_by_deployment_id}`} size="sm">Follow the plan</Anchor>}>
+          It cannot be edited or deleted until the plan ends.
+        </Notice>
       )}
       <Tabs defaultValue="overview" keepMounted={false}>
         <Tabs.List mb="md">

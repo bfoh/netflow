@@ -1,15 +1,17 @@
 import {
-  Alert, Badge, Button, Card, Checkbox, Code, CopyButton, Group, List, Modal, NumberInput, Select, SimpleGrid, Stack,
+  Badge, Button, Card, Checkbox, Code, CopyButton, Group, List, Modal, NumberInput, Select, SimpleGrid, Stack,
   Text, TextInput, Title,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconAlertTriangle, IconCircleCheck, IconDownload, IconPlugConnected, IconRefresh, IconTerminal2 } from '@tabler/icons-react';
+import { IconDownload, IconPlugConnected, IconRefresh, IconTerminal2 } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
 import { DialogError } from '../components/ConfirmDialog';
+import { Notice, type NoticeKind } from '../components/Notice';
+import { SafetyHint } from '../components/SafetyHint';
 import { useAction, useAllDevices, useCredentialRefs, useDrivers, usePolicy, useProjects, useSerialPorts } from '../hooks/queries';
 import { api } from '../services/api';
 import { downloadText } from '../services/format';
@@ -18,11 +20,11 @@ import type { BootstrapPreview, BootstrapProfile, BootstrapResult, Device } from
 
 const CONSOLE_PLATFORMS = new Set(['aos_switch']);
 const BAUD = ['9600', '19200', '38400', '57600', '115200'];
-const STATUS: Record<BootstrapResult['status'], { color: string; title: string }> = {
-  bootstrapped: { color: 'teal', title: 'Bootstrap complete' },
-  already_configured: { color: 'teal', title: 'Already bootstrapped — nothing was changed' },
-  refused: { color: 'orange', title: 'Refused — the switch does not look factory default' },
-  failed: { color: 'red', title: 'Bootstrap failed' },
+const STATUS: Record<BootstrapResult['status'], { kind: NoticeKind; title: string }> = {
+  bootstrapped: { kind: 'success', title: 'Bootstrap complete' },
+  already_configured: { kind: 'success', title: 'Already bootstrapped — nothing was changed' },
+  refused: { kind: 'caution', title: 'Refused — the switch does not look factory default' },
+  failed: { kind: 'error', title: 'Bootstrap failed' },
 };
 
 function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }) {
@@ -102,25 +104,20 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
             program can use a COM port. Settings used: 8 data bits, no parity, 1 stop bit.
           </Text>
         )}
-        {blocked && (
-          <Alert color="orange" mt="sm" icon={<IconAlertTriangle size={16} />}>
-            Real-device changes are off. Turn them on in Settings → Safety to run a console setup. Preview still works.
-          </Alert>
-        )}
         <Group mt="md">
           <Button leftSection={<IconTerminal2 size={16} />} disabled={!complete || !serialPort || !!blocked}
             onClick={() => { setConfirm(''); open(); }}>Run console bootstrap…</Button>
+          <SafetyHint real={!simulated} />
         </Group>
       </Card>
 
       {result && (
         <Card withBorder>
-          <Alert color={STATUS[result.status].color} title={STATUS[result.status].title} mb="sm"
-            icon={result.status === 'failed' || result.status === 'refused' ? <IconAlertTriangle size={18} /> : <IconCircleCheck size={18} />}>
-            <Text size="sm">{result.message}</Text>
+          <Notice kind={STATUS[result.status].kind} title={STATUS[result.status].title} mb="sm">
+            {result.message}
             {result.findings.length > 0 && <List size="sm" mt={4}>{result.findings.map((f) => <List.Item key={f}>{f}</List.Item>)}</List>}
             {result.network_hint && <Text size="sm" mt={6}>{result.network_hint}</Text>}
-          </Alert>
+          </Notice>
           <Group gap="xs" mb="xs">
             {result.erased && <Badge variant="light" color="orange">erased “{result.erased}” first</Badge>}
             {result.no_password && <Badge variant="light" color="yellow">no manager password</Badge>}
@@ -153,32 +150,29 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
           <Checkbox label="This switch is preconfigured (it has a manager password that is not the approved one): erase its configuration first"
             checked={erase} onChange={(e) => setErase(e.currentTarget.checked)} />
           {erase && (
-            <Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} p="xs">
-              <Text size="xs" mb={6}>
-                UNDM logs in with the switch's <b>current login</b>, checks that its hostname is the one you type, saves a copy of its
-                configuration in the transcript, runs <code>erase startup-config</code> and confirms it, waits for the restart (up to
-                7 minutes), then sets the switch up as new with this device's login and bootstraps it. The erase cannot be undone.
-                Any question UNDM does not recognise stops it with the switch's text.
-              </Text>
-              <Stack gap={6}>
+            <Stack gap={6}>
+              <Notice kind="caution" compact title="The erase cannot be undone"
+                details={<>UNDM logs in with the switch's <b>current login</b>, checks that its hostname is the one you type, saves a
+                  copy of its configuration in the transcript, runs <code>erase startup-config</code> and confirms it, waits for the
+                  restart (up to 7 minutes), then sets the switch up as new with this device's login and bootstraps it. Any question
+                  UNDM does not recognise stops it with the switch's text.</>}>
+                Its configuration is erased, then it is set up as a new switch.
+              </Notice>
                 <Select size="xs" label="Its current login" placeholder={refs.data?.length ? 'Choose the preconfigured login' : 'Add it on the system\'s Logins tab'}
                   data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={currentLogin} onChange={setCurrentLogin} />
                 <TextInput size="xs" label="Type its current hostname"
                   description="The name in its console prompt, before > or # (e.g. for a prompt 'sw-name#' type sw-name). Not the username."
                   placeholder="as shown in the console prompt"
                   value={hostname} onChange={(e) => setHostname(e.currentTarget.value)} />
-              </Stack>
-            </Alert>
+            </Stack>
           )}
           {!erase && <Checkbox label="The switch already has configuration — bootstrap it anyway" checked={allowConfigured}
             onChange={(e) => setAllowConfigured(e.currentTarget.checked)} />}
           <TextInput label={`Type the device name to confirm: ${device.name}`} value={confirm} onChange={(e) => setConfirm(e.currentTarget.value)} />
           {run.isPending && (
-            <Alert color="yellow" variant="light" p="xs">
-              <Text size="xs">{erase
-                ? 'Working on the console: erasing, then the switch restarts (1–2 minutes), then UNDM presses Enter every 10 seconds until it answers and bootstraps it. This can take up to 8 minutes. Keep the console cable connected and this window open.'
-                : 'Working on the console… keep the cable connected.'}</Text>
-            </Alert>
+            <Notice kind="status" compact title="Working on the console">{erase
+              ? 'Erasing, then the switch restarts (1–2 minutes), then UNDM presses Enter every 10 seconds until it answers and bootstraps it. This can take up to 8 minutes. Keep the console cable connected and this window open.'
+              : 'Keep the cable connected.'}</Notice>
           )}
           <DialogError error={run.error} />
           <Group justify="flex-end">

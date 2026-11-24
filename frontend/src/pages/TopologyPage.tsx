@@ -1,7 +1,7 @@
 import '@xyflow/react/dist/style.css';
 
-import { Alert, Badge, Button, Card, Grid, Group, Select, Stack, Table, Text, Title, useComputedColorScheme } from '@mantine/core';
-import { IconAlertTriangle, IconCircleCheck, IconLayoutGrid } from '@tabler/icons-react';
+import { Badge, Button, Card, Grid, Group, Select, Stack, Table, Text, Title, useComputedColorScheme } from '@mantine/core';
+import { IconCircleCheck, IconLayoutGrid } from '@tabler/icons-react';
 import {
   Background, ConnectionMode, Controls, type Connection, type Edge, MarkerType, Position, ReactFlow, ReactFlowProvider,
   useNodesState,
@@ -15,6 +15,7 @@ import { LinkModal } from '../features/topology/LinkModal';
 import { useAction, useProjects, useTopology } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Topology, TopologyLink, TopologyLinkInput } from '../types/api';
+import { EmptyState } from '../components/EmptyState';
 
 const nodeTypes = { device: DeviceNode };
 const ROW: Record<string, number> = { firewall: 0, router: 1, switch: 2 };
@@ -183,7 +184,7 @@ export function TopologyPage() {
       </Group>
       <QueryState isLoading={topo.isLoading} error={topo.error} />
       {topo.data && topo.data.nodes.length === 0 && (
-        <Alert color="gray" icon={<IconAlertTriangle size={18} />}>This system has no devices yet. Add devices on the system page first.</Alert>
+        <EmptyState>This system has no devices yet. Add devices on the system page first.</EmptyState>
       )}
       {topo.data && topo.data.nodes.length > 0 && (
         <Grid>

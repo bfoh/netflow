@@ -1,6 +1,7 @@
-import { Alert, Button, Code, Group, Stack, Text, Title } from '@mantine/core';
-import { IconAlertTriangle } from '@tabler/icons-react';
+import { Button, Code, Group, Stack, Text, Title } from '@mantine/core';
 import { isRouteErrorResponse, Link, useRouteError } from 'react-router';
+
+import { Notice } from './Notice';
 
 /** Shown instead of a page that crashed, inside the normal layout so navigation keeps working. */
 export function RouteError() {
@@ -11,13 +12,11 @@ export function RouteError() {
   return (
     <Stack maw={720} gap="md">
       <Title order={1} size="h2">This page hit an error</Title>
-      <Alert color="red" icon={<IconAlertTriangle size={18} />}>
-        <Text size="sm">Something went wrong while showing this page. Your data has not been changed.</Text>
-      </Alert>
+      <Notice kind="error">Something went wrong while showing this page. Your data has not been changed.</Notice>
       <Code block>{message}</Code>
       <Text size="sm" c="dimmed">Please report what you clicked just before this happened, together with the message above.</Text>
       <Group>
-        <Button component={Link} to="/">Go to dashboard</Button>
+        <Button component={Link} to="/">Go to Home</Button>
         <Button variant="default" onClick={() => window.location.reload()}>Reload page</Button>
       </Group>
     </Stack>

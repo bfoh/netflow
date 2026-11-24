@@ -1,17 +1,17 @@
-import { Alert, AppShell, Badge, Burger, Group, NavLink, Text, Tooltip } from '@mantine/core';
+import { AppShell, Burger, Code, Group, NavLink, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconActivity, IconDatabaseExclamation, IconTool } from '@tabler/icons-react';
+import { IconActivity, IconTool } from '@tabler/icons-react';
 import { NavLink as RouterNavLink, Outlet, useLocation } from 'react-router';
 
-import { useHealth, usePolicy } from '../hooks/queries';
+import { useHealth } from '../hooks/queries';
 import { getActor } from '../services/api';
 import { ADVANCED_NAV, NAV, SETTINGS_NAV } from './nav';
+import { Notice } from './Notice';
 
 
 export function AppLayout() {
   const [opened, { toggle, close }] = useDisclosure();
   const { pathname } = useLocation();
-  const policy = usePolicy();
   const health = useHealth();
   const isActive = (to: string) => (to === '/' ? pathname === '/' : pathname.startsWith(to));
 
@@ -30,20 +30,6 @@ export function AppLayout() {
             <Text c="dimmed" size="sm" visibleFrom="md">Universal Network Deployment Manager</Text>
           </Group>
           <Group gap="sm" wrap="nowrap">
-            <Tooltip withArrow multiline w={300} label={policy.data?.enable_real_device_writes
-              ? 'Approved plans may change real devices on the bench.'
-              : 'Real devices can only be read. Simulated devices can be changed freely.'}>
-              <Badge color={policy.data?.enable_real_device_writes ? 'red' : 'gray'} variant={policy.data?.enable_real_device_writes ? 'filled' : 'light'} radius="sm">
-                Real-device changes {policy.data?.enable_real_device_writes ? 'ON' : 'off'}
-              </Badge>
-            </Tooltip>
-            <Tooltip withArrow multiline w={300} label={policy.data?.enable_real_device_firmware
-              ? 'Approved firmware plans may upgrade real devices.'
-              : 'Firmware on real devices cannot be changed (dry runs only).'}>
-              <Badge color={policy.data?.enable_real_device_firmware ? 'red' : 'gray'} variant={policy.data?.enable_real_device_firmware ? 'filled' : 'light'} radius="sm" visibleFrom="sm">
-                Firmware changes {policy.data?.enable_real_device_firmware ? 'ON' : 'off'}
-              </Badge>
-            </Tooltip>
             <Text size="sm" c="dimmed" visibleFrom="xs">acting as <b>{getActor()}</b></Text>
           </Group>
         </Group>
@@ -67,9 +53,10 @@ export function AppLayout() {
 
       <AppShell.Main>
         {health.data?.problem && (
-          <Alert color="red" icon={<IconDatabaseExclamation size={18} />} mb="md" title="UNDM needs a database upgrade">
+          <Notice kind="error" mb="md" title="UNDM needs a database upgrade before it can be used">
             {health.data.problem}
-          </Alert>
+            <Code block mt={6}>backend\.venv\Scripts\python.exe -m alembic upgrade head</Code>
+          </Notice>
         )}
         <Outlet />
       </AppShell.Main>

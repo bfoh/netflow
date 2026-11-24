@@ -1,5 +1,5 @@
-import { Alert, Button, Group, Modal, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
-import { IconAlertTriangle, IconFlask } from '@tabler/icons-react';
+import { Button, Group, Modal, SegmentedControl, Select, SimpleGrid, Stack, Textarea, TextInput } from '@mantine/core';
+import { IconFlask } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import { DialogError } from '../../components/ConfirmDialog';
@@ -8,6 +8,8 @@ import { api } from '../../services/api';
 import { driverLabel } from '../../services/labels';
 import { addressProblem } from '../../services/validation';
 import { ROLES } from '../stage/roles';
+import { Notice } from '../../components/Notice';
+import { Hint } from '../../components/Hint';
 
 const PROTOCOLS = [
   { value: 'ssh', label: 'SSH' }, { value: 'https_api', label: 'HTTPS API' },
@@ -56,23 +58,17 @@ export function AddDeviceModal({ projectId, opened, onClose }:
           { value: 'simulated', label: 'Simulated device' }, { value: 'real', label: 'Real device on the bench' }]}
           aria-label="Simulated or real device" />
         {model && kind === 'simulated' && (
-          <Alert color="violet" icon={<IconFlask size={18} />} variant="light">
-            <Text size="sm">
-              {model.manufacturer} {model.model}: a simulated device that exists only inside UNDM. Use it to try plans safely.
-            </Text>
-          </Alert>
+          <Hint icon={<IconFlask size={14} />}>{model.manufacturer} {model.model}: a simulated device that exists only inside UNDM.
+            Use it to try plans safely.</Hint>
         )}
         {model && kind === 'real' && (
           driverId ? (
-            <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Real device">
-              <Text size="sm">
-                UNDM connects to it over SSH ({driverLabel(driverId, drivers.data)}). Reading from it is always allowed. Changing
-                it needs an approved plan and Real-device changes turned on in Settings → Safety. Its procedures stay marked
-                experimental until proven on the bench: use isolated test equipment only.
-              </Text>
-              {driver && <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{driver.notes.map((n) => <li key={n}><Text size="xs">{n}</Text></li>)}</ul>}
-            </Alert>
-          ) : <Alert color="gray">No real-device driver exists for this model.</Alert>
+            <Notice kind="caution" compact title="Real device: use isolated test equipment"
+              details={driver?.notes.length ? <ul style={{ margin: 0, paddingLeft: 18 }}>{driver.notes.map((n) => <li key={n}>{n}</li>)}</ul> : undefined}>
+              UNDM connects over SSH ({driverLabel(driverId, drivers.data)}). Reading is always allowed; changes need an approved
+              plan and Real-device changes on (Settings → Safety).
+            </Notice>
+          ) : <Hint>UNDM cannot reach a real {model.model} yet: only a simulated one can be added.</Hint>
         )}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <TextInput label="Device name" required value={form.name} onChange={set('name')} />

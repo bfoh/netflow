@@ -1,5 +1,5 @@
-import { Alert, Button, Group, Modal, NumberInput, Select, SimpleGrid, Stack, TagsInput, Text, Textarea, TextInput } from '@mantine/core';
-import { IconAlertTriangle } from '@tabler/icons-react';
+import { Button, Group, Modal, NumberInput, Select, SimpleGrid, Stack, TagsInput, Text, Textarea, TextInput } from '@mantine/core';
+
 import { useState } from 'react';
 
 import { DialogError } from '../../components/ConfirmDialog';
@@ -7,6 +7,8 @@ import { useAction, useCredentialRefs, useDrivers } from '../../hooks/queries';
 import { api } from '../../services/api';
 import { driverLabel } from '../../services/labels';
 import type { Device, DeviceEnvironment, DeviceInput } from '../../types/api';
+import { Notice } from '../../components/Notice';
+import { Hint } from '../../components/Hint';
 
 const PROTOCOLS = [
   { value: 'ssh', label: 'SSH' }, { value: 'https_api', label: 'HTTPS API' },
@@ -69,16 +71,15 @@ export function EditDeviceModal({ device, opened, onClose }: { device: Device; o
             onChange={(v) => setF({ ...f, credential_ref_id: v })} />
         </SimpleGrid>
         {driver && f.os_family && driver.os_family !== f.os_family && (
-          <Alert color="red" icon={<IconAlertTriangle size={18} />} title="Operating system mismatch">
-            This device is recorded as <b>{f.os_family}</b> but the driver is for <b>{driver.os_family}</b>. Choose the driver
-            matching the device's operating system (for example, an Aruba 2930F runs ArubaOS-Switch, not AOS-CX).
-          </Alert>
+          <Notice kind="error" title="Operating system mismatch">
+            This device is recorded as <b>{f.os_family}</b> but connects as <b>{driver.os_family}</b>. Choose the one matching
+            the device's operating system (an Aruba 2930F runs ArubaOS-Switch, not AOS-CX).
+          </Notice>
         )}
         {driver && !driver.simulated && (
-          <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Experimental real-device driver">
-            <Text size="sm">{driver.description}</Text>
-            <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{driver.notes.map((n) => <li key={n}><Text size="xs">{n}</Text></li>)}</ul>
-          </Alert>
+          <Hint more={driver.notes.length ? <ul style={{ margin: 0, paddingLeft: 18 }}>{driver.notes.map((n) => <li key={n}>{n}</li>)}</ul> : undefined}>
+            Real device: {driver.description}. Its procedures are marked experimental until proven on the bench.
+          </Hint>
         )}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <TextInput label="Site" value={f.site ?? ''} onChange={set('site')} />
