@@ -9,6 +9,7 @@ dies mid-deployment leaves a transient state behind that
 from __future__ import annotations
 
 import hashlib
+import uuid
 from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import PurePath
@@ -217,6 +218,7 @@ class DeploymentService:
         config_versions: dict[str, str] | None = None,
         secrets: dict[str, dict[str, str]] | None = None,
         credentials_after: dict[str, str] | None = None,
+        staging: tuple[str, int] | None = None, defer_preview: str | None = None,
     ) -> DeploymentRecord:
         if not device_ids:
             raise ConflictError("Select at least one device")
@@ -225,6 +227,8 @@ class DeploymentService:
         rec = DeploymentRecord(
             project_id=project_id, state=S.DRAFT.value, dry_run=dry_run,
             apply_mode=apply_mode.value, created_by=actor,
+            staging_id=staging[0] if staging else None,
+            staging_step=staging[1] if staging else None,
         )
         self.s.add(rec)
         for pos, did in enumerate(device_ids):
@@ -257,12 +261,97 @@ class DeploymentService:
             raise ConflictError("Login after loading chosen for a device that is not in the plan")
         self.s.flush()
         dep = self._to_domain(rec)
+        dep.defer_preview = defer_preview
         self._orchestrator(rec).prepare(dep)
         self._sync(rec, dep)
         audit.record(self.s, actor, "deployment.create", "deployment", rec.id, rec.state,
                      {"devices": device_ids, "dry_run": dry_run, "apply_mode": apply_mode.value,
-                      "config_versions": {t.device_id: t.config_version_id for t in rec.targets}})
+                      "config_versions": {t.device_id: t.config_version_id for t in rec.targets},
+                      **({"staging_id": staging[0], "staging_step": staging[1]}
+                         if staging else {})})
         return rec
+
+    # -- staging plans (D-071) ----------------------------------------------------------
+    def create_staging(self, project_id: str, device_id: str, actor: str, *,
+                       base_version_id: str, site_version_id: str,
+                       credential_after_ref_id: str | None = None,
+                       secrets: dict[str, str] | None = None) -> list[DeploymentRecord]:
+        """Base file (replace), then site file (merge), for one device, as one plan.
+
+        Step 2 is previewed at its run, once the base file is on the device: a site file
+        loaded over an earlier site configuration can be refused part-way (D-070)."""
+        device = self.s.get(Device, device_id)
+        if device is None or device.project_id != project_id:
+            raise NotFoundError(f"Device {device_id} not found in project")
+        if base_version_id == site_version_id:
+            raise ConflictError("Choose two different files: the base file and the site file")
+        site = self._choose_config(device, site_version_id)
+        self._check_file_can_be_applied(device, site, ApplyMode.MERGE)  # before any preview
+        staging_id = str(uuid.uuid4())
+        base_rec = self.create(
+            project_id, [device_id], actor, dry_run=False, apply_mode=ApplyMode.REPLACE,
+            config_versions={device_id: base_version_id},
+            credentials_after=({device_id: credential_after_ref_id}
+                               if credential_after_ref_id else None),
+            staging=(staging_id, 1))
+        site_rec = self.create(
+            project_id, [device_id], actor, dry_run=False, apply_mode=ApplyMode.MERGE,
+            config_versions={device_id: site_version_id},
+            secrets={device_id: secrets} if secrets else None,
+            staging=(staging_id, 2),
+            defer_preview="it is made at the run, after step 1 has restored the base file")
+        if base_rec.state == S.FAILED.value:
+            self.cancel_rest_of_staging(staging_id, 1, actor,
+                                        "step 1 (base file) failed its validation or preview")
+        audit.record(self.s, actor, "staging.create", "staging_plan", staging_id,
+                     details={"device": device_id, "steps": [base_rec.id, site_rec.id],
+                              "base_version": base_version_id, "site_version": site_version_id})
+        return [base_rec, site_rec]
+
+    def staging_steps(self, staging_id: str) -> list[DeploymentRecord]:
+        steps = list(self.s.scalars(
+            select(DeploymentRecord).where(DeploymentRecord.staging_id == staging_id)
+            .order_by(DeploymentRecord.staging_step)))
+        if not steps:
+            raise NotFoundError("Staging plan not found")
+        return steps
+
+    def approve_staging(self, staging_id: str, actor: str) -> list[DeploymentRecord]:
+        """One approval for every step still awaiting it."""
+        steps = self.staging_steps(staging_id)
+        waiting = [r for r in steps if r.state == S.AWAITING_APPROVAL.value]
+        if not waiting:
+            raise ConflictError("No step of this staging plan is awaiting approval")
+        for rec in waiting:
+            self.approve(rec.id, actor)
+        audit.record(self.s, actor, "staging.approve", "staging_plan", staging_id,
+                     details={"steps": [r.id for r in waiting]})
+        return steps
+
+    def check_staging_can_start(self, staging_id: str) -> list[DeploymentRecord]:
+        steps = self.staging_steps(staging_id)
+        pending = [r for r in steps if r.state != S.SUCCEEDED.value]
+        if not pending:
+            raise ConflictError("Every step of this staging plan has succeeded already")
+        not_ready = [r for r in pending if r.state != S.READY.value]
+        if not_ready:
+            r = not_ready[0]
+            raise ConflictError(f"Step {r.staging_step} is {r.state.replace('_', ' ')}: every "
+                                "step must be approved (ready) before the plan runs")
+        self.check_can_execute(pending[0].id)
+        return steps
+
+    def cancel_rest_of_staging(self, staging_id: str, after_step: int, actor: str,
+                               why: str) -> None:
+        """Later steps that will not run because an earlier step did not succeed."""
+        for rec in self.staging_steps(staging_id):
+            if (rec.staging_step or 0) > after_step and rec.state in {
+                    S.DRAFT.value, S.AWAITING_APPROVAL.value, S.READY.value}:
+                self.cancel(rec.id, actor)
+                rec.events.append(DeploymentEventRecord(
+                    seq=len(rec.events), timestamp=datetime.now(UTC), stage="lifecycle",
+                    status="skipped", message=f"not run: {why}"))
+        self.s.commit()
 
     def _check_file_can_be_applied(self, device: Device, cfg: ConfigVersion,
                                    apply_mode: ApplyMode) -> None:
@@ -420,6 +509,13 @@ class DeploymentService:
         rec = self.get(deployment_id)
         if rec.state != S.READY.value:
             raise ConflictError(f"Deployment must be ready to execute (state {rec.state})")
+        if rec.staging_id and (rec.staging_step or 1) > 1:
+            before = [r for r in self.staging_steps(rec.staging_id)
+                      if (r.staging_step or 0) < (rec.staging_step or 0)]
+            if any(r.state != S.SUCCEEDED.value for r in before):
+                raise ConflictError(
+                    f"Step {rec.staging_step} of a staging plan runs only after the steps "
+                    "before it have succeeded (the base file must be on the device first)")
         if rec.kind == "firmware" and not rec.dry_run:
             now = datetime.now(UTC)
             start, end = _utc(rec.window_start), _utc(rec.window_end)

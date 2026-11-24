@@ -17,6 +17,7 @@ manager, topology._
 | Real devices (experimental) | SSH drivers for ArubaOS-Switch (2930F), AOS-CX, FortiOS, IOS-XE: test connection, facts (best-effort parsing, raw output kept), backup, merge apply + save. Gated by policy switches (see SECURITY_BOUNDARIES) |
 | Intent & generation | Hostname, VLANs, L3 interfaces, static routes → AOS-CX / FortiOS / IOS-XE templates; validation; platform support checks |
 | Configuration import | Upload a file per device; normalised, versioned, labelled unvalidated; selectable per device in deployment plans |
+| Staging plan | Base file (replace), then site file (merge) for one device as one plan: one approval, one Execute, step 2 previewed at its run and run only after step 1 succeeded, shared Stop (D-071). API and fake FortiGate tests; **not yet run on hardware** |
 | Deployments | Lifecycle with directive-15 states; dry runs; approval; preflight with identity check; backup; verification by read-back (platform-aware for SSH drivers); rollback or manual recovery; device locks; crash recovery on restart |
 | Firmware | Repository with SHA-256 or SHA-512 vs vendor checksum (addable after upload); approval only when verified or with a written, audited reason (D-062); retire/delete; offline compatibility; upgrade plans with maintenance window and second approver; stage/install/reboot/wait/verify; rollback or manual recovery. Simulated devices, plus **one experimental real procedure: Aruba 2930F** (switch pulls the image from UNDM by TFTP into primary flash, restarts, version verified) behind `UNDM_ENABLE_REAL_DEVICE_FIRMWARE`. Experimental: **one successful run on hardware** (2026-11-19, spare JL260A, approved downgrade WC.16.11.0001 → WC.16.10.0025, verified) |
 | File transfer | Built-in TFTP server: read-only, per-job, per-device allowlist, transfer records; a transfer under way is cancelled when its file is withdrawn or the job ends (D-063); tested with an independent client |
@@ -61,11 +62,11 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-24)
 | Suite | Result |
 |---|---|
-| Backend pytest | 405 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 409 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (74 files) |
-| Frontend Vitest | 26 passed |
+| Frontend Vitest | 28 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
 
@@ -100,6 +101,6 @@ FortiGate 101F staging.
 3. Black Box LIG1014A and LE2700A: real load procedure once the switch's own command output
    (Q-28) or the web upload details (Q-27, Q-29) are available; file recognition and a
    simulated driver exist for both.
-4. The one-screen staging run across the four devices.
+4. The one-screen staging run across the four devices (first part: the FortiGate staging plan, base then site, D-071).
 5. FortiGate first login inside UNDM, if agreed (Q-24).
 6. Authentication and roles; persistent job runner.

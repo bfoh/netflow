@@ -206,6 +206,11 @@ class DeploymentRecord(TimestampMixin, Base):
     allow_downgrade: Mapped[bool] = mapped_column(default=False, server_default=false())
     # Firmware plans: also write the image into the secondary image slot.
     also_secondary: Mapped[bool] = mapped_column(default=False, server_default=false())
+    # Staging plans (D-071): the steps of one plan share staging_id and run in staging_step
+    # order (1: base file, replace; 2: site file, merge); a step runs only after the one
+    # before it succeeded.
+    staging_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    staging_step: Mapped[int | None] = mapped_column(nullable=True)
     apply_mode: Mapped[str] = mapped_column(String(20))
     created_by: Mapped[str] = mapped_column(String(120))
     approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)

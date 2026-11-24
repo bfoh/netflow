@@ -14,6 +14,7 @@ import { ProvisioningPage } from './pages/ProvisioningPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { StagingPage } from './pages/StagingPage';
 import { TopologyPage } from './pages/TopologyPage';
 
 export const routes: RouteObject[] = [
@@ -37,6 +38,7 @@ export const routes: RouteObject[] = [
           { path: 'firmware', element: <FirmwarePage /> },
           { path: 'deployments', element: <DeploymentsPage /> },
           { path: 'deployments/:deploymentId', element: <DeploymentDetailPage /> },
+          { path: 'staging/:stagingId', element: <StagingPage /> },
           { path: 'audit', element: <AuditPage /> },
           { path: 'settings', element: <SettingsPage /> },
         ],

@@ -160,6 +160,9 @@ class Deployment:
     window_start: datetime | None = None
     window_end: datetime | None = None
     stop: StopSignal = field(default_factory=StopSignal, repr=False)
+    # A later step of a staging plan: the device does not yet have the configuration this
+    # step builds on, so the preview is made at the run's preflight instead (D-071).
+    defer_preview: str | None = None
 
 
 class ApprovalRequiredError(PermissionError):
@@ -360,6 +363,11 @@ class DeploymentOrchestrator:
         return not problems
 
     def _preview(self, dep: Deployment) -> bool:
+        if dep.defer_preview:
+            for t in dep.targets:
+                t.state = TargetState.PREVIEWED
+                self._emit(dep, "preview", "ok", f"preview deferred: {dep.defer_preview}", t)
+            return True
         ok = True
         for t in dep.targets:
             try:

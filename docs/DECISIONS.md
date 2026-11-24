@@ -670,3 +670,26 @@ second: about nine tenths): restore the base file first, then load the file. The
 "Cannot change … while … is used" now carries the same advice. Other platforms add no
 caution, since a mostly unchanged merge is a normal update there. Re-running from a clean
 base is done with UNDM alone: the base plan (replace), then the site plan.
+
+### D-071 Staging plan: base file, then site file, as one plan (2026-11-24)
+Product owner request after D-070: one plan that always restores the base file before the
+site file, so a site file can never land on an earlier site configuration. Built from the
+existing plans rather than a new kind of run, so every safeguard applies unchanged
+(validation, preview, preflight with identity check, backup, verification, revisions,
+login after loading, password change, secrets, policy switches, device locks, Stop):
+- `POST /api/projects/{id}/staging-plans` {device, base version, site version, login after
+  loading for the base, secret credentials for the site} creates two linked plans
+  (`deployments.staging_id`, `staging_step`; migration 8f9754b6c029): step 1 replace with
+  the base file, previewed now; step 2 merge with the site file, whose preview is deferred
+  to its run ("preview deferred: it is made at the run, after step 1 has restored the base
+  file"): before the base restore the comparison would be meaningless. The site file is
+  checked for merge before anything is created; if step 1 fails its preview, step 2 is
+  cancelled with the reason.
+- One approval (`/approve`) covers every step awaiting it; `/execute` (background by
+  default) runs the steps that have not succeeded, in order; a step that does not succeed
+  ends the plan and the later steps are cancelled with "not run: step N ended <state>".
+  The steps share one Stop signal (`/stop`), so a stop also keeps later steps from running.
+- A later step run on its own (its own page) is refused until the steps before it have
+  succeeded.
+- UI: Deployment Center → "New staging plan (base file, then site file)"; a staging page
+  with both steps, Approve both steps, Execute, Stop; each step's page links back to it.

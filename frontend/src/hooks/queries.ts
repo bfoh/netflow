@@ -49,6 +49,18 @@ export const useDeployment = (id: string, live = false) =>
     queryFn: () => api.deployment(id),
     refetchInterval: (query) => (live || RUNNING_STATES.has(query.state.data?.state ?? '') ? 2000 : false),
   });
+/** A staging plan; refreshes every two seconds while a step runs, and after Execute (`live`)
+ * while a step is still waiting to run (the gap before step 1 starts and between steps). */
+export const useStaging = (id: string, live = false) =>
+  useQuery({
+    queryKey: ['staging', id],
+    queryFn: () => api.staging(id),
+    refetchInterval: (query) => {
+      const steps = query.state.data?.steps ?? [];
+      const waiting = live && steps.some((s) => s.state === 'ready');
+      return waiting || steps.some((s) => RUNNING_STATES.has(s.state)) ? 2000 : false;
+    },
+  });
 export const useAudit = (target?: string, limit = 200) =>
   useQuery({ queryKey: keys.audit(target), queryFn: () => api.audit({ target_id: target, limit }) });
 export const useDrivers = () => useQuery({ queryKey: keys.drivers, queryFn: api.drivers });

@@ -14,6 +14,8 @@ from undm.api.schemas import (
     DeploymentOut,
     DeploymentSummary,
     FirmwareDeploymentIn,
+    StagingPlanIn,
+    StagingPlanOut,
 )
 from undm.db.models import DeploymentRecord
 from undm.services.deployments import DeploymentService
@@ -147,3 +149,97 @@ def stop(deployment_id: str, svc: ServiceDep, actor: ActorDep,
 @router.post("/api/deployments/{deployment_id}/cancel", response_model=DeploymentOut)
 def cancel(deployment_id: str, svc: ServiceDep, actor: ActorDep) -> DeploymentRecord:
     return svc.cancel(deployment_id, actor)
+
+
+# -- staging plans (D-071): base file, then site file, as one plan --------------------------
+def _staging(staging_id: str, steps: list[DeploymentRecord]) -> dict[str, Any]:
+    return {"staging_id": staging_id, "steps": steps}
+
+
+@router.post("/api/projects/{project_id}/staging-plans", response_model=StagingPlanOut,
+             status_code=status.HTTP_201_CREATED)
+def create_staging_plan(project_id: str, body: StagingPlanIn, session: SessionDep,
+                        svc: ServiceDep, actor: ActorDep) -> dict[str, Any]:
+    get_project(session, project_id)
+    steps = svc.create_staging(
+        project_id, body.device_id, actor, base_version_id=body.base_version_id,
+        site_version_id=body.site_version_id,
+        credential_after_ref_id=body.credential_after_ref_id, secrets=body.secrets)
+    return _staging(str(steps[0].staging_id), steps)
+
+
+@router.get("/api/staging-plans/{staging_id}", response_model=StagingPlanOut)
+def read_staging_plan(staging_id: str, svc: ServiceDep) -> dict[str, Any]:
+    return _staging(staging_id, svc.staging_steps(staging_id))
+
+
+@router.post("/api/staging-plans/{staging_id}/approve", response_model=StagingPlanOut)
+def approve_staging_plan(staging_id: str, svc: ServiceDep, actor: ActorDep) -> dict[str, Any]:
+    return _staging(staging_id, svc.approve_staging(staging_id, actor))
+
+
+def _run_staging(state: Any, staging_id: str, actor: str, signal: Any) -> None:
+    """Each step that has not succeeded yet, in order; a step that does not succeed ends
+    the plan and the later steps are cancelled with the reason."""
+    jobs: DeploymentJobs = state.deployment_jobs
+    with state.session_factory() as session:
+        svc = build_service(session, state)
+        for rec in svc.staging_steps(staging_id):
+            if rec.state == "succeeded":
+                continue
+            step, dep_id = rec.staging_step or 0, rec.id
+            if signal.is_set():
+                svc.cancel_rest_of_staging(staging_id, step - 1, actor,
+                                           f"stopped by {signal.by} before step {step}")
+                return
+            if jobs.claim(dep_id, signal) is None:
+                return
+            try:
+                svc.execute(dep_id, actor, stop=signal)
+            except Exception as e:  # noqa: BLE001 - recorded on the plan, not lost in a thread
+                log.exception("staging step failed", extra={"ctx": {"deployment": dep_id}})
+                session.rollback()
+                svc.record_run_error(dep_id, actor, str(e) or type(e).__name__)
+            finally:
+                jobs.release(dep_id)
+            session.expire_all()
+            done = svc.get(dep_id)
+            if done.state != "succeeded":
+                svc.cancel_rest_of_staging(
+                    staging_id, step, actor,
+                    f"step {step} ended {done.state.replace('_', ' ')}")
+                return
+
+
+@router.post("/api/staging-plans/{staging_id}/execute", response_model=StagingPlanOut)
+def execute_staging_plan(staging_id: str, svc: ServiceDep, actor: ActorDep,
+                         request: Request,
+                         background: Annotated[bool, Query()] = True) -> dict[str, Any]:
+    """Run the approved steps in order (in the background by default; the page follows)."""
+    state = request.app.state
+    jobs: DeploymentJobs = state.deployment_jobs
+    steps = svc.check_staging_can_start(staging_id)
+    if any(jobs.is_running(r.id) for r in steps):
+        raise ConflictError("This staging plan is already running")
+    from undm.orchestration.deployment import StopSignal
+    signal = StopSignal()
+    if not background:
+        _run_staging(state, staging_id, actor, signal)
+        svc.s.expire_all()
+        return _staging(staging_id, svc.staging_steps(staging_id))
+    threading.Thread(target=_run_staging, name=f"staging-{staging_id[:8]}",
+                     args=(state, staging_id, actor, signal), daemon=True).start()
+    return _staging(staging_id, steps)
+
+
+@router.post("/api/staging-plans/{staging_id}/stop", response_model=StagingPlanOut)
+def stop_staging_plan(staging_id: str, svc: ServiceDep, actor: ActorDep,
+                      request: Request) -> dict[str, Any]:
+    """Stop the step that is running; the later steps then do not run."""
+    jobs: DeploymentJobs = request.app.state.deployment_jobs
+    running = [r for r in svc.staging_steps(staging_id) if jobs.is_running(r.id)]
+    if not running:
+        raise ConflictError("No step of this staging plan is running")
+    for rec in running:
+        svc.request_stop(rec.id, actor, jobs)
+    return _staging(staging_id, svc.staging_steps(staging_id))

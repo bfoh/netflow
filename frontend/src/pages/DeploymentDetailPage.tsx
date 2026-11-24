@@ -203,6 +203,13 @@ export function DeploymentDetailPage() {
         description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
           ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : ` · ${d.apply_mode} mode`}`}
         actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
+      {d.staging_id && (
+        <Alert color="grape" mb="md" p="xs" title={`Step ${d.staging_step} of a staging plan`}>
+          {d.staging_step === 1 ? 'The base file. The site file (step 2) runs after this step has succeeded. '
+            : 'The site file. It runs only after step 1 (the base file) has succeeded. '}
+          <Anchor component={Link} to={`/staging/${d.staging_id}`}>Open the staging plan</Anchor>
+        </Alert>
+      )}
       {working && <Progress d={d} names={byId} />}
       {!working && outcome && <Alert color={outcome.color} title={outcome.title} mb="md" icon={d.state === 'succeeded' ? <IconCheck size={18} /> : <IconAlertTriangle size={18} />}>{outcome.text}</Alert>}
       <Card withBorder mb="md">

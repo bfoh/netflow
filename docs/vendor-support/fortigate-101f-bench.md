@@ -41,6 +41,10 @@ hardware. Order agreed 2026-11-19: firmware → base file → site file (D-034).
   was sent** show what the unit runs.
 
 ## Steps
+Steps 6 and 7 can be done as one **staging plan** (Deployment Center → "New staging plan
+(base file, then site file)": device, base file, login after loading, site file, tunnel key;
+Approve both steps; Execute). It always restores the base file first (D-071).
+
 | # | Step | Expected |
 |---|---|---|
 | 1 | Device page → **Test connection**, **Retrieve information** | model FortiGate-101F, version v7.2.6 (bench unit) |

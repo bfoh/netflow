@@ -349,3 +349,35 @@ describe('firmware approval without a vendor checksum', () => {
     expect(screen.queryByRole('button', { name: 'Add vendor checksum…' })).toBeInTheDocument();
   });
 });
+
+describe('staging plan', () => {
+  const step = (n: number, state: string, extra: Record<string, unknown> = {}) => ({
+    id: `dep${n}`, project_id: 'p', kind: 'configuration', state, dry_run: false, apply_mode: n === 1 ? 'replace' : 'merge',
+    created_by: 'tester', approved_by: null, approved_at: null, created_at: '2026-11-24T10:00:00Z', updated_at: '2026-11-24T10:00:00Z',
+    firmware_image_id: null, window_start: null, window_end: null, staging_id: 'sp1', staging_step: n, targets: [],
+    events: [{ seq: 0, timestamp: '2026-11-24T10:00:00Z', stage: 'preview', status: 'ok',
+      message: n === 2 ? 'preview deferred: it is made at the run, after step 1 has restored the base file' : '+10 -2 lines', device_id: null }],
+    ...extra,
+  });
+
+  it('shows both steps and approves them with one action', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({
+      '/staging-plans/sp1': { staging_id: 'sp1', steps: [step(1, 'awaiting_approval'), step(2, 'awaiting_approval')] },
+      '/staging-plans/sp1/approve': { staging_id: 'sp1', steps: [step(1, 'ready'), step(2, 'ready')] },
+    });
+    renderAt('/staging/sp1');
+    expect(await screen.findByText(/Step 1 · base file \(replace\)/)).toBeInTheDocument();
+    expect(screen.getByText(/preview deferred/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Approve both steps' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/staging-plans/sp1/approve'
+      && c.init?.method === 'POST')).toBe(true));
+  });
+
+  it('says why the site step did not run', async () => {
+    mockApi({ '/staging-plans/sp1': { staging_id: 'sp1', steps: [step(1, 'recovery_required'), step(2, 'cancelled')] } });
+    renderAt('/staging/sp1');
+    expect(await screen.findByText('The plan did not complete')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Execute' })).not.toBeInTheDocument();
+  });
+});

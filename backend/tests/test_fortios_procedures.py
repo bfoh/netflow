@@ -524,3 +524,90 @@ def test_in_use_refusal_says_to_start_from_the_base(rig):
                                 "Command fail. Return code -23")  # bench wording
     r = rig.driver.apply_configuration(SCRIPT, ApplyMode.MERGE)
     assert r.status is ResultStatus.FAILED and "Restore the base file, then load" in r.message
+
+
+# -- staging plan: base file, then site file, as one plan (D-071) ------------------------
+def _staging(client, pid, did, refs, after=True):
+    base = client.post(f"/api/devices/{did}/configs/import",
+                       json={"filename": "base.conf", "text": BACKUP}).json()
+    site = client.post(f"/api/devices/{did}/configs/import",
+                       json={"filename": "site.txt", "text": SCRIPT}).json()
+    r = client.post(f"/api/projects/{pid}/staging-plans", json={
+        "device_id": did, "base_version_id": base["id"], "site_version_id": site["id"],
+        "credential_after_ref_id": refs["base"] if after else None})
+    assert r.status_code == 201, r.json()
+    return r.json()
+
+
+def _events(step):
+    return " | ".join(e["message"] for e in step["events"])
+
+
+def test_api_staging_plan_restores_the_base_then_loads_the_site(api):
+    client, pid, did, fg, refs = api
+    fg.restore_sets_password, fg.restore_forces_password_change = BASE_PW, True
+    fg.change_dialogue = True
+    plan = _staging(client, pid, did, refs)
+    sid, (base, site) = plan["staging_id"], plan["steps"]
+    assert (base["staging_step"], site["staging_step"]) == (1, 2)
+    assert base["apply_mode"] == "replace" and site["apply_mode"] == "merge"
+    assert base["state"] == site["state"] == "awaiting_approval"
+    assert "preview deferred" in _events(site)
+    # The site step cannot run on its own before the base step has succeeded.
+    client.post(f"/api/deployments/{site['id']}/approve")
+    alone = client.post(f"/api/deployments/{site['id']}/execute")
+    assert alone.status_code == 409 and "steps before it have succeeded" in alone.json()["error"]
+    approved = client.post(f"/api/staging-plans/{sid}/approve").json()
+    assert [s["state"] for s in approved["steps"]] == ["ready", "ready"]
+    out = client.post(f"/api/staging-plans/{sid}/execute?background=false").json()
+    base, site = out["steps"]
+    assert base["state"] == "succeeded", _events(base)
+    assert site["state"] == "succeeded", _events(site)
+    assert "UNDM answered its questions" in _events(base)
+    assert "already on the FortiGate" not in _events(site)
+    assert fg.hostname == "lab-fw-site" and fg.password == APPROVED
+    assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == refs["approved"]
+    audit = [a["action"] for a in client.get("/api/audit?limit=100").json()]
+    assert "staging.create" in audit and "staging.approve" in audit
+
+
+def test_api_staging_site_step_does_not_run_when_the_base_fails(api, monkeypatch):
+    from undm.drivers.ssh import base as ssh_base
+    monkeypatch.setattr(ssh_base, "tcp_port_open", lambda host, port, timeout=3.0: True)
+    monkeypatch.setattr(FortiOSSsh, "restart_grace", 0.2)
+    client, pid, did, fg, refs = api
+    fg.restart_mode = "prompt_only"  # takes the file but never restarts
+    sid = _staging(client, pid, did, refs, after=False)["staging_id"]
+    client.post(f"/api/staging-plans/{sid}/approve")
+    base, site = client.post(f"/api/staging-plans/{sid}/execute?background=false"
+                             ).json()["steps"]
+    assert base["state"] != "succeeded"
+    assert site["state"] == "cancelled" and "not run: step 1 ended" in _events(site)
+    assert "lab-fw-site" not in fg.hostname
+
+
+def test_staging_stop_before_a_step_keeps_it_from_running(api):
+    from undm.api.routers.deployments import _run_staging
+    from undm.orchestration.deployment import StopSignal
+    client, pid, did, fg, refs = api
+    sid = _staging(client, pid, did, refs, after=False)["staging_id"]
+    client.post(f"/api/staging-plans/{sid}/approve")
+    signal = StopSignal()
+    signal.request("tester")
+    _run_staging(client.app.state, sid, "tester", signal)
+    steps = client.get(f"/api/staging-plans/{sid}").json()["steps"]
+    assert [s["state"] for s in steps] == ["cancelled", "cancelled"]
+    assert "stopped by tester before step 1" in _events(steps[1])
+    assert fg.restarts == 0
+
+
+def test_api_staging_plan_refuses_the_files_the_wrong_way_round(api):
+    client, pid, did, fg, refs = api
+    base = client.post(f"/api/devices/{did}/configs/import",
+                       json={"filename": "base.conf", "text": BACKUP}).json()
+    site = client.post(f"/api/devices/{did}/configs/import",
+                       json={"filename": "site.txt", "text": SCRIPT}).json()
+    r = client.post(f"/api/projects/{pid}/staging-plans", json={
+        "device_id": did, "base_version_id": site["id"], "site_version_id": base["id"]})
+    assert r.status_code == 409, r.json()
+    assert client.get(f"/api/projects/{pid}/deployments").json() == []

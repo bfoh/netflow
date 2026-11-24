@@ -207,6 +207,15 @@ export interface DeploymentSummary {
   created_by: string;
   approved_by: string | null;
   created_at: string;
+  /** Staging plans (D-071): steps share staging_id and run in staging_step order. */
+  staging_id?: string | null;
+  staging_step?: number | null;
+}
+
+/** One device: step 1 restores the base file (replace), step 2 loads the site file (merge). */
+export interface StagingPlan {
+  staging_id: string;
+  steps: Deployment[];
 }
 
 export interface Deployment extends DeploymentSummary {

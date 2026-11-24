@@ -1,6 +1,5 @@
 import type {
-  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, Compatibility, SerialPort, Topology, TopologyLink, TopologyLinkInput, ConfigDiff, ConfigVersion, CredentialRef, FirmwareImage, Policy, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent,
-  DeviceModel, Driver, GenerateResult, OperationResult, Project,
+  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SerialPort, StagingPlan, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -132,6 +131,14 @@ export const api = {
   executeDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/execute?background=true`),
   /** Stops a running deployment at its next safe point. */
   stopDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/stop`),
+  createStaging: (pid: string, body: {
+    device_id: string; base_version_id: string; site_version_id: string;
+    credential_after_ref_id?: string | null; secrets?: Record<string, string>;
+  }) => request<StagingPlan>('POST', `/projects/${pid}/staging-plans`, body),
+  staging: (id: string) => request<StagingPlan>('GET', `/staging-plans/${id}`),
+  approveStaging: (id: string) => request<StagingPlan>('POST', `/staging-plans/${id}/approve`),
+  executeStaging: (id: string) => request<StagingPlan>('POST', `/staging-plans/${id}/execute?background=true`),
+  stopStaging: (id: string) => request<StagingPlan>('POST', `/staging-plans/${id}/stop`),
   cancelDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/cancel`),
 
   serialPorts: () => request<SerialPort[]>('GET', '/provisioning/serial-ports'),

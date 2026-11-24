@@ -1,6 +1,6 @@
 import { Alert, Anchor, Button, Card, Checkbox, Group, SegmentedControl, Select, Stack, Switch, Table, Text, Title } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
@@ -156,6 +156,60 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
   );
 }
 
+/** Base file, then site file, for one device, as one plan (D-071). */
+function NewStagingPlan({ projectId }: { projectId: string }) {
+  const devices = useProjectDevices(projectId);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const configs = useConfigs(deviceId ?? '');
+  const [base, setBase] = useState<string | null>(null);
+  const [site, setSite] = useState<string | null>(null);
+  const [loginAfter, setLoginAfter] = useState<string | null>(null);
+  const [secrets, setSecrets] = useState<Record<string, string>>({});
+  const navigate = useNavigate();
+  const versions = configs.data ?? [];
+  const options = (mode: string) => {
+    const fitting = versions.filter((v) => !v.inspection?.apply_mode || v.inspection.apply_mode === mode);
+    return (fitting.length ? fitting : versions).map((v) => ({ value: v.id, label: versionLabel(v) }));
+  };
+  const create = useAction(() => api.createStaging(projectId, {
+    device_id: deviceId!, base_version_id: base!, site_version_id: site!,
+    credential_after_ref_id: loginAfter,
+    secrets: Object.keys(secrets).length ? secrets : undefined,
+  }), (p) => `Staging plan created: step 1 ${p.steps[0]?.state.replaceAll('_', ' ')}`);
+  const ignoreMode = useCallback(() => undefined, []);
+
+  return (
+    <Card withBorder>
+      <Title order={4} mb="xs">New staging plan (base file, then site file)</Title>
+      <Text size="sm" c="dimmed" mb="md">
+        For a FortiGate staged with two files: step 1 restores the base file (replace, the device restarts), step 2 loads the
+        site file (merge) once step 1 has succeeded. The site file therefore always lands on a clean base, never on an earlier
+        site configuration. One approval covers both steps.
+      </Text>
+      <Stack gap="xs" maw={560}>
+        <Select label="Device" placeholder="Choose a device" data={(devices.data ?? []).map((d) => ({ value: d.id, label: `${d.name} (${d.model})` }))}
+          value={deviceId} onChange={(v) => { setDeviceId(v); setBase(null); setSite(null); setLoginAfter(null); setSecrets({}); }} />
+        {deviceId && <>
+          <Select label="Step 1 · base file" placeholder="Choose the base file" data={options('replace')}
+            value={base} onChange={(v) => { setBase(v); setLoginAfter(null); }} />
+          {base && <FileNeeds projectId={projectId} versionId={base} secrets={{}} onSecrets={() => undefined}
+            onMode={ignoreMode} loginAfter={loginAfter} onLoginAfter={setLoginAfter} />}
+          <Select label="Step 2 · site file" placeholder="Choose the site file" data={options('merge')}
+            value={site} onChange={(v) => { setSite(v); setSecrets({}); }} />
+          {site && <FileNeeds projectId={projectId} versionId={site} secrets={secrets} onSecrets={setSecrets}
+            onMode={ignoreMode} loginAfter={null} onLoginAfter={() => undefined} />}
+        </>}
+        <Group>
+          <Button disabled={!deviceId || !base || !site || base === site} loading={create.isPending}
+            onClick={() => create.mutate(undefined, { onSuccess: (p) => void navigate(`/staging/${p.staging_id}`) })}>
+            Create staging plan
+          </Button>
+        </Group>
+      </Stack>
+    </Card>
+  );
+}
+
 export function DeploymentsPage() {
   const [params, setParams] = useSearchParams();
   const projects = useProjects();
@@ -176,6 +230,7 @@ export function DeploymentsPage() {
         </Card>
         {projectId && <NewPlan key={projectId + preselected.join() + (version ?? '')} projectId={projectId}
           preselected={preselected} version={version} />}
+        {projectId && <NewStagingPlan key={`staging-${projectId}`} projectId={projectId} />}
         <Card withBorder padding={0}>
           <Title order={5} p="md" pb={0}>All deployments</Title>
           <QueryState isLoading={all.isLoading} error={all.error} />
@@ -187,7 +242,8 @@ export function DeploymentsPage() {
                   <Table.Tr key={d.id}>
                     <Table.Td><Anchor component={Link} to={`/deployments/${d.id}`} size="sm">{fmtDate(d.created_at)}</Anchor></Table.Td>
                     <Table.Td>{names.get(d.project_id) ?? '—'}</Table.Td>
-                    <Table.Td>{d.kind === 'firmware' ? 'firmware' : `config · ${d.apply_mode}`}{d.dry_run ? ' · dry run' : ''}</Table.Td>
+                    <Table.Td>{d.kind === 'firmware' ? 'firmware' : `config · ${d.apply_mode}`}{d.dry_run ? ' · dry run' : ''}
+                      {d.staging_id && <> · <Anchor component={Link} to={`/staging/${d.staging_id}`} size="sm">staging step {d.staging_step}</Anchor></>}</Table.Td>
                     <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
                     <Table.Td><StateBadge state={d.state} /></Table.Td>
                   </Table.Tr>

@@ -12,12 +12,14 @@ class DeploymentJobs:
         self._lock = threading.Lock()
         self._running: dict[str, StopSignal] = {}
 
-    def claim(self, deployment_id: str) -> StopSignal | None:
-        """Register a run; None if this deployment is already running here."""
+    def claim(self, deployment_id: str, signal: StopSignal | None = None
+              ) -> StopSignal | None:
+        """Register a run; None if this deployment is already running here. The steps of
+        a staging plan share one signal, so a stop also keeps the later steps from running."""
         with self._lock:
             if deployment_id in self._running:
                 return None
-            signal = StopSignal()
+            signal = signal or StopSignal()
             self._running[deployment_id] = signal
             return signal
 

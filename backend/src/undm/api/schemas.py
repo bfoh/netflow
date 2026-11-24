@@ -321,8 +321,26 @@ class DeploymentOut(ORM):
     approved_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    staging_id: str | None = None
+    staging_step: int | None = None
     targets: list[DeploymentTargetOut]
     events: list[DeploymentEventOut]
+
+
+class StagingPlanIn(BaseModel):
+    """One device: restore the base file (replace), then load the site file (merge)."""
+    device_id: str
+    base_version_id: str
+    site_version_id: str
+    # Login valid once the base file is applied (it sets its own admin password).
+    credential_after_ref_id: str | None = None
+    # Secret slot id of the site file -> credential reference id (e.g. the tunnel key).
+    secrets: dict[str, str] | None = None
+
+
+class StagingPlanOut(BaseModel):
+    staging_id: str
+    steps: list[DeploymentOut]
 
 
 class DeploymentSummary(ORM):
@@ -337,6 +355,8 @@ class DeploymentSummary(ORM):
     created_by: str
     approved_by: str | None
     created_at: datetime
+    staging_id: str | None = None
+    staging_step: int | None = None
 
 
 class AuditOut(ORM):
