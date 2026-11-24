@@ -250,6 +250,7 @@ export interface FirmwareImage {
   size_bytes: number;
   sha256: string;
   vendor_sha256: string | null;
+  vendor_sha512?: string | null;
   integrity_verified: boolean;
   compatible_models: string[];
   min_from_version: string | null;

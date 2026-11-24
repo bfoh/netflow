@@ -294,3 +294,22 @@ describe('audit trail', () => {
     expect(await screen.findByText(/"first_login_credentials_set": false/)).toBeInTheDocument();
   });
 });
+
+describe('firmware repository', () => {
+  it('an unverified image can be verified with the vendor checksum after upload', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const img = { id: 'fg', vendor: 'Fortinet', platform: 'fortios', version: '7.6.5', filename: 'FGT_101F.out',
+      size_bytes: 1024, sha256: 'f3'.repeat(32), vendor_sha256: null, vendor_sha512: null, integrity_verified: false,
+      compatible_models: ['FortiGate-101F'], min_from_version: null, release_notes: '', status: 'uploaded',
+      approved_by: null, approved_at: null, created_by: 'tester', created_at: '2026-11-24T08:00:00Z' };
+    const calls = mockApi({ '/firmware/images': [img], '/firmware/images/fg/checksum': { ...img, integrity_verified: true } });
+    renderAt('/firmware');
+    expect(await screen.findByLabelText(/Vendor checksum \(SHA-256 or SHA-512\)/)).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Add vendor checksum…' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText('Vendor checksum'), 'ab'.repeat(64));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Verify' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/firmware/images/fg/checksum'
+      && JSON.parse(String(c.init?.body)).checksum === 'ab'.repeat(64))).toBe(true));
+  });
+});

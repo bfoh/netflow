@@ -522,3 +522,14 @@ prepared (in memory only; Netmiko scrubs the password, UNDM redacts again; the r
 stops once the prompt is reached) and report "Logged in, but the device did not show its
 command prompt; it showed: …" with platform advice (`prompt_hint`; FortiOS: set the
 approved admin password once by hand, then retry).
+
+### D-061 Vendor checksums: SHA-256 or SHA-512, added at upload or later; MD5 refused (2026-11-24)
+Bench: a FortiOS image uploaded without a checksum stayed "not verified" and could not be
+approved; Fortinet publishes MD5 and SHA-512 for FortiGate images, not SHA-256 (Fortinet
+community: "How to verify downloaded firmware checksum"). The repository now accepts a
+vendor checksum of 64 hex characters (SHA-256) or 128 (SHA-512); both hashes are computed
+during the upload. An uploaded image can be verified later ("Add vendor checksum…",
+`POST /api/firmware/images/{id}/checksum`): the stored file is hashed and compared; a
+mismatch is refused and its audit record kept. MD5 is refused with an explanation: it
+cannot show that a file is genuine. New column `firmware_images.vendor_sha512`
+(migration d75f9b5c5360).

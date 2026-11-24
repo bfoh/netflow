@@ -125,3 +125,39 @@ def test_incompatible_plan_rejected_with_details(client):
     r = client.post(f"/api/projects/{pid}/firmware-upgrades",
                     json={"device_ids": [did], "image_id": img["id"]})
     assert r.status_code == 409 and "sw1" in r.json()["details"]
+
+
+def test_sha512_checksum_is_accepted_and_md5_refused(client):
+    """Fortinet publishes MD5 and SHA-512 for FortiGate images, not SHA-256 (2026-11-24)."""
+    import hashlib
+
+    md5 = client.post("/api/firmware/images", data={
+        "vendor": "Fortinet", "platform": "fortios", "version": "7.6.5",
+        "compatible_models": "FortiGate-101F", "vendor_sha256": hashlib.md5(IMAGE).hexdigest()},
+        files={"file": ("FGT_101F.out", IMAGE, "application/octet-stream")})
+    assert md5.status_code in (400, 422) and "MD5" in md5.json()["error"]
+    wrong = upload(client, sha="ab" * 64)
+    assert wrong.status_code in (400, 422) and "SHA512 mismatch" in wrong.json()["error"]
+    ok = upload(client, sha=hashlib.sha512(IMAGE).hexdigest().upper())
+    assert ok.status_code == 201, ok.text
+    img = ok.json()
+    assert img["integrity_verified"] and img["vendor_sha512"] == hashlib.sha512(IMAGE).hexdigest()
+    assert img["vendor_sha256"] is None
+    assert client.post(f"/api/firmware/images/{img['id']}/approve").status_code == 200
+
+
+def test_vendor_checksum_can_be_added_after_upload(client):
+    import hashlib
+
+    img = upload(client, sha=None).json()
+    assert img["integrity_verified"] is False
+    assert client.post(f"/api/firmware/images/{img['id']}/approve").status_code == 409
+    bad = client.post(f"/api/firmware/images/{img['id']}/checksum", json={"checksum": "cd" * 64})
+    assert bad.status_code in (400, 422) and "mismatch" in bad.json()["error"]
+    good = client.post(f"/api/firmware/images/{img['id']}/checksum",
+                       json={"checksum": hashlib.sha512(IMAGE).hexdigest()})
+    assert good.status_code == 200 and good.json()["integrity_verified"] is True
+    assert client.post(f"/api/firmware/images/{img['id']}/approve").status_code == 200
+    audit = client.get("/api/audit?limit=20").json()
+    outcomes = [a["outcome"] for a in audit if a["action"] == "firmware.verify"]
+    assert outcomes == ["success", "failed"]  # newest first

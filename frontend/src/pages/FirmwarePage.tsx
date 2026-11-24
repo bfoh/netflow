@@ -1,5 +1,5 @@
 import {
-  Alert, Badge, Button, Card, Checkbox, FileInput, Group, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput,
+  Alert, Badge, Button, Card, Checkbox, FileInput, Group, Modal, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput,
   Text, Textarea, TextInput, Tooltip,
 } from '@mantine/core';
 import { IconAlertTriangle, IconCheck, IconShieldCheck, IconUpload, IconX } from '@tabler/icons-react';
@@ -52,7 +52,7 @@ function UploadForm() {
           <Select label="Platform" data={PLATFORMS} value={platform} onChange={setPlatform} allowDeselect={false} />
           <TextInput label="Version" placeholder="as reported by the device, e.g. WC.16.11.0003" value={version} onChange={(e) => setVersion(e.currentTarget.value)} required />
           <TagsInput label="Compatible models" placeholder="type and press Enter" data={suggestions} value={compatible} onChange={setCompatible} />
-          <TextInput label="Vendor SHA-256" description="Copy from the vendor download page. Required for approval." value={sha} onChange={(e) => setSha(e.currentTarget.value)} />
+          <TextInput label="Vendor checksum (SHA-256 or SHA-512)" description="Copy it from the vendor's download page (Fortinet: the SHA-512 under 'Checksum'). MD5 is not accepted. Required for approval; it can also be added after the upload." value={sha} onChange={(e) => setSha(e.currentTarget.value)} />
           <TextInput label="Minimum version to upgrade from (optional)" description="Upgrade-path rule from the release notes" value={minFrom} onChange={(e) => setMinFrom(e.currentTarget.value)} />
         </SimpleGrid>
         <Textarea label="Release notes / reference" autosize minRows={2} value={notes} onChange={(e) => setNotes(e.currentTarget.value)} />
@@ -73,7 +73,23 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
   const approve = useAction((id: string) => api.approveFirmware(id), 'Image approved');
   const retire = useAction((id: string) => api.retireFirmware(id), 'Image retired');
   const del = useAction((id: string) => api.deleteFirmware(id), 'Image deleted');
+  const [checking, setChecking] = useState<FirmwareImage | null>(null);
+  const [checksum, setChecksum] = useState('');
+  const verify = useAction(() => api.addFirmwareChecksum(checking!.id, checksum.trim()), 'Checksum matched: image verified');
   return (
+    <>
+    <Modal opened={checking !== null} onClose={() => setChecking(null)} title={`Vendor checksum for ${checking?.filename ?? ''}`}>
+      <Stack>
+        <Text size="sm">Paste the SHA-256 or SHA-512 the vendor publishes for this file (Fortinet: the SHA-512 under
+          'Checksum' next to the download). UNDM computes the same checksum of the stored file and compares; MD5 is not accepted.</Text>
+        <TextInput label="Vendor checksum" value={checksum} onChange={(e) => setChecksum(e.currentTarget.value)} ff="monospace" />
+        <Group justify="flex-end">
+          <Button variant="default" onClick={() => setChecking(null)}>Cancel</Button>
+          <Button disabled={!checksum.trim()} loading={verify.isPending}
+            onClick={() => verify.mutate(undefined, { onSuccess: () => { setChecking(null); setChecksum(''); } })}>Verify</Button>
+        </Group>
+      </Stack>
+    </Modal>
     <Card withBorder padding={0}>
       <Table.ScrollContainer minWidth={900}>
         <Table verticalSpacing="xs" horizontalSpacing="md">
@@ -87,8 +103,11 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
                 <Table.Td><Text size="sm">{i.filename}</Text><Text size="xs" c="dimmed" ff="monospace">{fmtSize(i.size_bytes)} · {i.sha256.slice(0, 12)}…</Text></Table.Td>
                 <Table.Td><Text size="sm">{i.compatible_models.join(', ')}</Text></Table.Td>
                 <Table.Td>{i.integrity_verified
-                  ? <Tooltip label="SHA-256 matched the vendor-published checksum"><Badge color="teal" variant="light" leftSection={<IconShieldCheck size={12} />}>verified</Badge></Tooltip>
-                  : <Tooltip label="No vendor checksum was supplied, so the file cannot be approved"><Badge color="yellow" variant="light">not verified</Badge></Tooltip>}</Table.Td>
+                  ? <Tooltip label={`${i.vendor_sha512 ? 'SHA-512' : 'SHA-256'} matched the vendor-published checksum`}><Badge color="teal" variant="light" leftSection={<IconShieldCheck size={12} />}>verified</Badge></Tooltip>
+                  : <Group gap={4} wrap="nowrap">
+                      <Tooltip label="No vendor checksum was supplied, so the file cannot be approved"><Badge color="yellow" variant="light">not verified</Badge></Tooltip>
+                      <Button size="compact-xs" variant="light" onClick={() => { setChecksum(''); setChecking(i); }}>Add vendor checksum…</Button>
+                    </Group>}</Table.Td>
                 <Table.Td><Badge color={i.status === 'approved' ? 'teal' : i.status === 'retired' ? 'gray' : 'blue'} variant="light">{i.status}</Badge>
                   {i.approved_by && <Text size="xs" c="dimmed">by {i.approved_by}</Text>}</Table.Td>
                 <Table.Td>
@@ -105,6 +124,7 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
         </Table>
       </Table.ScrollContainer>
     </Card>
+    </>
   );
 }
 

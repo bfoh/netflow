@@ -72,7 +72,7 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   await page.getByRole('textbox', { name: 'Version', exact: true }).fill('10.2.0');
   await page.getByRole('combobox', { name: 'Compatible models' }).fill('6300M');
   await page.getByRole('combobox', { name: 'Compatible models' }).press('Enter');
-  await page.getByLabel('Vendor SHA-256').fill(createHash('sha256').update(image).digest('hex'));
+  await page.getByLabel('Vendor checksum (SHA-256 or SHA-512)').fill(createHash('sha256').update(image).digest('hex'));
   await page.getByRole('button', { name: 'Upload to repository' }).click();
   const row = page.getByRole('row', { name: new RegExp(`cx-${id}`) });
   await expect(row.getByText('verified')).toBeVisible();

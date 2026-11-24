@@ -381,6 +381,7 @@ class FirmwareImageOut(ORM):
     size_bytes: int
     sha256: str
     vendor_sha256: str | None
+    vendor_sha512: str | None = None
     integrity_verified: bool
     compatible_models: list[str]
     min_from_version: str | None
@@ -390,6 +391,10 @@ class FirmwareImageOut(ORM):
     approved_at: datetime | None
     created_by: str
     created_at: datetime
+
+
+class VendorChecksumIn(BaseModel):
+    checksum: str = Field(min_length=32, max_length=200)
 
 
 class CompatibilityIn(BaseModel):

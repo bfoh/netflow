@@ -26,6 +26,34 @@ from undm.services.errors import ConflictError, NotFoundError, ServiceError
 
 _SAFE = re.compile(r"[^A-Za-z0-9._-]")
 _HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
+_HEX128 = re.compile(r"^[0-9a-fA-F]{128}$")
+
+
+def vendor_checksum(value: str | None) -> tuple[str, str] | None:
+    """('sha256' | 'sha512', lower-case hex) for a vendor-published checksum.
+
+    MD5 (32 hex characters) is refused: it cannot show that a file is genuine."""
+    text = "".join((value or "").split()).lower()
+    if not text:
+        return None
+    if _HEX64.match(text):
+        return "sha256", text
+    if _HEX128.match(text):
+        return "sha512", text
+    if re.fullmatch(r"[0-9a-f]{32}", text):
+        raise ServiceError("That looks like an MD5 checksum, which is not accepted. Use the "
+                           "vendor's SHA-256 or SHA-512 (Fortinet: the SHA-512 under "
+                           "'Checksum' on the download page).")
+    raise ServiceError("Vendor checksum must be a SHA-256 (64 hexadecimal characters) or a "
+                       "SHA-512 (128 hexadecimal characters)")
+
+
+def _file_digest(path: Path, algorithm: str) -> str:
+    digest = hashlib.new(algorithm)
+    with path.open("rb") as f:
+        while chunk := f.read(CHUNK):
+            digest.update(chunk)
+    return digest.hexdigest()
 CHUNK = 1024 * 1024
 
 
@@ -46,12 +74,12 @@ class FirmwareRepository:
         compatible_models: list[str], min_from_version: str | None, vendor_sha256: str | None,
         release_notes: str, actor: str,
     ) -> FirmwareImage:
-        if vendor_sha256 and not _HEX64.match(vendor_sha256.strip()):
-            raise ServiceError("Vendor SHA-256 must be 64 hexadecimal characters")
+        published = vendor_checksum(vendor_sha256)  # the form field keeps its name
         if not version.strip():
             raise ServiceError("Version is required")
         self.root.mkdir(parents=True, exist_ok=True)
         digest = hashlib.sha256()
+        digest512 = hashlib.sha512()
         size = 0
         fd, tmp_name = tempfile.mkstemp(dir=self.root, prefix=".upload-")
         try:
@@ -62,14 +90,19 @@ class FirmwareRepository:
                         raise ServiceError(
                             f"Image larger than the {self.max_bytes // 1024**2} MiB limit")
                     digest.update(chunk)
+                    digest512.update(chunk)
                     out.write(chunk)
             if size == 0:
                 raise ServiceError("Uploaded file is empty")
             sha = digest.hexdigest()
-            if vendor_sha256 and vendor_sha256.strip().lower() != sha:
-                raise ServiceError(
-                    "SHA-256 mismatch: the file does not match the checksum published by the "
-                    f"vendor (file {sha}). The download may be corrupted or the wrong file.")
+            if published is not None:
+                algorithm, expected = published
+                actual = sha if algorithm == "sha256" else digest512.hexdigest()
+                if expected != actual:
+                    raise ServiceError(
+                        f"{algorithm.upper()} mismatch: the file does not match the checksum "
+                        f"published by the vendor (file {actual}). The download may be "
+                        "corrupted or the wrong file.")
             if self.s.scalars(select(FirmwareImage).where(FirmwareImage.sha256 == sha)).first():
                 raise ConflictError("This image file is already in the repository")
             final = self.root / f"{sha}_{_SAFE.sub('_', filename)[:120]}"
@@ -80,8 +113,9 @@ class FirmwareRepository:
         img = FirmwareImage(
             vendor=vendor.strip(), platform=platform.strip(), version=version.strip(),
             filename=_SAFE.sub("_", filename)[:255], size_bytes=size, sha256=sha,
-            vendor_sha256=vendor_sha256.strip().lower() if vendor_sha256 else None,
-            integrity_verified=bool(vendor_sha256), storage_path=str(final),
+            vendor_sha256=published[1] if published and published[0] == "sha256" else None,
+            vendor_sha512=published[1] if published and published[0] == "sha512" else None,
+            integrity_verified=published is not None, storage_path=str(final),
             compatible_models=[m.strip() for m in compatible_models if m.strip()],
             min_from_version=(min_from_version or "").strip() or None,
             release_notes=release_notes, created_by=actor,
@@ -93,13 +127,40 @@ class FirmwareRepository:
             "size": size, "sha256": sha, "integrity_verified": img.integrity_verified})
         return img
 
+    def add_vendor_checksum(self, image_id: str, checksum: str, actor: str) -> FirmwareImage:
+        """Verify an uploaded image against the vendor's checksum, without uploading again."""
+        img = self.get(image_id)
+        published = vendor_checksum(checksum)
+        if published is None:
+            raise ServiceError("Enter the vendor's checksum")
+        path = Path(img.storage_path)
+        if not path.is_file():
+            raise ConflictError("Image file is missing from the repository storage")
+        algorithm, expected = published
+        actual = _file_digest(path, algorithm)
+        if actual != expected:
+            audit.record(self.s, actor, "firmware.verify", "firmware_image", img.id, "failed",
+                         {"algorithm": algorithm, "file": actual})
+            self.s.commit()  # keep the record of a failed integrity check
+            raise ServiceError(
+                f"{algorithm.upper()} mismatch: the stored file does not match the vendor's "
+                f"checksum (file {actual}). It may be corrupted or the wrong file; delete it.")
+        if algorithm == "sha256":
+            img.vendor_sha256 = expected
+        else:
+            img.vendor_sha512 = expected
+        img.integrity_verified = True
+        audit.record(self.s, actor, "firmware.verify", "firmware_image", img.id,
+                     details={"algorithm": algorithm, "version": img.version})
+        return img
+
     def approve(self, image_id: str, actor: str) -> FirmwareImage:
         img = self.get(image_id)
         if img.status == "retired":
             raise ConflictError("Retired images cannot be approved")
         if not img.integrity_verified:
-            raise ConflictError("Only images whose checksum matched the vendor's SHA-256 "
-                                "can be approved")
+            raise ConflictError("Only images whose checksum matched the vendor's published "
+                                "SHA-256 or SHA-512 can be approved")
         if not Path(img.storage_path).is_file():
             raise ConflictError("Image file is missing from the repository storage")
         img.status, img.approved_by, img.approved_at = "approved", actor, datetime.now(UTC)

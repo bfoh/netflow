@@ -61,11 +61,11 @@ library; intent beyond the first slice; project export/import; persistent job ru
 ## Test results (2026-11-19)
 | Suite | Result |
 |---|---|
-| Backend pytest | 380 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 382 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (73 files) |
-| Frontend Vitest | 23 passed |
+| Frontend Vitest | 24 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 3 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console) |
 

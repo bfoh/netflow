@@ -37,7 +37,8 @@ def compatibility_issues(
         err("image_not_approved", "image has not been approved for use")
     if not rules.integrity_verified:
         err("integrity_not_verified",
-            "image checksum has not been verified against the vendor's published SHA-256")
+            "image checksum has not been verified against the vendor's published "
+            "SHA-256 or SHA-512")
     if rules.platform != driver_platform:
         err("platform_mismatch",
             f"image is for platform {rules.platform!r}, device driver is {driver_platform!r}")

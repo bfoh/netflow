@@ -118,6 +118,9 @@ export const api = {
   firmwareImages: () => request<FirmwareImage[]>('GET', '/firmware/images'),
   uploadFirmware: (form: FormData) => request<FirmwareImage>('POST', '/firmware/images', form),
   approveFirmware: (id: string) => request<FirmwareImage>('POST', `/firmware/images/${id}/approve`),
+  /** Verify an uploaded image against the vendor's SHA-256 or SHA-512. */
+  addFirmwareChecksum: (id: string, checksum: string) =>
+    request<FirmwareImage>('POST', `/firmware/images/${id}/checksum`, { checksum }),
   retireFirmware: (id: string) => request<FirmwareImage>('POST', `/firmware/images/${id}/retire`),
   deleteFirmware: (id: string) => request<void>('DELETE', `/firmware/images/${id}`),
   firmwareCompatibility: (id: string, deviceIds: string[]) =>

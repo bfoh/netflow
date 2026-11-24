@@ -4,7 +4,13 @@ from fastapi import APIRouter, File, Form, UploadFile, status
 from sqlalchemy import select
 
 from undm.api.deps import ActorDep, RegistryDep, SessionDep, SettingsDep
-from undm.api.schemas import CompatibilityIn, CompatibilityOut, FirmwareImageOut, IssueOut
+from undm.api.schemas import (
+    CompatibilityIn,
+    CompatibilityOut,
+    FirmwareImageOut,
+    IssueOut,
+    VendorChecksumIn,
+)
 from undm.db.models import Device, FirmwareImage
 from undm.services.errors import NotFoundError
 from undm.services.firmware import FirmwareRepository, device_compatibility
@@ -30,7 +36,8 @@ def upload_image(
     platform: Annotated[str, Form(description="Driver platform key: aoscx, fortios, iosxe")],
     version: Annotated[str, Form()],
     compatible_models: Annotated[str, Form(description="Comma-separated model names")],
-    vendor_sha256: Annotated[str | None, Form(description="Vendor-published SHA-256")] = None,
+    vendor_sha256: Annotated[str | None, Form(
+        description="Vendor-published SHA-256 or SHA-512")] = None,
     min_from_version: Annotated[str | None, Form()] = None,
     release_notes: Annotated[str, Form()] = "",
 ) -> FirmwareImage:
@@ -44,6 +51,13 @@ def upload_image(
 @router.get("/images/{image_id}", response_model=FirmwareImageOut)
 def read_image(image_id: str, session: SessionDep, settings: SettingsDep) -> FirmwareImage:
     return _repo(session, settings).get(image_id)
+
+
+@router.post("/images/{image_id}/checksum", response_model=FirmwareImageOut)
+def add_checksum(image_id: str, body: VendorChecksumIn, session: SessionDep,
+                 settings: SettingsDep, actor: ActorDep) -> FirmwareImage:
+    """Verify an uploaded image against the vendor's SHA-256 or SHA-512."""
+    return _repo(session, settings).add_vendor_checksum(image_id, body.checksum, actor)
 
 
 @router.post("/images/{image_id}/approve", response_model=FirmwareImageOut)

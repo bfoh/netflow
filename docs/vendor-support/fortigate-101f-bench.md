@@ -18,7 +18,8 @@ hardware. Order agreed 2026-11-19: firmware → base file → site file (D-034).
       password, set the approved password when forced to. (UNDM does not do this step yet.)
 - [ ] The **base file carries the approved admin password** (your team edits it; otherwise
       UNDM cannot log in after the restore and stops with "Authentication failed").
-- [ ] Image `FGT_101F-v7.6.5…out` downloaded from the Fortinet support site, with its SHA-256.
+- [ ] Image `FGT_101F-v7.6.5…out` downloaded from the Fortinet support site, with its
+      **SHA-512** (the 'Checksum' link next to the download; UNDM accepts SHA-256 or SHA-512, D-061).
 - [ ] `backend\.env`: `UNDM_ENABLE_REAL_DEVICE_WRITES=true`,
       `UNDM_ENABLE_REAL_DEVICE_FIRMWARE=true` (and, if alone,
       `UNDM_FIRMWARE_REQUIRE_SEPARATE_APPROVER=false`); database upgraded
@@ -76,3 +77,4 @@ addresses as usual), especially any "device output" event, and the time each ste
 | 2026-11-23 | spare 101F | Test connection | login accepted, no prompt | Netmiko "Pattern not detected: 'to accept\|[#$]'". Probably the forced admin password change at the first login (to be confirmed by what the unit shows). UNDM now reports the unit's text (D-060). |
 | 2026-11-24 | spare 101F | First login (by hand, browser) | done | GUI after `admin` with an empty password: page "Change Password" with "You are required to change the default password.", fields Old Password / New Password / Confirm Password, buttons OK / Logout; after OK the login page returns. Confirms the forced change behind the SSH "no prompt" result. The SSH wording of the same step is not yet seen (needed before UNDM can do it). |
 | 2026-11-24 | same unit | Test connection, Retrieve information | **passed** | SSH with the approved admin login; facts read correctly: hostname and model FortiGate-101F, FortiOS **v7.2.6** (as shipped; the checklist expected v7.2.7), serial number (not recorded here), VDOM mode disabled. The FortiOS facts parser is now listed as checked on FortiGate-101F v7.2.6. |
+| 2026-11-24 | same unit | Firmware image upload | not verified | Uploaded without a checksum; Fortinet publishes MD5 and SHA-512, which UNDM did not accept. Fixed: SHA-512 accepted, checksum can be added after upload (D-061). |
