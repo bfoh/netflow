@@ -11,6 +11,13 @@ the running and/or the startup configuration (product owner, 2026-11-19). Firmwa
 v00.01.00 → v00.01.01 is also done through the web interface. Two models, two formats:
 **LIG1014A** files use the switch's CLI syntax; **LE2700A** files are XML exports.
 
+## Bench unit and logins (product owner, 2026-11-24)
+The bench unit is a **LIG1014A**. Its factory login is `admin` with an **empty password**;
+the team's file sets the approved admin password. In UNDM: the device's own login is the
+factory one, and a plan that loads the file names the approved login as "login after
+loading", as for the 2930F (D-042). UNDM keeps the approved login for the device once the
+load is verified. Cable the PC to **port 1/3**: the file keeps management on that port only.
+
 ## LIG1014A file (facts read from the sample)
 | Topic | Finding |
 |---|---|
