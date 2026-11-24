@@ -1,10 +1,11 @@
 import { ActionIcon, Anchor, Button, Card, Checkbox, Group, Menu, Select, Table, Text, Tooltip } from '@mantine/core';
-import { IconDots, IconLock } from '@tabler/icons-react';
+import { IconDots, IconLock, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../../components/Badges';
 import { useAction } from '../../hooks/queries';
+import { useConfirm } from '../../hooks/useConfirm';
 import { api } from '../../services/api';
 import type { Device, OperationResult } from '../../types/api';
 import { humanize, stateLabel } from '../../services/labels';
@@ -13,14 +14,15 @@ import { humanize, stateLabel } from '../../services/labels';
  * Inventory table with multi-select and bulk actions.
  *
  * Only read-only actions run from here. Anything that changes a device goes through a
- * deployment plan (validate, preview, approve, execute), so there is no
- * "enable impacting actions" switch: the plan itself is the gate.
+ * plan (check, preview, approve, run), so there is no "enable impacting actions" switch:
+ * the plan itself is the gate. Deleting removes the device from UNDM only (confirmed).
  */
 const BULK = [
   { value: 'get_facts', label: 'Retrieve device information' },
   { value: 'backup_configuration', label: 'Back up configuration' },
   { value: 'generate', label: 'Generate configuration' },
   { value: 'deploy', label: 'Make a plan…' },
+  { value: 'delete', label: 'Delete devices…' },
 ];
 
 export function DeviceTable({ devices, showProject, projectNames }:
@@ -50,8 +52,29 @@ export function DeviceTable({ devices, showProject, projectNames }:
       : api.runOperation(id, op),
   (r) => `${stateLabel(r.status)}${r.message ? ` — ${r.message}` : ''}`);
 
+  const [ask, confirmDialog] = useConfirm();
+  const remove = useAction(async (targets: Device[]) => {
+    const failed: string[] = [];
+    for (const d of targets) {
+      try { await api.deleteDevice(d.id); } catch (e) { failed.push(`${d.name}: ${(e as Error).message}`); }
+    }
+    if (failed.length) throw new Error(`Not deleted: ${failed.join('; ')}`);
+    return targets.length;
+  }, (n) => `${n} ${n === 1 ? 'device' : 'devices'} deleted`, { errorInDialog: true });
+  const askDelete = (targets: Device[]) => ask({
+    title: targets.length === 1 ? `Delete ${targets[0].name}?` : `Delete ${targets.length} devices?`,
+    confirmLabel: 'Delete', typed: targets.length === 1 ? targets[0].name : 'delete',
+    message: <>
+      {targets.length > 1 && <>{targets.map((d) => d.name).join(', ')}.<br /></>}
+      Their files, backups and history are removed from UNDM; the devices themselves are not touched. Their logins stay on the
+      system page. A device a plan is running on cannot be deleted.
+    </>,
+    onConfirm: async () => { await remove.mutateAsync(targets); setSelected([]); },
+  });
+
   const perform = () => {
     if (!action || sel.length === 0) return;
+    if (action === 'delete') { askDelete(devices.filter((d) => sel.includes(d.id))); return; }
     if (action === 'deploy') {
       const projects = new Set(devices.filter((d) => sel.includes(d.id)).map((d) => d.project_id));
       if (projects.size !== 1) return;
@@ -65,6 +88,7 @@ export function DeviceTable({ devices, showProject, projectNames }:
 
   return (
     <Card withBorder padding={0}>
+      {confirmDialog}
       <Group justify="space-between" p="sm" wrap="wrap">
         <Group gap="xs">
           <Text size="sm">Selected: <b>{sel.length}</b></Text>
@@ -121,6 +145,9 @@ export function DeviceTable({ devices, showProject, projectNames }:
                       <Menu.Item onClick={() => single.mutate({ id: d.id, op: 'generate' })}>Generate configuration</Menu.Item>
                       <Menu.Label>Changes the device</Menu.Label>
                       <Menu.Item onClick={() => void navigate(`/deployments?project=${d.project_id}&devices=${d.id}`)}>Make a plan…</Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!!d.locked_by_deployment_id}
+                        onClick={() => askDelete([d])}>Delete…</Menu.Item>
                     </Menu.Dropdown>
                   </Menu>
                 </Table.Td>

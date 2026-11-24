@@ -816,6 +816,73 @@ class DeploymentService:
                          {"dry_run": rec.dry_run})
             self.s.commit()
 
+    # -- plans that need attention (D-088) ---------------------------------------------
+    def attention(self, records: list[DeploymentRecord]) -> dict[str, str | None]:
+        """For each plan that needs attention: None while it waits for a person, else why
+        it no longer does: 'checked' (a person recorded a check) or 'superseded:<id>' (a
+        later, real, successful plan covered all of its devices, so they were checked
+        again). The plan's own state is never changed."""
+        pending = [r for r in records if r.state == S.RECOVERY_REQUIRED.value]
+        if not pending:
+            return {}
+        later = list(self.s.scalars(
+            select(DeploymentRecord).where(
+                DeploymentRecord.project_id.in_({r.project_id for r in pending}),
+                DeploymentRecord.state == S.SUCCEEDED.value,
+                DeploymentRecord.dry_run.is_(False))
+            .order_by(DeploymentRecord.created_at)))
+        out: dict[str, str | None] = {}
+        for r in pending:
+            if any(e.status == "checked" for e in r.events):
+                out[r.id] = "checked"
+                continue
+            devices = {t.device_id for t in r.targets}
+            since = _utc(r.created_at)
+            assert since is not None
+            hit = next((x for x in later if (_utc(x.created_at) or since) > since
+                        and devices <= {t.device_id for t in x.targets}), None)
+            out[r.id] = f"superseded:{hit.id}" if hit else None
+        return out
+
+    def delete(self, deployment_id: str, actor: str, jobs: DeploymentJobs) -> list[str]:
+        """Remove a plan that is not running, with its targets and events (D-088). A step
+        of a staging plan takes the whole staging plan with it, so the order of the steps
+        cannot be bypassed. The audit trail keeps what the plan was."""
+        rec = self.get(deployment_id)
+        recs = self.staging_steps(rec.staging_id) if rec.staging_id else [rec]
+        for r in recs:
+            locked = self.s.scalars(select(Device.name).where(
+                Device.locked_by_deployment_id == r.id)).first()
+            if (DeploymentState(r.state) in TRANSIENT_STATES or jobs.is_running(r.id)
+                    or locked):
+                raise ConflictError("This plan is running: stop it, wait for it to end, "
+                                    "then delete it")
+        ids = [r.id for r in recs]
+        for r in recs:
+            audit.record(self.s, actor, "deployment.delete", "deployment", r.id, details={
+                "kind": r.kind, "state": r.state, "dry_run": r.dry_run,
+                "devices": [x.device_id for x in r.targets], "created_by": r.created_by,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                **({"staging_id": r.staging_id, "staging_step": r.staging_step}
+                   if r.staging_id else {})})
+            self.s.delete(r)
+        return ids
+
+    def mark_checked(self, deployment_id: str, actor: str, note: str) -> DeploymentRecord:
+        """A person checked the device(s) of a plan that needs attention (D-088)."""
+        rec = self.get(deployment_id)
+        if rec.state != S.RECOVERY_REQUIRED.value:
+            raise ConflictError("Only a plan that needs attention can be marked as checked")
+        note = " ".join(note.split())
+        if len(note) < 5:
+            raise ConflictError("Say in a few words what you checked on the device")
+        rec.events.append(DeploymentEventRecord(
+            seq=len(rec.events), timestamp=datetime.now(UTC), stage="recover",
+            status="checked", message=f"device checked by {actor}: {note}"))
+        audit.record(self.s, actor, "deployment.checked", "deployment", rec.id,
+                     details={"note": note})
+        return rec
+
     def cancel(self, deployment_id: str, actor: str) -> DeploymentRecord:
         rec = self.get(deployment_id)
         if rec.state not in {S.DRAFT.value, S.AWAITING_APPROVAL.value, S.READY.value}:

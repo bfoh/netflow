@@ -15,7 +15,8 @@ export function EnvironmentBadge({ env }: { env: DeviceEnvironment }) {
   const e = ENV[env] ?? ENV.simulated;
   return (
     <Tooltip label={e.hint} withArrow>
-      <Badge color={e.color} variant="light" radius="sm">{e.label}</Badge>
+      <Badge color={e.color} variant="light" radius="sm" style={{ flexShrink: 0 }}
+        styles={{ root: { overflow: 'visible' }, label: { overflow: 'visible' } }}>{e.label}</Badge>
     </Tooltip>
   );
 }

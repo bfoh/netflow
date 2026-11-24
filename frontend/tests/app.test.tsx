@@ -507,3 +507,67 @@ describe('system packages', () => {
     expect(calls.some((c) => c.url === '/api/systems/import' && c.init?.body instanceof FormData)).toBe(true);
   });
 });
+
+describe('plans that need attention (D-088)', () => {
+  const row = (id: string, over: Record<string, unknown>) => ({ id, project_id: 'p1', kind: 'configuration', state: 'recovery_required',
+    dry_run: false, apply_mode: 'replace', created_by: 'a', approved_by: 'b', created_at: '2026-11-23T10:00:00Z', ...over });
+
+  it('Home lists only those still waiting for a check', async () => {
+    mockApi({
+      '/projects': [{ id: 'p1', name: 'Bench', description: '', site: '', purpose: '', created_at: '', updated_at: '' }],
+      '/deployments': [row('old', { needs_attention: false, attention_cleared: 'superseded:new' }),
+        row('open', { needs_attention: true, created_at: '2026-11-24T10:00:00Z' })],
+    });
+    renderAt('/');
+    expect(await screen.findByText('Check the device: it may be half-changed')).toBeInTheDocument();
+    expect(screen.getAllByText('Check the device: it may be half-changed')).toHaveLength(1);
+    const stat = screen.getByText('Needs attention', { selector: 'p' }).parentElement!;
+    expect(within(stat).getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('later plan succeeded')).toBeInTheDocument();
+  });
+
+  it('a plan is marked as checked with a note', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/deployments/dep1': plan({ dry_run: false, kind: 'configuration', state: 'recovery_required',
+      needs_attention: true }), '/projects/p1/devices': [device({})] });
+    renderAt('/deployments/dep1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Mark as checked…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Mark as checked' });
+    await userEvent.type(within(dialog).getByLabelText(/What did you check/), 'console: running config matches');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Mark as checked' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/deployments/dep1/checked')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/deployments/dep1/checked');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ note: 'console: running config matches' });
+  });
+});
+
+describe('deleting from lists', () => {
+  it('devices are deleted from the list after their name or "delete" is typed', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/devices': [device({}), device({ id: 'd2', name: 'sw2' })], '/projects': [] });
+    renderAt('/devices');
+    await userEvent.click(await screen.findByLabelText('Select sw1'));
+    await userEvent.click(screen.getByLabelText('Select sw2'));
+    await userEvent.click(screen.getAllByLabelText('Bulk action')[0]);
+    await userEvent.click(await screen.findByRole('option', { name: 'Delete devices…', hidden: true }));
+    await userEvent.click(screen.getByRole('button', { name: 'Perform' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 2 devices?' });
+    const go = within(dialog).getByRole('button', { name: 'Delete' });
+    expect(go).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText('Type delete to confirm'), 'delete');
+    await userEvent.click(go);
+    await vi.waitFor(() => expect(calls.filter((c) => c.init?.method === 'DELETE').map((c) => c.url))
+      .toEqual(['/api/devices/d1', '/api/devices/d2']));
+  });
+
+  it('a finished plan can be deleted from the plans list', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/deployments': [{ id: 'x1', project_id: 'p1', kind: 'configuration', state: 'succeeded', dry_run: false,
+      apply_mode: 'merge', created_by: 'a', approved_by: 'b', created_at: '2026-11-23T10:00:00Z' }], '/projects': [] });
+    renderAt('/deployments');
+    await userEvent.click(await screen.findByLabelText(/Delete plan of/));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete this plan?' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/deployments/x1' && c.init?.method === 'DELETE')).toBe(true));
+  });
+});

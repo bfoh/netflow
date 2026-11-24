@@ -176,6 +176,8 @@ export const api = {
   executeStaging: (id: string) => request<StagingPlan>('POST', `/staging-plans/${id}/execute?background=true`),
   stopStaging: (id: string) => request<StagingPlan>('POST', `/staging-plans/${id}/stop`),
   cancelDeployment: (id: string) => request<Deployment>('POST', `/deployments/${id}/cancel`),
+  deleteDeployment: (id: string) => request<void>('DELETE', `/deployments/${id}`),
+  markChecked: (id: string, note: string) => request<Deployment>('POST', `/deployments/${id}/checked`, { note }),
 
   serialPorts: () => request<SerialPort[]>('GET', '/provisioning/serial-ports'),
   bootstrapPreview: (id: string, profile: BootstrapProfile) =>

@@ -1,10 +1,12 @@
-import { Alert, Anchor, Button, Card, Checkbox, Group, SegmentedControl, Select, Stack, Switch, Table, Text, Title } from '@mantine/core';
-import { IconInfoCircle } from '@tabler/icons-react';
+import { ActionIcon, Alert, Anchor, Button, Card, Checkbox, Group, SegmentedControl, Select, Stack, Switch, Table, Text, Title, Tooltip } from '@mantine/core';
+import { IconInfoCircle, IconTrash } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
+import { PlanStatus } from '../features/plans/AttentionBadge';
+import { usePlanDelete } from '../hooks/usePlanDelete';
 import { fmtDate, planKind } from '../services/format';
 import { useAction, useAllDeployments, useConfig, useConfigs, useCredentialRefs, useProjectDevices, useProjects } from '../hooks/queries';
 import type { ConfigVersion } from '../types/api';
@@ -263,6 +265,7 @@ function NewFirstLogin({ projectId }: { projectId: string }) {
 }
 
 export function DeploymentsPage() {
+  const [askToDelete, deleteDialog, canDelete] = usePlanDelete();
   const [params, setParams] = useSearchParams();
   const projects = useProjects();
   const all = useAllDeployments();
@@ -285,11 +288,12 @@ export function DeploymentsPage() {
         {projectId && <NewFirstLogin key={`first-${projectId}`} projectId={projectId} />}
         {projectId && <NewStagingPlan key={`staging-${projectId}`} projectId={projectId} />}
         <Card withBorder padding={0}>
+          {deleteDialog}
           <Title order={2} size="h5" p="md" pb={0}>All plans</Title>
           <QueryState isLoading={all.isLoading} error={all.error} />
           <Table.ScrollContainer minWidth={640}>
             <Table verticalSpacing="xs" horizontalSpacing="md" highlightOnHover>
-              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>System</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>System</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th><Table.Th w={40} /></Table.Tr></Table.Thead>
               <Table.Tbody>
                 {(all.data ?? []).map((d) => (
                   <Table.Tr key={d.id}>
@@ -298,10 +302,12 @@ export function DeploymentsPage() {
                     <Table.Td>{planKind(d)}
                       {d.staging_id && <> · <Anchor component={Link} to={`/staging/${d.staging_id}`} size="sm">staging step {d.staging_step}</Anchor></>}</Table.Td>
                     <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
-                    <Table.Td><StateBadge state={d.state} /></Table.Td>
+                    <Table.Td><PlanStatus d={d} /></Table.Td>
+                    <Table.Td>{canDelete(d) && <Tooltip label="Delete plan"><ActionIcon variant="subtle" color="red" aria-label={`Delete plan of ${fmtDate(d.created_at)}`}
+                      onClick={() => askToDelete(d)}><IconTrash size={16} /></ActionIcon></Tooltip>}</Table.Td>
                   </Table.Tr>
                 ))}
-                {all.data?.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text c="dimmed" ta="center" p="md">No plans yet.</Text></Table.Td></Table.Tr>}
+                {all.data?.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text c="dimmed" ta="center" p="md">No plans yet.</Text></Table.Td></Table.Tr>}
               </Table.Tbody>
             </Table>
           </Table.ScrollContainer>

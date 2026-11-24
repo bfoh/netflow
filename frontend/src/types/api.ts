@@ -215,6 +215,10 @@ export interface DeploymentSummary {
   /** Staging plans (D-071): steps share staging_id and run in staging_step order. */
   staging_id?: string | null;
   staging_step?: number | null;
+  /** D-088: needs attention and still waits for a person (else why not, below). */
+  needs_attention?: boolean;
+  /** "checked", or "superseded:<id of the later successful plan>". */
+  attention_cleared?: string | null;
 }
 
 /** One device: step 1 restores the base file (replace), step 2 loads the site file (merge). */

@@ -336,6 +336,8 @@ class DeploymentOut(ORM):
     updated_at: datetime
     staging_id: str | None = None
     staging_step: int | None = None
+    needs_attention: bool = False  # D-088, see DeploymentSummary
+    attention_cleared: str | None = None
     targets: list[DeploymentTargetOut]
     events: list[DeploymentEventOut]
 
@@ -422,6 +424,15 @@ class DeploymentSummary(ORM):
     created_at: datetime
     staging_id: str | None = None
     staging_step: int | None = None
+    # D-088: a plan that needs attention and still waits for a person; else why not.
+    needs_attention: bool = False
+    attention_cleared: str | None = None  # "checked" or "superseded:<plan id>"
+
+
+class CheckedIn(BaseModel):
+    """What a person checked on the device(s) of a plan that needs attention."""
+
+    note: str = Field(min_length=1, max_length=500)
 
 
 class AuditOut(ORM):

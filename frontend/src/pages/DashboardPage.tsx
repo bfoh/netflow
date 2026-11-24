@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 
 import { StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
+import { PlanStatus } from '../features/plans/AttentionBadge';
 import { fmtDate } from '../services/format';
 import { planKind } from '../services/labels';
 import { useAllDeployments, useAllDevices, useProjects } from '../hooks/queries';
@@ -20,7 +21,6 @@ function Stat({ label, value, hint, to }: { label: string; value: number | strin
   );
 }
 
-const ATTENTION = new Set(['failed', 'recovery_required', 'rolled_back']);
 const RUNNING = new Set(['validating', 'preflight', 'backing_up', 'deploying', 'verifying', 'recovering']);
 
 /** What the person should do next with a plan, or null when nothing is waiting. */
@@ -28,7 +28,8 @@ function nextAction(d: DeploymentSummary): string | null {
   if (d.state === 'awaiting_approval') return 'Read the preview and approve it';
   if (d.state === 'ready') return 'Approved: run it when the devices are cabled';
   if (RUNNING.has(d.state)) return 'Running now: follow its progress';
-  if (d.state === 'recovery_required') return 'Check the device: it may be half-changed';
+  // Until a later plan succeeded on its device(s) or a person marked it checked (D-088).
+  if (d.state === 'recovery_required' && d.needs_attention) return 'Check the device: it may be half-changed';
   return null;
 }
 
@@ -65,7 +66,7 @@ export function DashboardPage() {
   const systems = projects.data ?? [];
   const projectName = new Map(systems.map((p) => [p.id, p.name]));
   const waiting = deps.filter((x) => nextAction(x));
-  const attention = deps.filter((x) => ATTENTION.has(x.state));
+  const attention = deps.filter((x) => x.needs_attention);
   const loaded = !devices.isLoading && !projects.isLoading;
 
   return (
@@ -81,7 +82,7 @@ export function DashboardPage() {
         <Stat label="Systems" value={systems.length} to="/projects" />
         <Stat label="Devices" value={d.length} hint={`${d.filter((x) => x.last_connection_at).length} reached at least once`} to="/devices" />
         <Stat label="Waiting for you" value={waiting.length} hint="to approve, run or check" to="/deployments" />
-        <Stat label="Did not finish" value={attention.length} hint="failed, undone or needs attention" to="/deployments" />
+        <Stat label="Needs attention" value={attention.length} hint="a device may be half-changed" to="/deployments" />
       </SimpleGrid>
       {waiting.length > 0 && (
         <Card withBorder mb="lg">
@@ -116,7 +117,7 @@ export function DashboardPage() {
                       <Table.Td><Anchor component={Link} to={`/deployments/${x.id}`} size="sm">{fmtDate(x.created_at)}</Anchor></Table.Td>
                       <Table.Td>{projectName.get(x.project_id) ?? '—'}</Table.Td>
                       <Table.Td>{planKind(x)}</Table.Td>
-                      <Table.Td><StateBadge state={x.state} /></Table.Td>
+                      <Table.Td><PlanStatus d={x} /></Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>

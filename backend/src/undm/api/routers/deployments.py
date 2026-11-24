@@ -10,6 +10,7 @@ from undm.api.deps import ActorDep, RegistryDep, SessionDep, SettingsDep
 from undm.api.routers.projects import get_project
 from undm.api.schemas import (
     ApproveIn,
+    CheckedIn,
     DeploymentIn,
     DeploymentOut,
     DeploymentSummary,
@@ -52,21 +53,40 @@ def _svc(session: SessionDep, registry: RegistryDep, settings: SettingsDep,
 ServiceDep = Annotated[DeploymentService, Depends(_svc)]
 
 
+def _attention(flags: dict[str, str | None], rec: DeploymentRecord) -> dict[str, Any]:
+    if rec.id not in flags:
+        return {}
+    return {"needs_attention": flags[rec.id] is None, "attention_cleared": flags[rec.id]}
+
+
+def _summaries(svc: DeploymentService, recs: list[DeploymentRecord]) -> list[DeploymentSummary]:
+    flags = svc.attention(recs)
+    return [DeploymentSummary.model_validate(r).model_copy(update=_attention(flags, r))
+            for r in recs]
+
+
+def _full(svc: DeploymentService, rec: DeploymentRecord) -> DeploymentOut:
+    return DeploymentOut.model_validate(rec).model_copy(
+        update=_attention(svc.attention([rec]), rec))
+
+
 @router.get("/api/deployments", response_model=list[DeploymentSummary])
-def list_all_deployments(session: SessionDep, limit: int = Query(50, ge=1, le=500),
-                         state: str | None = None) -> list[DeploymentRecord]:
+def list_all_deployments(session: SessionDep, svc: ServiceDep,
+                         limit: int = Query(50, ge=1, le=500),
+                         state: str | None = None) -> list[DeploymentSummary]:
     q = select(DeploymentRecord).order_by(DeploymentRecord.created_at.desc()).limit(limit)
     if state:
         q = q.where(DeploymentRecord.state == state)
-    return list(session.scalars(q))
+    return _summaries(svc, list(session.scalars(q)))
 
 
 @router.get("/api/projects/{project_id}/deployments", response_model=list[DeploymentSummary])
-def list_deployments(project_id: str, session: SessionDep) -> list[DeploymentRecord]:
+def list_deployments(project_id: str, session: SessionDep,
+                     svc: ServiceDep) -> list[DeploymentSummary]:
     get_project(session, project_id)
-    return list(session.scalars(
+    return _summaries(svc, list(session.scalars(
         select(DeploymentRecord).where(DeploymentRecord.project_id == project_id)
-        .order_by(DeploymentRecord.created_at.desc())))
+        .order_by(DeploymentRecord.created_at.desc()))))
 
 
 @router.post("/api/projects/{project_id}/deployments", response_model=DeploymentOut,
@@ -81,8 +101,25 @@ def create_deployment(project_id: str, body: DeploymentIn, session: SessionDep,
 
 
 @router.get("/api/deployments/{deployment_id}", response_model=DeploymentOut)
-def read_deployment(deployment_id: str, svc: ServiceDep) -> DeploymentRecord:
-    return svc.get(deployment_id)
+def read_deployment(deployment_id: str, svc: ServiceDep) -> DeploymentOut:
+    return _full(svc, svc.get(deployment_id))
+
+
+@router.delete("/api/deployments/{deployment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_deployment(deployment_id: str, svc: ServiceDep, actor: ActorDep,
+                      request: Request) -> None:
+    """Delete a plan that is not running (a staging step deletes its whole staging plan)."""
+    svc.delete(deployment_id, actor, request.app.state.deployment_jobs)
+
+
+@router.post("/api/deployments/{deployment_id}/checked", response_model=DeploymentOut)
+def mark_checked(deployment_id: str, body: CheckedIn, svc: ServiceDep,
+                 actor: ActorDep) -> DeploymentOut:
+    """Record that a person checked the device(s) of a plan that needs attention (D-088).
+    The plan's state stays; it no longer waits on the Home page."""
+    rec = svc.mark_checked(deployment_id, actor, body.note)
+    svc.s.flush()
+    return _full(svc, rec)
 
 
 @router.post("/api/deployments/{deployment_id}/approve", response_model=DeploymentOut)

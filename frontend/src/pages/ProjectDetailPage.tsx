@@ -1,11 +1,12 @@
-import { Anchor, Button, Card, Group, SimpleGrid, Stack, Table, Tabs, Text, Textarea, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Anchor, Button, Card, Group, SimpleGrid, Stack, Table, Tabs, Text, TextInput, Textarea, Title, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconPlus } from '@tabler/icons-react';
+import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 
-import { StateBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
+import { PlanStatus } from '../features/plans/AttentionBadge';
+import { usePlanDelete } from '../hooks/usePlanDelete';
 import { fmtDate, planKind } from '../services/format';
 import { AddDeviceModal } from '../features/devices/AddDeviceModal';
 import { CredentialsPanel } from '../features/devices/CredentialsPanel';
@@ -93,6 +94,7 @@ export function ProjectDetailPage() {
   const devices = useProjectDevices(projectId);
   const deployments = useDeployments(projectId);
   const [opened, { open, close }] = useDisclosure();
+  const [askToDelete, deleteDialog, canDelete] = usePlanDelete();
 
   if (!project.data) return <QueryState isLoading={project.isLoading} error={project.error} />;
   const p = project.data;
@@ -116,20 +118,23 @@ export function ProjectDetailPage() {
           <DeviceTable devices={devices.data ?? []} />
         </Tabs.Panel>
         <Tabs.Panel value="deployments">
+          {deleteDialog}
           <Card withBorder padding={0}>
             <Table.ScrollContainer minWidth={560}>
               <Table verticalSpacing="xs" horizontalSpacing="md">
-                <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead>
+                <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th><Table.Th w={40} /></Table.Tr></Table.Thead>
                 <Table.Tbody>
                   {(deployments.data ?? []).map((d) => (
                     <Table.Tr key={d.id}>
                       <Table.Td><Anchor component={Link} to={`/deployments/${d.id}`}>{fmtDate(d.created_at)}</Anchor></Table.Td>
                       <Table.Td>{planKind(d)}</Table.Td>
                       <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
-                      <Table.Td><StateBadge state={d.state} /></Table.Td>
+                      <Table.Td><PlanStatus d={d} /></Table.Td>
+                      <Table.Td>{canDelete(d) && <Tooltip label="Delete plan"><ActionIcon variant="subtle" color="red" aria-label={`Delete plan of ${fmtDate(d.created_at)}`}
+                      onClick={() => askToDelete(d)}><IconTrash size={16} /></ActionIcon></Tooltip>}</Table.Td>
                     </Table.Tr>
                   ))}
-                  {deployments.data?.length === 0 && <Table.Tr><Table.Td colSpan={5}><Text c="dimmed" ta="center" p="md">No plans yet. Make one on the Plans page.</Text></Table.Td></Table.Tr>}
+                  {deployments.data?.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text c="dimmed" ta="center" p="md">No plans yet. Make one on the Plans page.</Text></Table.Td></Table.Tr>}
                 </Table.Tbody>
               </Table>
             </Table.ScrollContainer>

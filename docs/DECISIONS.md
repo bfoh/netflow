@@ -954,3 +954,24 @@ password (the dialog lists them: store them on the Logins tab); firmware images 
 (`system.export`, `system.import`). Not yet: mapping a package's login to an existing login
 of another system (logins belong to their system).
 
+### D-088 Plans that need attention stop waiting once checked; deleting from lists (2026-11-24)
+Product owner, on the Home page: eight "Needs attention" 2930F loads from the bench sessions
+of 2026-11-23 (before the fifth run succeeded) were listed as waiting, forever: the state is
+terminal and UNDM had no way to record that the device was checked. Now a plan that needs
+attention keeps its outcome but no longer *waits* when (a) a later, real (not dry-run),
+successful plan covered all of its devices, which changed and verified them again, or (b)
+a person records a check with a note (`POST /api/deployments/{id}/checked`: a `checked`
+event "device checked by <who>: <note>" and audit `deployment.checked`). Plan lists and the
+plan page carry `needs_attention` and `attention_cleared` (`checked` or `superseded:<id>`).
+Home lists only plans still waiting, and its all-time "Did not finish" count became "Needs
+attention" (still waiting). No database change.
+
+Deleting (product owner: "make it possible to also delete on this page and other similar
+pages"): devices from the Devices list (row menu, or several at once with the word
+"delete" typed), systems from the Systems list (name typed), and plans from the Plans list,
+a system's Plans tab and the plan page (`DELETE /api/deployments/{id}`). A running plan
+cannot be deleted. Deleting a step of a staging plan deletes the whole staging plan, so the
+step order can never be bypassed. Every deletion is audited with what the plan was; the
+devices themselves are never touched. The device-kind badge is no longer cut short in
+narrow columns.
+

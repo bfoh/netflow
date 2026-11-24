@@ -1,9 +1,9 @@
-import { Accordion, Alert, Anchor, Badge, Button, Card, Code, CopyButton, Group, Modal, Stack, Stepper, Text, TextInput, Timeline, Title } from '@mantine/core';
+import { Accordion, Alert, Anchor, Badge, Button, Card, Code, CopyButton, Group, Modal, Stack, Stepper, Text, Textarea, TextInput, Timeline, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { IconAlertTriangle, IconCheck, IconFlask, IconX } from '@tabler/icons-react';
-import { Link, useParams } from 'react-router';
+import { IconAlertTriangle, IconCheck, IconFlask, IconTrash, IconX } from '@tabler/icons-react';
+import { Link, useNavigate, useParams } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { DiffView } from '../components/DiffView';
@@ -15,6 +15,7 @@ import type { Deployment } from '../types/api';
 import { applyModeLabel, stageLabel, stateLabel } from '../services/labels';
 import { DialogError } from '../components/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
+import { usePlanDelete } from '../hooks/usePlanDelete';
 
 const STEPS = ['Validate & preview', 'Approve', 'Preflight', 'Back up', 'Deploy', 'Verify', 'Complete'];
 const STEP_OF: Record<string, number> = {
@@ -31,7 +32,7 @@ const OUTCOME: Record<string, { color: string; title: string; text: string }> = 
   succeeded: { color: 'teal', title: 'Plan succeeded', text: 'Every changed device was verified against its intended configuration.' },
   failed: { color: 'red', title: 'Plan failed before any change', text: 'No device was changed. See events for the reason.' },
   rolled_back: { color: 'orange', title: 'Plan failed and the device was put back', text: 'Every changed device was automatically restored from its backup.' },
-  recovery_required: { color: 'red', title: 'Manual recovery required', text: 'At least one device may be in an intermediate state. Check each target below before making further changes.' },
+  recovery_required: { color: 'red', title: 'Needs attention', text: 'At least one device may be in an intermediate state. Check each target below before making further changes.' },
   cancelled: { color: 'gray', title: 'Plan cancelled', text: 'No device was changed.' },
 };
 
@@ -62,6 +63,8 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
   const active = running || RUNNING_STATES.has(dep.state);
   useEffect(() => onRunning(running), [running, onRunning]);
   const canCancel = ['draft', 'awaiting_approval', 'ready'].includes(dep.state);
+  const [askToDelete, deleteDialog, canDelete] = usePlanDelete();
+  const navigate = useNavigate();
   return (
     <Group>
       {dep.state === 'awaiting_approval' && <Button onClick={() => (firmware ? openWindow() : approve.mutate())} loading={approve.isPending}>Approve</Button>}
@@ -86,6 +89,9 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
         onConfirm: () => cancel.mutateAsync(),
       })}>Cancel plan</Button>}
       {confirmDialog}
+      {deleteDialog}
+      {!active && canDelete(dep) && <Button variant="subtle" color="red" leftSection={<IconTrash size={16} />}
+        onClick={() => askToDelete(dep, () => void navigate('/deployments'))}>Delete</Button>}
       {active && <Button color="red" variant="light" onClick={openStop} loading={stop.isPending}
         disabled={stop.isSuccess}>{stop.isSuccess ? 'Stopping…' : 'Stop'}</Button>}
       <Modal opened={stopOpen} onClose={closeStop} title="Stop this plan?">
@@ -206,6 +212,48 @@ function AfterConfig({ afterId, sentId }: { afterId: string; sentId: string | nu
   );
 }
 
+/** A plan that needs attention: who checked it, or the later plan that did; else "Mark as checked…" (D-088). */
+function AttentionPanel({ d }: { d: Deployment }) {
+  const [opened, { open, close }] = useDisclosure();
+  const [note, setNote] = useState('');
+  const mark = useAction(() => api.markChecked(d.id, note), 'Marked as checked', { errorInDialog: true });
+  const cleared = d.attention_cleared;
+  if (cleared === 'checked') {
+    const ev = [...d.events].reverse().find((e) => e.status === 'checked');
+    return <Alert color="gray" mb="md" icon={<IconCheck size={18} />} title="Checked">{ev?.message ?? 'A person checked the device.'}</Alert>;
+  }
+  if (cleared?.startsWith('superseded:')) {
+    return (
+      <Alert color="gray" mb="md" icon={<IconCheck size={18} />} title="A later plan succeeded on this device">
+        <Anchor component={Link} to={`/deployments/${cleared.slice('superseded:'.length)}`} size="sm">That plan</Anchor> changed
+        and verified the same device(s) afterwards, so this one no longer waits for a check.
+      </Alert>
+    );
+  }
+  return (
+    <Card withBorder mb="md">
+      <Group justify="space-between" wrap="wrap">
+        <Text size="sm">When you have checked the device (for example on its console) and it is as it should be, record it:
+          the plan then no longer waits on the Home page. Its outcome stays as it was.</Text>
+        <Button variant="light" onClick={() => { setNote(''); mark.reset(); open(); }}>Mark as checked…</Button>
+      </Group>
+      <Modal opened={opened} onClose={close} title="Mark as checked">
+        <Stack>
+          <Textarea label="What did you check?" description="Kept in the plan's events and the audit log."
+            placeholder="e.g. console: show running-config matches the file; device saved" autosize minRows={2}
+            maxLength={500} value={note} onChange={(e) => setNote(e.currentTarget.value)} data-autofocus />
+          <DialogError error={mark.error} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={close}>Back</Button>
+            <Button disabled={note.trim().length < 5} loading={mark.isPending}
+              onClick={() => mark.mutate(undefined, { onSuccess: close })}>Mark as checked</Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </Card>
+  );
+}
+
 export function DeploymentDetailPage() {
   const { deploymentId = '' } = useParams();
   const [running, setRunning] = useState(false);
@@ -251,6 +299,7 @@ export function DeploymentDetailPage() {
       )}
       {working && <Progress d={d} names={byId} />}
       {!working && outcome && <Alert color={outcome.color} title={outcome.title} mb="md" icon={d.state === 'succeeded' ? <IconCheck size={18} /> : <IconAlertTriangle size={18} />}>{outcome.text}</Alert>}
+      {!working && d.state === 'recovery_required' && <AttentionPanel d={d} />}
       <Card withBorder mb="md">
         <Stepper active={stepOf[d.state] ?? 0} size="xs" allowNextStepsSelect={false}
           color={['failed', 'recovery_required', 'rolled_back'].includes(d.state) ? 'red' : undefined}>
