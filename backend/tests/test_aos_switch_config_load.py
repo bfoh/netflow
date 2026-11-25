@@ -339,7 +339,7 @@ def test_api_without_the_login_after_loading_the_failure_says_why(api):
     switch.password_after_load = "Example-Only-Approved-1"
     out = _load(client, pid, did, sample())
     assert out["state"] == "recovery_required"
-    assert "Authentication failed" in out["targets"][0]["message"]
+    assert "refused the login" in out["targets"][0]["message"]
 
 
 def test_api_unknown_login_after_loading_is_refused_at_planning(api):

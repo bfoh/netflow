@@ -159,7 +159,7 @@ def test_base_file_with_another_password_ends_with_a_clear_message(bench):
     base = imported(b, "base-example.conf", BACKUP)
     out = run(b, plan(b, base, "replace").json())
     assert out["state"] == "recovery_required", messages(out)
-    assert "Authentication failed" in out["targets"][0]["message"]
+    assert "refused the login" in out["targets"][0]["message"]
     assert b.fg.revisions == []
 
 

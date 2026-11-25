@@ -347,8 +347,12 @@ class SshCliDriver(DeviceDriver):
                 op, f"Logged in, but {e}; it showed: “{shown}”. {self.prompt_hint}",
                 {"device_output": shown, "login_accepted": True})
         except NetmikoAuthenticationException:
-            return OperationResult.failed(op, "Authentication failed (check the credential)",
-                                          {"login_refused": True})
+            user = self._credentials.username if self._credentials else '?'
+            return OperationResult.failed(
+                op, f"The device refused the login (user '{user}'). If a file that sets "
+                    "another password was loaded on it, choose that login as the device's "
+                    "login (Stage a system, step 1, or the device page), then try again.",
+                {"login_refused": True})
         except NetmikoTimeoutException as e:
             where = f"{self.target.management_address}:{self.target.port or 22}"
             detail = " ".join(redact_text(str(e)).split())

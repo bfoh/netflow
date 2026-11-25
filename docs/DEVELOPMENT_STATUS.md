@@ -71,7 +71,7 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-25, v68)
+## Test results (2026-11-25, v69)
 | Suite | Result |
 |---|---|
 | Backend pytest | 474 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |

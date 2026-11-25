@@ -50,7 +50,7 @@ def test_connect_passes_parameters_without_leaking_password(scenario):
 
 
 @pytest.mark.parametrize("error,needle", [
-    (NetmikoAuthenticationException("bad"), "Authentication failed"),
+    (NetmikoAuthenticationException("bad"), "The device refused the login (user 'netops')"),
     (NetmikoTimeoutException("slow"), "No answer from 192.0.2.10 on port 22 (SSH)"),
     (OSError("No route to host"), "No route to host"),
 ])
