@@ -22,7 +22,8 @@ _MAC = re.compile(
 )
 # Separators use [ \t] only: a label with an empty value must never swallow the next line.
 _SERIAL_LABEL = re.compile(
-    r"((?:Chassis )?Serial[- ]?(?:Number|Nbr|No\.?)|Processor board ID)([ \t]*:?[ \t]*)(\S+)",
+    r"((?:Chassis )?Serial[- ]?(?:Number|Nbr|No\.?)|Processor board ID)([ \t]*:?[ \t]*)"
+    r"(\S*[A-Za-z0-9]\S*)",  # a value has a letter or digit: never just a bracket
     re.I)
 _NAME_LABEL = re.compile(
     r"((?:System )?(?:Name|Contact|Location)|Hostname)([ \t]*:[ \t]*)(\S[^\n]*?)"

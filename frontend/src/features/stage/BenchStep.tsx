@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../../components/Badges';
+import { Hint } from '../../components/Hint';
 import { SafetyHint } from '../../components/SafetyHint';
-import { useAction } from '../../hooks/queries';
+import { useAction, usePolicy } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { Device, OperationResult } from '../../types/api';
 import type { Role } from './roles';
@@ -14,6 +15,7 @@ const CONSOLE_DONE = new Set(['bootstrapped', 'managed']);
 
 /** Step 3: cabling, safety switches, and whether each device answers. */
 export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }) {
+  const policy = usePolicy();
   const [results, setResults] = useState<Record<string, OperationResult>>({});
   const test = useAction(async (d: Device) => {
     const r = await api.runOperation(d.id, 'check_reachability');
@@ -33,6 +35,10 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
         </List>
       </Card>
       {real && <><SafetyHint real /><SafetyHint real firmware /></>}
+      {real && policy.data?.firmware_require_separate_approver !== false && (
+        <Hint>Staging alone? Firmware plans need a second person to approve them, unless you turn that off in{' '}
+          <Anchor component={Link} to="/settings" size="xs">Settings → Safety</Anchor>.</Hint>
+      )}
       <Card withBorder padding={0}>
         <Table.ScrollContainer minWidth={640}>
           <Table verticalSpacing="sm" horizontalSpacing="md">

@@ -97,7 +97,7 @@ function DeviceRun({ projectId, role, device, choice, latest }: {
           {consoleTodo && (
             <Notice kind="caution" compact action={<Button size="xs" variant="light" component={Link} to={`/provisioning?device=${device.id}`}
               leftSection={<IconTerminal2 size={14} />}>Open console setup</Button>}>
-              Do its console setup first, so it answers at {device.management_address}.
+              Do its console setup first (new switch, or a preconfigured one: tick “erase first” there), so it answers at {device.management_address}.
             </Notice>
           )}
           {missing.length > 0 && <Text size="xs" c="orange"><IconAlertTriangle size={12} /> Still needed: {missing.join(', ')} (step 2).</Text>}

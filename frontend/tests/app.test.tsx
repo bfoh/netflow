@@ -583,3 +583,24 @@ describe('deleting from lists', () => {
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/deployments/x1' && c.init?.method === 'DELETE')).toBe(true));
   });
 });
+
+describe('bench log (D-090)', () => {
+  it('shows the masked log for reading, with copy and download', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.includes('/bench-log')) return new Response('UNDM bench log (masked)\nsystem: <system-1>\n', { status: 200 });
+      const body = url.endsWith('/projects/p1')
+        ? { id: 'p1', name: 'Lab A', description: '', site: '', purpose: '', created_at: '', updated_at: '', certificate_subject: null } : [];
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+    renderAt('/projects/p1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Bench log…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bench log' });
+    expect(await within(dialog).findByText(/system: <system-1>/)).toBeInTheDocument();
+    expect(within(dialog).getByText('Read it through before sharing')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Download .txt' })).toBeEnabled();
+    expect(calls.some((u) => u === '/api/projects/p1/bench-log?hours=48')).toBe(true);
+  });
+});

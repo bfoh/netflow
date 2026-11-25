@@ -38,3 +38,9 @@ def test_known_serial_and_label_share_one_placeholder():
     b = sanitize("  ROM Version : WC.16.01.0010   Serial Number : SG00FAKE01  \n",
                  [("serial", "SG00FAKE01")], m)
     assert "<serial-1>" in a and "<serial-1>" in b and "<serial-2>" not in b
+
+
+def test_a_label_without_a_value_is_left_alone():
+    assert sanitize("device reachable again (same serial number)") == (
+        "device reachable again (same serial number)")
+

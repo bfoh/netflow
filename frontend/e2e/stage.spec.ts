@@ -35,4 +35,11 @@ test('stage a system with the wizard (simulated Black Box)', async ({ page }) =>
   await page.getByRole('button', { name: 'Next: Report' }).click();
   await expect(page.getByRole('heading', { name: `Staging report · ${system}` })).toBeVisible();
   await expect(page.locator('#staging-report').getByText('Succeeded')).toBeVisible();
+
+  // The masked bench log lists the run and hides the system's name (D-090).
+  await page.getByRole('button', { name: 'Bench log…' }).click();
+  const log = page.getByRole('dialog', { name: 'Bench log' });
+  await expect(log.getByText(/UNDM bench log \(masked\)/)).toBeVisible();
+  await expect(log.getByText(/→ succeeded/)).toBeVisible();
+  await expect(log.getByText(new RegExp(system))).toHaveCount(0);
 });

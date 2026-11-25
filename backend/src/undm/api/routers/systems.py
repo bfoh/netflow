@@ -1,13 +1,16 @@
 """Export and import of a whole system as one `.undm` file (D-087)."""
 
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Form, Query, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, Query, Request, Response, UploadFile, status
+from fastapi.responses import PlainTextResponse
 
 from undm.api.deps import ActorDep, RegistryDep, SessionDep, SettingsDep
 from undm.api.routers.projects import get_project
 from undm.api.schemas import ProjectOut, SystemImportOut
+from undm.services import bench_log as bench
 from undm.services import system_package
 from undm.services.firmware import FirmwareRepository
 
@@ -38,3 +41,13 @@ def import_system(file: Annotated[UploadFile, File(description="A .undm system p
     project, summary = system_package.import_system(session, file.file, actor, registry, repo,
                                                     name=name)
     return {"project": ProjectOut.model_validate(project), "summary": summary}
+
+
+@router.get("/api/projects/{project_id}/bench-log", response_class=PlainTextResponse)
+def bench_log(project_id: str, session: SessionDep, registry: RegistryDep, request: Request,
+              actor: ActorDep, hours: Annotated[int, Query(ge=0, le=24 * 365)] = 48) -> str:
+    """Everything recorded about the system's devices in the last `hours` (0: all), masked,
+    as text to send instead of screenshots (D-090)."""
+    project = get_project(session, project_id)
+    since = datetime.now(UTC) - timedelta(hours=hours) if hours else None
+    return bench.bench_log(session, project, registry, request.app.state.settings, actor, since)

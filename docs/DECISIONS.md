@@ -995,3 +995,35 @@ Settings → Safety; nothing for simulated devices. The plan page shows one outc
 plan that needs attention carries "Mark as checked…" as its action); the Run dialog names the
 real devices that will change.
 
+### D-090 Bench log: one masked text per system instead of screenshots (2026-11-25)
+For the first full bench run through the wizard (a new system: FortiGate 101F and LIG1014A
+factory default, 2930F preconfigured), results come back as one text.
+`GET /api/projects/{id}/bench-log?hours=48` (0 = everything; `services/bench_log.py`) lists:
+- the UNDM version and the safety switches in force
+- each device as last read: model, driver and maturity, status, the facts read
+- each console setup: outcome, verified, saved, message, findings
+- each plan, oldest first: kind, mode, staging step, state, approver, targets with
+  versions and messages, and every event with its time, stage and status
+
+It masks with the diagnostics sanitizer (IPs, MACs, serials, labelled names) and with
+values that belong to the system:
+- its name and site
+- device names
+- hostnames read from the devices or written in the plans' files
+- serials, MACs and login names
+- names typed for an erase
+- people's names
+- double-quoted names in event text (FortiOS objects)
+
+A factory hostname equal to the model is kept, so the log still names the models. The
+sanitizer no longer takes a bracket for a serial number after "serial number". The dialog
+("Bench log…" on the system page and the wizard's Report step) shows the text before
+Copy/Download, with "read it through before sharing". The export is audited
+(`system.bench_log`, no content). Wizard texts:
+- each role says which login it starts with (Black Box new unit: admin with no password,
+  the approved login after loading);
+- a 2930F's console setup hint mentions "erase first";
+- the bench check reminds a lone stager to turn off the second approver for firmware.
+
+Bench checklist: `vendor-support/staging-wizard-bench.md`.
+

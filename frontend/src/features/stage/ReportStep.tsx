@@ -9,6 +9,7 @@ import { downloadText, fmtDate } from '../../services/format';
 import type { Device, Project, StagingIndex, StagingPlan } from '../../types/api';
 import type { Role } from './roles';
 import { EmptyState } from '../../components/EmptyState';
+import { BenchLogButton } from '../systems/BenchLogButton';
 
 const minutes = (a: string, b: string) => {
   const ms = new Date(b).getTime() - new Date(a).getTime();
@@ -43,6 +44,7 @@ export function ReportStep({ project, roles, stagings }: {
       <Group justify="flex-end" className="no-print">
         <Button variant="default" leftSection={<IconPrinter size={16} />} onClick={() => window.print()}>Print</Button>
         <Button variant="default" leftSection={<IconDownload size={16} />} onClick={html}>Save as HTML</Button>
+        <BenchLogButton projectId={project.id} />
       </Group>
       {roles.length === 0 && <EmptyState>No devices yet: add them in step 1.</EmptyState>}
       <div id="staging-report">

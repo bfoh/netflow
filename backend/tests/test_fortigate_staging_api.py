@@ -230,3 +230,49 @@ def test_device_staging_is_checked_before_anything_is_made(bench):
                      json={"device_id": b.did, "steps": steps})
         assert r.status_code == 409 and words in r.json()["error"], (words, r.json())
     assert len(b.c.get("/api/deployments").json()) == before  # no plan was made
+
+
+# --- bench log (D-090) ------------------------------------------------------------------------
+
+def test_bench_log_lists_every_step_and_masks_what_identifies_the_system(bench):
+    b = bench
+    img = approved_image(b)
+    base = imported(b, "base-example.conf", BACKUP)
+    site = imported(b, "site-example.cfg", SCRIPT)
+    sid = b.c.post(f"/api/projects/{b.pid}/device-staging", json={"device_id": b.did, "steps": [
+        {"kind": "firmware", "image_id": img["id"]},
+        {"kind": "configuration", "version_id": base["id"]},
+        {"kind": "configuration", "version_id": site["id"], "secrets": {SLOT: b.psk}}]}
+    ).json()["staging_id"]
+    b.c.post(f"/api/staging-plans/{sid}/approve", json=window())
+    steps = b.c.post(f"/api/staging-plans/{sid}/execute?background=false").json()["steps"]
+    assert [s["state"] for s in steps] == ["succeeded"] * 3
+
+    r = b.c.get(f"/api/projects/{b.pid}/bench-log", headers={"X-UNDM-Actor": "Example Person"})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
+    log = r.text
+    assert log.startswith("UNDM bench log (masked)")
+    assert "real-device changes ON" in log and "second approver for firmware off" in log
+    assert log.count("→ succeeded") == 3 and "step 3" in log
+    assert "firmware" in log and "configuration (replace" in log and "configuration (merge" in log
+    assert "Masking is automatic and best effort" in log
+    serial = b.c.get(f"/api/devices/{b.did}").json()["observed_facts"]["serial_number"]
+    for secret in ("Staging", "lab-fw1", "lab-fw-base", "lab-fw-site", "example-tunnel",
+                   "127.0.0.1", "fw-admin", "cen-psk", serial, PSK, ADMIN_PW,
+                   "base-example.conf", "site-example.cfg"):
+        assert secret not in log, secret
+    assert "<device-1>" in log and "<hostname-" in log
+    assert "Fortinet FortiGate-101F" in log  # the model is not an identifier: kept
+    assert "number<serial" not in log
+    audit = b.c.get("/api/audit").json()
+    assert any(a["action"] == "system.bench_log" for a in audit)
+
+
+def test_bench_log_window(bench):
+    b = bench
+    assert "0 plans" in b.c.get(f"/api/projects/{b.pid}/bench-log?hours=1").text
+    imported(b, "site-example.cfg", SCRIPT)
+    b.c.post(f"/api/projects/{b.pid}/deployments", json={"device_ids": [b.did], "dry_run": True,
+                                                           "apply_mode": "merge"})
+    assert "1 plans" in b.c.get(f"/api/projects/{b.pid}/bench-log?hours=0").text
+    assert b.c.get(f"/api/projects/{b.pid}/bench-log?hours=-1").status_code == 422

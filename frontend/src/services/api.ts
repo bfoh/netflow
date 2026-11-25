@@ -87,6 +87,14 @@ export interface SystemImport {
 }
 
 export const api = {
+  benchLog: async (pid: string, hours: number) => {
+    const res = await fetch(`/api/projects/${pid}/bench-log?hours=${hours}`, { headers: { 'X-UNDM-Actor': getActor() } });
+    if (!res.ok) {
+      const data: unknown = await res.json().catch(() => null);
+      throw new ApiError(res.status, describe(data, res.status));
+    }
+    return res.text();
+  },
   exportSystem: (pid: string, includeFirmware: boolean) =>
     download(`/projects/${pid}/export?include_firmware=${includeFirmware}`, 'system.undm'),
   importSystem: (file: File, name?: string) => {

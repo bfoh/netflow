@@ -48,6 +48,14 @@ function ChooseSystem() {
   );
 }
 
+/** Which login a device of each role uses at the start of its plan. */
+const LOGIN_HINT: Record<RoleKey, string> = {
+  firewall: 'The approved login. On a new unit, the first login step sets it.',
+  blackbox: 'New unit: admin with no password. In step 2 choose the approved login as "Login after loading".',
+  aruba_a: 'The approved login. Preconfigured switch: the console setup erases it first with its current login (add that login too).',
+  aruba_b: 'The approved login. Preconfigured switch: the console setup erases it first with its current login (add that login too).',
+};
+
 /** One role: its device, or a button that adds it with the bench defaults. */
 function RoleCard({ role, device, projectId, systemName, simulated }: {
   role: Role; device?: Device; projectId: string; systemName: string; simulated: boolean;
@@ -75,7 +83,7 @@ function RoleCard({ role, device, projectId, systemName, simulated }: {
           <Group gap="xs"><Anchor component={Link} to={`/devices/${device.id}`} fw={600} size="sm">{device.name}</Anchor>
             <Text size="sm" ff="monospace" c="dimmed">{device.management_address}</Text></Group>
           <Select size="xs" label="Its login" clearable w="100%" maw={320}
-            description={role.key === 'blackbox' ? 'Factory: user admin, no password.' : 'The approved login (the setup steps set it on a new unit).'}
+            description={LOGIN_HINT[role.key]}
             placeholder={refs.data?.length ? 'Choose a login' : 'Add logins on the system page first'}
             data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
             value={device.credential_ref_id} onChange={(v) => setLogin.mutate(v)} />
