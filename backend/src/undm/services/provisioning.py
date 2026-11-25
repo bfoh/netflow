@@ -222,6 +222,11 @@ def run_console_bootstrap(
                     f"{params.address.network} (for example "
                     f"{params.address.network.network_address + 50}), then press Test (Stage a "
                     "system, step 3) or Test connection (device page).")
+    known = [("hostname", device.name), ("ip", address)]
+    shown = sanitize(result.transcript, known)
+    # A failed setup keeps the console's last words for the bench log (passwords are never in
+    # the transcript: UNDM writes "(password sent)" instead).
+    tail = shown[-1500:] if result.status.value == "failed" else None
     audit.record(session, actor, "provisioning.console_bootstrap", "device", device.id,
                  result.status.value, {
                      "serial_port": serial_port, "profile": stored_profile,
@@ -234,14 +239,13 @@ def run_console_bootstrap(
                      "erase_existing": erase_existing, "erased_hostname": result.erased,
                      "current_login": current_ref.name if current_ref else None,
                      "credential": device.credential_ref.name if device.credential_ref
-                     else None})
-    known = [("hostname", device.name), ("ip", address)]
+                     else None, **({"transcript_tail": tail} if tail else {})})
     return {
         "status": result.status.value, "message": result.message,
         "commands_sent": result.commands_sent, "findings": result.findings,
         "verified": result.verified, "saved": result.saved, "transcript": result.transcript,
         "credentials_set": result.credentials_set, "erased": result.erased,
         "no_password": result.no_password, "password_set": result.password_set,
-        "sanitized_transcript": sanitize(result.transcript, known),
+        "sanitized_transcript": shown,
         "network_reachable": reachable, "network_hint": hint,
     }

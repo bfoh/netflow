@@ -268,5 +268,13 @@ def test_preconfigured_switch_is_erased_first_with_its_current_login(monkeypatch
             shown = repr(out) + repr(audit)
             assert "Example-Only-Preconfigured" not in shown
             assert "Example-Only-Approved-1" not in shown
+            # A failed setup keeps the console's last words for the bench log (2026-11-25: an
+            # erase ended "Could not reach a command prompt" with nothing to show why).
+            failed = [x for x in audit if x["action"] == "provisioning.console_bootstrap"
+                      and "transcript_tail" in x["details"]]
+            assert len(failed) == 1 and failed[0]["details"]["transcript_tail"].strip()
+            log = client.get(f"/api/projects/{pid}/bench-log").text
+            assert "console (last lines):" in log and "lab-bhdmz-sw01" not in log
+            assert "Example-Only" not in log
     finally:
         keyring.set_keyring(previous)

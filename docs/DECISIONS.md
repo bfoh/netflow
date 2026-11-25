@@ -1058,3 +1058,27 @@ login) and wrong for a factory Black Box. Roles now say when a real device needs
 missing until chosen, so "Make the plan" stays disabled, and step 2 shows the field as
 required with the reason. Simulated devices and the 2930F are unchanged.
 
+### D-093 First full wizard run: results, and two bench log fixes (2026-11-25)
+Results (bench log of the run):
+- FortiGate 101F, factory default on v7.2.8: first login (Q-41 answered: "You are forced to
+  change your password. Please input a new password. New Password:"), firmware 7.6.5 (image
+  fetched, restart, back in about 2.5 minutes), base restore (the forced password change after
+  the restore answered as in D-065), site script (1784 statements accepted, revision saved):
+  one staging plan, every step succeeded.
+- 2930F A (preconfigured): the first console setup erased it, then reached no command prompt
+  on the console; the second was refused because the typed hostname no longer matched (the
+  switch was already erased, nothing done); the third set it up. Already on WC.16.10.0025
+  (primary and secondary), so its firmware step was skipped; its file loaded and verified.
+- 2930F B (new, on WC.16.11.0001): approved downgrade to WC.16.10.0025 in both slots, then its
+  file; it came back at the shared address with A unplugged, as D-091 asks.
+- Black Box: firmware v00.01.00 → v00.01.01 succeeded; the file step ended Needs attention for
+  want of a login after loading (D-092).
+
+Bench log fixes:
+- A FortiGate revision is named after its file (without the extension), and that name was
+  shown in clear. The log now masks file names with and without their extension, and any name
+  in "revision '…'".
+- A failed console setup now keeps the last 1500 characters of its masked console transcript
+  in its audit entry (passwords are never in the transcript), and the bench log prints them,
+  so the next "Could not reach a command prompt" shows the switch's own words.
+

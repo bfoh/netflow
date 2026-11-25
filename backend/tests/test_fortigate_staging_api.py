@@ -259,8 +259,10 @@ def test_bench_log_lists_every_step_and_masks_what_identifies_the_system(bench):
     serial = b.c.get(f"/api/devices/{b.did}").json()["observed_facts"]["serial_number"]
     for secret in ("Staging", "lab-fw1", "lab-fw-base", "lab-fw-site", "example-tunnel",
                    "127.0.0.1", "fw-admin", "cen-psk", serial, PSK, ADMIN_PW,
-                   "base-example.conf", "site-example.cfg"):
+                   "base-example.conf", "site-example.cfg", "base-example", "site-example"):
         assert secret not in log, secret
+    # Revisions are named after the files (bench 2026-11-25: one showed the site code).
+    assert "revision '<file-" in log
     assert "<device-1>" in log and "<hostname-" in log
     assert "Fortinet FortiGate-101F" in log  # the model is not an identifier: kept
     assert "number<serial" not in log

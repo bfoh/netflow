@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
+from pathlib import PurePath
 from typing import Any
 
 from sqlalchemy import select
@@ -29,6 +30,8 @@ from undm.services.safety_settings import effective
 
 _FILE_HOSTNAME = re.compile(r'^\s*(?:set\s+)?hostname\s+"?([^"\s]+)"?', re.M | re.I)
 _QUOTED = re.compile(r'"([^"\n]{3,80})"')
+# Revisions are named after the file (``services/deployments.py``): "revision 'name' saved".
+_REVISION = re.compile(r"(revision ')([^'\n]{1,80})(')")
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -69,7 +72,10 @@ def bench_log(session: Session, project: Project, registry: DriverRegistry, sett
     version_ids = {t.config_version_id for p in plans for t in p.targets if t.config_version_id}
     for v in session.scalars(select(ConfigVersion).where(ConfigVersion.id.in_(version_ids))):
         known += [("hostname", m.group(1)) for m in _FILE_HOSTNAME.finditer(v.text)]
-        known.append(("file", v.reference))
+        # The file name, and the name without its extension that revisions carry (bench
+        # 2026-11-25: a revision named after the site file showed the site code in clear).
+        stem = PurePath(v.reference).stem if v.reference else ""
+        known += [("file", v.reference), ("file", stem), ("file", stem[:60])]
     people = {p.created_by for p in plans} | {p.approved_by or "" for p in plans}
     people |= {a.actor for a in setups} | {actor}
     known += [("person", name) for name in people if name and name != "local-user"]
@@ -84,6 +90,8 @@ def bench_log(session: Session, project: Project, registry: DriverRegistry, sett
 
     def s(text: object) -> str:
         out = sanitize(str(text), known, mapper)
+        out = _REVISION.sub(lambda m: m.group(0) if m.group(2).startswith("<")
+                            else f"{m.group(1)}{mapper('file', m.group(2))}{m.group(3)}", out)
         # FortiOS object names in quotes (tunnels, VIPs, VDOMs); placeholders stay as they are.
         return _QUOTED.sub(lambda m: m.group(0) if m.group(1).startswith("<")
                            else f'"{mapper("name", m.group(1))}"', out)
@@ -128,6 +136,9 @@ def bench_log(session: Session, project: Project, registry: DriverRegistry, sett
                 lines.append(f"  {s(det['message'])}")
             for f in det.get("findings") or []:
                 lines.append(f"  finding: {s(f)}")
+            if det.get("transcript_tail"):  # a failed setup keeps the console's last words
+                lines.append("  console (last lines):")
+                lines += [f"    {s(ln)}" for ln in str(det["transcript_tail"]).splitlines()]
     lines += ["", "== plans =="]
     for p in plans:
         flags = []
