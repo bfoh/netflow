@@ -41,11 +41,29 @@ printed, with addresses, serials, names and logins masked (D-090).
    - **Black Box**: v00.01.01, the team file, and as login after loading **approved**.
    - **2930F**: WC.16.10.0025 (and "also the backup slot" if wanted), the team file, and as
      login after loading **approved**.
-8. **Wizard step 3**:
-   - cable as shown;
-   - give the PC 192.168.1.50/24 and 192.0.2.50/24;
-   - close PuTTY;
-   - allow incoming UDP 69 on the PC.
+8. **Wizard step 3** (Bench check): cable as in the table below; give the PC
+   192.168.1.50/24 and 192.0.2.50/24; close PuTTY; allow incoming UDP 69 on the PC.
+
+## Cabling (all four at once)
+One small switch, connected to nothing else, one cable per device (two would make a loop):
+
+| Device | Cable to the small switch | Address now | After its file |
+|---|---|---|---|
+| PC | wired port | 192.168.1.50/24 and 192.0.2.50/24 on the same adapter | same |
+| FortiGate 101F | MGMT port | 192.168.1.99 | same (the base file keeps it) |
+| Black Box LIG1014A | port 1/3 (the file keeps management on that port only) | 192.0.2.1 | same |
+| 2930F A | port 2, plugged in after its console setup | 192.168.1.1 | same |
+| 2930F B | port 3, plugged in after its console setup | 192.168.1.2 (temporary) | **192.168.1.1** |
+
+The USB console cable goes from the PC to a 2930F's console port for its console setup; one
+cable is enough, moved from A to B. Plug a 2930F's port into the small switch only after its
+console setup: a preconfigured unit may still use an address another device has.
+
+**Both 2930F end at 192.168.1.1.** Once B's file loads, A and B would share the address. So:
+A's plan first; when A shows **Staged**, unplug A from the small switch; then B's plan. If A
+still answers at 192.168.1.1, B's file step stops before anything is sent ("Another device
+already answers…", nothing changed, D-091): unplug A and make a new plan for B (its firmware,
+already done, is skipped).
 
 ## Order of the run (wizard step 4)
 
@@ -58,7 +76,9 @@ Expected:
   approved one, the name is as in the file, and **192 of 192** lines are shown. This answers
   Q-44, which asked whether the two `ip http secure-…` lines survive the upgrade.
 
-### 2. 2930F A, then 2930F B
+### 2. 2930F A, then unplug A, then 2930F B
+Run A's plan to the end. When A shows **Staged**, unplug A from the small switch, then run B's
+plan (its file moves B to A's address). The Black Box and the FortiGate can run alongside.
 - **Console setup** (link on its card). For the preconfigured unit:
   - tick **erase first**;
   - choose its current login;

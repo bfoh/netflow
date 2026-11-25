@@ -8,6 +8,7 @@ the file from UNDM's TFTP server. Proves the procedure's decisions, not hardware
 """
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 from fake_aos_switch import FakeArubaSwitch
@@ -15,6 +16,7 @@ from fake_netmiko import Scenario, factory_for
 
 from undm.drivers.aruba.config_files import address_after_loading, inspect_aos_switch_file
 from undm.drivers.base import ApplyMode, Credentials, DeviceTarget, ResultStatus
+from undm.drivers.ssh import base as ssh_base
 from undm.drivers.ssh.base import SshCliDriver
 from undm.drivers.ssh.platforms import ArubaOSSwitchSsh
 from undm.transfer.hub import TransferHub
@@ -105,6 +107,21 @@ def test_load_message_says_where_to_connect_after_the_restart():
     assert where_after_loading(sample(), "192.168.1.1") == \
         "192.168.1.1 (VLAN 222, untagged on port 2)"
     assert where_after_loading(sample(), "203.0.113.5") is None
+
+
+@pytest.fixture(autouse=True)
+def answering(monkeypatch):
+    """Addresses where another device answers (none unless a test adds one), so the
+    address-taken check never depends on what listens on the test machine."""
+    hosts: set[str] = set()
+    probed: list[str] = []
+
+    def probe(host, port, timeout=3.0):
+        probed.append(host)
+        return host in hosts
+
+    monkeypatch.setattr(ssh_base, "tcp_port_open", probe)
+    return SimpleNamespace(hosts=hosts, probed=probed)
 
 
 @dataclass
@@ -456,3 +473,40 @@ def test_api_load_with_a_silent_restart_succeeds(api):
     assert out["state"] == "succeeded", messages
     assert any("the session went quiet" in m for m in messages)
     assert any(m.startswith("back after loading: hostname lab-oobm-sw01") for m in messages)
+
+
+# -- the file's address is already taken (D-091) -----------------------------------------
+
+def test_a_file_moving_the_switch_to_a_taken_address_is_stopped_before_sending(rig, answering):
+    """Both 2930F roles end at the same OOBM address: the second load must not start while
+    the first switch still answers there."""
+    answering.hosts.add("127.0.0.2")
+    r = rig.driver.check_before_apply(sample(oobm_address="127.0.0.2", mask="255.0.0.0"),
+                                      ApplyMode.REPLACE)
+    assert r is not None and r.status is ResultStatus.FAILED
+    assert "Another device already answers at 127.0.0.2" in r.message
+    assert "Unplug it" in r.message and "Nothing was changed" in r.message
+
+
+def test_a_free_new_address_or_the_same_address_passes_the_check(rig, answering):
+    text = sample(oobm_address="127.0.0.2", mask="255.0.0.0")
+    assert rig.driver.check_before_apply(text, ApplyMode.REPLACE) is None
+    assert answering.probed == ["127.0.0.2"]
+    same = sample(oobm_address="127.0.0.1", mask="255.0.0.0")
+    assert rig.driver.check_before_apply(same, ApplyMode.REPLACE) is None
+    assert rig.driver.check_before_apply(sample(), ApplyMode.REPLACE) is None  # other subnet
+    assert rig.driver.check_before_apply(text, ApplyMode.MERGE) is None
+    assert answering.probed == ["127.0.0.2"]  # only a move to a new address is probed
+
+
+def test_api_taken_address_fails_the_plan_with_nothing_changed(api, answering):
+    client, pid, did, switch, hub = api
+    answering.hosts.add("127.0.0.2")
+    out = _load(client, pid, did, sample(oobm_address="127.0.0.2", mask="255.0.0.0"))
+    events = " | ".join(e["message"] for e in out["events"])
+    assert out["state"] == "failed", events
+    assert "Another device already answers at 127.0.0.2" in out["targets"][0]["message"]
+    assert "no device was changed" in events
+    assert not any(c.startswith(("copy", "crypto", "write")) for c in switch.commands)
+    assert client.get(f"/api/devices/{did}").json()["management_address"] == "127.0.0.1"
+

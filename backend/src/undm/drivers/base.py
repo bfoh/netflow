@@ -257,6 +257,12 @@ class DeviceDriver:
         does not restart). Shown as an event before the apply starts."""
         return None
 
+    def check_before_apply(self, config: str, mode: ApplyMode) -> OperationResult | None:
+        """A check before anything is sent that changes nothing on any device (None = no
+        check). A failed result ends the device's preflight: the plan fails with no device
+        changed. Example: the address a file gives the device is already in use."""
+        return None
+
     def prepare_before_apply(self, config: str, mode: ApplyMode,
                              settings: Mapping[str, Any]) -> OperationResult | None:
         """Steps a file needs on the device before it is applied (None = nothing to do).

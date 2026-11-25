@@ -492,6 +492,34 @@ describe('Stage a system', () => {
     window.localStorage.removeItem('undm.stage.p1');
   });
 
+  const switches = () => [
+    device({ id: 'sa', name: 'lab-a-sw-a', manufacturer: 'Aruba', model: '2930F', driver_id: 'mock.aruba.aos_switch',
+      management_address: '192.168.1.1', provisioning_status: 'bootstrapped' }),
+    device({ id: 'sb', name: 'lab-a-sw-b', manufacturer: 'Aruba', model: '2930F', driver_id: 'mock.aruba.aos_switch',
+      management_address: '192.168.1.2', provisioning_status: 'bootstrapped' }),
+  ];
+  const project = { id: 'p1', name: 'Lab A', description: '', site: '', purpose: '', created_at: '', updated_at: '', certificate_subject: null };
+
+  it('the bench check shows how each device is cabled and which 2930F waits (D-091)', async () => {
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': switches(), '/projects/p1/staging-plans': [] });
+    renderAt('/stage/p1?step=2');
+    const table = await screen.findByRole('table', { name: 'Cabling per device' });
+    expect(within(table).getByText('USB console cable first; after its console setup, port 3 → small switch')).toBeInTheDocument();
+    expect(within(table).getByText('same')).toBeInTheDocument();  // switch A keeps its address
+    expect(screen.getByText(/lab-a-sw-b and lab-a-sw-a both end at 192\.168\.1\.1/)).toBeInTheDocument();
+  });
+
+  it('the run board tells which switch to unplug before the other one loads its file', async () => {
+    const choice = { firstLogin: true, imageId: null, allowDowngrade: false, alsoSecondary: false,
+      baseId: null, siteId: null, fileId: 'v1', loginAfter: null, secrets: {} };
+    window.localStorage.setItem('undm.stage.p1', JSON.stringify({ aruba_a: choice, aruba_b: choice }));
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': switches(), '/projects/p1/staging-plans': [] });
+    renderAt('/stage/p1?step=3');
+    expect(await screen.findByText(/where lab-a-sw-a answers\. Unplug lab-a-sw-a from the small switch/)).toBeInTheDocument();
+    expect(screen.queryByText(/where lab-a-sw-b answers/)).not.toBeInTheDocument();
+    window.localStorage.removeItem('undm.stage.p1');
+  });
+
   it('without a system it offers to make or choose one', async () => {
     mockApi({});
     renderAt('/stage');

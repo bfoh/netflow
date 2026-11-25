@@ -514,6 +514,11 @@ class DeploymentOrchestrator:
                                        running.message)
                 continue
             t.diff = self._preview_diff(dep, t, running.data)
+            check = t.driver.check_before_apply(t.intended_config, dep.apply_mode)
+            if check is not None and not check.ok:
+                ok = self._fail_target(dep, t, "preflight", TargetState.PREFLIGHT_FAILED,
+                                       check.message)
+                continue
             t.state = TargetState.PREFLIGHT_PASSED
             self._emit(dep, "preflight", "ok",
                        f"reachable, identity ok; +{t.diff.added} -{t.diff.removed} lines", t)

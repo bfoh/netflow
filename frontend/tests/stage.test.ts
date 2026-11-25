@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { EMPTY_CHOICE, planSteps } from '../src/features/stage/choices';
-import { assignRoles, ROLES } from '../src/features/stage/roles';
+import { addressTakenBy, assignRoles, ROLES } from '../src/features/stage/roles';
 import type { Device } from '../src/types/api';
 
 const role = (key: string) => ROLES.find((r) => r.key === key)!;
@@ -39,6 +39,25 @@ describe('stage a system: steps per device', () => {
     const roles = assignRoles([d('1', '192.168.1.2'), d('2', '192.168.1.1')]);
     expect(roles.aruba_a?.id).toBe('2');
     expect(roles.aruba_b?.id).toBe('1');
+  });
+});
+
+describe('two devices ending at one address (D-091)', () => {
+  const sw = (id: string, address: string) => ({ device: { id, name: `sw-${id}`, model: '2930F', management_address: address } as Device });
+  const b = ROLES.find((r) => r.key === 'aruba_b')!;
+  const a = ROLES.find((r) => r.key === 'aruba_a')!;
+
+  it('the switch on its temporary address waits for the one already at the final address', () => {
+    const all = [sw('a', '192.168.1.1'), sw('b', '192.168.1.2')];
+    expect(addressTakenBy(b, all[1].device, all)?.id).toBe('a');
+    expect(addressTakenBy(a, all[0].device, all)).toBeUndefined();  // its file keeps its address
+  });
+
+  it('nothing to wait for once moved, or with one switch only', () => {
+    const moved = [sw('a', '192.168.1.1'), sw('b', '192.168.1.1')];
+    expect(addressTakenBy(b, moved[1].device, moved)).toBeUndefined();
+    const alone = [sw('b', '192.168.1.2')];
+    expect(addressTakenBy(b, alone[0].device, alone)).toBeUndefined();
   });
 });
 

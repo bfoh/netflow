@@ -63,7 +63,8 @@ Order matters: the file switches the TFTP client off, so firmware (step 2, both 
 come first.
 Both switch roles end at 192.168.1.1: after step 4 only one of them may be connected to the
 bench network at a time — UNDM checks the serial number after the restart and refuses a
-different switch answering at that address.
+different switch answering at that address. Since D-091 a file that moves the switch to a new
+address is refused before anything is sent when another device already answers there.
 
 ## Bench checklist — step 4 (spare 2930F only)
 Before: steps 1–3 done; `UNDM_ENABLE_REAL_DEVICE_WRITES=true`; inbound UDP 69 allowed on the

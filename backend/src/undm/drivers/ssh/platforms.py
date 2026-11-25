@@ -33,6 +33,7 @@ from undm.drivers.base import (
 )
 from undm.drivers.blackbox.lig1014a_ssh import BlackBoxLig1014aSsh
 from undm.drivers.fortinet.fortios_ssh import FortiOSSsh
+from undm.drivers.ssh import base as ssh_base
 from undm.drivers.ssh.base import SSH_CAPABILITIES, SshCliDriver
 
 
@@ -190,6 +191,24 @@ class ArubaOSSwitchSsh(SshCliDriver):
         (r"Enter State\(ST\)\s*:", "state"),
         (r"Enter Country\(C\)\s*:", "country"),
     )
+
+    def check_before_apply(self, config: str, mode: ApplyMode) -> OperationResult | None:
+        """Both switch roles of a system end at the same OOBM address (D-091): if the file
+        moves this switch to an address where another device already answers, loading it
+        would leave two devices on one address. Stop before anything is sent."""
+        if mode is not ApplyMode.REPLACE:
+            return None
+        current = self.target.management_address
+        after = address_after_loading(config, current)
+        if after is None or after == current:
+            return None
+        if not ssh_base.tcp_port_open(after, self.target.port or 22):
+            return None
+        return OperationResult.failed(
+            DeviceOperation.APPLY_CONFIGURATION,
+            f"Another device already answers at {after}, the address this file gives the "
+            "switch (on the bench: probably the other 2930F). Unplug it from the bench "
+            "network, then make a new plan for this switch. Nothing was changed.")
 
     def prepare_before_apply(self, config: str, mode: ApplyMode,
                              settings: Mapping[str, Any]) -> OperationResult | None:

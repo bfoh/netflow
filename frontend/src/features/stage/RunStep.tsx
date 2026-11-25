@@ -10,7 +10,7 @@ import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import type { Device, StagingIndex } from '../../types/api';
 import { type Choice, EMPTY_CHOICE, planSteps, wantsFirstLogin } from './choices';
-import { type Role, STEP_TIME, STEP_WORDS, type StepKind } from './roles';
+import { addressTakenBy, type Role, STEP_TIME, STEP_WORDS, type StepKind } from './roles';
 import { StagingControls } from './StagingControls';
 import { stagingStatus } from './staging';
 import { EmptyState } from '../../components/EmptyState';
@@ -67,8 +67,8 @@ function LivePlan({ stagingId }: { stagingId: string }) {
   );
 }
 
-function DeviceRun({ projectId, role, device, choice, latest }: {
-  projectId: string; role: Role; device: Device; choice: Choice; latest?: StagingIndex;
+function DeviceRun({ projectId, role, device, choice, latest, all }: {
+  projectId: string; role: Role; device: Device; choice: Choice; latest?: StagingIndex; all: { device: Device }[];
 }) {
   const [fresh, setFresh] = useState(false);
   const { steps, missing } = planSteps(role, choice, device);
@@ -77,6 +77,14 @@ function DeviceRun({ projectId, role, device, choice, latest }: {
     (p) => `Plan made for ${device.name}: ${p.steps.length} steps waiting for approval`, { errorInDialog: true });
   const finished = latest && latest.states.every((x) => x === 'succeeded');
   const usable = latest && !fresh;
+  // Its file moves it to an address another device of the system already has (both 2930F).
+  const taken = steps.some((s) => s.kind === 'configuration') ? addressTakenBy(role, device, all) : undefined;
+  const takenNotice = taken && !(finished && !fresh) && (
+    <Notice kind="caution" compact>
+      Its file moves it to {role.addressAfter}, where {taken.name} answers. Unplug {taken.name} from the small switch
+      before you run this plan. If it still answers there, the file step stops before sending (nothing changed).
+    </Notice>
+  );
   return (
     <Card withBorder>
       <Group justify="space-between" mb="xs" wrap="nowrap">
@@ -88,12 +96,14 @@ function DeviceRun({ projectId, role, device, choice, latest }: {
       </Group>
       {usable ? (
         <Stack gap="xs">
+          {takenNotice}
           <LivePlan stagingId={latest.staging_id} />
           <Button size="xs" variant="subtle" onClick={() => setFresh(true)}>Make a new plan for this device…</Button>
         </Stack>
       ) : (
         <Stack gap="xs">
           <PlannedSteps role={role} choice={choice} device={device} />
+          {takenNotice}
           {consoleTodo && (
             <Notice kind="caution" compact action={<Button size="xs" variant="light" component={Link} to={`/provisioning?device=${device.id}`}
               leftSection={<IconTerminal2 size={14} />}>Open console setup</Button>}>
@@ -122,12 +132,13 @@ export function RunStep({ projectId, roles, choices, stagings }: {
   return (
     <Stack>
       <Text size="sm" c="dimmed">Devices run independently: start one while another restarts. The runs continue on the server if you
-        leave this page. Order inside each device: as listed.</Text>
+        leave this page. Order inside each device: as listed. Two devices that end at the same address (the two 2930F) run one
+        after the other: the card says which to unplug first.</Text>
       <SimpleGrid cols={{ base: 1, md: 2, xl: 4 }}>
         {roles.map(({ role, device }) => (
           <DeviceRun key={role.key} projectId={projectId} role={role} device={device}
             choice={choices[role.key] ?? EMPTY_CHOICE}
-            latest={stagings.find((x) => x.device_id === device.id)} />
+            latest={stagings.find((x) => x.device_id === device.id)} all={roles} />
         ))}
       </SimpleGrid>
     </Stack>

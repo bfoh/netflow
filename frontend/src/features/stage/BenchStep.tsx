@@ -9,7 +9,8 @@ import { SafetyHint } from '../../components/SafetyHint';
 import { useAction, usePolicy } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { Device, OperationResult } from '../../types/api';
-import type { Role } from './roles';
+import { addressTakenBy, type Role } from './roles';
+import { Notice } from '../../components/Notice';
 
 const CONSOLE_DONE = new Set(['bootstrapped', 'managed']);
 
@@ -27,12 +28,36 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
     <Stack>
       <Card withBorder>
         <Title order={3} size="h5" mb="xs">Cabling</Title>
-        <List size="sm" spacing={4}>
-          <List.Item>Connect the PC and every device to one small switch that is connected to nothing else.</List.Item>
+        <List size="sm" spacing={4} mb="sm">
+          <List.Item>Connect the PC and every device to one small switch that is connected to nothing else, with one cable per device (two would make a loop).</List.Item>
           <List.Item>Give the PC's wired adapter two addresses, one per factory network, for example <Code>192.168.1.50/24</Code> and <Code>192.0.2.50/24</Code> (Windows: adapter settings → IPv4 → Advanced). UNDM does not change your PC's network settings.</List.Item>
-          <List.Item>Aruba switches: console cable to the PC first (Console setup), then their OOBM port to the small switch.</List.Item>
+          <List.Item>Aruba switches: the USB console cable goes to the PC first, for the console setup. One cable is enough: move it from one switch to the other.</List.Item>
           <List.Item>Allow incoming TFTP on this PC (UDP port 69): devices fetch firmware and files from UNDM. A blocked transfer is reported as such.</List.Item>
         </List>
+        <Table.ScrollContainer minWidth={560}>
+          <Table verticalSpacing={4} aria-label="Cabling per device">
+            <Table.Thead><Table.Tr><Table.Th>Device</Table.Th><Table.Th>Cable</Table.Th><Table.Th>Address now</Table.Th><Table.Th>After its file</Table.Th></Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {roles.map(({ role, device }) => (
+                <Table.Tr key={role.key}>
+                  <Table.Td><Text size="sm" fw={600}>{role.title}</Text></Table.Td>
+                  <Table.Td><Text size="sm">{role.cable}</Text></Table.Td>
+                  <Table.Td><Text size="sm" ff="monospace">{device.management_address || '—'}</Text></Table.Td>
+                  <Table.Td><Text size="sm" ff="monospace">{device.management_address === role.addressAfter ? 'same' : role.addressAfter}</Text></Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+        {roles.map(({ role, device }) => {
+          const other = addressTakenBy(role, device, roles);
+          return other ? (
+            <Notice key={role.key} kind="caution" compact mt="sm">
+              {device.name} and {other.name} both end at {role.addressAfter}. Run {other.name} first; when it shows
+              Staged, unplug it from the small switch, then run {device.name}.
+            </Notice>
+          ) : null;
+        })}
       </Card>
       {real && <><SafetyHint real /><SafetyHint real firmware /></>}
       {real && policy.data?.firmware_require_separate_approver !== false && (

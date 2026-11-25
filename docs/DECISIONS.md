@@ -1027,3 +1027,22 @@ Copy/Download, with "read it through before sharing". The export is audited
 
 Bench checklist: `vendor-support/staging-wizard-bench.md`.
 
+### D-091 All four on one bench switch; two devices never on one address (2026-11-25)
+The product owner asked whether all four devices can be staged at once and how the laptop
+connects. Yes: one small switch, connected to nothing else, one cable per device (FortiGate
+MGMT, Black Box port 1/3, 2930F A port 2 and B port 3 after their console setups), the PC
+on 192.168.1.50/24 and 192.0.2.50/24. Both 2930F team files set 192.168.1.1, so B (on the
+temporary 192.168.1.2) runs only after A is staged and unplugged.
+- The wizard's Bench check shows a cabling table (cable, address now, address after its file,
+  from `roles.ts`) and names the device that must go first when two end at one address
+  (`addressTakenBy`). The run board shows the same caution on the waiting device's card.
+- New driver hook `check_before_apply(config, mode)`: a check that changes nothing, run in
+  the plan's preflight after the diff; a failed result fails the target in preflight, so the
+  plan ends "failed, no device was changed". Generic in the orchestrator; the ArubaOS-Switch
+  driver uses it for a complete file that moves the switch to a new address: if a TCP
+  connection to that address on the SSH port succeeds, another device answers there and the
+  load is refused before the certificate step or the file. Before, the file was loaded, the
+  serial check found the other switch after the restart, and the plan ended Needs attention.
+- The probe is UNDM's own check (no vendor command); a device that answers neither SSH nor
+  TCP at that address is not detected, and the serial check after the restart stays.
+
