@@ -216,10 +216,12 @@ def run_console_bootstrap(
             reachable = _tcp_reachable(address)
             hint = ("SSH port answers: continue with Test connection on the device page."
                     if reachable else
-                    f"The switch does not answer on {address}:22 from this PC yet. Connect "
-                    f"the PC to port {params.untagged_port} and give its wired adapter an "
-                    f"address in {params.address.network} (for example "
-                    f"{params.address.network.network_address + 50}).")
+                    f"The switch does not answer on {address}:22 from this PC yet. Plug its "
+                    f"port {params.untagged_port} into the bench switch the PC is on (or into "
+                    f"the PC directly), check that the PC has an address in "
+                    f"{params.address.network} (for example "
+                    f"{params.address.network.network_address + 50}), then press Test (Stage a "
+                    "system, step 3) or Test connection (device page).")
     audit.record(session, actor, "provisioning.console_bootstrap", "device", device.id,
                  result.status.value, {
                      "serial_port": serial_port, "profile": stored_profile,

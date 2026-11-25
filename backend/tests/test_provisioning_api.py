@@ -123,6 +123,9 @@ def test_real_device_bootstrap_over_serial_when_writes_enabled(monkeypatch):
     assert sim.vlans[222]["untagged"] == {"3"}
     assert out["network_reachable"] is False and "port 3" in out["network_hint"]
     assert "192.168.1.51" in out["network_hint"] or "192.168.1.50" in out["network_hint"]
+    # Bench cabling (D-091): the switch's port goes into the bench switch the PC is on.
+    assert "Plug its port 3 into the bench switch the PC is on" in out["network_hint"]
+    assert "then press Test (Stage a system, step 3)" in out["network_hint"]
 
 
 def test_busy_com_port_gives_clear_error(monkeypatch):
