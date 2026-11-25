@@ -80,6 +80,26 @@ describe('application shell', () => {
     expect(screen.getByRole('button', { name: 'Run console bootstrap…' })).toBeEnabled();
   });
 
+  it('console setup starts from the port and address of the switch\'s wizard role', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const sw = device({ id: 'sw', name: 'sys-sw-b', model: '2930F', role: 'Aruba 2930F (OOBM port 3)',
+      driver_id: 'mock.aruba.aos_switch' });
+    mockApi({
+      '/devices': [sw],
+      '/drivers': [{ driver_id: 'mock.aruba.aos_switch', platform: 'aos_switch', simulated: true, vendor: 'Aruba', os_family: 'ArubaOS-Switch', description: '', capabilities: [], maturity: 'simulation', transport: 'simulated', notes: [] }],
+      '/provisioning/serial-ports': [{ port: 'SIMULATED', description: 'Simulated switch console', hardware_id: '' }],
+    });
+    renderAt('/provisioning?device=sw');
+    const port = await screen.findByLabelText(/Untagged port/);
+    expect(port).toHaveValue('3');
+    expect(screen.getByDisplayValue('192.168.1.2/24')).toBeInTheDocument();
+    expect(screen.getByText('Stage a system: port 3 for this switch')).toBeInTheDocument();
+    expect(screen.queryByText(/The bench cabling uses port 3/)).not.toBeInTheDocument();
+    await userEvent.clear(port);
+    await userEvent.type(port, '83');
+    expect(screen.getByText(/The bench cabling uses port 3 for this switch/)).toBeInTheDocument();
+  });
+
   it('erasing is blocked up front when the device\'s own login has no password', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     const sw = device({ id: 'sw', name: 'dmz-sw', driver_id: 'mock.aruba.aos_switch', credential_ref_id: 'factory',

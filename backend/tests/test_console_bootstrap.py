@@ -113,9 +113,11 @@ def test_address_in_the_network_of_a_dhcp_lease_is_explained():
     assert r.status is BootstrapStatus.FAILED and not r.saved and sim.saved_config is None
     assert "rejected 'ip address 192.168.1.1 255.255.255.0'" in r.message
     assert "overlapping network" in r.message  # the switch's own words
-    assert "VLAN 1" in r.message and "DHCP" in r.message and "unplug" in r.message
-    assert "Plug port 2" in r.message
+    # The switch's own 'show ip' names the holder (read-only), not a guess.
+    assert '"DEFAULT_VLAN | DHCP/Bootp 192.168.1.120 255.255.255.0"' in r.message
+    assert "DHCP server" in r.message and "unplug" in r.message and "plug port 2" in r.message
     assert "write memory" not in r.commands_sent and "<<< exit" not in r.transcript
+    assert "<<< show ip" in r.transcript
 
 
 def test_dhcp_lease_in_another_network_does_not_matter():
@@ -123,10 +125,24 @@ def test_dhcp_lease_in_another_network_does_not_matter():
     assert r.status is BootstrapStatus.BOOTSTRAPPED
 
 
-def test_invalid_port_reported_by_switch():
-    r = run(SimulatedArubaConsole(), BootstrapParams(222, "OOBM_VLAN", "99",
-                                                     IPv4Interface("192.168.1.1/24")))
-    assert r.status is BootstrapStatus.FAILED and "untagged 99" in r.message
+def test_port_the_switch_does_not_have_is_refused_before_any_change():
+    """Bench 2026-11-25: port 83 typed for a 52-port switch. UNDM checks the port against the
+    switch's own configuration (VLAN 1 lists 1-52) and sends nothing."""
+    sim = SimulatedArubaConsole(first_login_setup=True)
+    r = run(sim, BootstrapParams(222, "OOBM_VLAN", "83", IPv4Interface("192.168.1.1/24")),
+            creds=Credentials("manager", "x-approved-1"))
+    assert r.status is BootstrapStatus.REFUSED and not r.saved
+    assert "no port 83" in r.message and "ports 1-52" in r.message
+    assert "Nothing was changed. The switch was new" in r.message and ".." not in r.message
+    assert "configure" not in sim.commands_received and sim.saved_config is None
+
+
+def test_quote_of_a_rejected_command_has_no_prompt_and_no_double_period():
+    sim = SimulatedArubaConsole(first_login_setup=True, fail_on={"untagged 2"})
+    r = run(sim, creds=Credentials("manager", "x-approved-1"))
+    assert r.status is BootstrapStatus.FAILED
+    assert '"Invalid input: untagged"' in r.message
+    assert "(vlan-222)#" not in r.message and ".." not in r.message
 
 
 def test_silently_ignored_command_is_caught_by_read_back():

@@ -21,7 +21,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
-from ipaddress import IPv4Interface
+from ipaddress import IPv4Address, IPv4Interface
 
 from undm.drivers.base import Credentials
 from undm.provisioning.console import ConsoleError, ConsoleSession, ConsoleTimeoutError
@@ -486,20 +486,72 @@ def wait_after_erase(console: ArubaOSSwitchConsole, request: EraseRequest) -> tu
                     "it shows its login, run the bootstrap again without erasing.") from None
 
 
+_PROMPT_LINE = re.compile(r"\S+(\([^)]*\))?[#>]")
+
+
+def config_ports(running_config: str) -> set[str]:
+    """Ports the switch's own configuration lists in its VLANs (untagged or tagged)."""
+    ports: set[str] = set()
+    for block in parse_vlans(running_config).values():
+        for ln in block:
+            for word in ("untagged ", "tagged "):
+                if ln.startswith(word):
+                    ports |= _expand_ports(ln[len(word):])
+    return ports
+
+
+def _port_list(ports: set[str]) -> str:
+    """{'1', ..., '52'} -> '1-52' (numbered ports); other names listed as they are."""
+    nums = sorted(int(p) for p in ports if p.isdigit())
+    groups: list[list[int]] = []
+    for n in nums:
+        if groups and n == groups[-1][1] + 1:
+            groups[-1][1] = n
+        else:
+            groups.append([n, n])
+    words = [str(a) if a == b else f"{a}-{b}" for a, b in groups]
+    return ", ".join(words + sorted(p for p in ports if not p.isdigit()))
+
+
+def _holders(console: ArubaOSSwitchConsole, params: BootstrapParams) -> str:
+    """Which interface holds an address in the wanted network: the switch's own 'show ip'
+    (read-only), lines that carry such an address. The full answer is in the transcript."""
+    try:
+        listing = console.command("show ip")
+    except ConsoleError:
+        return "(UNDM could not read 'show ip'.)"
+    lines = []
+    for raw in listing.splitlines():
+        for word in re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", raw):
+            try:
+                inside = IPv4Address(word) in params.address.network
+            except ValueError:
+                continue
+            if inside:
+                lines.append(" ".join(raw.split()))
+                break
+    fix = ("To fix: unplug every network cable from the switch, switch it off and on (this "
+           "discards the unsaved changes), then run the console setup again; plug port "
+           f"{params.untagged_port} into the bench switch only after the setup.")
+    if not lines:
+        return ("The switch's 'show ip' lists no address in that network (its answer is in "
+                "the transcript): send the transcript.")
+    shown = "The switch's 'show ip' shows: " + "; ".join(f'"{ln}"' for ln in lines[:4]) + "."
+    if any(re.search(r"DHCP", ln, re.I) for ln in lines):
+        return (shown + " That address came from a DHCP server: one of the switch's ports "
+                "is cabled to a network that has one. " + fix)
+    return shown + " " + fix
+
+
 def _rejected(cmd: str, output: str, params: BootstrapParams) -> str:
     """The message for a command the switch rejected, with the switch's own words."""
     said = " ".join(ln.strip() for ln in output.splitlines()
-                    if ln.strip() and ln.strip() != cmd)[:300]
+                    if ln.strip() and ln.strip() != cmd
+                    and not _PROMPT_LINE.fullmatch(ln.strip()))[:300]
     message = f"The switch rejected '{cmd}'" + (f": \"{said}\"" if said else "") + "."
     if OVERLAP.search(output):
-        return message + (
-            f" Another VLAN of the switch already has an address in {params.address.network}."
-            " On a factory switch this is VLAN 1, which asks for an address by DHCP: one of "
-            "its ports was connected to a network with a DHCP server. Nothing was saved. To "
-            "fix: unplug every network cable from the switch, switch it off and on (this "
-            "discards the unsaved changes and the DHCP address), then run the console setup "
-            f"again. Plug port {params.untagged_port} into the bench switch only after the "
-            "setup.")
+        return message + (f" Another interface of the switch already has an address in "
+                          f"{params.address.network}. Nothing was saved.")
     return message + (" Earlier commands changed the running configuration but nothing was "
                       "saved: reboot the switch without saving to discard them.")
 
@@ -536,6 +588,13 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
         password_set = True
 
     def done(status: BootstrapStatus, message: str, **kw: object) -> BootstrapResult:
+        result = _done(status, message, **kw)
+        if result.message.endswith(".."):
+            result.message = result.message[:-1]
+        result.message = result.message.replace(".. ", ". ")
+        return result
+
+    def _done(status: BootstrapStatus, message: str, **kw: object) -> BootstrapResult:
         if erased:
             message = f"Erased the configuration of '{erased}' first. {message}"
         if console.credentials_set:
@@ -586,6 +645,12 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
                         f"VLAN {params.vlan_id} already has {params.address} with port "
                         f"{params.untagged_port} untagged"
                         + ("" if password_set else "; nothing was changed"), verified=True)
+        ports = config_ports(before)
+        if ports and params.untagged_port not in ports:
+            return done(BootstrapStatus.REFUSED,
+                        f"This switch has no port {params.untagged_port} (its configuration "
+                        f"lists ports {_port_list(ports)}). Correct the port in 'Management "
+                        "settings' and run again. Nothing was changed")
         findings = site_config_findings(before, params)
         if findings and not allow_configured:
             return done(BootstrapStatus.REFUSED,
@@ -597,8 +662,10 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
             output = console.command(cmd)
             if ERROR.search(output):
                 console.command("end")
-                return done(BootstrapStatus.FAILED, _rejected(cmd, output, params),
-                            findings=findings)
+                message = _rejected(cmd, output, params)
+                if OVERLAP.search(output):
+                    message += " " + _holders(console, params)
+                return done(BootstrapStatus.FAILED, message, findings=findings)
         console.command("end")
         after = console.running_config()
         if not is_configured(after, params):

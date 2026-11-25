@@ -124,6 +124,11 @@ plan (its file moves B to A's address). The Black Box and the FortiGate can run 
   cabled to the bench network during the setup. Unplug every network cable from the switch,
   switch it off and on (nothing was saved), run the console setup again, and plug its
   management port in only after it.
+- **Console setup: "This switch has no port …"** (2026-11-25): the port in "Management
+  settings" is wrong. Since v76 it starts at the role's port (A: 2, B: 3); correct it and run
+  again. Nothing was changed.
+- **A new 2930F runs a newer release than the approved one** (seen: WC.16.11.0001): tick
+  the approved downgrade option in its firmware step.
 - **Any other stop**: send the bench log. Do not retry more than once before sending it.
 
 ## What this run answers

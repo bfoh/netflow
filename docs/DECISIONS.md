@@ -1252,3 +1252,17 @@ device served DHCP is not known (not checked).
 - UNDM does not remove VLAN 1's DHCP setting itself: that would add a command to the
   console bootstrap that the team's procedure does not have (D-025).
 
+### D-104 Console setup: the port comes from the switch's role and is checked first (2026-11-25)
+Bench: a new 2930F's console setup stopped at `untagged 83` ("Module not present for port or
+invalid port: 83"); the free-text port field held 83 on a 48-port switch (ports 1-52).
+- The console setup page starts, for a device added by Stage a system and with no saved
+  settings, from its role's bench cabling: port 2 (switch A) or 3 (switch B) and the role's
+  address (B: 192.168.1.2/24). A different port shows a caution; the field stays editable.
+- Before any change, UNDM checks the port against the switch's own running configuration
+  (the ports its VLANs list; factory: VLAN 1 `untagged 1-52`). A port it does not list is
+  refused with the list, and nothing is sent. No model port table is assumed.
+- Quotes of a rejected command no longer include the switch's prompt.- Amends D-103 after a second refusal on another switch (port 3, 192.168.1.2): the switch's
+  refusal quotes only the address being set, so D-103's "VLAN 1 by DHCP" was a guess. On that
+  refusal UNDM now reads the switch's `show ip` (read-only) and quotes the lines that hold
+  an address in that network; the DHCP advice is given only when that line says DHCP.
+

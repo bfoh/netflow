@@ -240,6 +240,22 @@ class SimulatedArubaConsole:
             if self._ctx:
                 self._ctx.pop()
             return ""
+        if cmd == "show ip":
+            # SYNTHETIC layout (only the address lines matter to UNDM).
+            rows = ["", " Internet (IP) Service", "",
+                    "  VLAN                 | IP Config  IP Address      Subnet Mask",
+                    "  -------------------- + ---------- --------------- ---------------"]
+            for vid in sorted(self.vlans):
+                v = self.vlans[vid]
+                if vid == 1 and self.dhcp_lease:
+                    lease = IPv4Interface(self.dhcp_lease)
+                    rows.append(f"  {v['name']:<20} | DHCP/Bootp {lease.ip!s:<15} {lease.netmask}")
+                elif v["ip"] and v["ip"] != "dhcp-bootp":
+                    addr, _, mask = str(v["ip"]).partition(" ")
+                    rows.append(f"  {v['name']:<20} | Manual     {addr:<15} {mask}")
+                else:
+                    rows.append(f"  {v['name']:<20} | Disabled")
+            return "\r\n".join(rows) + "\r\n"
         if cmd == "show running-config":
             return self.render().replace("\n", "\r\n")
         if not self._manager:

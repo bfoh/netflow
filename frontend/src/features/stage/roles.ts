@@ -27,6 +27,8 @@ export interface Role {
   /** Why a real device of this role needs a 'login after loading' (its file sets a password
    * that its starting login does not have); absent when its starting login stays valid. */
   loginAfter?: string;
+  /** 2930F: the port its console setup puts in the management VLAN (the bench cabling). */
+  consolePort?: string;
 }
 
 export const ROLES: Role[] = [
@@ -46,13 +48,20 @@ export const ROLES: Role[] = [
     realDriver: 'ssh.aruba.aos_switch', simulatedDriver: 'mock.aruba.aos_switch', nameSuffix: 'sw-a',
     address: '192.168.1.1', steps: ['console', 'firmware', 'file'],
     hint: 'Console cable first: the console setup gives it this address on port 2.',
-    cable: 'USB console cable first; after its console setup, port 2 → small switch', addressAfter: '192.168.1.1' },
+    cable: 'USB console cable first; after its console setup, port 2 → small switch', addressAfter: '192.168.1.1',
+    consolePort: '2' },
   { key: 'aruba_b', title: 'Aruba 2930F (OOBM port 3)', model: '2930F', modelId: 'aruba-2930f',
     realDriver: 'ssh.aruba.aos_switch', simulatedDriver: 'mock.aruba.aos_switch', nameSuffix: 'sw-b',
     address: '192.168.1.2', steps: ['console', 'firmware', 'file'],
     hint: 'Temporary address so both switches fit on the bench; its file sets the final one.',
-    cable: 'USB console cable first; after its console setup, port 3 → small switch', addressAfter: '192.168.1.1' },
+    cable: 'USB console cable first; after its console setup, port 3 → small switch', addressAfter: '192.168.1.1',
+    consolePort: '3' },
 ];
+
+/** The wizard role a device was added for (Stage a system sets `device.role`). */
+export function roleOf(device: Device): Role | undefined {
+  return ROLES.find((r) => r.title === device.role && r.model === device.model);
+}
 
 export const STEP_WORDS: Record<StepKind, string> = {
   console: 'Console setup', first_login: 'First login', firmware: 'Firmware',

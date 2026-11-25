@@ -16,6 +16,7 @@ import { useAction, useAllDevices, useCredentialRefs, useDrivers, usePolicy, use
 import { api } from '../services/api';
 import { downloadText } from '../services/format';
 import { driverLabel, stateLabel } from '../services/labels';
+import { roleOf } from '../features/stage/roles';
 import type { BootstrapPreview, BootstrapProfile, BootstrapResult, Device } from '../types/api';
 
 const CONSOLE_PLATFORMS = new Set(['aos_switch']);
@@ -33,8 +34,10 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
   const saved = device.bootstrap_profile;
   const [vlanId, setVlanId] = useState<number | string>(saved?.vlan_id ?? 222);
   const [vlanName, setVlanName] = useState(saved?.vlan_name ?? 'OOBM_VLAN');
-  const [port, setPort] = useState(saved?.untagged_port ?? '');
-  const [address, setAddress] = useState(saved?.address ?? '192.168.1.1/24');
+  // Not saved yet: start from the bench cabling of its role in Stage a system.
+  const role = roleOf(device);
+  const [port, setPort] = useState(saved?.untagged_port ?? role?.consolePort ?? '');
+  const [address, setAddress] = useState(saved?.address ?? (role?.consolePort ? `${role.address}/24` : '192.168.1.1/24'));
   const [serialPort, setSerialPort] = useState<string | null>(simulated ? 'SIMULATED' : null);
   const [baud, setBaud] = useState('9600');
   const [preview, setPreview] = useState<BootstrapPreview | null>(null);
@@ -89,9 +92,15 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
           <NumberInput label="VLAN ID" min={2} max={4094} value={vlanId} onChange={setVlanId} />
           <TextInput label="VLAN name" value={vlanName} onChange={(e) => setVlanName(e.currentTarget.value)} />
-          <TextInput label="Untagged port" placeholder="e.g. 2" value={port} onChange={(e) => setPort(e.currentTarget.value)} />
+          <TextInput label="Untagged port" placeholder="e.g. 2" value={port} onChange={(e) => setPort(e.currentTarget.value)}
+            description={role?.consolePort ? `Stage a system: port ${role.consolePort} for this switch` : undefined} />
           <TextInput label="Address / prefix" placeholder="192.168.1.1/24" value={address} onChange={(e) => setAddress(e.currentTarget.value)} />
         </SimpleGrid>
+        {role?.consolePort && port.trim() && port.trim() !== role.consolePort && (
+          <Notice kind="caution" compact>
+            The bench cabling uses port {role.consolePort} for this switch ({role.title}). Port {port.trim()} is used only if you cable it so.
+          </Notice>
+        )}
         <Group mt="sm">
           <Button variant="default" disabled={!complete} loading={save.isPending} onClick={() => save.mutate()}>Save settings</Button>
           <Button variant="light" disabled={!complete} loading={doPreview.isPending}
