@@ -1185,3 +1185,19 @@ product-specific items such as zones, clusters, MAC filtering and audit scripts 
   its audit entries and its plans' events, newest first, filtered (All, Plans, Console, Tests
   and reads), and copied masked (names, addresses, serials).
 
+### D-100 A FortiGate license file is loaded through an approved plan (EXPERIMENTAL) (2026-11-25)
+The project lead supplies a license file (already verified by the team); today it is uploaded on
+the FortiGate's web page after staging. Fortinet documents a CLI way for hardware units
+(FortiOS 7.2 "manual licensing for FortiGates in air-gap environments"):
+`execute restore manual-license {ftp | tftp} <file> <server>`, with the warning that it
+"will overwrite the current license and reboot the system". UNDM uses it with its own TFTP
+server, like the image and base restores: plan kind `license` (preview with the command,
+approval, backup, fetch, answer only that question with "y", wait until the unit answers with
+the same serial number, read its facts), capability `LICENSE_FILE` (FortiOS driver; simulated
+FortiGate for practice). Not yet run on 7.6.5 (Q-46): marked experimental in the dialog; after
+it, the person checks the license status on the unit's web page (System → FortiGuard).
+The file is stored for its device (`ConfigVersion` kind `license`, base64), never listed or
+shown, kept out of system exports and backup zips; only its name, size and hash are audited.
+UNDM does not check its content (the team does). Device menu: "Load license…" uploads the file
+and makes the plan; the Report step reminds that a FortiGate's license is loaded from its menu.
+

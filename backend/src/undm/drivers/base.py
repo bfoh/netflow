@@ -45,6 +45,8 @@ class Capability(StrEnum):
     # Restarts on request, outside a firmware step (D-099). REBOOT alone means only "restarts
     # as part of a firmware upgrade" on some drivers.
     RESTART = "supports_restart"
+    # Loads a license file the team supplies, fetched from UNDM (D-100).
+    LICENSE_FILE = "supports_license_file"
 
 
 # Capabilities an operation needs before a driver may be asked to perform it.
@@ -270,6 +272,15 @@ class DeviceDriver:
         the device untouched carries ``diagnostics["unchanged"] = True``."""
         return OperationResult.unsupported(
             DeviceOperation.REBOOT, "This driver cannot restart a device on request")
+
+    # The command a license load sends, shown in its preview.
+    license_command: ClassVar[str | None] = None
+
+    def load_license(self, path: Path, name: str) -> OperationResult:
+        """Make the device fetch and apply the license file at ``path`` (offered as ``name``).
+        Success means the device took it and is restarting (``data["restarting"]``)."""
+        return OperationResult.unsupported(
+            DeviceOperation.APPLY_CONFIGURATION, "This driver cannot load a license file")
 
     def temporary_address_commands(self, spare: str) -> OperationResult:
         """Read-only: the exact commands ``set_temporary_address`` would send (data:

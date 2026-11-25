@@ -8,6 +8,7 @@ dies mid-deployment leaves a transient state behind that
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import ipaddress
 import uuid
@@ -52,6 +53,7 @@ from undm.orchestration.deployment import (
 from undm.orchestration.firmware import FirmwareOrchestrator
 from undm.orchestration.first_login import FirstLoginOrchestrator
 from undm.orchestration.free_address import FreeAddressOrchestrator
+from undm.orchestration.license import LicenseOrchestrator
 from undm.orchestration.restart import RestartOrchestrator
 from undm.security import credentials as creds
 from undm.services import audit
@@ -153,7 +155,8 @@ class DeploymentService:
         attempts, delay = self.firmware_reboot_wait
         cls = {"first_login": FirstLoginOrchestrator,
                "free_address": FreeAddressOrchestrator,
-               "restart": RestartOrchestrator}.get(rec.kind, DeploymentOrchestrator)
+               "restart": RestartOrchestrator,
+               "license": LicenseOrchestrator}.get(rec.kind, DeploymentOrchestrator)
         return cls(
             sink=sink, require_separate_approver=self.require_separate_approver,
             restart_wait_attempts=attempts, restart_wait_delay_s=delay,
@@ -173,6 +176,8 @@ class DeploymentService:
                 if cfg.kind == "imported" and cfg.reference:
                     # Named after the file, as the team names FortiGate revisions.
                     label = PurePath(cfg.reference).stem[:60] or None
+                elif cfg.kind == "license":
+                    label = PurePath(cfg.reference or "license.lic").name[:80]
             serial = (device.observed_facts or {}).get("serial_number")
             dt = DeploymentTarget(device.id, device.name, build_driver(device, self.registry),
                                   text, expected_serial=serial)
@@ -418,6 +423,56 @@ class DeploymentService:
         self._sync(rec, dep)
         audit.record(self.s, actor, "deployment.create", "deployment", rec.id, rec.state,
                      {"devices": [device_id], "kind": "restart"})
+        return rec
+
+    # -- a license file on a device (D-100) ---------------------------------------------
+    def store_license(self, device: Device, filename: str, data: bytes,
+                      actor: str) -> ConfigVersion:
+        """Keep the team's license file for a device. Its content is not checked (the team
+        verified it), never shown, and kept out of exports and backups; only its name and
+        hash are audited."""
+        if not data:
+            raise ConflictError("The license file is empty")
+        if len(data) > 1_000_000:
+            raise ConflictError("A license file is small; this one is over 1 MB")
+        if device.driver_id not in self.registry or Capability.LICENSE_FILE not in \
+                self.registry.get(device.driver_id).info.capabilities:
+            raise ConflictError(f"UNDM cannot load a license file on {device.name}")
+        digest = hashlib.sha256(data).hexdigest()
+        v = ConfigVersion(device_id=device.id, kind="license",
+                          text=base64.b64encode(data).decode(), sha256=digest,
+                          reference=PurePath(filename).name[:200] or "license.lic",
+                          created_by=actor)
+        self.s.add(v)
+        self.s.flush()
+        audit.record(self.s, actor, "device.license_stored", "device", device.id,
+                     details={"file": v.reference, "sha256": digest, "bytes": len(data)})
+        return v
+
+    def create_license(self, project_id: str, device_id: str, version_id: str,
+                       actor: str) -> DeploymentRecord:
+        device = self.s.get(Device, device_id)
+        if device is None or device.project_id != project_id:
+            raise NotFoundError(f"Device {device_id} not found in project")
+        cfg = self.s.get(ConfigVersion, version_id)
+        if cfg is None or cfg.device_id != device_id or cfg.kind != "license":
+            raise ConflictError("Choose a license file stored for this device")
+        problem = self._policy_problem(device, False)
+        if problem:
+            raise ForbiddenError(problem)
+        rec = DeploymentRecord(
+            project_id=project_id, kind="license", state=S.DRAFT.value, dry_run=False,
+            apply_mode=ApplyMode.MERGE.value, created_by=actor)
+        rec.targets.append(DeploymentTargetRecord(
+            device_id=device_id, position=0, state=TargetState.PENDING.value,
+            config_version_id=cfg.id))
+        self.s.add(rec)
+        self.s.flush()
+        dep = self._to_domain(rec)
+        self._orchestrator(rec).prepare(dep)
+        self._sync(rec, dep)
+        audit.record(self.s, actor, "deployment.create", "deployment", rec.id, rec.state,
+                     {"devices": [device_id], "kind": "license", "file": cfg.reference})
         return rec
 
     # -- staging plans (D-071) ----------------------------------------------------------
@@ -1076,7 +1131,7 @@ class DeploymentService:
                 device.credential_ref_id = after
             if t.backup is not None:
                 device.last_backup_at = now
-            if rec.kind in ("first_login", "restart"):
+            if rec.kind in ("first_login", "restart", "license"):
                 continue  # no configuration was deployed
             if rec.kind == "firmware":
                 if t.current_version:  # observed, not declared

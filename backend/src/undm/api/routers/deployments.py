@@ -2,7 +2,8 @@ import logging
 import threading
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,11 @@ from undm.services.errors import ConflictError, NotFoundError
 from undm.services.jobs import DeploymentJobs
 from undm.services.policy import Policy
 from undm.services.safety_settings import effective
+
+
+class LicensePlanIn(BaseModel):
+    version_id: str
+
 
 router = APIRouter(tags=["deployments"])
 log = logging.getLogger("undm")
@@ -109,6 +115,29 @@ def create_restart_plan(device_id: str, session: SessionDep, svc: ServiceDep,
     if device is None:
         raise NotFoundError("Device not found")
     return _full(svc, svc.create_restart(device.project_id, device_id, actor))
+
+
+@router.post("/api/devices/{device_id}/license", status_code=status.HTTP_201_CREATED)
+def upload_license(device_id: str, file: Annotated[UploadFile, File()], session: SessionDep,
+                   svc: ServiceDep, actor: ActorDep) -> dict[str, str]:
+    """Keep the team's license file for this device (D-100); its content is never returned."""
+    device = session.get(Device, device_id)
+    if device is None:
+        raise NotFoundError("Device not found")
+    v = svc.store_license(device, file.filename or "license.lic", file.file.read(1_000_001),
+                          actor)
+    return {"id": v.id, "filename": v.reference, "sha256": v.sha256}
+
+
+@router.post("/api/devices/{device_id}/license-plan", response_model=DeploymentOut,
+             status_code=status.HTTP_201_CREATED)
+def create_license_plan(device_id: str, body: LicensePlanIn, session: SessionDep,
+                        svc: ServiceDep, actor: ActorDep) -> DeploymentOut:
+    """A plan that loads a stored license file on the device (D-100)."""
+    device = session.get(Device, device_id)
+    if device is None:
+        raise NotFoundError("Device not found")
+    return _full(svc, svc.create_license(device.project_id, device_id, body.version_id, actor))
 
 
 @router.get("/api/deployments/{deployment_id}", response_model=DeploymentOut)

@@ -56,7 +56,8 @@ export function ReportStep({ project, roles, stagings }: {
         return <div className="no-print">{open.length === 0 ? (
           <Notice kind="success" title={`All ${rows.length} devices are staged`}
             action={<DownloadBackupsButton projectId={project.id} />}>
-            Staging of this system is complete. To finish: save this report (Print or Save as HTML), download the backups,
+            Staging of this system is complete. If a FortiGate needs its license, load it from its menu (⋯ → Load license…).
+            To finish: save this report (Print or Save as HTML), download the backups,
             turn the safety switches off (<Anchor component={Link} to="/settings?tab=safety" size="sm">Settings → Safety</Anchor>),
             then power the devices off and label them.
           </Notice>

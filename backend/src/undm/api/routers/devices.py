@@ -175,7 +175,8 @@ def _full(session: Session, version: ConfigVersion,
 def list_configs(device_id: str, session: SessionDep) -> list[ConfigVersion]:
     get_device(session, device_id)
     return list(session.scalars(
-        select(ConfigVersion).where(ConfigVersion.device_id == device_id)
+        select(ConfigVersion).where(ConfigVersion.device_id == device_id,
+                                    ConfigVersion.kind != "license")  # never shown (D-100)
         .order_by(ConfigVersion.created_at.desc())))
 
 

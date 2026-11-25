@@ -73,6 +73,7 @@ class FortiOSSsh(SshCliDriver):
         simulated=False,
         capabilities=SSH_CAPABILITIES | {
             Capability.FIRMWARE_UPGRADE, Capability.REBOOT, Capability.CONFIGURATION_REPLACE,
+            Capability.LICENSE_FILE,
             Capability.CONFIGURATION_CHECKPOINT, Capability.FIRST_LOGIN_SETUP},
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
@@ -104,6 +105,10 @@ class FortiOSSsh(SshCliDriver):
     # on the bench). Only these questions are answered, and only with "y".
     _IMAGE_QUESTION: ClassVar[str] = r"replace the current firmware[\s\S]*\(y/n\)"
     _RESTORE_QUESTION: ClassVar[str] = r"overwrite the current setting[\s\S]*\(y/n\)"
+    # Manual license on hardware (Fortinet 7.2 documentation and community example: "This
+    # operation will overwrite the current license and reboot the system! ... (y/n)").
+    # Not yet run on 7.6.5 (Q-46): only this question is answered.
+    _LICENSE_QUESTION: ClassVar[str] = r"overwrite the current license[\s\S]*\(y/n\)"
     transfer_timeout: ClassVar[float] = 1800.0   # transfer + check + write, until the restart
     question_timeout: ClassVar[float] = 60.0     # silence before the transfer starts
     # After a complete transfer and a quiet minute, check the SSH port this often: a unit
@@ -145,7 +150,8 @@ class FortiOSSsh(SshCliDriver):
     # -- what this driver can do with supplied files ----------------------------------
     @classmethod
     def needs_file_server(cls, kind: str, mode: ApplyMode | None = None) -> bool:
-        return kind == "firmware" or (kind == "configuration" and mode is ApplyMode.REPLACE)
+        return kind in ("firmware", "license") or (kind == "configuration"
+                                                    and mode is ApplyMode.REPLACE)
 
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
@@ -461,6 +467,22 @@ class FortiOSSsh(SshCliDriver):
             if now - start > self.restart_grace:
                 return "no_restart", output
             time.sleep(self.poll_interval)
+
+    # -- license file (EXPERIMENTAL, D-100; not yet run on hardware, Q-46) ---------------
+    license_command = "execute restore manual-license tftp <file> <this PC>"
+
+    def load_license(self, path: Path, name: str) -> OperationResult:
+        op = Op.APPLY_CONFIGURATION
+        if r := self._need(op):
+            return r
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", name) or "license.lic"
+        r = self._device_fetch(op, path, safe,
+                               lambda ip: f"execute restore manual-license tftp {safe} {ip}",
+                               self._LICENSE_QUESTION, "license file")
+        if r.ok:
+            self._restarting = False  # the wait for its return is the plan's
+            return OperationResult.success(op, {"restarting": True}, r.message)
+        return r
 
     def stage_firmware(self, image: FirmwareImageRef) -> OperationResult:
         op = Op.STAGE_FIRMWARE

@@ -78,6 +78,7 @@ class FakeFortiGate:
         "next", "end"])
     revisions: list[str] = field(default_factory=list)
     restarts: int = 0
+    license: bytes | None = None
     fetched: list[str] = field(default_factory=list)
     blocks_received: int = 0
     fetch_failed: bool = False
@@ -163,6 +164,12 @@ class FakeFortiGate:
         if text in self.question_on:
             self._pending = "unknown"
             self._out += self.question_on[text]
+            return
+        m = re.match(r"execute restore manual-license tftp (\S+) (\S+)$", text)
+        if m:  # wording after Fortinet's documented warning (synthetic)
+            self._args = [m.group(1), m.group(2)]
+            self._ask("license", "This operation will overwrite the current license and "
+                                 "reboot the system!\r\nDo you want to continue? (y/n)")
             return
         m = re.match(r"execute restore (image|config) tftp (\S+) (\S+)$", text)
         if m:
@@ -279,6 +286,15 @@ class FakeFortiGate:
         if self.restart_mode == "close":
             self._out += "\r\nPlease wait for system to restart.\r\n"
             self._closing = True
+
+    def _answer_license(self, key: str) -> None:
+        if key != "y":
+            self._reply("")
+            return
+        data = self._fetch(*self._args)
+        self.license = data
+        self._out += "\r\nGet license file from tftp server OK.\r\n"
+        self._restart()
 
     def _answer_image(self, key: str) -> None:
         if key != "y":

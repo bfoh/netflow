@@ -60,3 +60,5 @@ lines; save behaviour; session limits and timeouts; and, before any firmware wor
 vendor's documented image transfer, boot-bank, reboot and rollback procedure.
 
 Temporary address (D-096): `ssh.aruba.aos_switch` only, **experimental, not yet run on hardware** (Q-45). Simulated drivers do not offer it.
+
+License file (D-100): `ssh.fortinet.fortios` only, **experimental, not yet run on hardware** (Q-46). Restart on request (D-099): `ssh.aruba.aos_switch` and `ssh.blackbox.lig1014a`, using the restarts their file and firmware procedures run on hardware; FortiGate not yet (Q-47).

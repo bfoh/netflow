@@ -1,7 +1,7 @@
-import { ActionIcon, Button, Group, Menu, Modal, Stack, Table, Text } from '@mantine/core';
+import { ActionIcon, Button, FileInput, Group, Menu, Modal, Stack, Table, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
-  IconActivity, IconClipboard, IconDots, IconExternalLink, IconFileText, IconInfoCircle, IconPlugConnected,
+  IconActivity, IconCertificate, IconClipboard, IconDots, IconExternalLink, IconFileText, IconInfoCircle, IconPlugConnected,
   IconPower, IconRocket, IconTerminal, IconTerminal2, IconTrash, IconWorld,
 } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
@@ -30,6 +30,8 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
   const address = temporaryAddress(device) || device.management_address;
   const [info, setInfo] = useState<Device | null>(null);
   const [restartOpen, restart] = useDisclosure();
+  const [licenseOpen, license] = useDisclosure();
+  const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const waiting = useRef<number | null>(null);
   useEffect(() => () => { if (waiting.current) window.clearInterval(waiting.current); }, []);
 
@@ -42,6 +44,10 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
   }, undefined);
   const ssh = useAction(() => api.openSsh(device.id), () => `SSH window opened for ${device.name}: type the password there`);
   const makeRestart = useAction(() => api.restartPlan(device.id), undefined, { errorInDialog: true });
+  const makeLicense = useAction(async () => {
+    const stored = await api.uploadLicense(device.id, licenseFile!);
+    return api.licensePlan(device.id, stored.id);
+  }, undefined, { errorInDialog: true });
 
   const waitUntilAnswers = () => {
     if (waiting.current) window.clearInterval(waiting.current);
@@ -82,6 +88,7 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
           <Menu.Item component={Link} to={`/devices/${device.id}?tab=log`} leftSection={<IconActivity size={14} />}>Device log</Menu.Item>
           <Menu.Label>Changes the device (approved plan)</Menu.Label>
           {can(device, 'supports_restart') && <Menu.Item leftSection={<IconPower size={14} />} onClick={restart.open}>Restart…</Menu.Item>}
+          {can(device, 'supports_license_file') && <Menu.Item leftSection={<IconCertificate size={14} />} onClick={license.open}>Load license…</Menu.Item>}
           {device.driver_id.includes('aos_switch') && <Menu.Item component={Link} to={`/provisioning?device=${device.id}`}
             leftSection={<IconTerminal2 size={14} />}>Console setup</Menu.Item>}
           <Menu.Item leftSection={<IconRocket size={14} />} onClick={() => void navigate(`/deployments?project=${device.project_id}&devices=${device.id}`)}>Make a plan…</Menu.Item>
@@ -92,6 +99,24 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
 
       <Modal opened={!!info} onClose={() => setInfo(null)} title={`Information · ${device.name}`}>
         {info && <DeviceInfo device={info} />}
+      </Modal>
+
+      <Modal opened={licenseOpen} onClose={license.close} title={`Load a license on ${device.name}`}>
+        <Stack>
+          <Text size="sm">Choose the license file the project lead sent. UNDM keeps it for this device (never shown), makes a plan
+            that loads it, and opens the plan: check it, approve and run. The unit fetches the file from this PC and restarts with
+            it; UNDM waits until it answers again.</Text>
+          <FileInput label="License file" placeholder="Choose the .lic file" value={licenseFile} onChange={setLicenseFile} clearable />
+          {real && <Notice kind="caution" compact>Experimental: this way of loading a license has not been run on a FortiGate yet. Afterwards,
+            check the license status on its web page (System → FortiGuard).</Notice>}
+          <DialogError error={makeLicense.error} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={license.close}>Back</Button>
+            <Button disabled={!licenseFile} loading={makeLicense.isPending} leftSection={<IconCertificate size={16} />}
+              onClick={() => makeLicense.mutate(undefined, { onSuccess: (p) => { license.close(); setLicenseFile(null); void navigate(`/deployments/${p.id}`); } })}>
+              Make the license plan</Button>
+          </Group>
+        </Stack>
       </Modal>
 
       <Modal opened={restartOpen} onClose={restart.close} title={`Restart ${device.name}`}>

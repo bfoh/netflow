@@ -201,7 +201,7 @@ export interface DeploymentEvent {
 export interface DeploymentSummary {
   id: string;
   project_id: string;
-  kind: 'configuration' | 'firmware' | 'first_login' | 'free_address' | 'restart';
+  kind: 'configuration' | 'firmware' | 'first_login' | 'free_address' | 'restart' | 'license';
   state: DeploymentState;
   dry_run: boolean;
   /** Firmware plans: install the approved image even where a device runs a newer one. */

@@ -278,3 +278,39 @@ def test_bench_log_window(bench):
                                                            "apply_mode": "merge"})
     assert "1 plans" in b.c.get(f"/api/projects/{b.pid}/bench-log?hours=0").text
     assert b.c.get(f"/api/projects/{b.pid}/bench-log?hours=-1").status_code == 422
+
+
+# -- a license file after staging (D-100) ---------------------------------------------------
+
+LICENSE = b"-----SYNTHETIC LICENSE FOR TESTS-----\nNOT-A-REAL-LICENSE\n"
+
+
+def test_license_file_is_stored_unseen_and_loaded_through_an_approved_plan(bench):
+    b = bench
+    r = b.c.post(f"/api/devices/{b.did}/license",
+                 files={"file": ("lab-fw.lic", LICENSE, "application/octet-stream")})
+    assert r.status_code == 201, r.text
+    stored = r.json()
+    assert set(stored) == {"id", "filename", "sha256"} and stored["filename"] == "lab-fw.lic"
+    versions = b.c.get(f"/api/devices/{b.did}/configs").json()
+    assert all(v["kind"] != "license" for v in versions)  # never listed, never shown
+    dep = b.c.post(f"/api/devices/{b.did}/license-plan",
+                   json={"version_id": stored["id"]}).json()
+    assert dep["kind"] == "license" and dep["state"] == "awaiting_approval", dep
+    assert "execute restore manual-license tftp" in messages(dep)
+    out = run(b, dep)
+    events = messages(out)
+    assert out["state"] == "succeeded", events
+    assert b.fg.license == LICENSE and b.fg.keys[-1] == "y"
+    assert "back after the license load" in events
+    assert "NOT-A-REAL-LICENSE" not in repr(out) + repr(b.c.get("/api/audit").json())
+    entry = next(a for a in b.c.get("/api/audit").json() if a["action"] == "device.license_stored")
+    assert entry["details"]["sha256"] == stored["sha256"]
+
+
+def test_an_empty_license_file_or_another_device_s_file_is_refused(bench):
+    b = bench
+    r = b.c.post(f"/api/devices/{b.did}/license", files={"file": ("x.lic", b"", "text/plain")})
+    assert r.status_code == 409 and "empty" in r.json()["error"]
+    r = b.c.post(f"/api/devices/{b.did}/license-plan", json={"version_id": "nope"})
+    assert r.status_code == 409

@@ -105,4 +105,25 @@ describe('device menu, tree and watch (D-099)', () => {
     expect(screen.queryByText('restarting')).not.toBeInTheDocument();
     expect(screen.getByText('saved')).toBeInTheDocument();
   });
+
+  it('a FortiGate offers Load license…: the file is uploaded and a plan is made', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const fortigate = device({ id: 'fw', name: 'lab-fw', category: 'firewall', model: 'FortiGate-101F',
+      driver_id: 'ssh.fortinet.fortios', capabilities: ['supports_ssh', 'supports_license_file'] });
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [fortigate],
+      '/devices/fw/license': { id: 'lic1', filename: 'lab-fw.lic', sha256: 'x' },
+      '/devices/fw/license-plan': { id: 'dep7', kind: 'license', state: 'awaiting_approval', events: [], targets: [] } });
+    renderAt('/projects/p1');
+    const table = await screen.findByRole('table');
+    await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-fw' }));
+    await userEvent.click(await screen.findByText('Load license…'));
+    const dialog = await screen.findByRole('dialog', { name: 'Load a license on lab-fw' });
+    const input = dialog.querySelector('input[type=file]') as HTMLInputElement;
+    await userEvent.upload(input, new File(['SYNTHETIC'], 'lab-fw.lic'));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Make the license plan' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/devices/fw/license-plan')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/devices/fw/license-plan');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ version_id: 'lic1' });
+    expect(calls.find((c) => c.url === '/api/devices/fw/license')?.init?.body).toBeInstanceOf(FormData);
+  });
 });

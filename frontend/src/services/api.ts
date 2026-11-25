@@ -136,6 +136,12 @@ export const api = {
   updateDevice: (id: string, body: DeviceInput) => request<Device>('PATCH', `/devices/${id}`, body),
   openSsh: (id: string) => request<{ command: string }>('POST', `/devices/${id}/open-ssh`),
   restartPlan: (id: string) => request<Deployment>('POST', `/devices/${id}/restart-plan`),
+  uploadLicense: (id: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<{ id: string; filename: string; sha256: string }>('POST', `/devices/${id}/license`, form);
+  },
+  licensePlan: (id: string, versionId: string) => request<Deployment>('POST', `/devices/${id}/license-plan`, { version_id: versionId }),
   reachability: (pid: string) => request<Reachability[]>('GET', `/projects/${pid}/reachability`),
   deviceLog: (id: string, masked = false) => request<DeviceLogEntry[]>('GET', `/devices/${id}/log${masked ? '?masked=true' : ''}`),
   clearTemporaryAddress: (id: string) => request<Device>('POST', `/devices/${id}/temporary-address/clear`),

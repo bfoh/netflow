@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping
+from pathlib import Path
 from typing import ClassVar
 
 from undm.domain.operations import DeviceOperation
@@ -267,8 +268,22 @@ class MockFortiGateDriver(MockDriver):
         simulated=True,
         # Restoring a base file (full backup) is simulated too, so a staging run can be
         # practised end to end (D-085); it says nothing about real units.
-        capabilities=_COMMON | {C.REST_API, C.ZERO_TOUCH_PROVISIONING, C.CONFIGURATION_REPLACE},
+        capabilities=_COMMON | {C.REST_API, C.ZERO_TOUCH_PROVISIONING, C.CONFIGURATION_REPLACE,
+                                C.LICENSE_FILE},
     )
+
+    license_command = "(simulated license load)"
+
+    def load_license(self, path: Path, name: str) -> OperationResult:
+        op = Op.APPLY_CONFIGURATION
+        if r := self._require(op):
+            return r
+        if not path.read_bytes():
+            return OperationResult.failed(op, "The license file is empty")
+        r = self.reboot()
+        return OperationResult.success(op, {"restarting": True},
+                                       f"license '{name}' loaded and the unit restarted "
+                                       "(simulated)") if r.ok else r
 
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
