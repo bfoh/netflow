@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from ipaddress import IPv4Interface
 
 BANNER = ("\r\nSIMULATED SWITCH CONSOLE (UNDM)\r\n"
           "Aruba 2930F simulation - not a real device\r\n\r\n")
@@ -49,6 +50,9 @@ class SimulatedArubaConsole:
     # As on the bench (2026-11-25, WC.16.10.0025): 'erase startup-config' cleared the
     # configuration but the manager login survived, so the console asked for it again.
     keep_passwords_on_erase: bool = False
+    # VLAN 1 holds this address from DHCP (a port was cabled to a network with a DHCP
+    # server). Not in the configuration; refused as on the bench (2026-11-25).
+    dhcp_lease: str | None = None
 
     def __post_init__(self) -> None:
         self._out = bytearray()
@@ -273,6 +277,12 @@ class SimulatedArubaConsole:
                     vlan["untagged"].add(port)  # type: ignore[attr-defined]
                     return ""
                 if m := re.fullmatch(r"ip address (\S+)(?: (\S+))?", cmd):
+                    if self.dhcp_lease and m.group(2) and self._ctx[-1] != "vlan-1":
+                        new = IPv4Interface(f"{m.group(1)}/{m.group(2)}")
+                        if new.network.overlaps(IPv4Interface(self.dhcp_lease).network):
+                            return ("An interface with the same IP address or subnet or an "
+                                    "overlapping network\r\n "
+                                    f"{new.ip}/{new.network.prefixlen} already exists.\r\n")
                     vlan["ip"] = cmd[len("ip address "):]
                     return ""
         return f"Invalid input: {cmd.split()[0]}\r\n"

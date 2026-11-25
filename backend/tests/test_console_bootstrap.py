@@ -105,6 +105,24 @@ def test_rejected_command_stops_without_saving():
     assert r.commands_sent == ["configure", "vlan 222", 'name "OOBM_VLAN"', "untagged 2"]
 
 
+def test_address_in_the_network_of_a_dhcp_lease_is_explained():
+    """Bench 2026-11-25: VLAN 1 held a DHCP address in the bench network, so the switch
+    refused the OOBM address. UNDM stops at once, quotes the switch, and says what to do."""
+    sim = SimulatedArubaConsole(dhcp_lease="192.168.1.120/24")
+    r = run(sim)
+    assert r.status is BootstrapStatus.FAILED and not r.saved and sim.saved_config is None
+    assert "rejected 'ip address 192.168.1.1 255.255.255.0'" in r.message
+    assert "overlapping network" in r.message  # the switch's own words
+    assert "VLAN 1" in r.message and "DHCP" in r.message and "unplug" in r.message
+    assert "Plug port 2" in r.message
+    assert "write memory" not in r.commands_sent and "<<< exit" not in r.transcript
+
+
+def test_dhcp_lease_in_another_network_does_not_matter():
+    r = run(SimulatedArubaConsole(dhcp_lease="10.0.0.5/24"))
+    assert r.status is BootstrapStatus.BOOTSTRAPPED
+
+
 def test_invalid_port_reported_by_switch():
     r = run(SimulatedArubaConsole(), BootstrapParams(222, "OOBM_VLAN", "99",
                                                      IPv4Interface("192.168.1.1/24")))

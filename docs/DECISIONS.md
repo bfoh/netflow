@@ -1236,3 +1236,19 @@ Product owner: the console setup should take both logins. It now does, for every
   its dialogue is not yet seen on hardware.
 The simulator models the surviving password (`keep_passwords_on_erase`) with the bench wording.
 
+### D-103 Console setup: the address is refused because VLAN 1 holds one by DHCP (2026-11-25)
+Bench: a 2930F's console setup ended "Commands were accepted but the configuration read back
+does not show the expected VLAN, port and address". The transcript shows the switch refused
+`ip address` in the OOBM VLAN with "An interface with the same IP address or subnet or an
+overlapping network … already exists", although its configuration had no other static
+address. VLAN 1 asks for an address by DHCP on a factory switch; one of its ports was cabled
+to the bench network, where a DHCP server gave it an address in the same network. Which
+device served DHCP is not known (not checked).
+- The switch's wording is now recognised as a rejection (observed text, not invented), so
+  the setup stops at that command and quotes the switch.
+- The message says what it means and what to do: unplug every network cable, switch the
+  switch off and on (nothing was saved; this discards the leftover VLAN and the DHCP
+  address), run the setup again, and plug its management port in only afterwards.
+- UNDM does not remove VLAN 1's DHCP setting itself: that would add a command to the
+  console bootstrap that the team's procedure does not have (D-025).
+

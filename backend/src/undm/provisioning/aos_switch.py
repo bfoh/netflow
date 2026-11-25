@@ -57,8 +57,12 @@ PASSWORD_LINE = re.compile(r"^password manager\b", re.M)
 # 2026-11-23): the console senses its speed from two Enter key presses.
 SPEED_SENSE = re.compile(
     r"Waiting for Speed Sense\.\s*Press <Enter> twice to continue\.?\s*$", re.I)
+# Seen on the bench (2026-11-25, WC.16.10.0025) when another VLAN already holds an address
+# in the same network: "An interface with the same IP address or subnet or an overlapping
+# network <a>/24 already exists."
+OVERLAP = re.compile(r"same IP address or subnet|overlapping network", re.I)
 ERROR = re.compile(r"Invalid input|Incomplete input|Ambiguous input|invalid port|"
-                   r"not allowed|Error:|Unable to", re.I)
+                   r"not allowed|Error:|Unable to|" + OVERLAP.pattern, re.I)
 
 # Erasing a preconfigured switch (product owner, 2026-11-23: BH-DMZ units arrive with a site
 # configuration and a non-approved manager password). Command from the vendor's CLI
@@ -482,6 +486,24 @@ def wait_after_erase(console: ArubaOSSwitchConsole, request: EraseRequest) -> tu
                     "it shows its login, run the bootstrap again without erasing.") from None
 
 
+def _rejected(cmd: str, output: str, params: BootstrapParams) -> str:
+    """The message for a command the switch rejected, with the switch's own words."""
+    said = " ".join(ln.strip() for ln in output.splitlines()
+                    if ln.strip() and ln.strip() != cmd)[:300]
+    message = f"The switch rejected '{cmd}'" + (f": \"{said}\"" if said else "") + "."
+    if OVERLAP.search(output):
+        return message + (
+            f" Another VLAN of the switch already has an address in {params.address.network}."
+            " On a factory switch this is VLAN 1, which asks for an address by DHCP: one of "
+            "its ports was connected to a network with a DHCP server. Nothing was saved. To "
+            "fix: unplug every network cable from the switch, switch it off and on (this "
+            "discards the unsaved changes and the DHCP address), then run the console setup "
+            f"again. Plug port {params.untagged_port} into the bench switch only after the "
+            "setup.")
+    return message + (" Earlier commands changed the running configuration but nothing was "
+                      "saved: reboot the switch without saving to discard them.")
+
+
 def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
               *, allow_configured: bool = False,
               erase: EraseRequest | None = None,
@@ -575,11 +597,8 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
             output = console.command(cmd)
             if ERROR.search(output):
                 console.command("end")
-                return done(
-                    BootstrapStatus.FAILED,
-                    f"The switch rejected '{cmd}'. Earlier commands changed the running "
-                    "configuration but nothing was saved: reboot the switch without saving "
-                    "to discard them.", findings=findings)
+                return done(BootstrapStatus.FAILED, _rejected(cmd, output, params),
+                            findings=findings)
         console.command("end")
         after = console.running_config()
         if not is_configured(after, params):

@@ -119,6 +119,11 @@ plan (its file moves B to A's address). The Black Box and the FortiGate can run 
   recover: set the device's "Its login" to the login the file set (Test should connect), set
   "Login after loading" to it as well, and make a new plan; the firmware step is skipped
   (already running) and the file is loaded and checked again.
+- **Console setup: "The switch rejected 'ip address …': … overlapping network … already
+  exists"** (2026-11-25): VLAN 1 got an address by DHCP because a port of the switch was
+  cabled to the bench network during the setup. Unplug every network cable from the switch,
+  switch it off and on (nothing was saved), run the console setup again, and plug its
+  management port in only after it.
 - **Any other stop**: send the bench log. Do not retry more than once before sending it.
 
 ## What this run answers
