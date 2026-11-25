@@ -42,6 +42,29 @@ describe('stage a system: steps per device', () => {
   });
 });
 
+describe('login after loading (D-092)', () => {
+  const real = (model: string) => ({ id: 'x', model, environment: 'lab', capabilities: [] } as unknown as Device);
+  const sim = (model: string) => ({ id: 'x', model, environment: 'simulated', capabilities: [] } as unknown as Device);
+
+  it('a real Black Box needs it: its team file sets the approved password', () => {
+    const c = { ...EMPTY_CHOICE, fileId: 'f' };
+    expect(planSteps(role('blackbox'), c, real('LIG1014A')).missing).toEqual(['the login after loading (its team file sets the approved password)']);
+    const ok = planSteps(role('blackbox'), { ...c, loginAfter: 'approved' }, real('LIG1014A'));
+    expect(ok.missing).toEqual([]);
+    expect(ok.steps).toEqual([{ kind: 'configuration', version_id: 'f', credential_after_ref_id: 'approved' }]);
+  });
+
+  it('not for a simulated Black Box, nor a 2930F (its console setup gave it the approved login)', () => {
+    expect(planSteps(role('blackbox'), { ...EMPTY_CHOICE, fileId: 'f' }, sim('LIG1014A')).missing).toEqual([]);
+    expect(planSteps(role('aruba_a'), { ...EMPTY_CHOICE, fileId: 'f' }, real('2930F')).missing).toEqual([]);
+  });
+
+  it('a real FortiGate needs it for its base file', () => {
+    const c = { ...EMPTY_CHOICE, firstLogin: false, baseId: 'b', siteId: 's' };
+    expect(planSteps(role('firewall'), c, real('FortiGate-101F')).missing).toEqual(['the login after loading (its base file sets its own admin password)']);
+  });
+});
+
 describe('two devices ending at one address (D-091)', () => {
   const sw = (id: string, address: string) => ({ device: { id, name: `sw-${id}`, model: '2930F', management_address: address } as Device });
   const b = ROLES.find((r) => r.key === 'aruba_b')!;

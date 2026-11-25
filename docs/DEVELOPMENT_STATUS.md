@@ -43,7 +43,7 @@ manager, topology._
 | Audit & logging | All significant actions, redacted details and device output; actions shown in words (raw action name kept below) |
 | Safety switches in Settings | Real-device changes, Firmware changes and the second approver for firmware can be changed in Settings → Safety: confirmation before the less safe position, one audit event per change, kept in `settings.json` in the data folder, `.env`/environment values win and are shown as fixed, production switches start-up only, in force at once (an approved plan not yet started is stopped by turning a switch off) (D-082) |
 | Feedback and confirmations | Errors shown inside the dialog that caused them; other errors stay until closed, with Copy details; one confirmation dialog for cancel plan, retire/delete image, delete login, delete system (typed name); deleting a system removes its stored passwords; tables scroll inside their cards; no sideways page scroll at 390 px (D-084) |
-| Bench cabling | Wizard Bench check: cabling table per device (all four on one isolated switch); a 2930F whose file moves it to an address another device has waits until that one is unplugged (card caution); the 2930F file step stops in preflight, nothing changed, when another device answers at that address (D-091) Test connection answers in the device's row (a real device without a login says "Choose its login first" with a link to step 1; a refused test shows its reason there, no pop-up) (v63). A console setup whose switch does not answer yet says to plug its port into the bench switch and press Test (v64). An SSH timeout says "No answer from <address> on port 22 (SSH)" with the bench causes (cable, PC address, Wi-Fi on the same network); the library text stays in the diagnostics. The console setup state reads "Console setup done", not "Reachable" (v65). |
+| Bench cabling | Wizard Bench check: cabling table per device (all four on one isolated switch); a 2930F whose file moves it to an address another device has waits until that one is unplugged (card caution); the 2930F file step stops in preflight, nothing changed, when another device answers at that address (D-091) Test connection answers in the device's row (a real device without a login says "Choose its login first" with a link to step 1; a refused test shows its reason there, no pop-up) (v63). A console setup whose switch does not answer yet says to plug its port into the bench switch and press Test (v64). An SSH timeout says "No answer from <address> on port 22 (SSH)" with the bench causes (cable, PC address, Wi-Fi on the same network); the library text stays in the diagnostics. The console setup state reads "Console setup done", not "Reachable" (v65). First full wizard run (2026-11-25): both 2930F and the FortiGate staged; the Black Box loaded its file but its plan had no login after loading, so the wizard now requires one for a real Black Box and FortiGate (D-092, v66). |
 | Bench log | One masked text per system (devices, console setups, plans with every event) to send instead of screenshots; read before sharing; audited (D-090). Checklist for the first full wizard run: `vendor-support/staging-wizard-bench.md` |
 | Messages | Four kinds only (problem, caution, status, help) from one component; explanations as quiet hints; empty states; safety switch state shown next to actions on real devices instead of the header; guarded by a test (D-089) A real device without a login says so in plain words, with where to choose one (v62). |
 | Needs attention, deleting | A plan that needs attention stops waiting once a later real plan succeeded on its devices or a person records a check (note, audited); Home shows only those still waiting. Delete devices (row or several), systems and plans (a staging step takes its whole staging plan; never while running); audited (D-088) |
@@ -70,14 +70,14 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-25, v65)
+## Test results (2026-11-25, v66)
 | Suite | Result |
 |---|---|
 | Backend pytest | 460 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (79 files) |
-| Frontend Vitest | 52 passed |
+| Frontend Vitest | 55 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 5 passed (acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box; export and import of a system) |
 

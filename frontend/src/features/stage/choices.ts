@@ -73,5 +73,10 @@ export function planSteps(role: Role, c: Choice, device?: Device): { steps: Stag
       } else missing.push('the team file');
     }
   }
+  // A real device whose file sets a password its starting login does not have (D-092, bench
+  // 2026-11-25: a Black Box plan without it loaded its file, then could not log in again).
+  if (role.loginAfter && device && device.environment !== 'simulated' && (c.fileId || c.baseId) && !c.loginAfter) {
+    missing.push(`the login after loading (${role.loginAfter.split(':')[0]})`);
+  }
   return { steps, missing };
 }

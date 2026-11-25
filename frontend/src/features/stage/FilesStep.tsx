@@ -53,6 +53,7 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
   const set = (part: Partial<Choice>) => onChange({ ...choice, ...part });
   const { missing } = planSteps(role, choice, device);
   const hasFile = role.steps.includes('base') || role.steps.includes('file');
+  const needsLoginAfter = !!role.loginAfter && device.environment !== 'simulated';
   return (
     <Card withBorder>
       <Group justify="space-between" mb={4} wrap="nowrap" align="flex-start">
@@ -96,12 +97,17 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
           <FilePick device={device} label="Team file" description="The complete file this switch gets." logins={logins}
             value={choice.fileId} onChange={(v) => set({ fileId: v })} />
         )}
-        {hasFile && (
+        {hasFile && (needsLoginAfter ? (
+          <Select label="Login after loading" clearable w="100%" maw={420} data={logins} value={choice.loginAfter}
+            placeholder="Choose the login" description={`Needed: ${role.loginAfter}.`}
+            error={choice.loginAfter ? undefined : 'Not chosen yet'}
+            onChange={(v) => set({ loginAfter: v })} />
+        ) : (
           <Select label="Login after loading (optional)" clearable w="100%" maw={420} data={logins} value={choice.loginAfter}
             placeholder="Same login as now"
-            description="If the file sets another password (FortiGate base file; team files set the approved one), choose that login."
+            description="Leave empty when the device already uses the login its file sets (2930F after their console setup); otherwise choose that login."
             onChange={(v) => set({ loginAfter: v })} />
-        )}
+        ))}
       </Stack>
     </Card>
   );

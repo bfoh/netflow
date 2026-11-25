@@ -107,6 +107,12 @@ plan (its file moves B to A's address). The Black Box and the FortiGate can run 
 - **The plan says "Needs attention"**: check the device on its console. When it is right,
   open the plan and press **Mark as checked…**. Then make a new plan for that device; the
   run board offers "Make a new plan for this device…".
+- **The device answers after its file but refuses the login** (2026-11-25, Black Box): the
+  plan had no login after loading, so UNDM kept the factory login while the file had set the
+  approved password. Since v66 the wizard requires it for a real Black Box and FortiGate. To
+  recover: set the device's "Its login" to the login the file set (Test should connect), set
+  "Login after loading" to it as well, and make a new plan; the firmware step is skipped
+  (already running) and the file is loaded and checked again.
 - **Any other stop**: send the bench log. Do not retry more than once before sending it.
 
 ## What this run answers

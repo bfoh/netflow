@@ -1046,3 +1046,15 @@ temporary 192.168.1.2) runs only after A is staged and unplugged.
 - The probe is UNDM's own check (no vendor command); a device that answers neither SSH nor
   TCP at that address is not detected, and the serial check after the restart stays.
 
+### D-092 The wizard requires a login after loading where the file sets a new password (2026-11-25)
+First full wizard run: both 2930F and the FortiGate (first login → firmware → base → site)
+staged. The Black Box loaded its team file ("Import Done!", restart), then refused the
+login for 10 minutes. The plan had no login after loading (no "from now on logging in with
+the credential chosen for after loading" event), so UNDM kept the factory login while the
+file had set the approved password. The wizard showed the field as optional with "Same login
+as now", which is right for the 2930F (their console setup already gave them the approved
+login) and wrong for a factory Black Box. Roles now say when a real device needs it
+(`roles.ts` `loginAfter`: Black Box team file, FortiGate base file); `planSteps` lists it as
+missing until chosen, so "Make the plan" stays disabled, and step 2 shows the field as
+required with the reason. Simulated devices and the 2930F are unchanged.
+

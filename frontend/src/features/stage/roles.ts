@@ -24,6 +24,9 @@ export interface Role {
   cable: string;
   /** Its management address once its file is loaded, as the team's files set it. */
   addressAfter: string;
+  /** Why a real device of this role needs a 'login after loading' (its file sets a password
+   * that its starting login does not have); absent when its starting login stays valid. */
+  loginAfter?: string;
 }
 
 export const ROLES: Role[] = [
@@ -31,12 +34,14 @@ export const ROLES: Role[] = [
     realDriver: 'ssh.fortinet.fortios', simulatedDriver: 'mock.fortinet.fortios', nameSuffix: 'fw',
     address: '192.168.1.99', steps: ['first_login', 'firmware', 'base', 'site'],
     hint: 'Mgmt port, factory address. A new unit gets its approved password at the first login.',
-    cable: 'MGMT port → small switch', addressAfter: '192.168.1.99' },
+    cable: 'MGMT port → small switch', addressAfter: '192.168.1.99',
+    loginAfter: 'its base file sets its own admin password: choose the login with that password' },
   { key: 'blackbox', title: 'Black Box LIG1014A', model: 'LIG1014A', modelId: 'blackbox-lig1014a',
     realDriver: 'ssh.blackbox.lig1014a', simulatedDriver: 'mock.blackbox.switch', nameSuffix: 'bb',
     address: '192.0.2.1', steps: ['firmware', 'file'],
     hint: 'Factory address, user admin with no password. Firmware first, then the team file.',
-    cable: 'Port 1/3 → small switch (its file keeps management on that port only)', addressAfter: '192.0.2.1' },
+    cable: 'Port 1/3 → small switch (its file keeps management on that port only)', addressAfter: '192.0.2.1',
+    loginAfter: 'its team file sets the approved password: choose the approved login' },
   { key: 'aruba_a', title: 'Aruba 2930F (OOBM port 2)', model: '2930F', modelId: 'aruba-2930f',
     realDriver: 'ssh.aruba.aos_switch', simulatedDriver: 'mock.aruba.aos_switch', nameSuffix: 'sw-a',
     address: '192.168.1.1', steps: ['console', 'firmware', 'file'],
