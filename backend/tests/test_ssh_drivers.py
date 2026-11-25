@@ -51,13 +51,23 @@ def test_connect_passes_parameters_without_leaking_password(scenario):
 
 @pytest.mark.parametrize("error,needle", [
     (NetmikoAuthenticationException("bad"), "Authentication failed"),
-    (NetmikoTimeoutException("slow"), "Timed out"),
+    (NetmikoTimeoutException("slow"), "No answer from 192.0.2.10 on port 22 (SSH)"),
     (OSError("No route to host"), "No route to host"),
 ])
 def test_connect_errors_are_reported(scenario, error, needle):
     scenario.connect_error = error
     r = drv().connect()
     assert r.status is ResultStatus.FAILED and needle in r.message
+
+
+def test_no_answer_is_said_in_plain_words_with_the_library_text_kept_aside(scenario):
+    """Bench 2026-11-25: the message showed the library's text and driver type."""
+    scenario.connect_error = NetmikoTimeoutException(
+        "TCP connection to device failed. Device settings: aruba_osswitch 192.0.2.10:22")
+    r = drv().connect()
+    assert "No answer from 192.0.2.10 on port 22 (SSH)" in r.message
+    assert "Wi-Fi" in r.message and "aruba_osswitch" not in r.message
+    assert "aruba_osswitch" in r.diagnostics["detail"]
 
 
 def test_iosxe_facts_and_backup(scenario):

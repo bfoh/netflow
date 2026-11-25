@@ -48,7 +48,7 @@ const STATES: Record<string, { label: string; color: string; hint?: string }> = 
   unknown: { label: 'Unknown', color: 'yellow' },
   planned: { label: 'Planned', color: 'gray' },
   factory_default: { label: 'Factory default', color: 'gray' },
-  bootstrapped: { label: 'Reachable', color: 'cyan' },
+  bootstrapped: { label: 'Console setup done', color: 'cyan' },
   managed: { label: 'Configured', color: 'teal' },
   decommissioned: { label: 'Decommissioned', color: 'gray' },
   // events and results

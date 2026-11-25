@@ -358,9 +358,15 @@ class SshCliDriver(DeviceDriver):
                     op, f"The device at {where} answered, but the SSH handshake failed: "
                         f"{detail[-300:]}. It may offer only older SSH methods that this PC's "
                         "SSH library no longer accepts.", {"ssh_handshake": True})
+            # In plain words with the bench's usual causes (2026-11-25: a switch set up on the
+            # console but not answering); the library's own text stays in the diagnostics.
             return OperationResult.failed(
-                op, f"Timed out connecting to {where} (unreachable, filtered, or SSH "
-                    f"disabled){': ' + detail[-200:] if detail else ''}")
+                op, f"No answer from {self.target.management_address} on port "
+                    f"{self.target.port or 22} (SSH). Check that: its network cable is in the "
+                    "right port and in the bench switch; this PC's wired adapter has an "
+                    "address in the same network; no other connection of this PC (e.g. "
+                    "Wi-Fi) uses that network too; the device is switched on and finished "
+                    "starting.", {"detail": detail[-400:]} if detail else {})
         except ReadTimeout:
             shown = self._scrub(seen.getvalue().decode("utf-8", "replace"), change_to)[-300:]
             done: dict[str, object] = {}
