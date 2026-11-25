@@ -207,6 +207,19 @@ def diagnostics(device_id: str, session: SessionDep, registry: RegistryDep,
     return DiagnosticsOut(text=svc.sanitized_diagnostics(session, d, registry, actor))
 
 
+@router.post("/api/devices/{device_id}/temporary-address/clear", response_model=DeviceOut)
+def clear_temporary_address(device_id: str, session: SessionDep, actor: ActorDep) -> Device:
+    """The device was restarted: it runs at its own (saved) address again (D-096). Changes
+    only UNDM's record; no device is contacted."""
+    d = get_device(session, device_id)
+    was = svc.temporary_address(d)
+    if was:
+        svc.set_temporary_address(d, None)
+        audit.record(session, actor, "device.temporary_address_cleared", "device", d.id,
+                     details={"address": was, "own_address": d.management_address})
+    return d
+
+
 @router.post("/api/devices/{device_id}/operations/{operation}", response_model=OperationOut)
 def run_operation(device_id: str, operation: DeviceOperation, session: SessionDep,
                   registry: RegistryDep, settings: SettingsDep,

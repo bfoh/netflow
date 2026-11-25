@@ -59,11 +59,13 @@ The USB console cable goes from the PC to a 2930F's console port for its console
 cable is enough, moved from A to B. Plug a 2930F's port into the small switch only after its
 console setup: a preconfigured unit may still use an address another device has.
 
-**Both 2930F end at 192.168.1.1.** Once B's file loads, A and B would share the address. So:
-A's plan first; when A shows **Staged**, unplug A from the small switch; then B's plan. If A
-still answers at 192.168.1.1, B's file step stops before anything is sent ("Another device
-already answers…", nothing changed, D-091): unplug A and make a new plan for B (its firmware,
-already done, is skipped).
+**Both 2930F end at 192.168.1.1.** Once B's file loads, A and B would share the address. Since
+v68 (D-096, experimental until this has run once on the bench) B's plan has a step "Make
+room": UNDM moves A to 192.168.1.3 in its running configuration only, nothing saved, so A
+returns to 192.168.1.1 at its next power-on. Stage A first, then run B's plan; no cable to
+unplug. If the step stops, nothing was saved on A: restart A, unplug it from the small switch
+as before, and make a new plan for B. A device UNDM cannot move (or a step that is absent)
+still means: unplug A before B's plan; the v61 check stops B's file step otherwise.
 
 ## Order of the run (wizard step 4)
 
@@ -82,7 +84,8 @@ plan (its file moves B to A's address). The Black Box and the FortiGate can run 
 - **Console setup** (link on its card). For the preconfigured unit:
   - tick **erase first**;
   - choose its current login;
-  - type its hostname as shown in the console prompt.
+  - press **Read its name from the console** (it changes nothing), then tick "Yes, erase
+    <name>". No name to type and no PuTTY (D-095).
 
   Expected: the erase, then a restart (about 1–2 minutes), "Press Enter twice", then the
   bootstrap. The log records the switch's own words for the erase confirmation (Q-37).

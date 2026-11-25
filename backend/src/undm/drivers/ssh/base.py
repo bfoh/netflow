@@ -366,7 +366,8 @@ class SshCliDriver(DeviceDriver):
                     "right port and in the bench switch; this PC's wired adapter has an "
                     "address in the same network; no other connection of this PC (e.g. "
                     "Wi-Fi) uses that network too; the device is switched on and finished "
-                    "starting.", {"detail": detail[-400:]} if detail else {})
+                    "starting.", {"no_answer": True,
+                                  **({"detail": detail[-400:]} if detail else {})})
         except ReadTimeout:
             shown = self._scrub(seen.getvalue().decode("utf-8", "replace"), change_to)[-300:]
             done: dict[str, object] = {}

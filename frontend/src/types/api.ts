@@ -201,7 +201,7 @@ export interface DeploymentEvent {
 export interface DeploymentSummary {
   id: string;
   project_id: string;
-  kind: 'configuration' | 'firmware' | 'first_login';
+  kind: 'configuration' | 'firmware' | 'first_login' | 'free_address';
   state: DeploymentState;
   dry_run: boolean;
   /** Firmware plans: install the approved image even where a device runs a newer one. */
@@ -229,7 +229,10 @@ export interface StagingPlan {
 
 /** One step of a device's staging plan, as sent to UNDM (D-085). */
 export interface StagingStepInput {
-  kind: 'first_login' | 'firmware' | 'configuration';
+  kind: 'first_login' | 'firmware' | 'configuration' | 'free_address';
+  /** free_address: the other device of the system to move aside, and the spare address. */
+  other_device_id?: string;
+  address?: string;
   image_id?: string;
   allow_downgrade?: boolean;
   also_secondary?: boolean;

@@ -1082,3 +1082,52 @@ Bench log fixes:
   in its audit entry (passwords are never in the transcript), and the bench log prints them,
   so the next "Could not reach a command prompt" shows the switch's own words.
 
+### D-094 Devices take their real hostname (2026-11-25)
+Product owner: the wizard's placeholder names (`<system>-sw-a`) should give way to the real
+ones, taken from the configuration file chosen for the device. When a non-dry-run plan is
+made with a supplied (imported) file, the device is renamed to the hostname the file sets
+(the driver's file report; FortiOS: `set hostname` in `config system global`), before any
+connection. After the file is loaded and verified, the hostname the device reports is
+compared again and wins if it differs. A hostname that is the model's factory name is not a
+name; a name another device of the system has is not taken (`device.rename_skipped`). Audit:
+`device.renamed` (from, to, source). The wizard finds its devices by the role it gave them at
+creation (`device.role`), then by name and address as before, so renamed devices, and two
+2930F at one address, keep their cards.
+
+### D-095 Erase: UNDM reads the switch's name, the person confirms it (amends D-057) (2026-11-25)
+D-057 made the person type the preconfigured switch's hostname. On the bench nobody knows it
+without a terminal program, which UNDM is meant to replace. New read-only console action
+(`POST /api/devices/{id}/provisioning/console-identify`): logs in with the switch's current
+login, returns the hostname of its prompt and whether it holds configuration, sends no
+configuration command, and does not answer a new switch's "configure the manager
+credentials" dialogue (`ArubaOSSwitchConsole.read_only`). The page shows "The switch on this
+console is X" with a checkbox "Yes, erase X"; the run sends that name, and `erase_existing`
+still refuses if the switch on the console has another name at that moment. A switch found
+at factory default or new is reported as such ("run the setup without erase"). D-057's other
+safeguards are unchanged: explicit request, current login, device name typed for the run,
+write switch, audit.
+
+### D-096 A device is moved to a spare address, unsaved, to free its own (EXPERIMENTAL) (2026-11-25)
+Both 2930F of a system end at one management address (D-091); unplugging the first by hand
+worked but is a step to forget. The product owner asked for something that undoes itself
+(a port that returns after 30 minutes). No timed command is verified for ArubaOS-Switch, so
+none is used. Instead: new plan kind `free_address` (lifecycle: preview with the exact
+commands, approval, backup, run, evidence) and driver capability `TEMPORARY_ADDRESS`,
+implemented for ArubaOS-Switch only. The switch gets a spare address in its running
+configuration (`vlan <id>` / `ip address <spare> <mask>`, the team's own console commands),
+UNDM reaches it there and checks its serial number, removes the old address if the switch
+kept both (`no ip address`; Q-45 asks which a real unit does), reads back, and checks that
+the old address has gone quiet. `write memory` is never sent: the saved configuration still
+matches the team's file, and the switch returns to its own address at its next power-on,
+which shipping from the bench guarantees. No port is switched off.
+- The wizard adds the step to the second switch's plan before its file step, when the device
+  in the way can be moved (`planSteps`, `addressTakenBy`, spare address 192.168.1.3).
+- Nothing answering at the first switch's address means nothing to move (off or unplugged):
+  the step succeeds without a change, so the old manual way still works.
+- The device keeps its own address on record; `observed_facts.extra.temporary_address` makes
+  UNDM reach it at the spare one. It is cleared when a later plan finds the device back at its
+  own address, or by "It was restarted" on the device page (no device contacted).
+- A failed step ends Needs attention and says that a restart returns the switch to its saved
+  configuration. The v61 check before sending a file stays as the last guard.
+- The two addresses of a plan are kept in the target's from/to fields (no schema change).
+

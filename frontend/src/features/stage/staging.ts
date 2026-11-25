@@ -18,6 +18,8 @@ export function stagingStatus(steps: Deployment[]) {
 export function stepTitle(step: Deployment): string {
   const what = step.kind === 'first_login'
     ? 'First login: sets the device\'s password when the new unit asks for one'
+    : step.kind === 'free_address'
+      ? 'Make room: the other switch moves to a spare address until its next power-on (nothing is saved on it)'
     : step.kind === 'firmware'
       ? 'Firmware: the device fetches the approved image from this PC and restarts into it'
       : step.apply_mode === 'replace'

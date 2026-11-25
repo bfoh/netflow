@@ -109,6 +109,8 @@ class FakeConnection:
 
     def send_config_set(self, lines, error_pattern: str = "", read_timeout: int = 0) -> str:
         self.s.calls.append(("send_config_set", list(lines)))
+        if hasattr(self.s.device, "configure"):
+            return str(self.s.device.configure(list(lines)))
         applied = []
         for ln in lines:
             if ln.strip() in self.s.bad_lines:
@@ -133,6 +135,8 @@ def factory_for(scenario: Scenario):
         if scenario.connect_error is not None:
             raise scenario.connect_error
         if scenario.device is not None:
+            if hasattr(scenario.device, "answers_at"):  # only at the addresses it has
+                scenario.device.answers_at(str(kwargs.get("host", "")))
             if hasattr(scenario.device, "password"):  # checks the password it is given
                 scenario.device.accept_connection(str(kwargs.get("password", "")))
             else:

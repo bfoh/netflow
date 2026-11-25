@@ -120,6 +120,83 @@ def _tcp_reachable(address: str, port: int = 22, timeout: float = 3.0) -> bool:
         return False
 
 
+def identify_console(
+    session: Session, device: Device, registry: DriverRegistry, actor: str, *,
+    serial_port: str, baudrate: int, current_credential_ref_id: str | None,
+) -> dict[str, Any]:
+    """Read which switch is on the console, changing nothing (D-095).
+
+    Logs in with the switch's current login and returns the hostname of its prompt and
+    whether it holds configuration, so a person confirms an erase by the name UNDM read
+    instead of typing a name they would first have to look up with a terminal program."""
+    if not supports_console_bootstrap(device, registry):
+        raise ServiceError("No console procedure exists for this device's platform")
+    if device.locked_by_deployment_id:
+        raise ConflictError("Device is locked by a running deployment")
+    simulated = registry.get(device.driver_id).info.simulated
+    if simulated != (serial_port == SIMULATED_PORT):
+        raise ServiceError(
+            "Simulated devices use the SIMULATED console port" if simulated
+            else "A real device needs a real serial port, not the simulated console")
+    current: Credentials | None = None
+    if current_credential_ref_id:
+        ref = session.get(CredentialRef, current_credential_ref_id)
+        if ref is None or ref.project_id != device.project_id:
+            raise ConflictError("Current login: credential not found in this project")
+        try:
+            current = creds.resolve(ref.provider, ref.locator)
+        except creds.CredentialResolutionError as e:
+            raise ServiceError(f"Credential '{ref.name}': {e}") from e
+    with _registry_lock:
+        lock = _port_locks.setdefault(serial_port if not simulated else f"sim:{device.id}",
+                                      threading.Lock())
+    if not lock.acquire(blocking=False):
+        raise ConflictError(f"{serial_port} is already in use by another console session")
+    transport: Transport | None = None
+    out: dict[str, Any]
+    try:
+        try:
+            if simulated:
+                sim = _simulated_consoles.setdefault(device.id, SimulatedArubaConsole())
+                sim._state, sim._enters = "asleep", 0  # noqa: SLF001 - new console session
+                transport = sim
+                console = aos_switch.ArubaOSSwitchConsole(
+                    ConsoleSession(sim, read_timeout=2.0, settle_time=0), current,
+                    wake_delay=0.0)
+            else:
+                transport = open_serial(serial_port, baudrate)
+                console = aos_switch.ArubaOSSwitchConsole(ConsoleSession(transport), current,
+                                                          wake_delay=0.5)
+            console.read_only = True
+            name = console.login()
+            findings: list[str] = []
+            if device.bootstrap_profile:
+                findings = aos_switch.site_config_findings(
+                    console.running_config(), _params(device, None))
+            else:
+                # Without bootstrap settings: any hostname of its own means it was set up.
+                findings = [] if name.lower().startswith("aruba-") else ["hostname"]
+            out = {"state": "configured" if findings else "factory_default", "hostname": name,
+                   "message": (f"The switch on this console is '{name}' and holds "
+                               "configuration." if findings else
+                               f"The switch on this console ('{name}') is already at factory "
+                               "default: run the setup without 'erase first'.")}
+        except aos_switch.NewSwitchError:
+            out = {"state": "new", "hostname": "",
+                   "message": "The switch on this console is new (it asks to set its manager "
+                              "credentials): run the setup without 'erase first'."}
+        except ConsoleError as e:
+            out = {"state": "unknown", "hostname": "",
+                   "message": f"Could not read the switch's name: {e}"}
+    finally:
+        if transport is not None and not simulated:
+            transport.close()
+        lock.release()
+    audit.record(session, actor, "provisioning.console_identify", "device", device.id,
+                 details={"serial_port": serial_port, "state": out["state"]})
+    return out
+
+
 def run_console_bootstrap(
     session: Session, device: Device, registry: DriverRegistry, policy: Policy, actor: str, *,
     serial_port: str, baudrate: int, profile: dict[str, Any] | None,

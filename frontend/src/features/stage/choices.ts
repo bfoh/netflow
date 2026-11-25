@@ -1,4 +1,5 @@
 import type { Device, StagingStepInput } from '../../types/api';
+import { canMoveAside, SPARE_ADDRESS } from './roles';
 import type { Role, RoleKey } from './roles';
 
 /** What the person chose for one device in the wizard. */
@@ -49,7 +50,7 @@ export function wantsFirstLogin(c: Choice, device?: Device): boolean {
 }
 
 /** The plan steps for a device, in its role's order; what is still missing, in words. */
-export function planSteps(role: Role, c: Choice, device?: Device): { steps: StagingStepInput[]; missing: string[] } {
+export function planSteps(role: Role, c: Choice, device?: Device, inTheWay?: Device): { steps: StagingStepInput[]; missing: string[] } {
   const steps: StagingStepInput[] = [];
   const missing: string[] = [];
   for (const kind of role.steps) {
@@ -69,6 +70,11 @@ export function planSteps(role: Role, c: Choice, device?: Device): { steps: Stag
     }
     if (kind === 'file') {
       if (c.fileId) {
+        // Its file gives it an address another device of the system holds: that one is moved
+        // to a spare address first, unsaved (D-096).
+        if (inTheWay && canMoveAside(inTheWay)) {
+          steps.push({ kind: 'free_address', other_device_id: inTheWay.id, address: SPARE_ADDRESS });
+        }
         steps.push({ kind: 'configuration', version_id: c.fileId, ...(c.loginAfter ? { credential_after_ref_id: c.loginAfter } : {}) });
       } else missing.push('the team file');
     }

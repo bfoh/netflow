@@ -231,7 +231,8 @@ def create_device_staging(project_id: str, body: DeviceStagingIn, session: Sessi
         kind=s.kind, image_id=s.image_id, allow_downgrade=s.allow_downgrade,
         also_secondary=s.also_secondary, version_id=s.version_id,
         apply_mode=ApplyMode(s.apply_mode) if s.apply_mode else None,
-        credential_after_ref_id=s.credential_after_ref_id, secrets=s.secrets or None)
+        credential_after_ref_id=s.credential_after_ref_id, secrets=s.secrets or None,
+        other_device_id=s.other_device_id, address=s.address)
         for s in body.steps]
     made = svc.create_device_staging(project_id, body.device_id, actor, steps)
     return _staging(str(made[0].staging_id), made)

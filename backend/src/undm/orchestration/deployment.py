@@ -123,6 +123,9 @@ class DeploymentTarget:
     # login chosen for after loading, demands a new password and a person sets this one
     # on it by hand (D-065); the device then keeps this login.
     credentials_before: Credentials | None = field(default=None, repr=False)
+    # Hostname the device reported once its configuration was verified (observed, not
+    # declared); the service may name the device after it (D-094).
+    observed_hostname: str | None = None
     kept_previous_login: bool = False
     password_set: bool = False  # UNDM answered a demanded password change (D-066)
     # Project settings a driver may need before applying (e.g. certificate_subject).
@@ -655,6 +658,7 @@ class DeploymentOrchestrator:
                     t.after_config = str(after.data)
                 if custom.ok:
                     t.state = TargetState.VERIFIED
+                    self._note_hostname(t)
                     self._emit(dep, "verify", "ok", custom.message or "verified", t)
                     self._emit_warnings(dep, t, "verify", custom)
                     self._checkpoint(dep, t)
@@ -683,9 +687,16 @@ class DeploymentOrchestrator:
                                        f"{detail}")
             else:
                 t.state = TargetState.VERIFIED
+                self._note_hostname(t)
                 self._emit(dep, "verify", "ok", "running configuration matches intent", t)
                 self._checkpoint(dep, t)
         return ok
+
+    @staticmethod
+    def _note_hostname(t: DeploymentTarget) -> None:
+        facts = t.driver.get_device_facts()
+        if facts.ok and facts.data.hostname:
+            t.observed_hostname = str(facts.data.hostname).strip() or None
 
     def _checkpoint(self, dep: Deployment, t: DeploymentTarget) -> None:
         """Keep a named restore point after a verified change, where the device supports it.

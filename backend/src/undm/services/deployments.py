@@ -9,6 +9,7 @@ dies mid-deployment leaves a transient state behind that
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import uuid
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -36,7 +37,8 @@ from undm.domain.lifecycle import (
     interrupted_outcome,
 )
 from undm.domain.validation import Severity
-from undm.drivers.base import ApplyMode, Credentials
+from undm.drivers.base import ApplyMode, Capability, Credentials
+from undm.drivers.fortinet.config_files import configured_hostname as fortinet_hostname
 from undm.drivers.registry import DriverRegistry
 from undm.orchestration.deployment import (
     ApprovalRequiredError,
@@ -49,9 +51,16 @@ from undm.orchestration.deployment import (
 )
 from undm.orchestration.firmware import FirmwareOrchestrator
 from undm.orchestration.first_login import FirstLoginOrchestrator
+from undm.orchestration.free_address import FreeAddressOrchestrator
 from undm.security import credentials as creds
 from undm.services import audit
-from undm.services.devices import build_driver, inspect_config, latest_config
+from undm.services.devices import (
+    build_driver,
+    inspect_config,
+    latest_config,
+    set_temporary_address,
+    temporary_address,
+)
 from undm.services.errors import ConflictError, ForbiddenError, NotFoundError
 from undm.services.firmware import FirmwareRepository, device_compatibility
 from undm.services.jobs import DeploymentJobs
@@ -67,14 +76,17 @@ _SETTING_LABELS = {"certificate_subject": "Project settings → HTTPS certificat
 
 MAX_STAGING_STEPS = 8
 _STEP_WORDS = {"first_login": "first login", "firmware": "firmware",
-               "configuration": "load a file"}
+               "configuration": "load a file", "free_address": "move the other device aside"}
 
 
 @dataclass(frozen=True)
 class StagingStep:
     """One step of a device's staging plan (D-085)."""
 
-    kind: str  # first_login | firmware | configuration
+    kind: str  # first_login | firmware | configuration | free_address
+    # free_address: the device of the system to move aside, and the spare address (D-096)
+    other_device_id: str | None = None
+    address: str | None = None
     image_id: str | None = None
     allow_downgrade: bool = False
     also_secondary: bool = False
@@ -138,7 +150,8 @@ class DeploymentService:
                 sink=sink, reboot_wait_attempts=attempts, reboot_wait_delay_s=delay,
                 require_separate_approver=self.firmware_separate_approver)
         attempts, delay = self.firmware_reboot_wait
-        cls = FirstLoginOrchestrator if rec.kind == "first_login" else DeploymentOrchestrator
+        cls = {"first_login": FirstLoginOrchestrator,
+               "free_address": FreeAddressOrchestrator}.get(rec.kind, DeploymentOrchestrator)
         return cls(
             sink=sink, require_separate_approver=self.require_separate_approver,
             restart_wait_attempts=attempts, restart_wait_delay_s=delay,
@@ -284,6 +297,12 @@ class DeploymentService:
         if set(credentials_after or {}) - set(device_ids):
             raise ConflictError("Login after loading chosen for a device that is not in the plan")
         self.s.flush()
+        if not dry_run:
+            for tr in rec.targets:
+                named = self.s.get(Device, tr.device_id)
+                file = self.s.get(ConfigVersion, tr.config_version_id)
+                if named is not None and file is not None:
+                    self._name_from_file(named, file, actor, rec)
         dep = self._to_domain(rec)
         dep.defer_preview = defer_preview
         self._orchestrator(rec).prepare(dep)
@@ -325,6 +344,50 @@ class DeploymentService:
                       **({"staging_id": staging[0], "staging_step": staging[1]}
                          if staging else {})})
         return rec
+
+    # -- move a device to a spare address until its next restart (D-096) ----------------
+    def create_free_address(self, project_id: str, device_id: str, address: str, actor: str,
+                            *, staging: tuple[str, int] | None = None) -> DeploymentRecord:
+        device = self.s.get(Device, device_id)
+        if device is None or device.project_id != project_id:
+            raise NotFoundError(f"Device {device_id} not found in project")
+        self._check_free_address(device, address)
+        problem = self._policy_problem(device, False)
+        if problem:
+            raise ForbiddenError(problem)
+        rec = DeploymentRecord(
+            project_id=project_id, kind="free_address", state=S.DRAFT.value, dry_run=False,
+            apply_mode=ApplyMode.MERGE.value, created_by=actor,
+            staging_id=staging[0] if staging else None,
+            staging_step=staging[1] if staging else None)
+        # The two addresses are kept in the target's from/to fields (no schema change).
+        rec.targets.append(DeploymentTargetRecord(
+            device_id=device_id, position=0, state=TargetState.PENDING.value,
+            from_version=device.management_address, to_version=address))
+        self.s.add(rec)
+        self.s.flush()
+        dep = self._to_domain(rec)
+        self._orchestrator(rec).prepare(dep)
+        self._sync(rec, dep)
+        audit.record(self.s, actor, "deployment.create", "deployment", rec.id, rec.state,
+                     {"devices": [device_id], "kind": "free_address", "address": address,
+                      **({"staging_id": staging[0], "staging_step": staging[1]}
+                         if staging else {})})
+        return rec
+
+    def _check_free_address(self, device: Device, address: str | None) -> None:
+        try:
+            ipaddress.ip_address(address or "")
+        except ValueError:
+            raise ConflictError(f"'{address}' is not an address") from None
+        if device.driver_id not in self.registry or Capability.TEMPORARY_ADDRESS not in \
+                self.registry.get(device.driver_id).info.capabilities:
+            raise ConflictError(f"{device.name} cannot be moved to a temporary address by "
+                                "UNDM: disconnect it from the bench network instead")
+        if temporary_address(device):
+            raise ConflictError(f"{device.name} already runs at a temporary address")
+        if address == device.management_address:
+            raise ConflictError("The spare address is the device's own address")
 
     # -- staging plans (D-071) ----------------------------------------------------------
     def create_staging(self, project_id: str, device_id: str, actor: str, *,
@@ -398,6 +461,10 @@ class DeploymentService:
             if step.kind == "first_login":
                 rec = self.create_first_login(project_id, device_id, actor,
                                               staging=(staging_id, n))
+            elif step.kind == "free_address":
+                rec = self.create_free_address(project_id, str(step.other_device_id),
+                                               str(step.address), actor,
+                                               staging=(staging_id, n))
             elif step.kind == "firmware":
                 assert step.image_id is not None
                 rec = self.create_firmware(
@@ -465,6 +532,12 @@ class DeploymentService:
             if step.credential_after_ref_id:
                 self._credentials_for(device, step.credential_after_ref_id)
             problem = self._policy_problem(device, False)
+        elif step.kind == "free_address":
+            other = self.s.get(Device, step.other_device_id) if step.other_device_id else None
+            if other is None or other.project_id != device.project_id or other.id == device.id:
+                raise ConflictError(f"{where}: choose another device of this system")
+            self._check_free_address(other, step.address)
+            problem = self._policy_problem(other, False)
         else:
             raise ConflictError(f"Step {n}: unknown kind '{step.kind}'")
         if problem:
@@ -508,7 +581,9 @@ class DeploymentService:
         out = []
         for sid, steps in plans.items():
             steps.sort(key=lambda r: r.staging_step or 0)
-            device = steps[0].targets[0].device_id if steps[0].targets else ""
+            # The plan's device: a 'free_address' step targets another device (D-096).
+            own = next((r for r in steps if r.kind != "free_address"), steps[0])
+            device = own.targets[0].device_id if own.targets else ""
             out.append((sid, device, steps))
         return out
 
@@ -930,7 +1005,23 @@ class DeploymentService:
             if rec.dry_run:
                 continue
             reached = t.driver.target.management_address
-            if (reached != device.management_address
+            if rec.kind == "free_address":
+                if t.state is TargetState.VERIFIED:
+                    # Running there until its next restart; its own address stays on record.
+                    set_temporary_address(device, reached)
+                    audit.record(self.s, actor, "device.temporary_address", "device",
+                                 device.id, details={"address": reached, "deployment": rec.id,
+                                                     "own_address": device.management_address})
+                if t.backup is not None:
+                    device.last_backup_at = now
+                continue
+            moved = temporary_address(device)
+            if moved and reached != moved and t.state is TargetState.VERIFIED:
+                # It restarted (e.g. its file was loaded) and answers at its own address again.
+                set_temporary_address(device, None)
+                audit.record(self.s, actor, "device.temporary_address_cleared", "device",
+                             device.id, details={"address": moved, "deployment": rec.id})
+            if (reached != device.management_address and not temporary_address(device)
                     and t.state in (TargetState.VERIFIED, TargetState.VERIFY_FAILED)):
                 # The loaded file moved the device to another address, and it was reached
                 # there after its restart (identity checked): keep UNDM pointing at it.
@@ -965,10 +1056,55 @@ class DeploymentService:
             if t.state in (TargetState.VERIFIED, TargetState.NO_CHANGE):
                 device.deployment_status = DeviceDeploymentStatus.IN_SYNC.value
                 device.last_deployment_at = now
+                self._name_after_hostname(rec, tr, t, device, actor)
             elif t.state is TargetState.ROLLED_BACK:
                 device.deployment_status = DeviceDeploymentStatus.DEPLOYMENT_FAILED.value
             elif t.touched:
                 device.deployment_status = DeviceDeploymentStatus.UNKNOWN.value
+
+
+    def _name_after_hostname(self, rec: DeploymentRecord, tr: DeploymentTargetRecord,
+                             t: DeploymentTarget, device: Device, actor: str) -> None:
+        """A device whose supplied file was loaded and verified takes the hostname it now
+        reports (D-094), in case it differs from the one its file named."""
+        if t.state is not TargetState.VERIFIED:
+            return
+        cfg = self.s.get(ConfigVersion, tr.config_version_id) if tr.config_version_id else None
+        if cfg is None or cfg.kind != "imported":
+            return  # generated from the device's own settings: its name is already chosen
+        self._rename(device, t.observed_hostname, actor, rec.id, "read from the device")
+
+    def _name_from_file(self, device: Device, cfg: ConfigVersion, actor: str,
+                        rec: DeploymentRecord) -> None:
+        """A device named after the hostname in the file a plan will load on it (D-094,
+        product owner 2026-11-25): the placeholder name gives way as soon as the file is
+        chosen, before any connection."""
+        if cfg.kind != "imported":
+            return
+        report = inspect_config(self.s, cfg, self.registry)
+        name = (report.facts.get("hostname") if report else None) \
+            or fortinet_hostname(cfg.text)
+        self._rename(device, name, actor, rec.id, "the file to load")
+
+    def _rename(self, device: Device, hostname: str | None, actor: str, plan_id: str,
+                source: str) -> None:
+        new = (hostname or "").strip().strip('"')[:120]
+        if not new or new == device.name:
+            return
+        generic = {v.lower() for v in (device.model, device.product_family) if v}
+        if any(new.lower().startswith(g) for g in generic):
+            return  # a factory hostname is the model, not a name
+        taken = self.s.scalar(select(Device.id).where(
+            Device.project_id == device.project_id, Device.name == new, Device.id != device.id))
+        if taken:
+            audit.record(self.s, actor, "device.rename_skipped", "device", device.id,
+                         details={"hostname": new, "deployment": plan_id,
+                                  "reason": "another device of this system has that name"})
+            return
+        audit.record(self.s, actor, "device.renamed", "device", device.id,
+                     details={"from": device.name, "to": new, "deployment": plan_id,
+                              "source": source})
+        device.name = new
 
 
 def resolve_interrupted(session: Session, rec: DeploymentRecord, why: str) -> None:

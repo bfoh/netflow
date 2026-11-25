@@ -58,6 +58,11 @@ class FakeArubaSwitch:
     web_ssl: bool = False
     saves: int = 0
     reject: set[str] = field(default_factory=set)  # commands answered "Invalid input"
+    # Addresses the switch answers at (None: any, as most tests do not care), and whether a
+    # second 'ip address' in a VLAN replaces the first or is added to it (not verified on
+    # hardware: both are modelled, Q-45).
+    addresses: set[str] | None = None
+    ip_address_replaces: bool = False
     _config: bool = False
     _subject_left: list[str] = field(default_factory=list)
     # Observations.
@@ -79,6 +84,48 @@ class FakeArubaSwitch:
             raise NetmikoAuthenticationException("Authentication failed")
         self._closed, self._out, self._pending = False, "", ""
         self._silent = False
+
+    def answers_at(self, host: str) -> None:
+        if self.addresses is not None and host not in self.addresses:
+            from netmiko.exceptions import NetmikoTimeoutException
+            raise NetmikoTimeoutException(f"TCP connection to device failed: {host}")
+
+    def configure(self, lines: list[str]) -> str:
+        """Configuration lines in the running configuration only (never the startup one)."""
+        from netmiko.exceptions import ConfigInvalidException
+        vid: str | None = None
+        for ln in (x.strip() for x in lines):
+            self.commands.append(ln)
+            if ln in self.reject:
+                raise ConfigInvalidException(f"Invalid input: {ln}")
+            if m := re.match(r"^vlan (\d+)$", ln):
+                vid = m.group(1)
+                continue
+            m = re.match(r"^(no )?ip address (\S+) (\S+)$", ln)
+            if not m or vid is None:
+                continue
+            out, inside = [], False
+            for row in self.running_config.splitlines():
+                s = row.strip()
+                if s == f"vlan {vid}":
+                    inside = True
+                elif s == "exit" and inside:
+                    if not m.group(1):
+                        out.append(f"   ip address {m.group(2)} {m.group(3)}")
+                        if self.addresses is not None:
+                            self.addresses.add(m.group(2))
+                    inside = False
+                elif inside and s.startswith("ip address "):
+                    gone = (s == f"ip address {m.group(2)} {m.group(3)}" if m.group(1)
+                            else self.ip_address_replaces)
+                    if gone:
+                        if self.addresses is not None:
+                            self.addresses.discard(s.split()[2])
+                        continue
+                out.append(row)
+            self.running_config = "\n".join(out) + "\n"
+            self.unsaved_changes = True
+        return ""
 
     def show(self, command: str) -> str:
         self.commands.append(command)

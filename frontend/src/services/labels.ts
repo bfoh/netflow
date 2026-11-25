@@ -111,6 +111,7 @@ export function platformLabel(platform: string): string {
 export function planKind(d: { kind: string; apply_mode: string; dry_run: boolean }): string {
   const base = d.kind === 'firmware' ? 'Firmware upgrade'
     : d.kind === 'first_login' ? 'First login'
+    : d.kind === 'free_address' ? 'Temporary address'
       : d.apply_mode === 'replace' ? 'Configuration (complete file)' : 'Configuration (additions)';
   return base + (d.dry_run ? ' · dry run' : '');
 }

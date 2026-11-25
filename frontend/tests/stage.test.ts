@@ -34,11 +34,38 @@ describe('stage a system: steps per device', () => {
     expect(roles.blackbox).toBeUndefined();
   });
 
+  it('renamed devices at one address keep the role the wizard gave them', () => {
+    const d = (id: string, name: string, r: string) => ({ id, name, model: '2930F', management_address: '192.168.1.1', role: r } as Device);
+    const roles = assignRoles([d('1', 'site-lte-sw', 'Aruba 2930F (OOBM port 3)'), d('2', 'site-dmz-sw', 'Aruba 2930F (OOBM port 2)')]);
+    expect(roles.aruba_a?.id).toBe('2');
+    expect(roles.aruba_b?.id).toBe('1');
+  });
+
   it('without names, the bench address decides which 2930F plays which role', () => {
     const d = (id: string, address: string) => ({ id, name: `sw${id}`, model: '2930F', management_address: address } as Device);
     const roles = assignRoles([d('1', '192.168.1.2'), d('2', '192.168.1.1')]);
     expect(roles.aruba_a?.id).toBe('2');
     expect(roles.aruba_b?.id).toBe('1');
+  });
+});
+
+describe('making room for the second switch (D-096)', () => {
+  const sw = (id: string, address: string, capabilities: string[], extra?: object) => ({ id, name: `sw-${id}`, model: '2930F',
+    environment: 'lab', management_address: address, capabilities, observed_facts: extra ? { extra } : null } as unknown as Device);
+  const b = sw('b', '192.168.1.2', []);
+
+  it('the plan of the switch that moves gets a step that moves the other one aside first', () => {
+    const a = sw('a', '192.168.1.1', ['supports_temporary_address']);
+    const { steps } = planSteps(role('aruba_b'), { ...EMPTY_CHOICE, imageId: 'i', fileId: 'f' }, b, a);
+    expect(steps.map((s) => s.kind)).toEqual(['firmware', 'free_address', 'configuration']);
+    expect(steps[1]).toEqual({ kind: 'free_address', other_device_id: 'a', address: '192.168.1.3' });
+  });
+
+  it('not when the other device cannot be moved by UNDM, or already was', () => {
+    const plain = sw('a', '192.168.1.1', []);
+    expect(planSteps(role('aruba_b'), { ...EMPTY_CHOICE, fileId: 'f' }, b, plain).steps.map((s) => s.kind)).toEqual(['configuration']);
+    const moved = sw('a', '192.168.1.1', ['supports_temporary_address'], { temporary_address: '192.168.1.3' });
+    expect(addressTakenBy(role('aruba_b'), b, [{ device: moved }, { device: b }])).toBeUndefined();
   });
 });
 

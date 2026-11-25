@@ -9,6 +9,8 @@ from undm.api.schemas import (
     BootstrapPreviewOut,
     ConsoleBootstrapIn,
     ConsoleBootstrapOut,
+    ConsoleIdentifyIn,
+    ConsoleIdentifyOut,
     SerialPortOut,
 )
 from undm.services import provisioning as svc
@@ -47,3 +49,15 @@ def console_bootstrap(device_id: str, body: ConsoleBootstrapIn, session: Session
         erase_existing=body.erase_existing,
         current_credential_ref_id=body.current_credential_ref_id,
         confirm_hostname=body.confirm_hostname)
+
+
+@router.post("/api/devices/{device_id}/provisioning/console-identify",
+             response_model=ConsoleIdentifyOut)
+def console_identify(device_id: str, body: ConsoleIdentifyIn, session: SessionDep,
+                     registry: RegistryDep, actor: ActorDep) -> dict[str, Any]:
+    """Which switch is on the console (its hostname). Read-only: changes nothing."""
+    d = get_device(session, device_id)
+    return svc.identify_console(
+        session, d, registry, actor, serial_port=body.serial_port, baudrate=body.baudrate,
+        current_credential_ref_id=body.current_credential_ref_id)
+

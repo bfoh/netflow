@@ -44,7 +44,10 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
   // Preconfigured switch (e.g. BH-DMZ units): erase its configuration first (D-057).
   const [erase, setErase] = useState(false);
   const [currentLogin, setCurrentLogin] = useState<string | null>(null);
-  const [hostname, setHostname] = useState('');
+  // The name is read from the console by UNDM and confirmed by the person (D-095).
+  const [seen, setSeen] = useState<{ state: string; hostname: string; message: string } | null>(null);
+  const [eraseOk, setEraseOk] = useState(false);
+  const hostname = seen?.state === 'configured' ? seen.hostname : '';
   const refs = useCredentialRefs(device.project_id);
   const [opened, { open, close }] = useDisclosure();
 
@@ -56,6 +59,9 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
     serial_port: serialPort!, baudrate: Number(baud), profile, confirm_device_name: confirm,
     allow_configured: allowConfigured && !erase,
     ...(erase ? { erase_existing: true, current_credential_ref_id: currentLogin, confirm_hostname: hostname.trim() } : {}),
+  }), undefined, { errorInDialog: true });
+  const identify = useAction(() => api.consoleIdentify(device.id, {
+    serial_port: serialPort!, baudrate: Number(baud), current_credential_ref_id: currentLogin,
   }), undefined, { errorInDialog: true });
   const blocked = !simulated && policy.data && !policy.data.enable_real_device_writes;
   const portOptions = (ports.data ?? [])
@@ -152,18 +158,28 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
           {erase && (
             <Stack gap={6}>
               <Notice kind="caution" compact title="The erase cannot be undone"
-                details={<>UNDM logs in with the switch's <b>current login</b>, checks that its hostname is the one you type, saves a
+                details={<>UNDM logs in with the switch's <b>current login</b>, checks again that it is the switch whose name it read, saves a
                   copy of its configuration in the transcript, runs <code>erase startup-config</code> and confirms it, waits for the
                   restart (up to 7 minutes), then sets the switch up as new with this device's login and bootstraps it. Any question
                   UNDM does not recognise stops it with the switch's text.</>}>
                 Its configuration is erased, then it is set up as a new switch.
               </Notice>
                 <Select size="xs" label="Its current login" placeholder={refs.data?.length ? 'Choose the preconfigured login' : 'Add it on the system\'s Logins tab'}
-                  data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={currentLogin} onChange={setCurrentLogin} />
-                <TextInput size="xs" label="Type its current hostname"
-                  description="The name in its console prompt, before > or # (e.g. for a prompt 'sw-name#' type sw-name). Not the username."
-                  placeholder="as shown in the console prompt"
-                  value={hostname} onChange={(e) => setHostname(e.currentTarget.value)} />
+                  data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={currentLogin}
+                  onChange={(v) => { setCurrentLogin(v); setSeen(null); setEraseOk(false); }} />
+                <Group gap="xs">
+                  <Button size="xs" variant="light" disabled={!currentLogin} loading={identify.isPending}
+                    onClick={() => { setEraseOk(false); identify.mutate(undefined, { onSuccess: setSeen }); }}>Read its name from the console</Button>
+                  <Text size="xs" c="dimmed">Logs in and reads the name. Changes nothing.</Text>
+                </Group>
+                <DialogError error={identify.error} />
+                {seen && seen.state === 'configured' && (
+                  <Checkbox checked={eraseOk} onChange={(e) => setEraseOk(e.currentTarget.checked)}
+                    label={<>The switch on this console is <b>{seen.hostname}</b>. Yes, erase {seen.hostname}.</>} />
+                )}
+                {seen && seen.state !== 'configured' && (
+                  <Notice kind={seen.state === 'unknown' ? 'error' : 'settled'} compact>{seen.message}</Notice>
+                )}
             </Stack>
           )}
           {!erase && <Checkbox label="The switch already has configuration — bootstrap it anyway" checked={allowConfigured}
@@ -177,7 +193,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
           <DialogError error={run.error} />
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Cancel</Button>
-            <Button color={erase ? 'red' : 'orange'} disabled={confirm.trim() !== device.name || (erase && (!currentLogin || !hostname.trim()))}
+            <Button color={erase ? 'red' : 'orange'} disabled={confirm.trim() !== device.name || (erase && (!currentLogin || !hostname || !eraseOk))}
               loading={run.isPending}
               onClick={() => run.mutate(undefined, { onSuccess: (r) => { setResult(r); close(); } })}>{erase ? 'Erase and bootstrap' : 'Run bootstrap'}</Button>
           </Group>

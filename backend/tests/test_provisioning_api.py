@@ -251,6 +251,14 @@ def test_preconfigured_switch_is_erased_first_with_its_current_login(monkeypatch
                 REAL_SWITCH, credential_ref_id=approved)).json()["id"]
             plain = run(client, did, confirm_device_name="lab-sw", serial_port="COM7").json()
             assert plain["status"] == "failed" and "enable" in plain["message"]
+            # Read its name first, changing nothing (D-095): no typing of a hostname.
+            before = list(sim.commands_received)
+            seen = client.post(f"/api/devices/{did}/provisioning/console-identify", json={
+                "serial_port": "COM7", "current_credential_ref_id": current}).json()
+            assert seen["state"] == "configured" and seen["hostname"] == "lab-bhdmz-sw01"
+            assert sim.hostname == "lab-bhdmz-sw01" and sim.password == "Example-Only-Preconfigured"
+            sent = sim.commands_received[len(before):]
+            assert not any(c.startswith(("erase", "write", "configure", "vlan")) for c in sent)
             missing = run(client, did, confirm_device_name="lab-sw", serial_port="COM7",
                           erase_existing=True)
             assert missing.status_code == 409 and "current login" in missing.json()["error"]

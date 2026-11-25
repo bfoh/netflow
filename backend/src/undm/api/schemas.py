@@ -364,7 +364,10 @@ class StagingStepIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["first_login", "firmware", "configuration"]
+    kind: Literal["first_login", "firmware", "configuration", "free_address"]
+    # free_address: another device of the system and the spare address it moves to (D-096)
+    other_device_id: str | None = None
+    address: str | None = Field(default=None, max_length=64)
     # firmware
     image_id: str | None = None
     allow_downgrade: bool = False
@@ -552,6 +555,19 @@ class ConsoleBootstrapIn(BaseModel):
     erase_existing: bool = False
     current_credential_ref_id: str | None = None
     confirm_hostname: str | None = Field(default=None, max_length=64)
+
+
+class ConsoleIdentifyIn(BaseModel):
+    serial_port: str = Field(min_length=1, max_length=64)
+    baudrate: Literal[9600, 19200, 38400, 57600, 115200] = 9600
+    current_credential_ref_id: str | None = None
+
+
+class ConsoleIdentifyOut(BaseModel):
+    # configured | factory_default | new | unknown
+    state: str
+    hostname: str
+    message: str
 
 
 class ConsoleBootstrapOut(BaseModel):

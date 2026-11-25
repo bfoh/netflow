@@ -74,8 +74,15 @@ export function deviceForRole(role: Role, devices: Device[], taken: Set<string>)
 export function assignRoles(devices: Device[]): Partial<Record<RoleKey, Device>> {
   const taken = new Set<string>();
   const out: Partial<Record<RoleKey, Device>> = {};
-  // Named matches first, so 'sw-b' is not taken by role A.
+  // The role the wizard gave the device when it added it: survives a rename to the real
+  // hostname (D-094) and the two 2930F ending at one address.
   for (const role of ROLES) {
+    const byRole = devices.find((d) => d.model === role.model && d.role === role.title && !taken.has(d.id));
+    if (byRole) { out[role.key] = byRole; taken.add(byRole.id); }
+  }
+  // Named matches next, so 'sw-b' is not taken by role A.
+  for (const role of ROLES) {
+    if (out[role.key]) continue;
     const named = devices.find((d) => d.model === role.model && d.name.endsWith(`-${role.nameSuffix}`) && !taken.has(d.id));
     if (named) { out[role.key] = named; taken.add(named.id); }
   }
@@ -100,5 +107,18 @@ export function assignRoles(devices: Device[]): Partial<Record<RoleKey, Device>>
  */
 export function addressTakenBy(role: Role, device: Device, all: { device: Device }[]): Device | undefined {
   if (device.management_address === role.addressAfter) return undefined;
-  return all.map((x) => x.device).find((d) => d.id !== device.id && d.management_address === role.addressAfter);
+  return all.map((x) => x.device).find((d) => d.id !== device.id && d.management_address === role.addressAfter
+    && !temporaryAddress(d));
 }
+
+/** Where a device runs until its next power-on, if UNDM moved it aside (D-096). */
+export function temporaryAddress(d: Device): string | undefined {
+  const extra = (d.observed_facts as { extra?: { temporary_address?: string } } | null)?.extra;
+  return extra?.temporary_address || undefined;
+}
+
+/** Spare bench address a device is moved to while another takes its address (D-096). */
+export const SPARE_ADDRESS = '192.168.1.3';
+
+/** Whether UNDM can move this device aside itself (real 2930F); else it must be unplugged. */
+export const canMoveAside = (d: Device) => d.capabilities.includes('supports_temporary_address');

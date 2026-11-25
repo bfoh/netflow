@@ -40,6 +40,8 @@ class Capability(StrEnum):
     REBOOT = "supports_reboot"
     # Answers a new unit's demanded password change at its first login (D-073).
     FIRST_LOGIN_SETUP = "supports_first_login_setup"
+    # Can run at another address until its next restart, with nothing saved (D-096).
+    TEMPORARY_ADDRESS = "supports_temporary_address"
 
 
 # Capabilities an operation needs before a driver may be asked to perform it.
@@ -256,6 +258,20 @@ class DeviceDriver:
         """What a person should know before an apply that restarts the device (None: it
         does not restart). Shown as an event before the apply starts."""
         return None
+
+    def temporary_address_commands(self, spare: str) -> OperationResult:
+        """Read-only: the exact commands ``set_temporary_address`` would send (data:
+        ``{"commands": [...], "vlan": id, "previous": address}``)."""
+        return OperationResult.unsupported(
+            DeviceOperation.APPLY_CONFIGURATION,
+            "This driver cannot move a device to a temporary address")
+
+    def set_temporary_address(self, spare: str) -> OperationResult:
+        """Move the device to ``spare`` in its running configuration only (never saved), so
+        its own address is free until its next restart (D-096)."""
+        return OperationResult.unsupported(
+            DeviceOperation.APPLY_CONFIGURATION,
+            "This driver cannot move a device to a temporary address")
 
     def check_before_apply(self, config: str, mode: ApplyMode) -> OperationResult | None:
         """A check before anything is sent that changes nothing on any device (None = no

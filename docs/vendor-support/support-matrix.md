@@ -58,3 +58,5 @@ Facts parsing against real output; behaviour of each rendered configuration line
 the device displays applied configuration (for verification); error strings for rejected
 lines; save behaviour; session limits and timeouts; and, before any firmware work, the
 vendor's documented image transfer, boot-bank, reboot and rollback procedure.
+
+Temporary address (D-096): `ssh.aruba.aos_switch` only, **experimental, not yet run on hardware** (Q-45). Simulated drivers do not offer it.

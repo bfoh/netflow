@@ -75,6 +75,10 @@ _SITE_CONFIG = ("ip authorized-managers", "ip route", "logging ", "sntp server",
                 "radius-server", "tacacs-server", "banner ", "timesync ")
 
 
+class NewSwitchError(ConsoleError):
+    """A read-only look met a new switch asking to set its manager credentials."""
+
+
 class BootstrapStatus(StrEnum):
     BOOTSTRAPPED = "bootstrapped"
     ALREADY_CONFIGURED = "already_configured"
@@ -266,6 +270,9 @@ class ArubaOSSwitchConsole:
         self.s.write_line()
 
     LOGIN_STEPS = (PROMPT, ANY_KEY, LOGIN, PASSWORD, TERMINATED)
+    # Set for a look at the switch that must change nothing (console identify, D-095): a new
+    # switch's "configure the manager credentials" dialogue is then not answered.
+    read_only = False
 
     def login(self, wake: bool = True, initial: tuple[int, str] | None = None) -> str:
         """Reach the manager prompt (#) at top level. Returns the prompt's hostname.
@@ -297,6 +304,9 @@ class ArubaOSSwitchConsole:
             if idx == 1:
                 self.s.write_line()
             elif idx == 2 and FIRST_LOGIN.search(seen) and not self.credentials_set:
+                if self.read_only:
+                    raise NewSwitchError(
+                        "The switch is new: it asks to configure its manager credentials")
                 text = self._first_login_setup()
                 break
             elif idx == 2:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import ipaddress
 import os
 import re
 import tempfile
@@ -35,6 +36,7 @@ from undm.drivers.blackbox.lig1014a_ssh import BlackBoxLig1014aSsh
 from undm.drivers.fortinet.fortios_ssh import FortiOSSsh
 from undm.drivers.ssh import base as ssh_base
 from undm.drivers.ssh.base import SSH_CAPABILITIES, SshCliDriver
+from undm.security.redaction import redact_text
 
 
 class ArubaAOSCXSsh(SshCliDriver):
@@ -136,7 +138,8 @@ class ArubaOSSwitchSsh(SshCliDriver):
         description="ArubaOS-Switch (e.g. 2930F) over SSH CLI (Netmiko 'aruba_osswitch'). "
                     "Experimental, not lab-validated.",
         simulated=False,
-        capabilities=SSH_CAPABILITIES | {Capability.FIRMWARE_UPGRADE, Capability.REBOOT,
+        capabilities=SSH_CAPABILITIES | {Capability.TEMPORARY_ADDRESS,
+                                         Capability.FIRMWARE_UPGRADE, Capability.REBOOT,
                                          Capability.CONFIGURATION_REPLACE,
                                          Capability.FIRMWARE_SECONDARY_IMAGE},
         maturity=DriverMaturity.EXPERIMENTAL,
@@ -191,6 +194,136 @@ class ArubaOSSwitchSsh(SshCliDriver):
         (r"Enter State\(ST\)\s*:", "state"),
         (r"Enter Country\(C\)\s*:", "country"),
     )
+
+    # -- temporary address (EXPERIMENTAL, D-096; not yet run on hardware) -------------------
+    # The team's own console commands (staging use case): 'vlan <id>' / 'ip address <a> <m>'.
+    # 'no ip address <a> <m>' removes one address; whether a second 'ip address' adds to or
+    # replaces the first is not verified (Q-45): both are handled. Never 'write memory'.
+    @staticmethod
+    def _vlan_addresses(running: str) -> dict[int, list[tuple[str, str]]]:
+        found: dict[int, list[tuple[str, str]]] = {}
+        vid: int | None = None
+        for raw in running.splitlines():
+            line = raw.strip()
+            if m := re.match(r"^vlan (\d+)$", line):
+                vid = int(m.group(1))
+            elif line == "exit":
+                vid = None
+            elif vid is not None and (m := re.match(r"^ip address (\S+) (\S+)$", line)):
+                found.setdefault(vid, []).append((m.group(1), m.group(2)))
+        return found
+
+    def _temporary_plan(self, spare: str) -> tuple[OperationResult | None, int, str, str]:
+        op = DeviceOperation.APPLY_CONFIGURATION
+        if r := self._need(op):
+            return r, 0, "", ""
+        current = self.target.management_address
+        running = self.get_running_configuration()
+        if not running.ok:
+            return OperationResult.failed(op, running.message), 0, "", ""
+        for vid, addresses in self._vlan_addresses(str(running.data)).items():
+            for address, mask in addresses:
+                if address != current:
+                    continue
+                try:
+                    net = ipaddress.ip_network(f"{address}/{mask}", strict=False)
+                    ok = ipaddress.ip_address(spare) in net and spare != address
+                except ValueError:
+                    ok = False
+                if not ok:
+                    return OperationResult.failed(
+                        op, f"{spare} is not another address of the network of {address} "
+                            f"({mask})"), 0, "", ""
+                return None, vid, address, mask
+        return OperationResult.failed(
+            op, f"The running configuration shows no VLAN with the address {current}; "
+                "nothing was changed"), 0, "", ""
+
+    def temporary_address_commands(self, spare: str) -> OperationResult:
+        problem, vid, address, mask = self._temporary_plan(spare)
+        if problem is not None:
+            return problem
+        return OperationResult.success(
+            DeviceOperation.APPLY_CONFIGURATION,
+            {"vlan": vid, "previous": address,
+             "commands": [f"vlan {vid}", f"ip address {spare} {mask}",
+                          f"no ip address {address} {mask}"]},
+            f"VLAN {vid}: add {spare}, then remove {address}; nothing is saved")
+
+    def _config_lines(self, lines: list[str]) -> str | None:
+        """Send configuration lines; the reason if the switch rejected one, None if sent
+        (a session that drops while sending is not a rejection: the caller reads back)."""
+        from netmiko.exceptions import ConfigInvalidException
+        try:
+            self._conn.send_config_set(lines, error_pattern=self.error_pattern,
+                                       read_timeout=self.read_timeout)
+        except ConfigInvalidException as e:
+            return redact_text(str(e))[-300:]
+        except Exception:  # noqa: BLE001 - e.g. the session ended with the address
+            return None
+        return None
+
+    def set_temporary_address(self, spare: str) -> OperationResult:
+        op = DeviceOperation.APPLY_CONFIGURATION
+        problem, vid, old, mask = self._temporary_plan(spare)
+        if problem is not None:
+            return problem
+        port = self.target.port or 22
+        if ssh_base.tcp_port_open(spare, port):
+            return OperationResult.failed(
+                op, f"Another device already answers at {spare}; nothing was changed")
+        facts = self.get_device_facts()
+        serial = facts.data.serial_number if facts.ok else None
+        notes: list[str] = []
+        rejected = self._config_lines([f"vlan {vid}", f"ip address {spare} {mask}"])
+        if rejected:
+            return OperationResult.failed(
+                op, f"The switch rejected 'ip address {spare} {mask}' in VLAN {vid}; its own "
+                    "address was not removed", {"device_output": rejected})
+        # From here on the switch is reached at the spare address.
+        self.disconnect()
+        home = self.target
+        self.target = replace(self.target, management_address=spare)
+        back = self.connect()
+        if not back.ok:
+            self.target = home
+            return OperationResult.failed(
+                op, f"The switch took the command but does not answer at {spare} "
+                    f"({back.message}). Nothing was saved: restarting the switch returns it "
+                    "to its saved configuration.")
+        again = self.get_device_facts()
+        if serial and again.ok and again.data.serial_number != serial:
+            self.target = home
+            return OperationResult.failed(
+                op, f"A different device answers at {spare} (serial "
+                    f"{again.data.serial_number}); stopped. Nothing was saved.")
+        running = self.get_running_configuration()
+        listed = self._vlan_addresses(str(running.data)).get(vid, []) if running.ok else []
+        if (old, mask) in listed:
+            notes.append(f"the switch kept {old} next to {spare}; UNDM removed it")
+            rejected = self._config_lines([f"vlan {vid}", f"no ip address {old} {mask}"])
+            if rejected:
+                return OperationResult.failed(
+                    op, f"The switch now also answers at {spare}, but rejected 'no ip address "
+                        f"{old} {mask}': {old} is still in use by it. Nothing was saved.",
+                    {"device_output": rejected})
+            running = self.get_running_configuration()
+            listed = self._vlan_addresses(str(running.data)).get(vid, []) if running.ok else []
+        else:
+            notes.append(f"the switch replaced {old} by {spare}")
+        if (spare, mask) not in listed or (old, mask) in listed:
+            return OperationResult.failed(
+                op, f"After the commands the running configuration does not show VLAN {vid} "
+                    f"with {spare} only. Nothing was saved: restarting the switch returns it "
+                    "to its saved configuration.")
+        if ssh_base.tcp_port_open(old, port):
+            return OperationResult.failed(
+                op, f"The switch moved to {spare}, but something still answers at {old}. "
+                    "Nothing was saved.")
+        return OperationResult.success(
+            op, {"address": spare, "previous": old, "vlan": vid, "notes": notes},
+            f"running at {spare} (VLAN {vid}) until its next restart; {old} is free; nothing "
+            "was saved, so it returns to its saved configuration at the next power-on")
 
     def check_before_apply(self, config: str, mode: ApplyMode) -> OperationResult | None:
         """Both switch roles of a system end at the same OOBM address (D-091): if the file

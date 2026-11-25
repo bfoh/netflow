@@ -32,6 +32,24 @@ READ_ONLY_OPERATIONS = frozenset(
 )
 
 
+def temporary_address(device: Device) -> str | None:
+    """The address the device runs at until its next restart, if UNDM moved it aside (D-096)."""
+    extra = (device.observed_facts or {}).get("extra") or {}
+    value = extra.get("temporary_address") if isinstance(extra, dict) else None
+    return str(value) if value else None
+
+
+def set_temporary_address(device: Device, address: str | None) -> None:
+    facts = dict(device.observed_facts or {})
+    extra = dict(facts.get("extra") or {})
+    if address:
+        extra["temporary_address"] = address
+    else:
+        extra.pop("temporary_address", None)
+    facts["extra"] = extra
+    device.observed_facts = facts
+
+
 def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
     if device.driver_id not in registry:
         raise ServiceError(f"Unknown driver {device.driver_id!r}")
@@ -50,7 +68,8 @@ def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
             f"{device.name} has no login chosen. Choose one on its device page (Edit), or in "
             "Stage a system, step 1 ('Its login'). Logins are added on the system page's "
             "Logins tab.")
-    target = DeviceTarget(device.id, device.management_address, device.management_port)
+    target = DeviceTarget(device.id, temporary_address(device) or device.management_address,
+                          device.management_port)
     return registry.create(device.driver_id, target, credentials)
 
 
@@ -174,7 +193,10 @@ def run_read_only_operation(
             result = driver.get_device_facts()
             payload = asdict(result.data) if result.ok else None
             if result.ok:
+                moved = temporary_address(device)
                 device.observed_facts = payload
+                if moved:  # where it runs until its next restart is not a fact it reports
+                    set_temporary_address(device, moved)
                 device.facts_retrieved_at = now
         elif op is DeviceOperation.BACKUP_CONFIGURATION:
             result = driver.backup_configuration()

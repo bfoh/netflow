@@ -510,3 +510,42 @@ def test_api_taken_address_fails_the_plan_with_nothing_changed(api, answering):
     assert not any(c.startswith(("copy", "crypto", "write")) for c in switch.commands)
     assert client.get(f"/api/devices/{did}").json()["management_address"] == "127.0.0.1"
 
+
+# -- the device takes its real hostname (D-094) -------------------------------------------
+
+def test_api_device_is_named_after_the_hostname_its_file_set(api):
+    client, pid, did, switch, hub = api
+    out = _load(client, pid, did, sample())
+    assert out["state"] == "succeeded", [e["message"] for e in out["events"]]
+    assert client.get(f"/api/devices/{did}").json()["name"] == "lab-oobm-sw01"
+    renamed = next(a for a in client.get("/api/audit?limit=50").json()
+                   if a["action"] == "device.renamed")
+    assert renamed["details"]["from"] == "lab-2930f" and renamed["details"]["to"] == "lab-oobm-sw01"
+    assert renamed["details"]["source"] == "the file to load"
+
+
+def test_api_a_name_another_device_has_is_not_taken(api):
+    client, pid, did, switch, hub = api
+    client.post(f"/api/projects/{pid}/devices", json={
+        "name": "lab-oobm-sw01", "manufacturer": "Aruba", "category": "switch", "model": "2930F",
+        "os_family": "ArubaOS-Switch", "driver_id": "mock.aruba.aos_switch",
+        "environment": "simulated", "management_address": "192.0.2.77"})
+    assert _load(client, pid, did, sample())["state"] == "succeeded"
+    assert client.get(f"/api/devices/{did}").json()["name"] == "lab-2930f"
+    assert any(a["action"] == "device.rename_skipped"
+               for a in client.get("/api/audit?limit=50").json())
+
+
+def test_api_the_name_comes_from_the_file_when_the_plan_is_made(api):
+    """Product owner, 2026-11-25: named from the file chosen for the device, before any
+    connection; a dry run does not rename."""
+    client, pid, did, switch, hub = api
+    v = client.post(f"/api/devices/{did}/configs/import",
+                    json={"filename": "oobm-switch.pcc", "text": sample()}).json()
+    body = {"device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]}}
+    client.post(f"/api/projects/{pid}/deployments", json=dict(body, dry_run=True))
+    assert client.get(f"/api/devices/{did}").json()["name"] == "lab-2930f"
+    client.post(f"/api/projects/{pid}/deployments", json=body)
+    assert client.get(f"/api/devices/{did}").json()["name"] == "lab-oobm-sw01"
+    assert not any(c.startswith("copy") for c in switch.commands)  # nothing was loaded yet
+

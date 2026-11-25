@@ -80,7 +80,7 @@ describe('application shell', () => {
     expect(screen.getByRole('button', { name: 'Run console bootstrap…' })).toBeEnabled();
   });
 
-  it('erasing a preconfigured switch needs its current login and hostname', async () => {
+  it('erasing a preconfigured switch: UNDM reads its name, the person confirms it (D-095)', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     const sw = device({ id: 'sw', name: 'dmz-sw', driver_id: 'mock.aruba.aos_switch',
       bootstrap_profile: { vlan_id: 222, vlan_name: 'OOBM_VLAN', untagged_port: '2', address: '192.168.1.1/24' } });
@@ -89,6 +89,7 @@ describe('application shell', () => {
       '/drivers': [{ driver_id: 'mock.aruba.aos_switch', platform: 'aos_switch', simulated: true, vendor: 'Aruba', os_family: 'ArubaOS-Switch', description: '', capabilities: [], maturity: 'simulation', transport: 'simulated', notes: [] }],
       '/provisioning/serial-ports': [{ port: 'SIMULATED', description: 'Simulated switch console', hardware_id: '' }],
       '/projects/p1/credential-refs': [{ id: 'old', name: 'preconfigured login' }],
+      '/devices/sw/provisioning/console-identify': { state: 'configured', hostname: 'lab-bhdmz-sw01', message: '' },
       '/devices/sw/provisioning/console-bootstrap': { status: 'bootstrapped', message: 'ok', commands_sent: [], findings: [],
         verified: true, saved: true, transcript: '', sanitized_transcript: '', erased: 'lab-bhdmz-sw01',
         network_reachable: null, network_hint: '' },
@@ -102,8 +103,14 @@ describe('application shell', () => {
     expect(go).toBeDisabled();  // current login and hostname still missing
     await userEvent.click(within(dialog).getByPlaceholderText('Choose the preconfigured login'));
     await userEvent.click(await screen.findByRole('option', { name: 'preconfigured login', hidden: true }));
-    await userEvent.type(within(dialog).getByLabelText(/Type its current hostname/), 'lab-bhdmz-sw01');
+    expect(within(dialog).queryByLabelText(/Type its current hostname/)).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Read its name from the console' }));
+    const yes = await within(dialog).findByRole('checkbox', { name: /Yes, erase lab-bhdmz-sw01/ });
+    expect(go).toBeDisabled();  // read, not yet confirmed
+    await userEvent.click(yes);
     expect(go).toBeEnabled();
+    const asked = calls.find((c) => c.url.endsWith('/provisioning/console-identify'));
+    expect(JSON.parse(String(asked?.init?.body))).toEqual({ serial_port: 'SIMULATED', baudrate: 9600, current_credential_ref_id: 'old' });
     await userEvent.click(go);
     expect(await screen.findByText(/erased “lab-bhdmz-sw01” first/)).toBeInTheDocument();
     const sent = calls.find((c) => c.url.endsWith('/provisioning/console-bootstrap'));

@@ -128,6 +128,7 @@ export const api = {
   createDevice: (pid: string, body: DeviceInput) =>
     request<Device>('POST', `/projects/${pid}/devices`, body),
   updateDevice: (id: string, body: DeviceInput) => request<Device>('PATCH', `/devices/${id}`, body),
+  clearTemporaryAddress: (id: string) => request<Device>('POST', `/devices/${id}/temporary-address/clear`),
   deleteDevice: (id: string) => request<void>('DELETE', `/devices/${id}`),
   setIntent: (id: string, intent: DeviceIntent) =>
     request<Device>('PUT', `/devices/${id}/intent`, intent),
@@ -190,6 +191,9 @@ export const api = {
   serialPorts: () => request<SerialPort[]>('GET', '/provisioning/serial-ports'),
   bootstrapPreview: (id: string, profile: BootstrapProfile) =>
     request<BootstrapPreview>('POST', `/devices/${id}/provisioning/console-bootstrap/preview`, { profile }),
+  consoleIdentify: (id: string, body: { serial_port: string; baudrate: number; current_credential_ref_id?: string | null }) =>
+    request<{ state: 'configured' | 'factory_default' | 'new' | 'unknown'; hostname: string; message: string }>(
+      'POST', `/devices/${id}/provisioning/console-identify`, body),
   consoleBootstrap: (id: string, body: {
     serial_port: string; baudrate: number; profile: BootstrapProfile; confirm_device_name: string; allow_configured: boolean;
     erase_existing?: boolean; current_credential_ref_id?: string | null; confirm_hostname?: string;

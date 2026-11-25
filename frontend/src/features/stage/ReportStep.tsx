@@ -17,7 +17,7 @@ const minutes = (a: string, b: string) => {
 };
 
 function stepName(kind: string, mode: string) {
-  return kind === 'first_login' ? 'First login' : kind === 'firmware' ? 'Firmware' : mode === 'replace' ? 'Complete file' : 'Script';
+  return kind === 'first_login' ? 'First login' : kind === 'free_address' ? 'Make room (other switch moved aside)' : kind === 'firmware' ? 'Firmware' : mode === 'replace' ? 'Complete file' : 'Script';
 }
 
 /** Step 5: what was done to each device, to print or keep. */
