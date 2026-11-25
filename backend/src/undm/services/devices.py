@@ -205,7 +205,10 @@ def run_read_only_operation(
         if not conn.ok:
             audit.record(session, actor, f"device.{op.value}", "device", device.id, "failed",
                          {"message": conn.message})
-            return {"status": conn.status.value, "message": conn.message}
+            out: dict[str, Any] = {"status": conn.status.value, "message": conn.message}
+            if conn.diagnostics.get("login_refused"):
+                out["login_refused"] = True
+            return out
         device.last_connection_at = now
         if op is DeviceOperation.CHECK_REACHABILITY:
             result = conn

@@ -463,6 +463,7 @@ class OperationOut(BaseModel):
     status: str
     message: str
     data: Any = None
+    login_refused: bool = False  # the device refused the login (driver diagnostic)
 
 
 class ApproveIn(BaseModel):

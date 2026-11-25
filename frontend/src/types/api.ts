@@ -272,7 +272,7 @@ export interface AuditEvent {
   details: Record<string, unknown>;
 }
 
-export interface OperationResult { status: string; message: string; data: unknown }
+export interface OperationResult { status: string; message: string; data: unknown; login_refused?: boolean }
 
 export interface ConfigDiff {
   from_version_id: string;

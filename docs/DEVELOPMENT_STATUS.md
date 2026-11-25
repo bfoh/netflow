@@ -47,6 +47,7 @@ manager, topology._
 | Two logins (v74) | Console setup takes the login the switch has now and the approved one; falls back on the current login when the approved one is refused (also after an erase that kept the password) and then requires 'Login after loading' for its file (D-102) |
 | Address refused (v75) | Console setup recognises the 2930F's "overlapping network" refusal (VLAN 1 holding a DHCP address in the bench network), quotes it and says to unplug, power-cycle and rerun (D-103) |
 | Console port (v76) | Console setup fills the port and address from the switch's wizard role, and refuses a port the switch's configuration does not list before changing anything (D-104) |
+| Bench check FortiGate (v77) | A factory FortiGate that refuses the approved login before it ever connected shows "Expected now" (its plan's first login sets the password), not a red failure; test results carry `login_refused` |
 | Erase dialog (v73) | Shows the login the switch gets after the erase and blocks early when it has no password or is the login being erased (D-101) |
 | FortiGate license (v72) | "Load license…" in a FortiGate's menu: the team's file is kept for the device (never shown or exported) and loaded through an approved plan with `execute restore manual-license tftp` (Fortinet-documented; **experimental, not yet run on hardware**, Q-46, D-100) |
 | Working with devices (v71) | Device menu everywhere (⋯ and right-click): Open SSH window (PC's own SSH program, password typed by the person, D-098), web page, check information, test, wait until it answers, back up, log, restart (approved plan; 2930F and LIG1014A), console setup. System tree with tick boxes, watch devices (reachability dots), device log (D-099) |
@@ -78,14 +79,14 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-25, v76)
+## Test results (2026-11-25, v77)
 | Suite | Result |
 |---|---|
-| Backend pytest | 489 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
+| Backend pytest | 491 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (79 files) |
-| Frontend Vitest | 69 passed |
+| Frontend Vitest | 71 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 6 passed (device menu, check information, test and log on a simulated switch; acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box; export and import of a system) |
 

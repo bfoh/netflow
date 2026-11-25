@@ -19,11 +19,11 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
   const policy = usePolicy();
   // Each answer stays in the device's row; a refused test (e.g. no login chosen) too, so no
   // pop-up covers the table being checked.
-  const [results, setResults] = useState<Record<string, { ok: boolean; message: string }>>({});
+  const [results, setResults] = useState<Record<string, { ok: boolean; message: string; loginRefused?: boolean }>>({});
   const test = useAction(async (d: Device) => {
     try {
       const r: OperationResult = await api.runOperation(d.id, 'check_reachability');
-      setResults((prev) => ({ ...prev, [d.id]: { ok: r.status === 'success', message: r.message } }));
+      setResults((prev) => ({ ...prev, [d.id]: { ok: r.status === 'success', message: r.message, loginRefused: !!r.login_refused } }));
     } catch (e) {
       setResults((prev) => ({ ...prev, [d.id]: { ok: false, message: e instanceof Error ? e.message : String(e) } }));
     }
@@ -78,6 +78,10 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
               {roles.map(({ role, device }) => {
                 const r = results[device.id];
                 const needsConsole = role.steps.includes('console');
+                // A factory unit whose plan starts with its first login refuses the approved
+                // login until that step sets it: expected, not a problem (never connected yet).
+                const expected = !!r && !r.ok && !!r.loginRefused && role.steps[0] === 'first_login'
+                  && !device.last_connection_at;
                 return (
                   <Table.Tr key={role.key}>
                     <Table.Td>
@@ -102,10 +106,12 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
                           <Group gap="xs" wrap="nowrap">
                             <Button size="xs" variant="light" leftSection={<IconPlugConnected size={14} />}
                               loading={test.isPending && test.variables?.id === device.id} onClick={() => test.mutate(device)}>Test</Button>
-                            {r && <Badge color={r.ok ? 'teal' : 'red'} variant="light" tt="none">
-                              {r.ok ? 'Connected' : 'Did not connect'}</Badge>}
+                            {r && <Badge color={r.ok ? 'teal' : expected ? 'gray' : 'red'} variant="light" tt="none">
+                              {r.ok ? 'Connected' : expected ? 'Expected now' : 'Did not connect'}</Badge>}
                           </Group>
-                          {r && !r.ok && <Text size="xs" c="red" mt={2}>{r.message}</Text>}
+                          {expected
+                            ? <Text size="xs" c="dimmed" mt={2}>A factory FortiGate has no password yet: the first step of its plan logs in as admin with no password and sets this login&apos;s password. Go on to step 4.</Text>
+                            : r && !r.ok && <Text size="xs" c="red" mt={2}>{r.message}</Text>}
                         </>
                       )}
                     </Table.Td>
@@ -116,7 +122,7 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
           </Table>
         </Table.ScrollContainer>
       </Card>
-      <Text size="xs" c="dimmed">Test connection logs in with the device's login. A new FortiGate refuses the approved login until the plan's first step sets it, so “Did not connect” is expected for it now.</Text>
+      <Text size="xs" c="dimmed">Test connection logs in with the device's login.</Text>
     </Stack>
   );
 }

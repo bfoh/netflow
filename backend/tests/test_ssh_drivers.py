@@ -184,6 +184,17 @@ def test_real_driver_environment_rules():
         assert r.status_code == 400 and "real equipment" in r.json()["error"]
 
 
+@pytest.mark.parametrize("error,refused", [
+    (NetmikoAuthenticationException("bad"), True), (NetmikoTimeoutException("slow"), False)])
+def test_test_connection_says_when_the_login_was_refused(scenario, mem_keyring, error, refused):
+    client, _ = make_client()
+    with client:
+        _, did = _setup(client)
+        scenario.connect_error = error
+        r = client.post(f"/api/devices/{did}/operations/check_reachability").json()
+        assert r["status"] == "failed" and r["login_refused"] is refused
+
+
 def test_lab_device_read_only_and_writes_gated(scenario, mem_keyring):
     client, _ = make_client()
     with client:

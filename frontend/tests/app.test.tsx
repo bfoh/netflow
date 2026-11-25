@@ -583,6 +583,28 @@ describe('Stage a system', () => {
     expect(screen.queryByText('That did not work')).not.toBeInTheDocument();  // no pop-up over the table
   });
 
+  it.each([
+    [null, 'Expected now', /has no password yet/],
+    ['2026-11-25T10:00:00Z', 'Did not connect', /The device refused the login/],
+  ])('a factory FortiGate refusing the login is expected only before it ever connected (last connection %s)', async (last, badge, text) => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    mockApi({ '/projects/p1': project, '/projects/p1/staging-plans': [], '/projects/p1/devices': [
+      device({ id: 'fw', name: 'lab-a-fw', manufacturer: 'Fortinet', model: 'FortiGate-101F', role: 'FortiGate 101F',
+        driver_id: 'ssh.fortinet.fortios', environment: 'lab', management_address: '192.168.1.99',
+        credential_ref_id: 'c1', last_connection_at: last }),
+    ] });
+    const fetchMock = vi.mocked(globalThis.fetch);
+    const answer = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => (String(input).includes('/operations/check_reachability')
+      ? new Response(JSON.stringify({ status: 'failed', message: "The device refused the login (user 'admin').", data: null, login_refused: true }),
+        { status: 200, headers: { 'content-type': 'application/json' } })
+      : answer(input, init)));
+    renderAt('/stage/p1?step=2');
+    await userEvent.click(await screen.findByRole('button', { name: 'Test' }));
+    expect(await screen.findByText(badge)).toBeInTheDocument();
+    expect(screen.getByText(text)).toBeInTheDocument();
+  });
+
   it('the run board tells which switch to unplug before the other one loads its file', async () => {
     const choice = { firstLogin: true, imageId: null, allowDowngrade: false, alsoSecondary: false,
       baseId: null, siteId: null, fileId: 'v1', loginAfter: null, secrets: {} };
