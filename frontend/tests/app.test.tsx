@@ -509,6 +509,33 @@ describe('Stage a system', () => {
     expect(screen.getByText(/lab-a-sw-b and lab-a-sw-a both end at 192\.168\.1\.1/)).toBeInTheDocument();
   });
 
+  it('the bench check answers in the row: no login yet, or the reason a test was refused', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const real = (over: Record<string, unknown>) => device({ manufacturer: 'Aruba', model: '2930F',
+      driver_id: 'ssh.aruba.aos_switch', environment: 'lab', provisioning_status: 'bootstrapped', ...over });
+    mockApi({ '/projects/p1': project, '/projects/p1/staging-plans': [], '/projects/p1/devices': [
+      real({ id: 'sa', name: 'lab-a-sw-a', management_address: '192.168.1.1', credential_ref_id: null }),
+      real({ id: 'sb', name: 'lab-a-sw-b', management_address: '192.168.1.2', credential_ref_id: 'c1' }),
+    ] });
+    const fetchMock = vi.mocked(globalThis.fetch);
+    const answer = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => (String(input).includes('/operations/check_reachability')
+      ? new Response(JSON.stringify({ error: 'lab-a-sw-b has no login chosen.' }), { status: 400, headers: { 'content-type': 'application/json' } })
+      : answer(input, init)));
+    const { MantineProvider } = await import('@mantine/core');
+    const { Notifications } = await import('@mantine/notifications');
+    const { render } = await import('@testing-library/react');
+    render(<MantineProvider><Notifications /></MantineProvider>);  // where a pop-up would appear
+    renderAt('/stage/p1?step=2');
+    expect(await screen.findByText(/Choose its login first/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'step 1, “Its login”' })).toHaveAttribute('href', '/stage/p1?step=0');
+    expect(screen.getAllByRole('button', { name: 'Test' })).toHaveLength(1);  // only the switch with a login
+    await userEvent.click(screen.getByRole('button', { name: 'Test' }));
+    expect(await screen.findByText('Did not connect')).toBeInTheDocument();
+    expect(screen.getByText('lab-a-sw-b has no login chosen.')).toBeInTheDocument();
+    expect(screen.queryByText('That did not work')).not.toBeInTheDocument();  // no pop-up over the table
+  });
+
   it('the run board tells which switch to unplug before the other one loads its file', async () => {
     const choice = { firstLogin: true, imageId: null, allowDowngrade: false, alsoSecondary: false,
       baseId: null, siteId: null, fileId: 'v1', loginAfter: null, secrets: {} };

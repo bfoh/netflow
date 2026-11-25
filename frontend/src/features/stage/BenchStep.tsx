@@ -17,12 +17,17 @@ const CONSOLE_DONE = new Set(['bootstrapped', 'managed']);
 /** Step 3: cabling, safety switches, and whether each device answers. */
 export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }) {
   const policy = usePolicy();
-  const [results, setResults] = useState<Record<string, OperationResult>>({});
+  // Each answer stays in the device's row; a refused test (e.g. no login chosen) too, so no
+  // pop-up covers the table being checked.
+  const [results, setResults] = useState<Record<string, { ok: boolean; message: string }>>({});
   const test = useAction(async (d: Device) => {
-    const r = await api.runOperation(d.id, 'check_reachability');
-    setResults((prev) => ({ ...prev, [d.id]: r }));
-    return r;
-  });
+    try {
+      const r: OperationResult = await api.runOperation(d.id, 'check_reachability');
+      setResults((prev) => ({ ...prev, [d.id]: { ok: r.status === 'success', message: r.message } }));
+    } catch (e) {
+      setResults((prev) => ({ ...prev, [d.id]: { ok: false, message: e instanceof Error ? e.message : String(e) } }));
+    }
+  }, undefined, { errorInDialog: true });
   const real = roles.some(({ device }) => device.environment !== 'simulated');
   return (
     <Stack>
@@ -88,13 +93,20 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
                       ) : <Text size="sm" c="dimmed">Not needed</Text>}
                     </Table.Td>
                     <Table.Td>
-                      <Group gap="xs" wrap="nowrap">
-                        <Button size="xs" variant="light" leftSection={<IconPlugConnected size={14} />}
-                          loading={test.isPending && test.variables?.id === device.id} onClick={() => test.mutate(device)}>Test</Button>
-                        {r && <Badge color={r.status === 'success' ? 'teal' : 'red'} variant="light" tt="none">
-                          {r.status === 'success' ? 'Connected' : 'Did not connect'}</Badge>}
-                      </Group>
-                      {r && r.status !== 'success' && <Text size="xs" c="red" mt={2}>{r.message}</Text>}
+                      {device.environment !== 'simulated' && !device.credential_ref_id ? (
+                        <Text size="sm">Choose its login first:{' '}
+                          <Anchor component={Link} to="?step=0" size="sm">step 1, “Its login”</Anchor></Text>
+                      ) : (
+                        <>
+                          <Group gap="xs" wrap="nowrap">
+                            <Button size="xs" variant="light" leftSection={<IconPlugConnected size={14} />}
+                              loading={test.isPending && test.variables?.id === device.id} onClick={() => test.mutate(device)}>Test</Button>
+                            {r && <Badge color={r.ok ? 'teal' : 'red'} variant="light" tt="none">
+                              {r.ok ? 'Connected' : 'Did not connect'}</Badge>}
+                          </Group>
+                          {r && !r.ok && <Text size="xs" c="red" mt={2}>{r.message}</Text>}
+                        </>
+                      )}
                     </Table.Td>
                   </Table.Tr>
                 );
