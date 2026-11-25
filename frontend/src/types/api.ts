@@ -105,6 +105,8 @@ export interface CredentialRef {
   provider: 'keyring' | 'env';
   locator: string;
   has_secret: boolean | null;
+  /** A login without a password (factory logins); the value itself is never sent. */
+  empty_password?: boolean | null;
 }
 
 export interface Policy {

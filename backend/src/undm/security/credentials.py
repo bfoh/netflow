@@ -68,6 +68,15 @@ def resolve(provider: str, locator: str) -> Credentials:
     raise CredentialResolutionError(f"Unknown credential provider {provider!r}")
 
 
+def has_empty_password(provider: str, locator: str) -> bool | None:
+    """Whether the stored login has no password (factory logins); None if unknown. Only the
+    fact is returned, never the value."""
+    try:
+        return resolve(provider, locator).password == ""
+    except CredentialResolutionError:
+        return None
+
+
 def has_secret(provider: str, locator: str) -> bool | None:
     """True/False if known; None if the store cannot be queried."""
     try:

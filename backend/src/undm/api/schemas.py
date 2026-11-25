@@ -113,6 +113,7 @@ class CredentialRefOut(ORM):
     provider: str
     locator: str
     has_secret: bool | None = None  # None: the credential store could not be queried
+    empty_password: bool | None = None  # a login without a password (never the value)
 
 
 class CredentialSecretIn(BaseModel):

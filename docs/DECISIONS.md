@@ -1201,3 +1201,15 @@ shown, kept out of system exports and backup zips; only its name, size and hash 
 UNDM does not check its content (the team does). Device menu: "Load license…" uploads the file
 and makes the plan; the Report step reminds that a FortiGate's license is loaded from its menu.
 
+### D-101 The erase dialog shows the login the switch gets after the erase (2026-11-25)
+Bench: a 2930F preconfigured with the factory login (no password) was erased with that login
+as "Its current login" (right), but the device's own login was the same factory login, so the
+run was refused at the end ("attach the approved login"). The two logins mean different things:
+the current login is used only to log in and erase; the device's own login is set on the switch
+after the erase and must be the approved one. The erase section now shows "After the erase it is
+set up with this device's login: X" with a link to change it, and refuses up front (button
+disabled, reason shown) when the device has no login, its login has no password, or it is the
+login being erased. `CredentialRefOut.empty_password` tells whether a stored login has no
+password (never the value). The backend refusal says where to change it and that nothing was
+erased.
+

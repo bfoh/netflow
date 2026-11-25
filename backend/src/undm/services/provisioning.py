@@ -241,8 +241,11 @@ def run_console_bootstrap(
         if current_ref is None or current_ref.project_id != device.project_id:
             raise ConflictError("Current login: credential not found in this project")
         if credentials is None or not credentials.password:
-            raise ConflictError("After the erase the switch is set up with the device's login: "
-                                "attach the approved login to the device first")
+            raise ConflictError(
+                "After the erase the switch is set up with this device's login, which has no "
+                "password (or none is chosen). Choose the approved login as the device's login "
+                "(Stage a system, step 1, or Edit on the device page), then run again. "
+                "Nothing was erased.")
         try:
             current = creds.resolve(current_ref.provider, current_ref.locator)
         except creds.CredentialResolutionError as e:

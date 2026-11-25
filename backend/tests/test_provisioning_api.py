@@ -259,6 +259,22 @@ def test_preconfigured_switch_is_erased_first_with_its_current_login(monkeypatch
             assert sim.hostname == "lab-bhdmz-sw01" and sim.password == "Example-Only-Preconfigured"
             sent = sim.commands_received[len(before):]
             assert not any(c.startswith(("erase", "write", "configure", "vlan")) for c in sent)
+            # The device's own login must be the approved one: after the erase the switch is
+            # set up as new with it. A login without a password is refused, nothing erased.
+            refs = {r["name"]: r for r in client.get(f"/api/projects/{pid}/credential-refs").json()}
+            assert refs["approved login"]["empty_password"] is False
+            factory = login("factory login", "")
+            listed = client.get(f"/api/projects/{pid}/credential-refs").json()
+            assert listed[-1]["empty_password"] is True
+            client.patch(f"/api/devices/{did}", json={"credential_ref_id": factory})
+            sent_before = list(sim.commands_received)
+            no_pw = run(client, did, confirm_device_name="lab-sw", serial_port="COM7",
+                        erase_existing=True, current_credential_ref_id=current,
+                        confirm_hostname="lab-bhdmz-sw01")
+            assert no_pw.status_code == 409 and "Choose the approved login" in no_pw.json()["error"]
+            assert "Nothing was erased" in no_pw.json()["error"]
+            assert sim.commands_received == sent_before
+            client.patch(f"/api/devices/{did}", json={"credential_ref_id": approved})
             missing = run(client, did, confirm_device_name="lab-sw", serial_port="COM7",
                           erase_existing=True)
             assert missing.status_code == 409 and "current login" in missing.json()["error"]

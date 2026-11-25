@@ -87,6 +87,8 @@ def delete_project(project_id: str, session: SessionDep, actor: ActorDep) -> Non
 def _ref_out(ref: CredentialRef) -> CredentialRefOut:
     out = CredentialRefOut.model_validate(ref)
     out.has_secret = creds.has_secret(ref.provider, ref.locator)
+    out.empty_password = (creds.has_empty_password(ref.provider, ref.locator)
+                          if out.has_secret else None)
     return out
 
 

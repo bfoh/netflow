@@ -80,15 +80,34 @@ describe('application shell', () => {
     expect(screen.getByRole('button', { name: 'Run console bootstrap…' })).toBeEnabled();
   });
 
+  it('erasing is blocked up front when the device\'s own login has no password', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const sw = device({ id: 'sw', name: 'dmz-sw', driver_id: 'mock.aruba.aos_switch', credential_ref_id: 'factory',
+      bootstrap_profile: { vlan_id: 222, vlan_name: 'OOBM_VLAN', untagged_port: '2', address: '192.168.1.1/24' } });
+    mockApi({
+      '/devices': [sw],
+      '/drivers': [{ driver_id: 'mock.aruba.aos_switch', platform: 'aos_switch', simulated: true, vendor: 'Aruba', os_family: 'ArubaOS-Switch', description: '', capabilities: [], maturity: 'simulation', transport: 'simulated', notes: [] }],
+      '/provisioning/serial-ports': [{ port: 'SIMULATED', description: 'Simulated switch console', hardware_id: '' }],
+      '/projects/p1/credential-refs': [{ id: 'factory', name: 'Aruba Factory', has_secret: true, empty_password: true }],
+    });
+    renderAt('/provisioning?device=sw');
+    await userEvent.click(await screen.findByRole('button', { name: 'Run console bootstrap…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Run console bootstrap' });
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /preconfigured/ }));
+    expect(within(dialog).getByText(/Its login "Aruba Factory" has no password/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Erase and bootstrap' })).toBeDisabled();
+  });
+
   it('erasing a preconfigured switch: UNDM reads its name, the person confirms it (D-095)', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
-    const sw = device({ id: 'sw', name: 'dmz-sw', driver_id: 'mock.aruba.aos_switch',
+    const sw = device({ id: 'sw', name: 'dmz-sw', driver_id: 'mock.aruba.aos_switch', credential_ref_id: 'new',
       bootstrap_profile: { vlan_id: 222, vlan_name: 'OOBM_VLAN', untagged_port: '2', address: '192.168.1.1/24' } });
     const calls = mockApi({
       '/devices': [sw],
       '/drivers': [{ driver_id: 'mock.aruba.aos_switch', platform: 'aos_switch', simulated: true, vendor: 'Aruba', os_family: 'ArubaOS-Switch', description: '', capabilities: [], maturity: 'simulation', transport: 'simulated', notes: [] }],
       '/provisioning/serial-ports': [{ port: 'SIMULATED', description: 'Simulated switch console', hardware_id: '' }],
-      '/projects/p1/credential-refs': [{ id: 'old', name: 'preconfigured login' }],
+      '/projects/p1/credential-refs': [{ id: 'old', name: 'preconfigured login' },
+        { id: 'new', name: 'approved', has_secret: true, empty_password: false }],
       '/devices/sw/provisioning/console-identify': { state: 'configured', hostname: 'lab-bhdmz-sw01', message: '' },
       '/devices/sw/provisioning/console-bootstrap': { status: 'bootstrapped', message: 'ok', commands_sent: [], findings: [],
         verified: true, saved: true, transcript: '', sanitized_transcript: '', erased: 'lab-bhdmz-sw01',
@@ -109,6 +128,7 @@ describe('application shell', () => {
     expect(go).toBeDisabled();  // read, not yet confirmed
     await userEvent.click(yes);
     expect(go).toBeEnabled();
+    expect(within(dialog).getByText('approved', { selector: 'b' })).toBeInTheDocument();  // its login after the erase
     const asked = calls.find((c) => c.url.endsWith('/provisioning/console-identify'));
     expect(JSON.parse(String(asked?.init?.body))).toEqual({ serial_port: 'SIMULATED', baudrate: 9600, current_credential_ref_id: 'old' });
     await userEvent.click(go);

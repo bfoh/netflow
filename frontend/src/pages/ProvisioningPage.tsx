@@ -1,5 +1,5 @@
 import {
-  Badge, Button, Card, Checkbox, Code, CopyButton, Group, List, Modal, NumberInput, Select, SimpleGrid, Stack,
+  Anchor, Badge, Button, Card, Checkbox, Code, CopyButton, Group, List, Modal, NumberInput, Select, SimpleGrid, Stack,
   Text, TextInput, Title,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -49,6 +49,12 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
   const [eraseOk, setEraseOk] = useState(false);
   const hostname = seen?.state === 'configured' ? seen.hostname : '';
   const refs = useCredentialRefs(device.project_id);
+  // After an erase the switch is set up as new with this device's own login: it must be one
+  // with a password (the approved login), and not the login being erased.
+  const ownLogin = refs.data?.find((r) => r.id === device.credential_ref_id);
+  const ownProblem = !ownLogin ? 'This device has no login chosen.'
+    : ownLogin.empty_password ? `Its login "${ownLogin.name}" has no password.`
+      : ownLogin.id === currentLogin ? `Its login "${ownLogin.name}" is the login being erased.` : null;
   const [opened, { open, close }] = useDisclosure();
 
   const profile: BootstrapProfile = { vlan_id: Number(vlanId), vlan_name: vlanName.trim(), untagged_port: port.trim(), address: address.trim() };
@@ -167,6 +173,12 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
                 <Select size="xs" label="Its current login" placeholder={refs.data?.length ? 'Choose the preconfigured login' : 'Add it on the system\'s Logins tab'}
                   data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={currentLogin}
                   onChange={(v) => { setCurrentLogin(v); setSeen(null); setEraseOk(false); }} />
+                <Text size="xs">After the erase it is set up with this device's login: <b>{ownLogin?.name ?? 'none chosen'}</b>{' '}
+                  (<Anchor component={Link} to={`/stage/${device.project_id}`} size="xs">change in Stage a system, step 1</Anchor>).</Text>
+                {ownProblem && (
+                  <Notice kind="error" compact>{ownProblem} Choose the approved login as this device's login first; the erase
+                    cannot start until then.</Notice>
+                )}
                 <Group gap="xs">
                   <Button size="xs" variant="light" disabled={!currentLogin} loading={identify.isPending}
                     onClick={() => { setEraseOk(false); identify.mutate(undefined, { onSuccess: setSeen }); }}>Read its name from the console</Button>
@@ -193,7 +205,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
           <DialogError error={run.error} />
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Cancel</Button>
-            <Button color={erase ? 'red' : 'orange'} disabled={confirm.trim() !== device.name || (erase && (!currentLogin || !hostname || !eraseOk))}
+            <Button color={erase ? 'red' : 'orange'} disabled={confirm.trim() !== device.name || (erase && (!currentLogin || !hostname || !eraseOk || !!ownProblem))}
               loading={run.isPending}
               onClick={() => run.mutate(undefined, { onSuccess: (r) => { setResult(r); close(); } })}>{erase ? 'Erase and bootstrap' : 'Run bootstrap'}</Button>
           </Group>
