@@ -1,5 +1,5 @@
 import {
-  Anchor, Badge, Button, Card, Checkbox, Code, CopyButton, Group, List, Modal, NumberInput, Select, SimpleGrid, Stack,
+  Badge, Button, Card, Checkbox, Code, CopyButton, Group, List, Modal, NumberInput, Select, SimpleGrid, Stack,
   Text, TextInput, Title,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -52,6 +52,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
   // After an erase the switch is set up as new with this device's own login: it must be one
   // with a password (the approved login), and not the login being erased.
   const ownLogin = refs.data?.find((r) => r.id === device.credential_ref_id);
+  const loginName = (id: string | null) => refs.data?.find((r) => r.id === id)?.name;
   const ownProblem = !ownLogin ? 'This device has no login chosen.'
     : ownLogin.empty_password ? `Its login "${ownLogin.name}" has no password.`
       : ownLogin.id === currentLogin ? `Its login "${ownLogin.name}" is the login being erased.` : null;
@@ -60,11 +61,14 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
   const profile: BootstrapProfile = { vlan_id: Number(vlanId), vlan_name: vlanName.trim(), untagged_port: port.trim(), address: address.trim() };
   const complete = !!profile.vlan_id && !!profile.vlan_name && !!profile.untagged_port && /^\d+\.\d+\.\d+\.\d+\/\d+$/.test(profile.address);
   const save = useAction(() => api.updateDevice(device.id, { bootstrap_profile: profile }), 'Bootstrap settings saved');
+  const chooseOwn = useAction((ref: string | null) => api.updateDevice(device.id, { credential_ref_id: ref }), 'Approved login chosen');
+  const loginOptions = (refs.data ?? []).map((r) => ({ value: r.id, label: r.name }));
   const doPreview = useAction(() => api.bootstrapPreview(device.id, profile));
   const run = useAction(() => api.consoleBootstrap(device.id, {
     serial_port: serialPort!, baudrate: Number(baud), profile, confirm_device_name: confirm,
     allow_configured: allowConfigured && !erase,
-    ...(erase ? { erase_existing: true, current_credential_ref_id: currentLogin, confirm_hostname: hostname.trim() } : {}),
+    ...(currentLogin ? { current_credential_ref_id: currentLogin } : {}),
+    ...(erase ? { erase_existing: true, confirm_hostname: hostname.trim() } : {}),
   }), undefined, { errorInDialog: true });
   const identify = useAction(() => api.consoleIdentify(device.id, {
     serial_port: serialPort!, baudrate: Number(baud), current_credential_ref_id: currentLogin,
@@ -159,6 +163,19 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
             configuration back and save it. {simulated ? 'This is a simulated console; no real device is involved.'
               : 'Make sure the console cable is plugged into the right switch.'}
           </Text>
+          <Card withBorder padding="sm">
+            <Stack gap={6}>
+              <Text size="sm" fw={600}>Logins</Text>
+              <Select size="xs" label="Login it has now" clearable data={loginOptions} value={currentLogin}
+                description="Factory or preconfigured login. Leave empty for a new switch. UNDM uses it if the approved login is refused, and for an erase."
+                placeholder={refs.data?.length ? 'Choose its current login' : "Add it on the system's Logins tab"}
+                onChange={(v) => { setCurrentLogin(v); setSeen(null); setEraseOk(false); }} />
+              <Select size="xs" label="Approved login (its login after the setup)" data={loginOptions} value={device.credential_ref_id}
+                description="Set on a new or erased switch; saved as this device's login."
+                placeholder="Choose the approved login" onChange={(v) => chooseOwn.mutate(v)} />
+              {ownProblem && <Notice kind="error" compact>{ownProblem} Choose the approved login here.</Notice>}
+            </Stack>
+          </Card>
           <Checkbox label="This switch is preconfigured (it has a manager password that is not the approved one): erase its configuration first"
             checked={erase} onChange={(e) => setErase(e.currentTarget.checked)} />
           {erase && (
@@ -170,15 +187,9 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
                   UNDM does not recognise stops it with the switch's text.</>}>
                 Its configuration is erased, then it is set up as a new switch.
               </Notice>
-                <Select size="xs" label="Its current login" placeholder={refs.data?.length ? 'Choose the preconfigured login' : 'Add it on the system\'s Logins tab'}
-                  data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={currentLogin}
-                  onChange={(v) => { setCurrentLogin(v); setSeen(null); setEraseOk(false); }} />
-                <Text size="xs">After the erase it is set up with this device's login: <b>{ownLogin?.name ?? 'none chosen'}</b>{' '}
-                  (<Anchor component={Link} to={`/stage/${device.project_id}`} size="xs">change in Stage a system, step 1</Anchor>).</Text>
-                {ownProblem && (
-                  <Notice kind="error" compact>{ownProblem} Choose the approved login as this device's login first; the erase
-                    cannot start until then.</Notice>
-                )}
+                <Text size="xs">Erased with <b>{loginName(currentLogin) ?? 'the login it has now (choose it above)'}</b>, then set up
+                  with <b>{ownLogin?.name ?? 'the approved login (choose it above)'}</b>. If the switch keeps its password after
+                  the erase, UNDM carries on with the login it has now.</Text>
                 <Group gap="xs">
                   <Button size="xs" variant="light" disabled={!currentLogin} loading={identify.isPending}
                     onClick={() => { setEraseOk(false); identify.mutate(undefined, { onSuccess: setSeen }); }}>Read its name from the console</Button>

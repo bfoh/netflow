@@ -120,8 +120,8 @@ describe('application shell', () => {
     await userEvent.type(within(dialog).getByLabelText(/Type the device name to confirm/), 'dmz-sw');
     const go = within(dialog).getByRole('button', { name: 'Erase and bootstrap' });
     expect(go).toBeDisabled();  // current login and hostname still missing
-    await userEvent.click(within(dialog).getByPlaceholderText('Choose the preconfigured login'));
-    await userEvent.click(await screen.findByRole('option', { name: 'preconfigured login', hidden: true }));
+    await userEvent.click(within(dialog).getByPlaceholderText('Choose its current login'));
+    await userEvent.click((await screen.findAllByRole('option', { name: 'preconfigured login', hidden: true }))[0]);
     expect(within(dialog).queryByLabelText(/Type its current hostname/)).not.toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Read its name from the console' }));
     const yes = await within(dialog).findByRole('checkbox', { name: /Yes, erase lab-bhdmz-sw01/ });

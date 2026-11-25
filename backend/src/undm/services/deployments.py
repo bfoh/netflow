@@ -61,6 +61,8 @@ from undm.services.devices import (
     build_driver,
     inspect_config,
     latest_config,
+    login_after_loading_needed,
+    set_login_after_loading_needed,
     set_temporary_address,
     temporary_address,
 )
@@ -291,6 +293,12 @@ class DeploymentService:
             after = (credentials_after or {}).get(did) or None
             if after:
                 self._credentials_for(device, after)  # exists, belongs here, has a secret
+            elif (not dry_run and apply_mode is ApplyMode.REPLACE
+                  and login_after_loading_needed(device)):
+                raise ConflictError(
+                    f"{device.name} still has the login it had before its console setup (its "
+                    "password survived): choose the approved login as 'Login after loading' "
+                    "for its file, which sets the approved password.")
             rec.targets.append(DeploymentTargetRecord(
                 device_id=did, position=pos, config_version_id=cfg.id,
                 state=TargetState.PENDING.value, secret_refs=refs,
@@ -1129,6 +1137,7 @@ class DeploymentService:
                              details={"from": device.credential_ref_id,
                                       "to": after, "deployment": rec.id})
                 device.credential_ref_id = after
+                set_login_after_loading_needed(device, False)
             if t.backup is not None:
                 device.last_backup_at = now
             if rec.kind in ("first_login", "restart", "license"):

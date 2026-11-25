@@ -44,6 +44,7 @@ manager, topology._
 | Safety switches in Settings | Real-device changes, Firmware changes and the second approver for firmware can be changed in Settings → Safety: confirmation before the less safe position, one audit event per change, kept in `settings.json` in the data folder, `.env`/environment values win and are shown as fixed, production switches start-up only, in force at once (an approved plan not yet started is stopped by turning a switch off) (D-082) |
 | Feedback and confirmations | Errors shown inside the dialog that caused them; other errors stay until closed, with Copy details; one confirmation dialog for cancel plan, retire/delete image, delete login, delete system (typed name); deleting a system removes its stored passwords; tables scroll inside their cards; no sideways page scroll at 390 px (D-084) |
 | Names, erase, two switches (v68) | Devices are named after the hostname in the file chosen for them, confirmed after loading (D-094). Erasing a preconfigured 2930F: UNDM reads its name from the console, the person ticks it; no typing (D-095). **Experimental, not yet run on hardware:** the second 2930F's plan moves the first to a spare address, unsaved, instead of unplugging it (D-096, Q-45) |
+| Two logins (v74) | Console setup takes the login the switch has now and the approved one; falls back on the current login when the approved one is refused (also after an erase that kept the password) and then requires 'Login after loading' for its file (D-102) |
 | Erase dialog (v73) | Shows the login the switch gets after the erase and blocks early when it has no password or is the login being erased (D-101) |
 | FortiGate license (v72) | "Load license…" in a FortiGate's menu: the team's file is kept for the device (never shown or exported) and loaded through an approved plan with `execute restore manual-license tftp` (Fortinet-documented; **experimental, not yet run on hardware**, Q-46, D-100) |
 | Working with devices (v71) | Device menu everywhere (⋯ and right-click): Open SSH window (PC's own SSH program, password typed by the person, D-098), web page, check information, test, wait until it answers, back up, log, restart (approved plan; 2930F and LIG1014A), console setup. System tree with tick boxes, watch devices (reachability dots), device log (D-099) |
@@ -75,14 +76,14 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-25, v73)
+## Test results (2026-11-25, v74)
 | Suite | Result |
 |---|---|
-| Backend pytest | 484 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
+| Backend pytest | 486 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (79 files) |
-| Frontend Vitest | 67 passed |
+| Frontend Vitest | 68 passed |
 | tsc / oxlint / vite build | clean / clean / success |
 | Playwright E2E | 6 passed (device menu, check information, test and log on a simulated switch; acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box; export and import of a system) |
 

@@ -83,6 +83,16 @@ export function planSteps(role: Role, c: Choice, device?: Device, inTheWay?: Dev
   // 2026-11-25: a Black Box plan without it loaded its file, then could not log in again).
   if (role.loginAfter && device && device.environment !== 'simulated' && (c.fileId || c.baseId) && !c.loginAfter) {
     missing.push(`the login after loading (${role.loginAfter.split(':')[0]})`);
+  } else if (device && keptPreviousLogin(device) && (c.fileId || c.baseId) && !c.loginAfter) {
+    missing.push('the login after loading (the switch kept its previous password; its file sets the approved one)');
   }
   return { steps, missing };
 }
+
+/** The switch kept the password it had before its console setup (D-102): its file must say
+ * which login is valid after loading. */
+export function keptPreviousLogin(d: Device): boolean {
+  const extra = (d.observed_facts as { extra?: { login_after_loading_needed?: boolean } } | null)?.extra;
+  return !!extra?.login_after_loading_needed;
+}
+

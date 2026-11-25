@@ -86,6 +86,13 @@ describe('login after loading (D-092)', () => {
     expect(planSteps(role('aruba_a'), { ...EMPTY_CHOICE, fileId: 'f' }, real('2930F')).missing).toEqual([]);
   });
 
+  it('a 2930F that kept its previous password needs it (D-102)', () => {
+    const kept = { id: 'x', model: '2930F', environment: 'lab', capabilities: [],
+      observed_facts: { extra: { login_after_loading_needed: true } } } as unknown as Device;
+    expect(planSteps(role('aruba_b'), { ...EMPTY_CHOICE, fileId: 'f' }, kept).missing)
+      .toEqual(['the login after loading (the switch kept its previous password; its file sets the approved one)']);
+  });
+
   it('a real FortiGate needs it for its base file', () => {
     const c = { ...EMPTY_CHOICE, firstLogin: false, baseId: 'b', siteId: 's' };
     expect(planSteps(role('firewall'), c, real('FortiGate-101F')).missing).toEqual(['the login after loading (its base file sets its own admin password)']);

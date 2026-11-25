@@ -33,6 +33,7 @@ from undm.provisioning.simulated import SimulatedArubaConsole
 from undm.security import credentials as creds
 from undm.security.sanitize import sanitize
 from undm.services import audit
+from undm.services.devices import set_login_after_loading_needed
 from undm.services.errors import ConflictError, ForbiddenError, ServiceError
 from undm.services.policy import Policy
 
@@ -233,6 +234,16 @@ def run_console_bootstrap(
     # hostname typed by the technician, checked against the switch before anything is sent.
     erase: aos_switch.EraseRequest | None = None
     current_ref: CredentialRef | None = None
+    current: Credentials | None = None
+    if current_credential_ref_id and not erase_existing:
+        # The login the switch has now (D-102): tried when the approved login is refused.
+        current_ref = session.get(CredentialRef, current_credential_ref_id)
+        if current_ref is None or current_ref.project_id != device.project_id:
+            raise ConflictError("Current login: credential not found in this project")
+        try:
+            current = creds.resolve(current_ref.provider, current_ref.locator)
+        except creds.CredentialResolutionError as e:
+            raise ServiceError(f"Credential '{current_ref.name}': {e}") from e
     if erase_existing:
         if not current_credential_ref_id or not (confirm_hostname or "").strip():
             raise ConflictError("To erase a preconfigured switch, choose its current login and "
@@ -274,7 +285,7 @@ def run_console_bootstrap(
             raise ServiceError(str(e)) from e
         result = aos_switch.bootstrap(
             aos_switch.ArubaOSSwitchConsole(console_session, credentials, wake_delay=wake),
-            params, allow_configured=allow_configured, erase=erase)
+            params, allow_configured=allow_configured, erase=erase, current=current)
     finally:
         if transport is not None and not simulated:
             transport.close()
@@ -288,6 +299,15 @@ def run_console_bootstrap(
     device.bootstrap_profile = stored_profile
     reachable: bool | None = None
     hint = ""
+    if ok and result.kept_current_login and current_ref is not None \
+            and device.credential_ref_id != current_ref.id:
+        # The switch still answers to the login it had: UNDM must use that one until its
+        # file sets the approved password ('Login after loading', D-102).
+        audit.record(session, actor, "device.credential_changed", "device", device.id,
+                     details={"from": device.credential_ref_id, "to": current_ref.id,
+                              "reason": "the switch kept its previous password"})
+        device.credential_ref_id = current_ref.id
+        set_login_after_loading_needed(device, True)
     if ok:
         device.provisioning_status = ProvisioningStatus.BOOTSTRAPPED.value
         if not device.management_address:
@@ -317,6 +337,7 @@ def run_console_bootstrap(
                      "no_manager_password": result.no_password,
                      "manager_password_set": result.password_set,
                      "erase_existing": erase_existing, "erased_hostname": result.erased,
+                     "kept_current_login": result.kept_current_login,
                      "current_login": current_ref.name if current_ref else None,
                      "credential": device.credential_ref.name if device.credential_ref
                      else None, **({"transcript_tail": tail} if tail else {})})

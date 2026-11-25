@@ -1213,3 +1213,26 @@ login being erased. `CredentialRefOut.empty_password` tells whether a stored log
 password (never the value). The backend refusal says where to change it and that nothing was
 erased.
 
+### D-102 Console setup asks for both logins; a switch that keeps its password after the erase (2026-11-25)
+Bench, second system: a 2930F preconfigured with a factory login was erased (`erase
+startup-config`, confirmed, restarted), but its manager password survived: after the restart
+the console asked "Username:" and refused the approved login ("Authentication failed. Please
+verify that the username and password are correct." three times, then "Session Terminated").
+A second run without erase showed operator level without a password and `enable` refusing the
+approved password ("Unable to verify password"). On the first system's unit the erase had
+cleared the passwords, so units differ (probably by how the credentials were stored).
+Product owner: the console setup should take both logins. It now does, for every run:
+- "Login it has now" (factory or preconfigured; empty for a new switch) and "Approved login
+  (its login after the setup)", the device's own login, chosen right in the dialog.
+- UNDM logs in with the approved login; when the switch refuses it, at the login or at
+  `enable`, UNDM tries the login it has now, once (`ArubaOSSwitchConsole.fallback`), also
+  after an erase. The transcript notes the switch.
+- When the setup succeeds on the login it had, that login becomes the device's login in UNDM
+  (audit `device.credential_changed`, reason "the switch kept its previous password") and the
+  device is marked so that a complete-file plan requires "Login after loading" (the team's
+  file sets the approved password); the wizard lists it as missing and the backend refuses a
+  plan without it. The mark is cleared once a load reaches the switch with the approved login.
+- No new command: changing an existing manager password on the console is not done, because
+  its dialogue is not yet seen on hardware.
+The simulator models the surviving password (`keep_passwords_on_erase`) with the bench wording.
+

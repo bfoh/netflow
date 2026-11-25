@@ -5,7 +5,7 @@ import { useAction, useConfig, useConfigs, useCredentialRefs, useFirmwareImages 
 import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import type { Device } from '../../types/api';
-import { type Choice, EMPTY_CHOICE, planSteps } from './choices';
+import { keptPreviousLogin, type Choice, EMPTY_CHOICE, planSteps } from './choices';
 import type { Role } from './roles';
 import { EmptyState } from '../../components/EmptyState';
 
@@ -53,7 +53,7 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
   const set = (part: Partial<Choice>) => onChange({ ...choice, ...part });
   const { missing } = planSteps(role, choice, device);
   const hasFile = role.steps.includes('base') || role.steps.includes('file');
-  const needsLoginAfter = !!role.loginAfter && device.environment !== 'simulated';
+  const needsLoginAfter = (!!role.loginAfter && device.environment !== 'simulated') || keptPreviousLogin(device);
   return (
     <Card withBorder>
       <Group justify="space-between" mb={4} wrap="nowrap" align="flex-start">
@@ -99,7 +99,7 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
         )}
         {hasFile && (needsLoginAfter ? (
           <Select label="Login after loading" clearable w="100%" maw={420} data={logins} value={choice.loginAfter}
-            placeholder="Choose the login" description={`Needed: ${role.loginAfter}.`}
+            placeholder="Choose the login" description={`Needed: ${role.loginAfter ?? 'the switch kept its previous password; its file sets the approved one: choose the approved login'}.`}
             error={choice.loginAfter ? undefined : 'Not chosen yet'}
             onChange={(v) => set({ loginAfter: v })} />
         ) : (

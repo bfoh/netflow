@@ -53,6 +53,24 @@ def set_temporary_address(device: Device, address: str | None) -> None:
     device.observed_facts = facts
 
 
+def login_after_loading_needed(device: Device) -> bool:
+    """The device runs on a login its file will replace: a plan that loads the file must
+    say which login is valid after loading (D-102)."""
+    extra = (device.observed_facts or {}).get("extra") or {}
+    return bool(isinstance(extra, dict) and extra.get("login_after_loading_needed"))
+
+
+def set_login_after_loading_needed(device: Device, needed: bool) -> None:
+    facts = dict(device.observed_facts or {})
+    extra = dict(facts.get("extra") or {})
+    if needed:
+        extra["login_after_loading_needed"] = True
+    else:
+        extra.pop("login_after_loading_needed", None)
+    facts["extra"] = extra
+    device.observed_facts = facts
+
+
 def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
     if device.driver_id not in registry:
         raise ServiceError(f"Unknown driver {device.driver_id!r}")
@@ -197,9 +215,12 @@ def run_read_only_operation(
             payload = asdict(result.data) if result.ok else None
             if result.ok:
                 moved = temporary_address(device)
+                pending = login_after_loading_needed(device)
                 device.observed_facts = payload
                 if moved:  # where it runs until its next restart is not a fact it reports
                     set_temporary_address(device, moved)
+                if pending:
+                    set_login_after_loading_needed(device, True)
                 device.facts_retrieved_at = now
         elif op is DeviceOperation.BACKUP_CONFIGURATION:
             result = driver.backup_configuration()

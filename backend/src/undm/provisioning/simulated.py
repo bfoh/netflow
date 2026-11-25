@@ -46,6 +46,9 @@ class SimulatedArubaConsole:
     setup_after_erase: bool = True
     # After the restart, wording as on the bench (WC.16.10.0025, 2026-11-23).
     speed_sense_after_erase: bool = False
+    # As on the bench (2026-11-25, WC.16.10.0025): 'erase startup-config' cleared the
+    # configuration but the manager login survived, so the console asked for it again.
+    keep_passwords_on_erase: bool = False
 
     def __post_init__(self) -> None:
         self._out = bytearray()
@@ -200,7 +203,9 @@ class SimulatedArubaConsole:
                 self._state = "cli"
                 self._emit("\r\n" + self._prompt())
             else:
-                self._emit("\r\nInvalid password\r\nUsername: ")
+                # Wording seen on the bench (2026-11-25).
+                self._emit("\r\nAuthentication failed. Please verify that the username and "
+                           "password are correct.\r\nUsername: ")
                 self._state = "username"
             return
         cmd = line.strip()
@@ -275,7 +280,8 @@ class SimulatedArubaConsole:
     def _factory_reset(self) -> None:
         self.hostname = "Aruba-2930F-48G-4SFP"
         self.extra_config = []
-        self.username = self.password = None
+        if not self.keep_passwords_on_erase:
+            self.username = self.password = None
         self.enable_login = False
         self.operator_level = False
         self._manager = True

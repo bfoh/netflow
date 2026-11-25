@@ -44,6 +44,8 @@ SETUP_REENTER = re.compile(r"Re-enter the new password\s*:\s*$", re.I)
 # 2026-11-19: "Password cannot be empty. / Operation aborted. / Session Terminated,
 # unable to login."). Nothing was set; the login simply starts again.
 TERMINATED = re.compile(r"Session Terminated, unable to login\.?\s*$", re.I)
+# A refused login, then the username prompt again (bench, WC.16.10.0025, 2026-11-25).
+AUTH_FAILED = re.compile(r"Authentication failed|Invalid password", re.I)
 # Setting the manager password on a switch that has none (bench, WC.16.10.0025, 2026-11-23):
 # in configuration mode, 'password manager' asks these two questions and echoes '*'.
 SET_PASSWORD_COMMAND = "password manager"  # noqa: S105 - a CLI command, not a password
@@ -135,6 +137,9 @@ class BootstrapResult:
     transcript: str = ""
     credentials_set: bool = False  # a new switch's first-login credentials were set
     erased: str = ""  # hostname of the configuration that was erased first, if any
+    # The approved login was refused and the switch was reached with the login it has now
+    # (e.g. its password survived the erase): that login stays the switch's (D-102).
+    kept_current_login: bool = False
     # The switch asked for no password and none was set: it has no manager password.
     no_password: bool = False
     # The switch had no manager password; UNDM set the device's login (verified).
@@ -212,6 +217,10 @@ class ArubaOSSwitchConsole:
         self.credentials_set = False
         # True once the switch asked for a password at login or at enable.
         self.password_asked = False
+        # The login the switch has now (factory or preconfigured), tried when ``credentials``
+        # (the approved login) is refused (D-102). ``used_fallback``: it was.
+        self.fallback: Credentials | None = None
+        self.used_fallback = False
 
     def _first_login_setup(self) -> str:
         """Answer a new switch's "Configure the manager credentials" request.
@@ -303,6 +312,8 @@ class ArubaOSSwitchConsole:
                 break
             if idx == 1:
                 self.s.write_line()
+            elif idx == 2 and AUTH_FAILED.search(text) and self._switch_to_fallback():
+                self.s.write_line(self._credential("username"))
             elif idx == 2 and FIRST_LOGIN.search(seen) and not self.credentials_set:
                 if self.read_only:
                     raise NewSwitchError(
@@ -333,6 +344,9 @@ class ArubaOSSwitchConsole:
                     self.s.transcript.append("<<< (password sent)\n")
                     self.s.transport.write((self._credential("password") + "\r").encode())
             m = PROMPT.search(text)
+            if (m is not None and m["mode"] != "#" and re.search(r"Unable to verify", text)
+                    and self._switch_to_fallback()):
+                return self.login(wake=False, initial=(0, text))  # 'enable' again with it
             if m is None or m["mode"] != "#":
                 raise ConsoleError(
                     "Could not enter manager (enable) level: the switch has a manager password "
@@ -342,6 +356,15 @@ class ArubaOSSwitchConsole:
             self.command("end")
         self.command("no page")  # session only
         return str(m["name"])
+
+    def _switch_to_fallback(self) -> bool:
+        """The approved login was refused: use the login the switch has now, once."""
+        if self.fallback is None or self.used_fallback:
+            return False
+        self.credentials, self.used_fallback = self.fallback, True
+        self.s.transcript.append("<<< (the approved login was refused: trying the login it "
+                                 "has now)\n")
+        return True
 
     def set_manager_password(self) -> None:
         """Give a switch without a manager password the attached login's password.
@@ -461,7 +484,8 @@ def wait_after_erase(console: ArubaOSSwitchConsole, request: EraseRequest) -> tu
 
 def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
               *, allow_configured: bool = False,
-              erase: EraseRequest | None = None) -> BootstrapResult:
+              erase: EraseRequest | None = None,
+              current: Credentials | None = None) -> BootstrapResult:
     """Run the bootstrap. Never raises for device-side problems; returns a result."""
     s = console.s
     sent: list[str] = []
@@ -502,6 +526,12 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
         if password_set:
             message += (". The switch had no manager password: it was set to the device's "
                         "attached login and saved")
+        if console.used_fallback and status in (BootstrapStatus.BOOTSTRAPPED,
+                                                BootstrapStatus.ALREADY_CONFIGURED):
+            message += (". The switch kept the password of the login it had (the approved "
+                        "login was refused), so that login is now its login in UNDM. Choose "
+                        "the approved login as 'Login after loading' for its team file: the "
+                        "file sets the approved password")
         if no_password:
             message += (". Note: the switch asked for no password, so it has no manager "
                         "password and SSH with the device's login will fail. Either set the "
@@ -511,11 +541,14 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
         return BootstrapResult(status, message, commands_sent=sent,
                                transcript=s.transcript_text,
                                credentials_set=console.credentials_set, erased=erased,
+                               kept_current_login=console.used_fallback,
                                no_password=no_password, password_set=password_set,
                                **kw)  # type: ignore[arg-type]
 
+    console.fallback = current  # the login the switch has now, if the person gave it
     try:
         if erase is not None:
+            console.fallback = erase.current
             erased = erase_existing(console, erase, params)
         if erased:
             assert erase is not None

@@ -302,3 +302,95 @@ def test_preconfigured_switch_is_erased_first_with_its_current_login(monkeypatch
             assert "Example-Only" not in log
     finally:
         keyring.set_keyring(previous)
+
+
+# -- a switch whose password survives the erase (D-102, bench 2026-11-25) --------------------
+
+def _two_logins(monkeypatch, sim):
+    import keyring
+    from memory_keyring import MemoryKeyring
+
+    monkeypatch.setattr(prov, "open_serial", lambda port, baud: sim)
+    monkeypatch.setattr(prov, "_tcp_reachable", lambda address, port=22, timeout=3.0: True)
+    monkeypatch.setattr(prov.ConsoleSession, "settle_time", 0)
+    monkeypatch.setattr(prov.aos_switch.time, "sleep", lambda s: None)
+    previous = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    return previous
+
+
+def test_after_an_erase_that_kept_the_password_the_current_login_is_used(monkeypatch):
+    import keyring
+
+    sim = SimulatedArubaConsole(hostname="lab-bhdmz-sw02", username="manager",
+                                password="Example-Only-Factory", operator_level=True,
+                                enable_login=True, keep_passwords_on_erase=True,
+                                extra_config=["ip route 0.0.0.0 0.0.0.0 192.0.2.254"])
+    previous = _two_logins(monkeypatch, sim)
+    try:
+        client, _ = make_client(enable_real_device_writes=True)
+        with client:
+            pid = client.post("/api/projects", json={"name": "BH-DMZ"}).json()["id"]
+
+            def login(name, password):
+                ref = client.post(f"/api/projects/{pid}/credential-refs",
+                                  json={"name": name}).json()
+                client.put(f"/api/credential-refs/{ref['id']}/secret",
+                           json={"username": "manager", "password": password})
+                return ref["id"]
+            approved = login("approved", "Example-Only-Approved-1")
+            factory = login("factory", "Example-Only-Factory")
+            did = client.post(f"/api/projects/{pid}/devices", json=dict(
+                REAL_SWITCH, credential_ref_id=approved)).json()["id"]
+            out = run(client, did, confirm_device_name="lab-sw", serial_port="COM7",
+                      erase_existing=True, current_credential_ref_id=factory,
+                      confirm_hostname="lab-bhdmz-sw02").json()
+            assert out["status"] == "bootstrapped", (out["message"], out["transcript"])
+            assert sim.erased == 1 and sim.password == "Example-Only-Factory"  # it survived
+            assert "Authentication failed" in out["transcript"]
+            assert "trying the login it has now" in out["transcript"]
+            assert "kept the password of the login it had" in out["message"]
+            device = client.get(f"/api/devices/{did}").json()
+            assert device["credential_ref_id"] == factory  # what the switch answers to now
+            assert device["observed_facts"]["extra"]["login_after_loading_needed"] is True
+            assert "Example-Only" not in repr(out)
+            # Its file must then say which login is valid after loading.
+            v = client.post(f"/api/devices/{did}/configs/import", json={
+                "filename": "team.pcc", "text": "; JL260A Configuration Editor; Created on "
+                "release #WC.16.10.0025\nhostname \"lab-sw\"\nvlan 222\n   name \"OOBM\"\n"
+                "   untagged 2\n   ip address 192.168.1.1 255.255.255.0\n   exit\n"}).json()
+            r = client.post(f"/api/projects/{pid}/deployments", json={
+                "device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]}})
+            assert r.status_code == 409 and "Login after loading" in r.json()["error"]
+    finally:
+        keyring.set_keyring(previous)
+
+
+def test_without_erase_the_current_login_is_tried_when_enable_refuses_the_approved(monkeypatch):
+    import keyring
+
+    # The bench's second attempt: operator level without a password, manager with one.
+    sim = SimulatedArubaConsole(username="manager", password="Example-Only-Factory",
+                                operator_level=True, enable_login=True)
+    previous = _two_logins(monkeypatch, sim)
+    try:
+        client, _ = make_client(enable_real_device_writes=True)
+        with client:
+            pid = client.post("/api/projects", json={"name": "Bench"}).json()["id"]
+            refs = []
+            for name, pw in (("approved", "Example-Only-Approved-1"),
+                             ("factory", "Example-Only-Factory")):
+                ref = client.post(f"/api/projects/{pid}/credential-refs",
+                                  json={"name": name}).json()
+                client.put(f"/api/credential-refs/{ref['id']}/secret",
+                           json={"username": "manager", "password": pw})
+                refs.append(ref["id"])
+            did = client.post(f"/api/projects/{pid}/devices", json=dict(
+                REAL_SWITCH, credential_ref_id=refs[0])).json()["id"]
+            out = run(client, did, confirm_device_name="lab-sw", serial_port="COM7",
+                      current_credential_ref_id=refs[1]).json()
+            assert out["status"] == "bootstrapped", (out["message"], out["transcript"])
+            assert "Unable to verify password" in out["transcript"]
+            assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == refs[1]
+    finally:
+        keyring.set_keyring(previous)
