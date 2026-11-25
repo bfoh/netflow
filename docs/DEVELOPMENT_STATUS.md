@@ -45,7 +45,7 @@ manager, topology._
 | Feedback and confirmations | Errors shown inside the dialog that caused them; other errors stay until closed, with Copy details; one confirmation dialog for cancel plan, retire/delete image, delete login, delete system (typed name); deleting a system removes its stored passwords; tables scroll inside their cards; no sideways page scroll at 390 px (D-084) |
 | Bench cabling | Wizard Bench check: cabling table per device (all four on one isolated switch); a 2930F whose file moves it to an address another device has waits until that one is unplugged (card caution); the 2930F file step stops in preflight, nothing changed, when another device answers at that address (D-091) |
 | Bench log | One masked text per system (devices, console setups, plans with every event) to send instead of screenshots; read before sharing; audited (D-090). Checklist for the first full wizard run: `vendor-support/staging-wizard-bench.md` |
-| Messages | Four kinds only (problem, caution, status, help) from one component; explanations as quiet hints; empty states; safety switch state shown next to actions on real devices instead of the header; guarded by a test (D-089) |
+| Messages | Four kinds only (problem, caution, status, help) from one component; explanations as quiet hints; empty states; safety switch state shown next to actions on real devices instead of the header; guarded by a test (D-089) A real device without a login says so in plain words, with where to choose one (v62). |
 | Needs attention, deleting | A plan that needs attention stops waiting once a later real plan succeeded on its devices or a person records a check (note, audited); Home shows only those still waiting. Delete devices (row or several), systems and plans (a staging step takes its whole staging plan; never while running); audited (D-088) |
 | System packages | Export a system to one `.undm` file (settings, devices, login names, files, topology, optionally approved firmware; no passwords; checksummed manifest) and import it on another copy: checked completely before anything is created; logins arrive empty, images unapproved (D-087) |
 | Plain words and navigation | One glossary (device, system, plan, login, file); states, drivers, platforms, facts, capabilities shown in words; internals under "Technical details"; sidebar Home · Systems · Devices · Files · Firmware · Console setup · Plans · Advanced (Topology, Audit log) · Settings; Home page with what is waiting for the user and each system's progress (D-083) |
@@ -70,10 +70,10 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-25, v61)
+## Test results (2026-11-25, v62)
 | Suite | Result |
 |---|---|
-| Backend pytest | 458 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
+| Backend pytest | 459 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (79 files) |

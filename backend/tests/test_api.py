@@ -316,3 +316,18 @@ def test_import_rejects_bad_files(client, text, msg):
     sw = device(client, pid, SWITCH)
     r = client.post(f"/api/devices/{sw}/configs/import", json={"filename": "f.cfg", "text": text})
     assert r.status_code == 400 and msg in r.json()["error"]
+
+
+def test_a_real_device_without_a_login_says_so_in_plain_words(client):
+    """Bench 2026-11-25: a firmware plan for 2930F switches whose login was not chosen yet."""
+    pid = client.post("/api/projects", json={"name": "Bench"}).json()["id"]
+    did = client.post(f"/api/projects/{pid}/devices", json={
+        "name": "bench-sw-a", "manufacturer": "Aruba", "category": "switch", "model": "2930F",
+        "os_family": "ArubaOS-Switch", "driver_id": "ssh.aruba.aos_switch",
+        "environment": "lab", "management_address": "192.0.2.10"}).json()["id"]
+    r = client.post(f"/api/devices/{did}/operations/check_reachability")
+    assert r.status_code == 400
+    assert r.json()["error"].startswith("bench-sw-a has no login chosen. Choose one on its "
+                                         "device page (Edit)")
+    assert "credential reference" not in r.json()["error"]
+

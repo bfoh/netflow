@@ -46,7 +46,10 @@ def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
         except creds.CredentialResolutionError as e:
             raise ServiceError(str(e)) from e
     elif not driver_cls.info.simulated:
-        raise ServiceError(f"Device {device.name} has no credential reference")
+        raise ServiceError(
+            f"{device.name} has no login chosen. Choose one on its device page (Edit), or in "
+            "Stage a system, step 1 ('Its login'). Logins are added on the system page's "
+            "Logins tab.")
     target = DeviceTarget(device.id, device.management_address, device.management_port)
     return registry.create(device.driver_id, target, credentials)
 
