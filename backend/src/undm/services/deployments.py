@@ -52,6 +52,7 @@ from undm.orchestration.deployment import (
 from undm.orchestration.firmware import FirmwareOrchestrator
 from undm.orchestration.first_login import FirstLoginOrchestrator
 from undm.orchestration.free_address import FreeAddressOrchestrator
+from undm.orchestration.restart import RestartOrchestrator
 from undm.security import credentials as creds
 from undm.services import audit
 from undm.services.devices import (
@@ -151,7 +152,8 @@ class DeploymentService:
                 require_separate_approver=self.firmware_separate_approver)
         attempts, delay = self.firmware_reboot_wait
         cls = {"first_login": FirstLoginOrchestrator,
-               "free_address": FreeAddressOrchestrator}.get(rec.kind, DeploymentOrchestrator)
+               "free_address": FreeAddressOrchestrator,
+               "restart": RestartOrchestrator}.get(rec.kind, DeploymentOrchestrator)
         return cls(
             sink=sink, require_separate_approver=self.require_separate_approver,
             restart_wait_attempts=attempts, restart_wait_delay_s=delay,
@@ -388,6 +390,35 @@ class DeploymentService:
             raise ConflictError(f"{device.name} already runs at a temporary address")
         if address == device.management_address:
             raise ConflictError("The spare address is the device's own address")
+
+    # -- restart a device on request (D-099) --------------------------------------------
+    def create_restart(self, project_id: str, device_id: str, actor: str) -> DeploymentRecord:
+        device = self.s.get(Device, device_id)
+        if device is None or device.project_id != project_id:
+            raise NotFoundError(f"Device {device_id} not found in project")
+        if device.driver_id not in self.registry or Capability.RESTART not in \
+                self.registry.get(device.driver_id).info.capabilities:
+            raise ConflictError(f"UNDM cannot restart {device.name} on request: no verified "
+                                "restart procedure for its model yet")
+        problem = self._policy_problem(device, False)
+        if problem:
+            raise ForbiddenError(problem)
+        rec = DeploymentRecord(
+            project_id=project_id, kind="restart", state=S.DRAFT.value, dry_run=False,
+            apply_mode=ApplyMode.MERGE.value, created_by=actor)
+        # Where it is reached now, and its own address it answers at after the restart.
+        rec.targets.append(DeploymentTargetRecord(
+            device_id=device_id, position=0, state=TargetState.PENDING.value,
+            from_version=temporary_address(device) or device.management_address,
+            to_version=device.management_address))
+        self.s.add(rec)
+        self.s.flush()
+        dep = self._to_domain(rec)
+        self._orchestrator(rec).prepare(dep)
+        self._sync(rec, dep)
+        audit.record(self.s, actor, "deployment.create", "deployment", rec.id, rec.state,
+                     {"devices": [device_id], "kind": "restart"})
+        return rec
 
     # -- staging plans (D-071) ----------------------------------------------------------
     def create_staging(self, project_id: str, device_id: str, actor: str, *,
@@ -1045,7 +1076,7 @@ class DeploymentService:
                 device.credential_ref_id = after
             if t.backup is not None:
                 device.last_backup_at = now
-            if rec.kind == "first_login":
+            if rec.kind in ("first_login", "restart"):
                 continue  # no configuration was deployed
             if rec.kind == "firmware":
                 if t.current_version:  # observed, not declared

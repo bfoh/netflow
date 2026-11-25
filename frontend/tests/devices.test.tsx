@@ -1,0 +1,108 @@
+import { fireEvent, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+
+import type { Device } from '../src/types/api';
+import { mockApi, renderAt } from './render';
+
+const device = (over: Partial<Device>): Device => ({
+  id: 'd1', project_id: 'p1', name: 'sw1', manufacturer: 'Aruba', product_family: '', model: '2930F',
+  hardware_revision: '', category: 'switch', role: '', os_family: 'ArubaOS-Switch', firmware_version: '',
+  management_address: '192.0.2.10', management_protocol: 'ssh', management_port: null, management_vrf: '',
+  site: '', rack_location: '', driver_id: 'ssh.aruba.aos_switch', credential_ref_id: 'c1', environment: 'lab',
+  provisioning_status: 'planned', deployment_status: 'never_deployed', notes: '', tags: [], intent: null,
+  observed_facts: null, facts_retrieved_at: null, last_connection_at: null, last_backup_at: null,
+  last_deployment_at: null, locked_by_deployment_id: null, bootstrap_profile: null,
+  capabilities: ['supports_restart', 'supports_ssh'], created_at: '', updated_at: '',
+  ...over,
+});
+const project = { id: 'p1', name: 'Lab A', description: '', site: '', purpose: '', created_at: '', updated_at: '', certificate_subject: null };
+const fw = device({ id: 'fw', name: 'lab-fw', category: 'firewall', model: 'FortiGate-101F', driver_id: 'ssh.fortinet.fortios',
+  capabilities: ['supports_ssh'], management_address: '192.168.1.99' });
+const sw = device({ id: 'sw', name: 'lab-sw-a' });
+const sim = device({ id: 'sim', name: 'lab-bb', environment: 'simulated', driver_id: 'mock.blackbox.switch', capabilities: [] });
+
+describe('device menu, tree and watch (D-099)', () => {
+  it('the system tree groups devices by kind and shares its tick boxes with the table', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': [fw, sw, sim] });
+    renderAt('/projects/p1');
+    const tree = await screen.findByLabelText('Devices of Lab A');
+    expect(within(tree).getByText('Firewalls')).toBeInTheDocument();
+    expect(within(tree).getByText('Switches')).toBeInTheDocument();
+    await userEvent.click(within(tree).getByRole('checkbox', { name: 'Select all switches' }));
+    expect(screen.getByText(/Selected:/).textContent).toContain('2');  // lab-sw-a and lab-bb
+  });
+
+  it('right-click opens the menu with what applies to that device', async () => {
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': [fw, sw, sim] });
+    renderAt('/projects/p1');
+    const row = (await screen.findAllByRole('link', { name: 'lab-fw' })).at(-1)!.closest('tr')!;
+    fireEvent.contextMenu(row);
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByText('Open SSH window')).toBeInTheDocument();
+    expect(within(menu).getByText('Open web page').closest('a')).toHaveAttribute('href', 'https://192.168.1.99');
+    expect(within(menu).getByText('Check information')).toBeInTheDocument();
+    expect(within(menu).queryByText('Restart…')).not.toBeInTheDocument();  // no verified restart for it
+  });
+
+  it('a simulated device offers no SSH window', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': [sim] });
+    renderAt('/projects/p1');
+    const table = await screen.findByRole('table');
+    await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-bb' }));
+    expect(await screen.findByText('Check information')).toBeInTheDocument();  // the menu is open
+    expect(screen.queryByText('Open SSH window')).not.toBeInTheDocument();
+  });
+
+  it('a 2930F offers restart and console setup', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': [sw] });
+    renderAt('/projects/p1');
+    const table = await screen.findByRole('table');
+    await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-sw-a' }));
+    expect(await screen.findByText('Restart…')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Console setup', hidden: true })).toBeInTheDocument();  // also a sidebar link
+  });
+
+  it('a restart is made as a plan and opens the plan page', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [sw],
+      '/devices/sw/restart-plan': { id: 'dep9', kind: 'restart', state: 'awaiting_approval', events: [], targets: [] } });
+    renderAt('/projects/p1');
+    const table = await screen.findByRole('table');
+    await userEvent.click(within(table).getByRole('button', { name: 'Actions for lab-sw-a' }));
+    await userEvent.click(await screen.findByText('Restart…'));
+    const dialog = await screen.findByRole('dialog', { name: 'Restart lab-sw-a' });
+    expect(within(dialog).getByText(/not saved on the device are lost/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Make the restart plan' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/devices/sw/restart-plan' && c.init?.method === 'POST')).toBe(true));
+  });
+
+  it('watching devices shows a dot per device from the reachability check', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [sw, sim],
+      '/projects/p1/reachability': [{ device_id: 'sw', address: '192.0.2.10', state: 'no_answer' },
+        { device_id: 'sim', address: '192.0.2.1', state: 'simulated' }] });
+    window.localStorage.removeItem('undm.watch.p1');
+    renderAt('/projects/p1');
+    await userEvent.click(await screen.findByRole('switch', { name: /Watch devices/ }));
+    expect((await screen.findAllByRole('img', { name: 'No answer on its management port' })).length).toBe(2);  // tree and table
+    expect(calls.some((c) => c.url === '/api/projects/p1/reachability')).toBe(true);
+    window.localStorage.removeItem('undm.watch.p1');
+  });
+
+  it('the device log lists entries and filters them', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    mockApi({ '/devices/sw': sw, '/projects/p1': project, '/devices/sw/log': [
+      { time: '2026-11-25T10:00:00Z', source: 'plan', kind: 'restart.deploy', status: 'ok', message: 'restarting', actor: '', plan_id: 'dep9' },
+      { time: '2026-11-25T09:00:00Z', source: 'audit', kind: 'provisioning.console_bootstrap', status: 'bootstrapped', message: 'saved', actor: 'x', plan_id: null },
+    ] });
+    renderAt('/devices/sw?tab=log');
+    expect(await screen.findByText('restarting')).toBeInTheDocument();
+    expect(screen.getByText('saved')).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Console'));
+    expect(screen.queryByText('restarting')).not.toBeInTheDocument();
+    expect(screen.getByText('saved')).toBeInTheDocument();
+  });
+});

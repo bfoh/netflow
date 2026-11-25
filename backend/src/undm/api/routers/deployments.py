@@ -22,10 +22,10 @@ from undm.api.schemas import (
     StagingPlanIn,
     StagingPlanOut,
 )
-from undm.db.models import DeploymentRecord
+from undm.db.models import DeploymentRecord, Device
 from undm.drivers.base import ApplyMode
 from undm.services.deployments import DeploymentService, StagingStep
-from undm.services.errors import ConflictError
+from undm.services.errors import ConflictError, NotFoundError
 from undm.services.jobs import DeploymentJobs
 from undm.services.policy import Policy
 from undm.services.safety_settings import effective
@@ -98,6 +98,17 @@ def create_deployment(project_id: str, body: DeploymentIn, session: SessionDep,
         project_id, body.device_ids, actor, dry_run=body.dry_run, apply_mode=body.apply_mode,
         config_versions=body.config_versions, secrets=body.secrets,
         credentials_after=body.credentials_after)
+
+
+@router.post("/api/devices/{device_id}/restart-plan", response_model=DeploymentOut,
+             status_code=status.HTTP_201_CREATED)
+def create_restart_plan(device_id: str, session: SessionDep, svc: ServiceDep,
+                        actor: ActorDep) -> DeploymentOut:
+    """A plan that restarts one device (D-099): previewed now, then approved and run."""
+    device = session.get(Device, device_id)
+    if device is None:
+        raise NotFoundError("Device not found")
+    return _full(svc, svc.create_restart(device.project_id, device_id, actor))
 
 
 @router.get("/api/deployments/{deployment_id}", response_model=DeploymentOut)

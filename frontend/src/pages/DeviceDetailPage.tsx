@@ -1,8 +1,8 @@
-import { Accordion, Anchor, Badge, Button, Card, Code, Group, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
+import { Accordion, Anchor, Badge, Button, Card, Code, Group, SegmentedControl, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
 import { IconEdit, IconPlugConnected, IconTerminal2, IconTrash } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
-import type { ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { type ReactNode, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { useConfirm } from '../hooks/useConfirm';
 
@@ -16,7 +16,9 @@ import { ConfigWorkbench } from '../features/configurations/ConfigWorkbench';
 import { DiagnosticsButton } from '../features/devices/DiagnosticsButton';
 import { EditDeviceModal } from '../features/devices/EditDeviceModal';
 import { IntentEditor } from '../features/devices/IntentEditor';
-import { useAction, useAudit, useCredentialRefs, useDevice, useDrivers, useProject } from '../hooks/queries';
+import { useAction, useCredentialRefs, useDevice, useDeviceLog, useDrivers, useProject } from '../hooks/queries';
+import { showSuccess } from '../services/notify';
+import { DeviceMenu } from '../features/devices/DeviceMenu';
 import { api } from '../services/api';
 import type { Device } from '../types/api';
 import { temporaryAddress } from '../features/stage/roles';
@@ -148,21 +150,47 @@ function Overview({ d }: { d: Device }) {
   );
 }
 
-function Activity({ deviceId }: { deviceId: string }) {
-  const audit = useAudit(deviceId);
+/** Everything UNDM recorded about this device, newest first (D-099). */
+function DeviceLog({ deviceId }: { deviceId: string }) {
+  const log = useDeviceLog(deviceId);
+  const [show, setShow] = useState('all');
+  const rows = (log.data ?? []).filter((r) => show === 'all'
+    || (show === 'plans' && (r.source === 'plan' || r.kind.startsWith('deployment.')))
+    || (show === 'console' && r.kind.startsWith('provisioning.'))
+    || (show === 'tests' && r.source === 'audit' && r.kind.startsWith('device.')));
+  const copy = async () => {
+    const masked = await api.deviceLog(deviceId, true);
+    const text = masked.map((r) => `${r.time} ${r.kind} [${r.status}] ${r.message}`).join('\n');
+    await navigator.clipboard?.writeText(text);
+    showSuccess('Copied the log (names, addresses and serials masked)');
+  };
   return (
-    <Card withBorder padding={0}>
-      <Table.ScrollContainer minWidth={520}>
-        <Table verticalSpacing={6} horizontalSpacing="md">
-          <Table.Thead><Table.Tr><Table.Th>Time</Table.Th><Table.Th>By</Table.Th><Table.Th>Action</Table.Th><Table.Th>Result</Table.Th></Table.Tr></Table.Thead>
-          <Table.Tbody>{(audit.data ?? []).map((a) => (
-            <Table.Tr key={a.id}><Table.Td>{fmtDate(a.timestamp)}</Table.Td><Table.Td>{a.actor}</Table.Td><Table.Td>{auditActionLabel(a.action)}</Table.Td><Table.Td><StateBadge state={a.outcome} /></Table.Td></Table.Tr>
-          ))}
-          {audit.data?.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text c="dimmed" ta="center" p="md">Nothing recorded for this device yet.</Text></Table.Td></Table.Tr>}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
-    </Card>
+    <Stack gap="xs">
+      <Group justify="space-between">
+        <SegmentedControl size="xs" aria-label="Show" value={show} onChange={setShow}
+          data={[{ value: 'all', label: 'All' }, { value: 'plans', label: 'Plans' }, { value: 'console', label: 'Console' }, { value: 'tests', label: 'Tests and reads' }]} />
+        <Button size="xs" variant="default" onClick={() => void copy()}>Copy (masked)</Button>
+      </Group>
+      <QueryState isLoading={log.isLoading} error={log.error} />
+      <Card withBorder padding={0}>
+        <Table.ScrollContainer minWidth={620}>
+          <Table verticalSpacing={6} horizontalSpacing="md">
+            <Table.Thead><Table.Tr><Table.Th>Time</Table.Th><Table.Th>What</Table.Th><Table.Th>Result</Table.Th><Table.Th>Detail</Table.Th></Table.Tr></Table.Thead>
+            <Table.Tbody>{rows.map((r, i) => (
+              <Table.Tr key={`${r.time}-${i}`}>
+                <Table.Td><Text size="xs" style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.time)}</Text></Table.Td>
+                <Table.Td><Text size="sm">{r.source === 'audit' ? auditActionLabel(r.kind) : humanize(r.kind.replace('.', ' · '))}</Text>
+                  {r.plan_id && <Anchor component={Link} to={`/deployments/${r.plan_id}`} size="xs">plan</Anchor>}</Table.Td>
+                <Table.Td>{r.status ? <StateBadge state={r.status} /> : '—'}</Table.Td>
+                <Table.Td><Text size="xs" lineClamp={3}>{r.message || (r.actor ? `by ${r.actor}` : '')}</Text></Table.Td>
+              </Table.Tr>
+            ))}
+            {!log.isLoading && rows.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text c="dimmed" ta="center" p="md">Nothing recorded for this device yet.</Text></Table.Td></Table.Tr>}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      </Card>
+    </Stack>
   );
 }
 
@@ -201,6 +229,8 @@ export function DeviceDetailPage() {
   const [ask, confirmDialog] = useConfirm();
   const navigate = useNavigate();
   const del = useAction(() => api.deleteDevice(deviceId), 'Device deleted', { errorInDialog: true });
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') ?? 'overview';
   if (!device.data) return <QueryState isLoading={device.isLoading} error={device.error} />;
   const d = device.data;
   return (
@@ -208,6 +238,7 @@ export function DeviceDetailPage() {
       <PageHeader title={d.name}
         description={<Group gap="xs" component="span"><EnvironmentBadge env={d.environment} /><span>{d.manufacturer} {d.model} · <Anchor component={Link} to={`/projects/${d.project_id}`} size="sm">{system.data?.name ?? 'system'}</Anchor></span></Group>}
         actions={<>
+          <DeviceMenu device={d} />
           <ConsoleBootstrapLink d={d} />
           <Button variant="default" leftSection={<IconEdit size={16} />} onClick={openEdit} disabled={!!d.locked_by_deployment_id}>Edit device</Button>
           <Button variant="subtle" color="red" leftSection={<IconTrash size={16} />} disabled={!!d.locked_by_deployment_id}
@@ -227,17 +258,17 @@ export function DeviceDetailPage() {
           It cannot be edited or deleted until the plan ends.
         </Notice>
       )}
-      <Tabs defaultValue="overview" keepMounted={false}>
+      <Tabs value={tab} onChange={(v) => setParams(v && v !== 'overview' ? { tab: v } : {})} keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="overview">Overview</Tabs.Tab>
           <Tabs.Tab value="intent">Intent</Tabs.Tab>
           <Tabs.Tab value="configs">Configurations</Tabs.Tab>
-          <Tabs.Tab value="activity">Activity</Tabs.Tab>
+          <Tabs.Tab value="log">Log</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="overview"><Overview d={d} /></Tabs.Panel>
         <Tabs.Panel value="intent"><IntentEditor key={d.updated_at} device={d} /></Tabs.Panel>
         <Tabs.Panel value="configs"><ConfigWorkbench device={d} /></Tabs.Panel>
-        <Tabs.Panel value="activity"><Activity deviceId={d.id} /></Tabs.Panel>
+        <Tabs.Panel value="log"><DeviceLog deviceId={d.id} /></Tabs.Panel>
       </Tabs>
     </>
   );

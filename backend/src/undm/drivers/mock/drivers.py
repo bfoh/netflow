@@ -228,6 +228,11 @@ class MockDriver(DeviceDriver):
         self._dev = None  # a reboot drops the session; callers must reconnect
         return OperationResult.success(op, message="rebooted (simulated)")
 
+    restart_command = "(simulated restart)"
+
+    def restart(self) -> OperationResult:
+        return self.reboot()
+
     def provision_factory_default_device(self, bootstrap_config: str) -> OperationResult:
         op = Op.PROVISION_FACTORY_DEFAULT
         if r := self._require(op):
@@ -245,7 +250,8 @@ class MockDriver(DeviceDriver):
 
 
 _COMMON = frozenset(
-    {C.SSH, C.CONFIGURATION_BACKUP, C.CONFIGURATION_APPLY, C.FIRMWARE_UPGRADE, C.REBOOT}
+    {C.SSH, C.CONFIGURATION_BACKUP, C.CONFIGURATION_APPLY, C.FIRMWARE_UPGRADE, C.REBOOT,
+     C.RESTART}
 )
 
 

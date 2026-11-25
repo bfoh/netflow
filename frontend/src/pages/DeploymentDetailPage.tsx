@@ -298,7 +298,7 @@ export function DeploymentDetailPage() {
 
   return (
     <>
-      <PageHeader title={`${d.kind === 'firmware' ? 'Firmware upgrade' : d.kind === 'first_login' ? 'First login (new unit)' : d.kind === 'free_address' ? 'Temporary address (make room)' : 'Configuration plan'}${d.dry_run ? ' (dry run)' : ''} · ${fmtDate(d.created_at)}`}
+      <PageHeader title={`${d.kind === 'firmware' ? 'Firmware upgrade' : d.kind === 'first_login' ? 'First login (new unit)' : d.kind === 'free_address' ? 'Temporary address (make room)' : d.kind === 'restart' ? 'Restart' : 'Configuration plan'}${d.dry_run ? ' (dry run)' : ''} · ${fmtDate(d.created_at)}`}
         description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
           ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : d.kind === 'first_login' ? '' : ` · ${d.apply_mode} mode`}`}
         actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />

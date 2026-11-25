@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+import shutil
+import subprocess
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
@@ -261,3 +264,116 @@ def sanitized_diagnostics(session: Session, device: Device, registry: DriverRegi
     lines += ["", "Masking is automatic and best effort. Review before sharing."]
     audit.record(session, actor, "device.diagnostics.export", "device", device.id)
     return "\n".join(lines) + "\n"
+
+
+# -- an SSH window on this PC (D-098) ------------------------------------------------------
+
+_ADDRESS = re.compile(r"^[A-Za-z0-9.:-]{1,253}$")
+_USER = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def ssh_command(device: Device, registry: DriverRegistry) -> list[str]:
+    """The command that opens an SSH session to the device. The password is never in it:
+    the person types it in the window."""
+    if device.driver_id in registry and registry.get(device.driver_id).info.simulated:
+        raise ConflictError("A simulated device has no SSH server to open")
+    address = temporary_address(device) or device.management_address
+    if not address or not _ADDRESS.match(address):
+        raise ConflictError(f"{device.name} has no usable management address")
+    user = "admin"
+    if device.credential_ref is not None:
+        try:
+            user = creds.resolve(device.credential_ref.provider,
+                                 device.credential_ref.locator).username or user
+        except creds.CredentialResolutionError as e:
+            raise ServiceError(str(e)) from e
+    if not _USER.match(user):
+        raise ConflictError("The login's user name cannot be passed to the SSH program")
+    port = device.management_port or 22
+    # Bench units are reset and re-used at the same addresses, so their host keys change
+    # often: like UNDM's own sessions, this window does not keep or check them (D-098).
+    return ["ssh", "-o", "StrictHostKeyChecking=no", "-o",
+            f"UserKnownHostsFile={os.devnull}", "-p", str(port), f"{user}@{address}"]
+
+
+def launch_window(argv: list[str]) -> None:
+    """Start a console program in a new window on this PC (Windows only)."""
+    if os.name != "nt":
+        raise ConflictError("Opening an SSH window is available when UNDM runs on Windows "
+                            "(the bench PC)")
+    exe = shutil.which("ssh") or os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"),
+                                              "System32", "OpenSSH", "ssh.exe")
+    if not os.path.exists(exe):
+        raise ConflictError("Windows' SSH program (OpenSSH client) is not installed on "
+                            "this PC")
+    subprocess.Popen([exe, *argv[1:]],  # noqa: S603 - fixed program, checked arguments
+                     creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+
+
+def open_ssh(session: Session, device: Device, registry: DriverRegistry,
+             actor: str) -> dict[str, str]:
+    argv = ssh_command(device, registry)
+    launch_window(argv)
+    audit.record(session, actor, "device.session_opened", "device", device.id,
+                 details={"program": "ssh", "address": argv[-1].split("@", 1)[1]})
+    return {"command": " ".join(argv)}
+
+
+# -- reachability of a system's devices (D-099) --------------------------------------------
+
+def reachability(session: Session, project_id: str,
+                 registry: DriverRegistry) -> list[dict[str, str]]:
+    """For each device: does its management port accept a TCP connection now? No login,
+    nothing sent. Simulated devices are reported as such."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from undm.drivers.ssh import base as ssh_base
+
+    devices = list(session.scalars(select(Device).where(Device.project_id == project_id)))
+
+    def check(d: Device) -> dict[str, str]:
+        simulated = d.driver_id in registry and registry.get(d.driver_id).info.simulated
+        address = temporary_address(d) or d.management_address
+        if simulated:
+            state = "simulated"
+        elif not address:
+            state = "no_address"
+        else:
+            state = ("answers" if ssh_base.tcp_port_open(address, d.management_port or 22,
+                                                         timeout=2.0) else "no_answer")
+        return {"device_id": d.id, "address": address or "", "state": state}
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        return list(pool.map(check, devices))
+
+
+# -- one device's log (D-099) ---------------------------------------------------------------
+
+def device_log(session: Session, device: Device, limit: int = 500) -> list[dict[str, Any]]:
+    """Everything UNDM recorded about one device, newest first: audit entries (console
+    setups, tests, renames, plans) and the events of its plans."""
+    from undm.db.models import AuditEvent, DeploymentEventRecord, DeploymentRecord
+
+    rows: list[dict[str, Any]] = []
+    for a in session.scalars(select(AuditEvent).where(AuditEvent.target_id == device.id)
+                             .order_by(AuditEvent.timestamp.desc()).limit(limit)):
+        details = dict(a.details or {})
+        text = str(details.get("message") or "")
+        rows.append({"time": a.timestamp, "source": "audit", "kind": a.action,
+                     "status": a.outcome or "", "message": text, "actor": a.actor,
+                     "plan_id": details.get("deployment")})
+    events = session.execute(
+        select(DeploymentEventRecord, DeploymentRecord.kind)
+        .join(DeploymentRecord, DeploymentRecord.id == DeploymentEventRecord.deployment_id)
+        .where(DeploymentEventRecord.device_id == device.id)
+        .order_by(DeploymentEventRecord.timestamp.desc()).limit(limit))
+    for e, kind in events:
+        rows.append({"time": e.timestamp, "source": "plan", "kind": f"{kind}.{e.stage}",
+                     "status": e.status, "message": e.message, "actor": "",
+                     "plan_id": e.deployment_id})
+    rows.sort(key=lambda r: _aware(r["time"]), reverse=True)
+    return rows[:limit]
+
+
+def _aware(t: datetime) -> datetime:
+    return t if t.tzinfo else t.replace(tzinfo=UTC)

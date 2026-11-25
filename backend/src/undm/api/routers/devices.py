@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -28,6 +28,7 @@ from undm.domain.enums import DeviceEnvironment
 from undm.domain.operations import DeviceOperation
 from undm.drivers.registry import DriverRegistry
 from undm.inventory.rules import environment_problem
+from undm.security.sanitize import new_mapper, sanitize
 from undm.services import audit
 from undm.services import devices as svc
 from undm.services.errors import ConflictError, NotFoundError, ServiceError
@@ -205,6 +206,54 @@ def diagnostics(device_id: str, session: SessionDep, registry: RegistryDep,
     """Sanitized report of the last retrieved device information. Does not contact the device."""
     d = get_device(session, device_id)
     return DiagnosticsOut(text=svc.sanitized_diagnostics(session, d, registry, actor))
+
+
+_LOCAL = {"127.0.0.1", "::1", "localhost"}
+
+
+def _from_this_pc(request: Request) -> bool:
+    """A window opens on the PC running UNDM: only a person at that PC may ask for one."""
+    host = request.client.host if request.client else ""
+    return host in _LOCAL
+
+
+@router.post("/api/devices/{device_id}/open-ssh")
+def open_ssh(device_id: str, request: Request, session: SessionDep, registry: RegistryDep,
+             actor: ActorDep) -> dict[str, str]:
+    """Open an SSH window to the device on this PC (D-098). The person types the password;
+    what is done in that window is outside UNDM's plans and audit."""
+    d = get_device(session, device_id)
+    if not _from_this_pc(request):
+        raise ConflictError("An SSH window can only be opened from the PC that runs UNDM")
+    return svc.open_ssh(session, d, registry, actor)
+
+
+@router.get("/api/projects/{project_id}/reachability")
+def reachability(project_id: str, session: SessionDep,
+                 registry: RegistryDep) -> list[dict[str, str]]:
+    """Whether each device's management port answers now (no login, nothing sent)."""
+    get_project(session, project_id)
+    return svc.reachability(session, project_id, registry)
+
+
+@router.get("/api/devices/{device_id}/log")
+def device_log(device_id: str, session: SessionDep,
+               masked: bool = False) -> list[dict[str, Any]]:
+    """Everything UNDM recorded about the device, newest first (D-099). ``masked``: names,
+    addresses and serials replaced, to share."""
+    d = get_device(session, device_id)
+    rows = svc.device_log(session, d)
+    if masked:
+        facts = dict(d.observed_facts or {})
+        known = [("device", d.name), ("hostname", str(facts.get("hostname") or "")),
+                 ("serial", str(facts.get("serial_number") or "")),
+                 ("ip", d.management_address or "")]
+        known = [(k, v) for k, v in known if v]
+        mapper = new_mapper()
+        for r in rows:
+            r["message"] = sanitize(str(r["message"]), known, mapper)
+            r["actor"] = ""
+    return rows
 
 
 @router.post("/api/devices/{device_id}/temporary-address/clear", response_model=DeviceOut)

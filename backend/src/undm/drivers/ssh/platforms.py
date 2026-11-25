@@ -138,7 +138,7 @@ class ArubaOSSwitchSsh(SshCliDriver):
         description="ArubaOS-Switch (e.g. 2930F) over SSH CLI (Netmiko 'aruba_osswitch'). "
                     "Experimental, not lab-validated.",
         simulated=False,
-        capabilities=SSH_CAPABILITIES | {Capability.TEMPORARY_ADDRESS,
+        capabilities=SSH_CAPABILITIES | {Capability.TEMPORARY_ADDRESS, Capability.RESTART,
                                          Capability.FIRMWARE_UPGRADE, Capability.REBOOT,
                                          Capability.CONFIGURATION_REPLACE,
                                          Capability.FIRMWARE_SECONDARY_IMAGE},
@@ -681,6 +681,19 @@ class ArubaOSSwitchSsh(SshCliDriver):
         return OperationResult.success(
             DeviceOperation.INSTALL_FIRMWARE,
             message="nothing to do: the image is activated by restarting into primary")
+
+    # A restart on request uses the command the firmware procedure runs on hardware: the
+    # switch restarts into its primary image (the one staging installs), and a "save current
+    # configuration?" question is answered "n" (D-099).
+    restart_command = "boot system flash primary"
+
+    def restart(self) -> OperationResult:
+        r = self.reboot()
+        if not r.ok and ("returned to its prompt" in r.message
+                         or "nothing was confirmed" in r.message):
+            return OperationResult.failed(r.operation, r.message,
+                                          {**r.diagnostics, "unchanged": True})
+        return r
 
     def reboot(self) -> OperationResult:
         op = DeviceOperation.REBOOT

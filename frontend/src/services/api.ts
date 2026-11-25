@@ -80,6 +80,11 @@ async function download(path: string, fallbackName: string): Promise<string> {
   return name;
 }
 
+export interface Reachability { device_id: string; address: string; state: 'answers' | 'no_answer' | 'simulated' | 'no_address' }
+export interface DeviceLogEntry {
+  time: string; source: 'audit' | 'plan'; kind: string; status: string; message: string; actor: string; plan_id: string | null;
+}
+
 export interface SystemImport {
   project: Project;
   summary: { devices: number; files: number; logins: string[]; links: number; firmware_added: number;
@@ -129,6 +134,10 @@ export const api = {
   createDevice: (pid: string, body: DeviceInput) =>
     request<Device>('POST', `/projects/${pid}/devices`, body),
   updateDevice: (id: string, body: DeviceInput) => request<Device>('PATCH', `/devices/${id}`, body),
+  openSsh: (id: string) => request<{ command: string }>('POST', `/devices/${id}/open-ssh`),
+  restartPlan: (id: string) => request<Deployment>('POST', `/devices/${id}/restart-plan`),
+  reachability: (pid: string) => request<Reachability[]>('GET', `/projects/${pid}/reachability`),
+  deviceLog: (id: string, masked = false) => request<DeviceLogEntry[]>('GET', `/devices/${id}/log${masked ? '?masked=true' : ''}`),
   clearTemporaryAddress: (id: string) => request<Device>('POST', `/devices/${id}/temporary-address/clear`),
   deleteDevice: (id: string) => request<void>('DELETE', `/devices/${id}`),
   setIntent: (id: string, intent: DeviceIntent) =>

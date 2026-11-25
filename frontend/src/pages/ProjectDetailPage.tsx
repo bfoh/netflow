@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Button, Card, Group, SimpleGrid, Stack, Table, Tabs, Text, TextInput, Textarea, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Anchor, Button, Card, Grid, Group, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Textarea, Title, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -12,9 +12,10 @@ import { AddDeviceModal } from '../features/devices/AddDeviceModal';
 import { CredentialsPanel } from '../features/devices/CredentialsPanel';
 import { DeviceTable } from '../features/devices/DeviceTable';
 import { BenchLogButton } from '../features/systems/BenchLogButton';
+import { SystemTree } from '../features/systems/SystemTree';
 import { DownloadBackupsButton, ExportSystemButton } from '../features/systems/SystemPackage';
 import { useConfirm } from '../hooks/useConfirm';
-import { useAction, useDeployments, useProject, useProjectDevices } from '../hooks/queries';
+import { useAction, useDeployments, useProject, useProjectDevices, useReachability } from '../hooks/queries';
 import { api } from '../services/api';
 import type { CertificateSubject, Project } from '../types/api';
 
@@ -96,6 +97,10 @@ export function ProjectDetailPage() {
   const deployments = useDeployments(projectId);
   const [opened, { open, close }] = useDisclosure();
   const [askToDelete, deleteDialog, canDelete] = usePlanDelete();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [watch, setWatch] = useWatch(projectId);
+  const reach = useReachability(projectId, watch);
+  const reachMap = new Map((reach.data ?? []).map((r) => [r.device_id, r.state]));
 
   if (!project.data) return <QueryState isLoading={project.isLoading} error={project.error} />;
   const p = project.data;
@@ -118,7 +123,20 @@ export function ProjectDetailPage() {
         </Tabs.List>
         <Tabs.Panel value="devices">
           <QueryState isLoading={devices.isLoading} error={devices.error} />
-          <DeviceTable devices={devices.data ?? []} />
+          <Group justify="flex-end" mb="xs">
+            <Switch size="sm" label="Watch devices (checks every 15 s whether each answers)" checked={watch}
+              onChange={(e) => setWatch(e.currentTarget.checked)} />
+          </Group>
+          <Grid>
+            <Grid.Col span={{ base: 12, md: 3 }}>
+              <SystemTree name={p.name} devices={devices.data ?? []} selected={selected} onSelectedChange={setSelected}
+                reach={watch ? reachMap : undefined} />
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, md: 9 }}>
+              <DeviceTable devices={devices.data ?? []} selected={selected} onSelectedChange={setSelected}
+                reach={watch ? reachMap : undefined} />
+            </Grid.Col>
+          </Grid>
         </Tabs.Panel>
         <Tabs.Panel value="deployments">
           {deleteDialog}
@@ -156,3 +174,16 @@ export function ProjectDetailPage() {
     </>
   );
 }
+
+/** The "Watch devices" switch, remembered per system in this browser (D-099). */
+function useWatch(projectId: string): [boolean, (on: boolean) => void] {
+  const key = `undm.watch.${projectId}`;
+  const [on, setOn] = useState(() => {
+    try { return window.localStorage.getItem(key) === '1'; } catch { return false; }
+  });
+  return [on, (v: boolean) => {
+    setOn(v);
+    try { window.localStorage.setItem(key, v ? '1' : '0'); } catch { /* storage unavailable */ }
+  }];
+}
+

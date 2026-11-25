@@ -1147,3 +1147,41 @@ download the backups, safety switches off, power off and label), or which device
 open. A system is complete when every device's latest staging plan has succeeded; UNDM
 records no separate "completed" state.
 
+### D-098 "Open SSH window": UNDM starts the PC's SSH program; it sends nothing itself (2026-11-25)
+The product owner asked for Open → SSH / Web page on a device, as the reference tool offers.
+A browser cannot start a terminal, and a terminal inside UNDM would let commands reach a device
+outside plans and approvals. So `POST /api/devices/{id}/open-ssh` starts Windows' own SSH client
+(OpenSSH, `ssh.exe`) in a new console window on the PC running UNDM, with `-p <port>
+<user>@<address>` (the user from the device's login; the temporary address if one is set). The
+password is never passed: the person types it. Arguments are a list (no shell) and checked
+against strict patterns; simulated devices and requests not from this PC are refused; audit
+`device.session_opened`. Bench units are reset and re-used at the same addresses, so, like
+UNDM's own sessions, the window neither keeps nor checks host keys. What is typed in that window
+is the person's own work, outside UNDM's plans and audit, as with PuTTY; the device-changing rule
+(changes only through the lifecycle) concerns what UNDM sends. "Open web page" is a link to
+`https://<address>`.
+
+### D-099 One device menu, the system tree, watching devices, the device log, restart as a plan (2026-11-25)
+Studied for workflow only from three screenshots of the reference tool (nothing copied; its
+product-specific items such as zones, clusters, MAC filtering and audit scripts not taken over):
+- **Device menu** (`DeviceMenu.tsx`) everywhere a device is listed, by "⋯" next to its name or
+  right-click on its row: Open SSH window, Open web page, Copy address; Check information (reads
+  the device and shows firmware, image slots, serial/MAC, hostname, with Copy); Test connection;
+  Wait until it answers (checks every 10 s for up to 10 minutes, then tells); Back up now;
+  Configurations and compare; Device log; Restart…; Console setup (2930F); Make a plan…; Delete.
+  Items appear only where they apply (real or simulated, capabilities).
+- **Restart** is a plan kind `restart` (preview with the command it sends, approval, backup,
+  restart, wait until it answers with the same serial number, facts). New capability `RESTART`
+  for drivers with a restart already run on hardware: ArubaOS-Switch `boot system flash primary`
+  (the firmware procedure's restart; answers "n" to saving) and LIG1014A `reload cold` (the
+  file procedure's restart). FortiGate: none verified yet (Q-47), so no Restart item. A device
+  at a temporary address (D-096) is waited for at its own address and the note is cleared.
+- **System tree** on the system page: the system, then Firewalls / Routers / Switches / Other,
+  each device with its icon, reachability dot, tick box (shared with the table) and menu.
+- **Watch devices** (per system, remembered in the browser): every 15 s,
+  `GET /api/projects/{id}/reachability` tries a TCP connection to each device's management port
+  (no login, nothing sent) and the tree and table show a dot.
+- **Device log**: the device page's Activity tab becomes Log, from `GET /api/devices/{id}/log`:
+  its audit entries and its plans' events, newest first, filtered (All, Plans, Console, Tests
+  and reads), and copied masked (names, addresses, serials).
+

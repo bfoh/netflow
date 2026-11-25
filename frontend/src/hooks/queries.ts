@@ -96,3 +96,10 @@ export function useAction<TArgs, TResult>(
     onError: (err: Error) => { if (!options.errorInDialog) showError(err.message); },
   });
 }
+
+/** Whether each device of a system answers on its management port, every 15 s while on (D-099). */
+export const useReachability = (pid: string, enabled: boolean) =>
+  useQuery({ queryKey: ['reachability', pid], queryFn: () => api.reachability(pid), enabled: enabled && !!pid, refetchInterval: 15_000 });
+
+export const useDeviceLog = (id: string) => useQuery({ queryKey: ['device-log', id], queryFn: () => api.deviceLog(id) });
+

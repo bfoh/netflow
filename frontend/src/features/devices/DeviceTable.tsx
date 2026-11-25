@@ -1,14 +1,16 @@
-import { ActionIcon, Anchor, Button, Card, Checkbox, Group, Menu, Select, Table, Text, Tooltip } from '@mantine/core';
-import { IconDots, IconLock, IconTrash } from '@tabler/icons-react';
+import { Anchor, Button, Card, Checkbox, Group, Select, Table, Text, Tooltip } from '@mantine/core';
+import { IconLock } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../../components/Badges';
 import { useAction } from '../../hooks/queries';
 import { useConfirm } from '../../hooks/useConfirm';
-import { api } from '../../services/api';
+import { api, type Reachability } from '../../services/api';
+import { DeviceMenu, openDeviceMenu } from './DeviceMenu';
+import { ReachDot } from './ReachDot';
 import type { Device, OperationResult } from '../../types/api';
-import { humanize, stateLabel } from '../../services/labels';
+import { humanize } from '../../services/labels';
 
 /**
  * Inventory table with multi-select and bulk actions.
@@ -25,9 +27,19 @@ const BULK = [
   { value: 'delete', label: 'Delete devices…' },
 ];
 
-export function DeviceTable({ devices, showProject, projectNames }:
-  { devices: Device[]; showProject?: boolean; projectNames?: Map<string, string> }) {
-  const [selected, setSelected] = useState<string[]>([]);
+export function DeviceTable({ devices, showProject, projectNames, selected: outer, onSelectedChange, reach }: {
+  devices: Device[]; showProject?: boolean; projectNames?: Map<string, string>;
+  /** Selection shared with another view (the system tree). */
+  selected?: string[]; onSelectedChange?: (ids: string[]) => void;
+  /** Live reachability by device id, when watched (D-099). */
+  reach?: Map<string, Reachability['state']>;
+}) {
+  const [inner, setInner] = useState<string[]>([]);
+  const selected = outer ?? inner;
+  const setSelected = (next: string[] | ((s: string[]) => string[])) => {
+    const value = typeof next === 'function' ? next(selected) : next;
+    if (onSelectedChange) onSelectedChange(value); else setInner(value);
+  };
   const [action, setAction] = useState<string | null>('get_facts');
   const navigate = useNavigate();
   const ids = new Set(devices.map((d) => d.id));
@@ -46,11 +58,6 @@ export function DeviceTable({ devices, showProject, projectNames }:
     }
     return results;
   }, (rs) => `${rs.filter((r) => r.status === 'success').length} of ${rs.length} succeeded`);
-
-  const single = useAction(({ id, op }: { id: string; op: string }) =>
-    op === 'generate' ? api.generateConfig(id).then((r) => ({ status: r.ok ? 'success' : 'failed', message: '' }))
-      : api.runOperation(id, op),
-  (r) => `${stateLabel(r.status)}${r.message ? ` — ${r.message}` : ''}`);
 
   const [ask, confirmDialog] = useConfirm();
   const remove = useAction(async (targets: Device[]) => {
@@ -113,15 +120,18 @@ export function DeviceTable({ devices, showProject, projectNames }:
               <Table.Th>Name</Table.Th>
               {showProject && <Table.Th>System</Table.Th>}
               <Table.Th>Vendor / model</Table.Th><Table.Th>Category</Table.Th><Table.Th>Role</Table.Th>
-              <Table.Th>Address</Table.Th><Table.Th>Kind</Table.Th><Table.Th>Status</Table.Th><Table.Th w={40} />
+              <Table.Th>Address</Table.Th><Table.Th>Kind</Table.Th><Table.Th>Status</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {devices.map((d) => (
-              <Table.Tr key={d.id} bg={sel.includes(d.id) ? 'var(--mantine-primary-color-light)' : undefined}>
+              <Table.Tr key={d.id} bg={sel.includes(d.id) ? 'var(--mantine-primary-color-light)' : undefined}
+                onContextMenu={openDeviceMenu}>
                 <Table.Td><Checkbox aria-label={`Select ${d.name}`} checked={sel.includes(d.id)} onChange={() => toggle(d.id)} /></Table.Td>
                 <Table.Td>
                   <Group gap={4} wrap="nowrap">
+                    {reach && <ReachDot state={reach.get(d.id)} />}
+                    <DeviceMenu device={d} onDelete={() => askDelete([d])} />
                     <Anchor component={Link} to={`/devices/${d.id}`} fw={600} size="sm">{d.name}</Anchor>
                     {d.locked_by_deployment_id && <Tooltip label="A plan is running on this device"><IconLock size={14} /></Tooltip>}
                   </Group>
@@ -133,28 +143,10 @@ export function DeviceTable({ devices, showProject, projectNames }:
                 <Table.Td><Text size="sm" ff="monospace">{d.management_address || '—'}</Text></Table.Td>
                 <Table.Td><EnvironmentBadge env={d.environment} /></Table.Td>
                 <Table.Td><StateBadge state={d.deployment_status} /></Table.Td>
-                <Table.Td>
-                  <Menu position="bottom-end" withinPortal>
-                    <Menu.Target><ActionIcon variant="subtle" aria-label={`Actions for ${d.name}`}><IconDots size={16} /></ActionIcon></Menu.Target>
-                    <Menu.Dropdown>
-                      <Menu.Item component={Link} to={`/devices/${d.id}`}>Open details</Menu.Item>
-                      <Menu.Label>Read-only</Menu.Label>
-                      <Menu.Item onClick={() => single.mutate({ id: d.id, op: 'check_reachability' })}>Test connection</Menu.Item>
-                      <Menu.Item onClick={() => single.mutate({ id: d.id, op: 'get_facts' })}>Retrieve device information</Menu.Item>
-                      <Menu.Item onClick={() => single.mutate({ id: d.id, op: 'backup_configuration' })}>Back up configuration</Menu.Item>
-                      <Menu.Item onClick={() => single.mutate({ id: d.id, op: 'generate' })}>Generate configuration</Menu.Item>
-                      <Menu.Label>Changes the device</Menu.Label>
-                      <Menu.Item onClick={() => void navigate(`/deployments?project=${d.project_id}&devices=${d.id}`)}>Make a plan…</Menu.Item>
-                      <Menu.Divider />
-                      <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!!d.locked_by_deployment_id}
-                        onClick={() => askDelete([d])}>Delete…</Menu.Item>
-                    </Menu.Dropdown>
-                  </Menu>
-                </Table.Td>
               </Table.Tr>
             ))}
             {devices.length === 0 && (
-              <Table.Tr><Table.Td colSpan={showProject ? 10 : 9}><Text c="dimmed" ta="center" p="md">No devices yet. Open a system and choose Add device.</Text></Table.Td></Table.Tr>
+              <Table.Tr><Table.Td colSpan={showProject ? 9 : 8}><Text c="dimmed" ta="center" p="md">No devices yet. Open a system and choose Add device.</Text></Table.Td></Table.Tr>
             )}
           </Table.Tbody>
         </Table>

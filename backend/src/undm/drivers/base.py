@@ -42,6 +42,9 @@ class Capability(StrEnum):
     FIRST_LOGIN_SETUP = "supports_first_login_setup"
     # Can run at another address until its next restart, with nothing saved (D-096).
     TEMPORARY_ADDRESS = "supports_temporary_address"
+    # Restarts on request, outside a firmware step (D-099). REBOOT alone means only "restarts
+    # as part of a firmware upgrade" on some drivers.
+    RESTART = "supports_restart"
 
 
 # Capabilities an operation needs before a driver may be asked to perform it.
@@ -258,6 +261,15 @@ class DeviceDriver:
         """What a person should know before an apply that restarts the device (None: it
         does not restart). Shown as an event before the apply starts."""
         return None
+
+    # The command a restart sends, shown in its preview (None: the driver cannot restart).
+    restart_command: ClassVar[str | None] = None
+
+    def restart(self) -> OperationResult:
+        """Restart the device now (D-099). Unsaved changes are not saved. A failure that left
+        the device untouched carries ``diagnostics["unchanged"] = True``."""
+        return OperationResult.unsupported(
+            DeviceOperation.REBOOT, "This driver cannot restart a device on request")
 
     def temporary_address_commands(self, spare: str) -> OperationResult:
         """Read-only: the exact commands ``set_temporary_address`` would send (data:

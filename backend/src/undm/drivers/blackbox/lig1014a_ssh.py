@@ -102,7 +102,8 @@ class BlackBoxLig1014aSsh(SshCliDriver):
         capabilities=frozenset({Capability.SSH, Capability.CONFIGURATION_BACKUP,
                                 Capability.CONFIGURATION_APPLY,
                                 Capability.CONFIGURATION_REPLACE,
-                                Capability.FIRMWARE_UPGRADE, Capability.REBOOT}),
+                                Capability.FIRMWARE_UPGRADE, Capability.REBOOT,
+                                Capability.RESTART}),
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
         notes=(
@@ -356,6 +357,27 @@ class BlackBoxLig1014aSsh(SshCliDriver):
             return OperationResult.success(
                 Op.REBOOT, message="the switch restarts by itself after the upgrade")
         return OperationResult.failed(Op.REBOOT, "No restart was started by the previous step")
+
+    # The restart UNDM sends after loading a file, proven on the bench (D-077, D-099).
+    restart_command = "reload cold"
+
+    def restart(self) -> OperationResult:
+        op = Op.REBOOT
+        if r := self._need(op):
+            return r
+        try:
+            talk = self._dialogue("reload cold", [], timeout=60, idle_timeout=self.command_quiet,
+                                  restarting=_RELOADING,
+                                  prompt_ok=lambda out: not re.search(_RELOADING, out))
+        except Exception as e:  # noqa: BLE001
+            return self._fail(op, e)
+        if talk.ended in ("restarting", "closed"):
+            self._conn = None  # the session is gone
+            return OperationResult.success(op, message="the switch is restarting ('reload cold')")
+        return OperationResult.failed(
+            op, f"The switch did not restart ({talk.detail or talk.ended}).",
+            {"device_output": " ".join(redact_text(_clean(talk.output)).split())[-600:],
+             "unchanged": True})
 
     def restart_notice(self, mode: ApplyMode) -> str | None:
         if mode is not ApplyMode.REPLACE:
