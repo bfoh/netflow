@@ -31,6 +31,20 @@ def export_system(project_id: str, session: SessionDep, actor: ActorDep,
                     headers={"Content-Disposition": f'attachment; filename="{name}.undm"'})
 
 
+@router.get("/api/projects/{project_id}/backups.zip",
+            responses={200: {"content": {"application/zip": {}}}})
+def export_backups(project_id: str, session: SessionDep, actor: ActorDep,
+                   hours: Annotated[int, Query(ge=0, le=24 * 365)] = 0) -> Response:
+    """Every backup UNDM took of this system's devices, as text files in one zip
+    (0 hours = all of them). Device configurations as read: handle it as confidential."""
+    project = get_project(session, project_id)
+    since = datetime.now(UTC) - timedelta(hours=hours) if hours else None
+    data = system_package.export_backups(session, project, actor, since)
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", project.name).strip("_") or "system"
+    return Response(data, media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="{name}-backups.zip"'})
+
+
 @router.post("/api/systems/import", response_model=SystemImportOut,
              status_code=status.HTTP_201_CREATED)
 def import_system(file: Annotated[UploadFile, File(description="A .undm system package")],

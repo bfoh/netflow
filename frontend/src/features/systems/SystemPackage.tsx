@@ -39,6 +39,32 @@ export function ExportSystemButton({ projectId }: { projectId: string }) {
   );
 }
 
+/** Every backup UNDM took of the system's devices, as text files in one zip (D-097). */
+export function DownloadBackupsButton({ projectId }: { projectId: string }) {
+  const [opened, { open, close }] = useDisclosure();
+  const run = useAction(() => api.downloadBackups(projectId), (name) => `Saved ${name} to your downloads`, { errorInDialog: true });
+  return (
+    <>
+      <Button variant="default" leftSection={<IconDownload size={16} />} onClick={open}>Backups…</Button>
+      <Modal opened={opened} onClose={close} title="Download this system's backups">
+        <Stack>
+          <Text size="sm">One zip with a folder per device. Each file is the device's configuration as UNDM read it, just before a
+            plan changed it or right after. A single backup can also be downloaded on its device's Configurations tab.</Text>
+          <Notice kind="caution" compact title="Keep the file confidential">
+            Device configurations can hold password hashes, community strings and site addressing.
+          </Notice>
+          <DialogError error={run.error} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={close}>Back</Button>
+            <Button leftSection={<IconDownload size={16} />} loading={run.isPending}
+              onClick={() => run.mutate(undefined, { onSuccess: close })}>Download</Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
+  );
+}
+
 /** Import a .undm file as a new system; tells what to do next (store the passwords). */
 export function ImportSystemButton() {
   const [opened, { open, close }] = useDisclosure();

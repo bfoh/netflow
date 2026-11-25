@@ -97,6 +97,7 @@ export const api = {
   },
   exportSystem: (pid: string, includeFirmware: boolean) =>
     download(`/projects/${pid}/export?include_firmware=${includeFirmware}`, 'system.undm'),
+  downloadBackups: (pid: string) => download(`/projects/${pid}/backups.zip`, 'backups.zip'),
   importSystem: (file: File, name?: string) => {
     const form = new FormData();
     form.append('file', file);

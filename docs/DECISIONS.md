@@ -1131,3 +1131,19 @@ which shipping from the bench guarantees. No port is switched off.
   configuration. The v61 check before sending a file stays as the last guard.
 - The two addresses of a plan are kept in the target's from/to fields (no schema change).
 
+### D-097 Backups as files on request; the report says when a system is complete (2026-11-25)
+Backups stay in the database (`ConfigVersion` kind `backup`: before each change, and read back
+after a load) and are shown on the device's Configurations tab. The product owner asked where
+they are and chose download buttons over an automatic folder (a folder of device
+configurations would need protecting). `GET /api/projects/{id}/backups.zip`: one folder per
+device, one text file per backup named by UTC time, before/after and plan, a README that says
+they are confidential; audited with counts only. "Backups…" on the system page; a download
+icon on every row of a device's versions.
+
+The first full system finished on the bench the same day (Black Box file loaded after its
+login was corrected; Q-44 partly answered). The product owner asked how the process ends: the
+Report step now says "All N devices are staged" with what is left to do (save the report,
+download the backups, safety switches off, power off and label), or which devices are still
+open. A system is complete when every device's latest staging plan has succeeded; UNDM
+records no separate "completed" state.
+

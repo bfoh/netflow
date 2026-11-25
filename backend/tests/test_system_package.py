@@ -150,3 +150,38 @@ def test_firmware_travels_on_request_and_arrives_unapproved(two_copies):
     imported = b.get("/api/firmware/images").json()
     assert [(i["version"], i["status"], i["integrity_verified"]) for i in imported] == [
         ("v00.01.01", "uploaded", True)]
+
+
+# -- a system's backups as files (D-097) --------------------------------------------------
+
+def test_backups_of_a_system_come_as_one_zip_with_a_folder_per_device(two_copies):
+    a, _ = two_copies
+    pid = make_system(a)
+    devices = {d["name"]: d["id"] for d in a.get(f"/api/projects/{pid}/devices").json()}
+    for did in devices.values():
+        r = a.post(f"/api/devices/{did}/operations/backup_configuration").json()
+        assert r["status"] == "success", r
+    r = a.get(f"/api/projects/{pid}/backups.zip")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    assert 'filename="Site_12-backups.zip"' in r.headers["content-disposition"]
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    names = z.namelist()
+    assert "README.txt" in names and "CONFIDENTIAL" in z.read("README.txt").decode()
+    files = [n for n in names if n != "README.txt"]
+    assert sorted({n.split("/")[0] for n in files}) == ["site12-bb", "site12-sw-a"]
+    assert all("-before-" in n and n.endswith(".txt") for n in files) and len(files) == 2
+    stored = a.get(f"/api/devices/{devices['site12-bb']}/configs").json()
+    backup = next(v for v in stored if v["kind"] == "backup")
+    text = a.get(f"/api/configs/{backup['id']}").json()["text"]
+    assert z.read(next(n for n in files if n.startswith("site12-bb/"))).decode() == text
+    entry = next(x for x in a.get("/api/audit?limit=20").json()
+                 if x["action"] == "system.backups_export")
+    assert entry["details"] == {"devices": 2, "backups": 2, "since": None}  # counts only
+
+
+def test_backups_zip_of_a_system_without_backups_and_of_no_system(two_copies):
+    a, _ = two_copies
+    pid = make_system(a)
+    z = zipfile.ZipFile(io.BytesIO(a.get(f"/api/projects/{pid}/backups.zip").content))
+    assert z.namelist() == ["README.txt"]
+    assert a.get("/api/projects/nope/backups.zip").status_code == 404

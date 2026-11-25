@@ -259,3 +259,57 @@ def import_system(session: Session, package: BinaryIO, actor: str,
                    "exported_at": manifest.get("created_at")}
         audit.record(session, actor, "system.import", "project", project.id, details=summary)
         return project, summary
+
+
+# -- a system's backups as files (D-097) --------------------------------------------------
+
+_BACKUPS_README = """Backups of the devices of one system, taken by UNDM.
+
+One folder per device. Each file is the device's configuration as UNDM read it:
+  ...-before-...  just before a plan changed the device
+  ...-after-...   read back after the change
+Times are UTC. The name ends with the first characters of the plan's id, or of the
+backup's own reference.
+
+CONFIDENTIAL: these files are device configurations as read. They can hold password
+hashes, SNMP community strings and site addressing. Handle them like the team's files.
+"""
+
+
+def _safe(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or "device"
+
+
+def export_backups(session: Session, project: Project, actor: str,
+                   since: datetime | None = None) -> bytes:
+    """Every backup of the system's devices as text files in one zip. Nothing is contacted."""
+    devices = list(session.scalars(select(Device).where(Device.project_id == project.id)
+                                   .order_by(Device.name)))
+    out = io.BytesIO()
+    count = 0
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("README.txt", _BACKUPS_README)
+        used: set[str] = set()
+        for d in devices:
+            folder = _safe(d.name)
+            for v in session.scalars(select(ConfigVersion).where(
+                    ConfigVersion.device_id == d.id, ConfigVersion.kind == "backup")
+                    .order_by(ConfigVersion.created_at)):
+                made = v.created_at if v.created_at.tzinfo else v.created_at.replace(tzinfo=UTC)
+                if since is not None and made < since:
+                    continue
+                ref = v.reference or ""
+                after = ref.startswith("after deployment ")
+                tail = _safe(ref.rsplit(" ", 1)[-1].replace("undm-stored-", ""))[:12]
+                name = (f"{folder}/{made.strftime('%Y%m%d-%H%M%S')}-"
+                        f"{'after' if after else 'before'}-{tail}.txt")
+                while name in used:  # two backups in one second with one reference
+                    name = name[:-4] + "_.txt"
+                used.add(name)
+                z.writestr(name, v.text)
+                count += 1
+    audit.record(session, actor, "system.backups_export", "project", project.id,
+                 details={"devices": len(devices), "backups": count,
+                          "since": since.isoformat() if since else None})
+    return out.getvalue()
+

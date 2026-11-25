@@ -12,7 +12,7 @@ import { AddDeviceModal } from '../features/devices/AddDeviceModal';
 import { CredentialsPanel } from '../features/devices/CredentialsPanel';
 import { DeviceTable } from '../features/devices/DeviceTable';
 import { BenchLogButton } from '../features/systems/BenchLogButton';
-import { ExportSystemButton } from '../features/systems/SystemPackage';
+import { DownloadBackupsButton, ExportSystemButton } from '../features/systems/SystemPackage';
 import { useConfirm } from '../hooks/useConfirm';
 import { useAction, useDeployments, useProject, useProjectDevices } from '../hooks/queries';
 import { api } from '../services/api';
@@ -104,6 +104,7 @@ export function ProjectDetailPage() {
       <PageHeader title={p.name} description={[p.site, p.purpose].filter(Boolean).join(' · ') || 'No site or purpose recorded'}
         actions={<>
           <BenchLogButton projectId={projectId} />
+          <DownloadBackupsButton projectId={projectId} />
           <ExportSystemButton projectId={projectId} />
           <Button variant="default" component={Link} to={`/stage/${projectId}`}>Stage this system</Button>
           <Button leftSection={<IconPlus size={16} />} onClick={open}>Add device</Button>

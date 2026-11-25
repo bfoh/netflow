@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Code, CopyButton, FileButton, Group, List, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { ActionIcon, Badge, Button, Card, Code, CopyButton, FileButton, Group, List, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { IconCopy, IconDownload, IconFileImport, IconRocket, IconWand } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -143,7 +143,7 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
         <Card withBorder padding={0}>
           <Table.ScrollContainer minWidth={560}>
             <Table verticalSpacing={6} horizontalSpacing="md">
-              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Kind</Table.Th><Table.Th>By</Table.Th><Table.Th>From</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Kind</Table.Th><Table.Th>By</Table.Th><Table.Th>From</Table.Th><Table.Th /></Table.Tr></Table.Thead>
               <Table.Tbody>
                 {list.map((v) => (
                   <Table.Tr key={v.id} onClick={() => setSelected(v.id)} tabIndex={0} aria-current={v.id === current ? 'true' : undefined}
@@ -151,6 +151,12 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(v.id); } }} style={{ cursor: 'pointer' }} bg={v.id === current ? 'var(--mantine-primary-color-light)' : undefined}>
                     <Table.Td>{fmtDate(v.created_at)}</Table.Td><Table.Td>{humanize(v.kind)}</Table.Td>
                     <Table.Td>{v.created_by}</Table.Td><Table.Td>{v.reference || '—'}</Table.Td>
+                    <Table.Td w={40}>
+                      <ActionIcon variant="subtle" aria-label={`Download ${humanize(v.kind)} of ${fmtDate(v.created_at)}`}
+                        onClick={(e) => { e.stopPropagation(); void api.config(v.id).then((full) =>
+                          downloadText(`${device.name}-${v.kind}-${v.sha256.slice(0, 8)}.txt`, full.text ?? '')); }}>
+                        <IconDownload size={16} /></ActionIcon>
+                    </Table.Td>
                   </Table.Tr>
                 ))}
               </Table.Tbody>
