@@ -27,11 +27,11 @@ test('stage a system with the wizard (simulated Black Box)', async ({ page }) =>
   await expect(page.getByText('Cabling')).toBeVisible();
   await page.getByRole('button', { name: 'Next: Run' }).click();
   const card = page.locator('.mantine-Card-root', { hasText: `wizard-${id}-bb` });
-  await card.getByRole('button', { name: 'Make the plan' }).click();
+  // D-121: Check and run makes the plan (nothing changes), then one confirmation approves and runs it.
+  await card.getByRole('button', { name: 'Check and run…' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Approve and run' }).click();
   // The device takes the hostname of the file chosen for it (D-094).
   const named = page.locator('.mantine-Card-root', { hasText: `e2e-bb-${id}` });
-  await named.getByRole('button', { name: 'Approve all steps' }).click();
-  await named.getByRole('button', { name: 'Run', exact: true }).click();
   await expect(named.getByText('Staged')).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole('button', { name: 'Next: Report' }).click();

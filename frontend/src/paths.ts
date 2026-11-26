@@ -19,6 +19,8 @@ export const paths = {
   stage: (systemId?: string, step?: number, extra: Record<string, string | undefined> = {}) =>
     (systemId ? `/stage/${systemId}` : '/stage') + q({ step, ...extra }),
   stageChooser: '/stage?choose=1',
+  /** A device's card in the Run step (step 4), scrolled into view. */
+  stageCard: (systemId: string, deviceId: string) => `/stage/${systemId}` + q({ step: 3 }) + `#device-${deviceId}`,
   systems: '/systems',
   system: (id: string, tab?: SystemTab) => `/systems/${id}` + q({ tab }),
   devices: '/devices',

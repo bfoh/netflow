@@ -45,5 +45,18 @@ test('every page meets WCAG 2.2 AA (axe)', async ({ page, request }) => {
       }
     }
   }
+  // The wizard's dialogs, open (D-121).
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.addInitScript((s) => window.localStorage.setItem('undm.color-scheme', s), scheme);
+    await page.goto(`/stage/${ids.projectId}?step=3`);
+    await page.getByRole('button', { name: /Start all ready/ }).click();
+    await page.getByRole('dialog').waitFor();
+    await page.waitForTimeout(600);  // after the fade-in: half-transparent text is not what people read
+    const result = await new AxeBuilder({ page }).withTags(TAGS).include('[role=dialog]').analyze();
+    for (const v of result.violations) {
+      problems.push(`${scheme} · start all dialog · ${v.id} (${v.impact}): ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
+    }
+  }
   expect(problems, problems.join('\n')).toEqual([]);
 });

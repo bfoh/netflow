@@ -86,8 +86,8 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
       </Card>
       {real && <><SafetyHint real /><SafetyHint real firmware /></>}
       {real && policy.data?.firmware_require_separate_approver !== false && (
-        <Hint>Staging alone? Firmware plans need a second person to approve them, unless you turn that off in{' '}
-          <Anchor component={Link} to={paths.settings('safety')} size="xs">Settings → Safety</Anchor>.</Hint>
+        <Hint>Staging alone? Firmware plans need a second person to approve them: when you approve one you made,
+          tick “I am staging alone”. The rule is off for that approval only.</Hint>
       )}
       <Card padding={0}>
         <Group justify="space-between" p="md" pb="xs" wrap="wrap">

@@ -53,3 +53,10 @@ html {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* A link inside a notice takes the notice's text colour (AA on its tint, D-119), underlined
+   and bold so it still reads as a link. */
+.mantine-Alert-root a.mantine-Anchor-root {
+  color: inherit;
+  font-weight: 600;
+}

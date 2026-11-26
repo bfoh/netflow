@@ -1,8 +1,9 @@
-import { Anchor, Badge, Button, Card, Checkbox, Group, Stack, Text, Title } from '@mantine/core';
+import { Anchor, Button, Card, Checkbox, Group, Stack, Text, Title } from '@mantine/core';
 import { IconCircleCheck, IconCircleDashed } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 
+import { Tag } from '../../components/Badges';
 import { DialogError } from '../../components/ConfirmDialog';
 import { Notice } from '../../components/Notice';
 import { useAction, usePolicy } from '../../hooks/queries';
@@ -40,17 +41,23 @@ export function FinishChecklist({ project, rows, allStaged, licenseLoaded, ticks
   const off = rows.filter(({ device }) => portOff(device));
   const hasFirewall = rows.some(({ role }) => role.key === 'firewall');
   const safetyOff = !!policy.data && !policy.data.enable_real_device_writes && !policy.data.enable_real_device_firmware;
-  const lockedOn = !!policy.data && policy.data.locked.some((k) => k === 'enable_real_device_writes' || k === 'enable_real_device_firmware');
+  const lockedOn = !!policy.data && (policy.data.locked ?? []).some((k) => k === 'enable_real_device_writes' || k === 'enable_real_device_firmware');
   // Not a Test: switched on again it answers at the address the other switch now has (D-107).
   const clear = useAction((id: string) => api.clearPortOff(id), 'Noted: its port is on again');
   const safety = useAction(() => api.changePolicy({ enable_real_device_writes: false, enable_real_device_firmware: false }),
     'Safety switches turned off');
+  // Staging alone switches the second-approver rule off for one approval (D-121); it must be on
+  // again at the end, unless the start-up file fixes it.
+  const secondOn = !!policy.data && (policy.data.firmware_require_separate_approver
+    || (policy.data.locked ?? []).includes('firmware_require_separate_approver'));
+  const putBack = useAction(() => api.changePolicy({ firmware_require_separate_approver: true }),
+    'A second person approves firmware plans again');
   const finish = useAction(() => api.finishStaging(project.id, rows.map(({ device }) => device.id)),
     'Staging of this system is finished', { errorInDialog: true });
   const reopen = useAction(() => api.reopenStaging(project.id), 'Staging reopened');
   const tick = (part: Ticks) => onTicks({ ...ticks, ...part });
   const ready = allStaged && off.length === 0 && (!hasFirewall || licenseLoaded || !!ticks.license) && !!ticks.report
-    && !!ticks.backups && safetyOff && !!ticks.powered;
+    && !!ticks.backups && safetyOff && secondOn && !!ticks.powered;
 
   if (project.staged_at) {
     return (
@@ -63,8 +70,8 @@ export function FinishChecklist({ project, rows, allStaged, licenseLoaded, ticks
   return (
     <Card withBorder>
       <Group justify="space-between" mb="sm">
-        <Title order={2} size="h5">Finish staging</Title>
-        <Badge color={ready ? 'teal' : 'gray'} variant="light" tt="none">{ready ? 'ready to finish' : 'to do'}</Badge>
+        <Title order={2}>Finish staging</Title>
+        <Tag tone={ready ? 'success' : 'neutral'}>{ready ? 'ready to finish' : 'to do'}</Tag>
       </Group>
       <Stack gap="sm">
         <Item done={allStaged} title="Every device is staged">
@@ -108,6 +115,12 @@ export function FinishChecklist({ project, rows, allStaged, licenseLoaded, ticks
             : <Group gap="xs" mt={2}><span>Real-device or firmware changes are still on.</span>
               <Button size="compact-xs" variant="light" loading={safety.isPending} onClick={() => safety.mutate(undefined)}>Turn them off</Button>
               <Anchor component={Link} to={paths.settings('safety')} size="xs">Settings → Safety</Anchor></Group>}
+        </Item>
+        <Item done={secondOn} title="A second person approves firmware plans">
+          {secondOn ? 'The rule is on, as it should be.' : (
+            <Group gap="xs" mt={2}><span>The rule is off (staging alone switches it off for one approval only).</span>
+              <Button size="compact-xs" variant="light" loading={putBack.isPending} onClick={() => putBack.mutate(undefined)}>Put it back on</Button></Group>
+          )}
         </Item>
         <Item manual done={!!ticks.powered} onTick={(v) => tick({ powered: v })} title="Devices powered off and labelled" />
         <DialogError error={finish.error} />

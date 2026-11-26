@@ -1,4 +1,4 @@
-import { Accordion, Anchor, Badge, Button, Card, Code, CopyButton, Group, Modal, Stack, Stepper, Text, Textarea, TextInput, Timeline, Title } from '@mantine/core';
+import { Accordion, Anchor, Badge, Button, Card, Code, CopyButton, Group, Modal, Stack, Stepper, Text, Textarea, Timeline, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -14,7 +14,11 @@ import { Notice, type NoticeKind } from '../components/Notice';
 import { SafetyHint } from '../components/SafetyHint';
 import { fmtDate } from '../services/format';
 import { RUNNING_STATES, useAction, useDeployment, usePolicy, useProjectDevices } from '../hooks/queries';
-import { api } from '../services/api';
+import { api, getActor } from '../services/api';
+import { ApproveFields } from '../features/plans/ApproveFields';
+import { approveAlone, needsSecondPerson, soloOffered } from '../features/plans/soloApproval';
+import { defaultWindow, windowBody, windowProblem } from '../features/plans/window';
+import { ReasonButton } from '../components/ReasonButton';
 import type { Deployment } from '../types/api';
 import { applyModeLabel, PLAN_STAGES, planKind, stageLabel, stateLabel } from '../services/labels';
 import { DialogError } from '../components/ConfirmDialog';
@@ -41,21 +45,24 @@ const OUTCOME: Record<string, { kind: NoticeKind; title: string; text: string }>
   cancelled: { kind: 'settled', title: 'Plan cancelled', text: 'No device was changed.' },
 };
 
-/** datetime-local value in UTC for a Date (UNDM shows and takes times in UTC, like the network). */
-const toUtcInput = (d: Date) => d.toISOString().slice(0, 16);
-/** A datetime-local value typed in UTC, as an ISO time. */
-const fromUtcInput = (v: string) => new Date(`${v}:00Z`).toISOString();
-
 function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boolean) => void }) {
   const [confirm, { open, close }] = useDisclosure();
   const [windowOpen, { open: openWindow, close: closeWindow }] = useDisclosure();
-  const [start, setStart] = useState(() => toUtcInput(new Date()));
-  const [end, setEnd] = useState(() => toUtcInput(new Date(Date.now() + 2 * 3600 * 1000)));
   const firmware = dep.kind === 'firmware';
-  const approve = useAction(() => api.approveDeployment(dep.id, firmware
-    ? { window_start: fromUtcInput(start), window_end: fromUtcInput(end) } : undefined), 'Plan approved',
-    { errorInDialog: firmware });
   const policy = usePolicy();
+  // The same window, approver words and "staging alone" as Stage a system (D-121).
+  const actor = getActor();
+  const [win, setWin] = useState(defaultWindow);
+  const [solo, setSolo] = useState(false);
+  const second = needsSecondPerson(policy.data, { firmware, maker: dep.created_by, actor });
+  const offered = soloOffered(policy.data, { firmware, maker: dep.created_by, actor });
+  const approve = useAction(() => {
+    const call = () => api.approveDeployment(dep.id, firmware ? windowBody(win) : undefined);
+    return second && solo ? approveAlone(call) : call();
+  }, 'Plan approved', { errorInDialog: firmware });
+  const approveBlocked = firmware && windowProblem(win) ? 'Correct the window first.'
+    : second && !(offered && solo) ? (offered ? 'Tick “I am staging alone”, or let a second person approve it.' : 'A second person must approve it.')
+      : null;
   const [ask, confirmDialog] = useConfirm();
   const [started, setStarted] = useState(false);
   const [stopOpen, { open: openStop, close: closeStop }] = useDisclosure();
@@ -80,15 +87,13 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
       {dep.state === 'awaiting_approval' && <Button onClick={() => (firmware ? openWindow() : approve.mutate())} loading={approve.isPending}>Approve</Button>}
       <Modal opened={windowOpen} onClose={closeWindow} title="Approve firmware upgrade">
         <Stack>
-          <Text size="sm">Firmware upgrades can only run inside an approved maintenance window (maximum 24 hours).
-            {policy.data?.firmware_require_separate_approver !== false
-              ? ` The approver must be a different person from the plan's maker (${dep.created_by}).` : ''}</Text>
-          <TextInput type="datetime-local" label="Window start (UTC)" value={start} onChange={(e) => setStart(e.currentTarget.value)} />
-          <TextInput type="datetime-local" label="Window end (UTC)" value={end} onChange={(e) => setEnd(e.currentTarget.value)} />
+          <ApproveFields firmware window={win} onWindow={setWin} maker={dep.created_by} actor={actor}
+            second={second} soloOffered={offered} solo={solo} onSolo={setSolo} />
           <DialogError error={approve.error} />
-          <Group justify="flex-end">
-            <Button variant="default" onClick={closeWindow}>Back</Button>
-            <Button loading={approve.isPending} onClick={() => approve.mutate(undefined, { onSuccess: closeWindow })}>Approve with this window</Button>
+          <Group justify="flex-end" align="flex-start">
+            <Button variant="default" onClick={closeWindow} data-autofocus>Cancel</Button>
+            <ReasonButton loading={approve.isPending} disabled={!!approveBlocked} reason={approveBlocked}
+              onClick={() => approve.mutate(undefined, { onSuccess: closeWindow })}>Approve</ReasonButton>
           </Group>
         </Stack>
       </Modal>
@@ -112,7 +117,7 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
           <Text size="sm">If a device may already have been changed, the plan ends as <b>Needs attention</b> and names
             it: check that device before making further changes. If nothing was changed yet, it ends as <b>Failed</b>.</Text>
           <Group justify="flex-end">
-            <Button variant="default" onClick={closeStop}>Back</Button>
+            <Button variant="default" onClick={closeStop} data-autofocus>Cancel</Button>
             <Button color="red" onClick={() => { closeStop(); stop.mutate(); }}>Stop</Button>
           </Group>
         </Stack>
@@ -133,7 +138,7 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
                 {realNames.join(', ')}: equipment on your bench, not a simulation.</Notice>
             : <Hint>{dep.dry_run ? 'A dry run only reads from the devices.' : 'Every device in this plan is simulated: nothing real is touched.'}</Hint>}
           <Group justify="flex-end">
-            <Button variant="default" onClick={close}>Back</Button>
+            <Button variant="default" onClick={close} data-autofocus>Cancel</Button>
             <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={() => { close(); setStarted(true); execute.mutate(undefined, { onError: () => setStarted(false) }); }}>Confirm</Button>
           </Group>
         </Stack>

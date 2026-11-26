@@ -496,7 +496,10 @@ describe('staging plan', () => {
     renderAt('/plans/staging/sp1');
     expect(await screen.findByText(/Step 1 · Complete file: the device fetches it/)).toBeInTheDocument();
     expect(screen.getByText(/preview deferred/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Approve all steps' }));
+    // D-121: the same approval dialog everywhere; engineers approve here without running.
+    await userEvent.click(screen.getByRole('button', { name: 'Approve all steps…' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/staging-plans/sp1/approve'
       && c.init?.method === 'POST')).toBe(true));
   });
@@ -593,11 +596,13 @@ describe('Stage a system', () => {
       '/projects/p1/devices': [device({ id: 'bb', name: 'lab-a-bb', manufacturer: 'Black Box', model: 'LIG1014A',
         driver_id: 'mock.blackbox.switch', management_address: '192.0.2.1' })],
       '/projects/p1/staging-plans': [],
+      '/projects/p1/device-staging': { staging_id: 'sp9', steps: [] },
     });
     renderAt('/stage/p1?step=3');
     expect(await screen.findByText('lab-a-bb')).toBeInTheDocument();
     expect(screen.getByText('1. Team file')).toBeInTheDocument();  // no firmware chosen: kept as it is
-    await userEvent.click(screen.getByRole('button', { name: 'Make the plan' }));
+    // D-121: "Check and run" makes the plan (that changes nothing) and opens the decision.
+    await userEvent.click(screen.getByRole('button', { name: 'Check and run…' }));
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1/device-staging')).toBe(true));
     const sent = calls.find((c) => c.url === '/api/projects/p1/device-staging');
     expect(JSON.parse(String(sent?.init?.body))).toEqual({ device_id: 'bb', steps: [{ kind: 'configuration', version_id: 'v1' }] });
@@ -985,7 +990,7 @@ describe('finishing a system (D-108)', () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     const calls = mockApi({
       '/projects/p1': project(), '/projects/p1/devices': [bb()], '/staging-plans/sp1': plan,
-      '/policy': { ...policyOn, enable_real_device_writes: false, enable_real_device_firmware: false },
+      '/policy': { ...policyOn, enable_real_device_writes: false, enable_real_device_firmware: false, firmware_require_separate_approver: true },
       '/projects/p1/staging-plans': [{ staging_id: 'sp1', device_id: 'bb', created_at: '', kinds: ['configuration'], states: ['succeeded'] }],
       '/projects/p1/finish': project({ staged_at: '2026-11-26T09:00:00Z', staged_by: 'tester' }),
     });
@@ -1206,7 +1211,8 @@ describe('Nokia modem: first access over the console (D-112)', () => {
     // D-121: its first access opens inside the wizard, and returns to this step.
     expect(screen.getByRole('link', { name: 'Open console setup' })).toHaveAttribute('href', '/stage/p1?step=3&console=m1');
     expect(screen.getByText(/Do its first access first/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Make the plan' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Check and run…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Check and run…' })).toHaveAccessibleDescription('Its first access comes first.');
     first.unmount();
     const bench = renderAt('/stage/p1?step=2');
     expect(await screen.findByText('After its first access (it saves the console port)')).toBeInTheDocument();
@@ -1226,7 +1232,9 @@ describe('Nokia modem: first access over the console (D-112)', () => {
     expect(screen.queryByRole('textbox', { name: 'Firmware' })).not.toBeInTheDocument();
     files.unmount();
     renderAt('/stage/p1?step=4');
-    expect((await screen.findAllByText(/Still to do in step 4 \(Run\): lab-modem/)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/Still to do in step 4 \(Run\)/)).length).toBeGreaterThan(0);
+    // D-121: each device still to do links to its card in step 4.
+    expect(screen.getByRole('link', { name: 'lab-modem' })).toHaveAttribute('href', '/stage/p1?step=3#device-m1');
   });
 });
 
@@ -1262,7 +1270,7 @@ describe('the Flexi BBU: staged by hand in its portal, guided and recorded (D-11
     expect(screen.getByRole('link', { name: 'Open its portal' })).toHaveAttribute('href', 'https://192.0.2.129');
     expect(await screen.findByText('SBTS_EXAMPLE.zip · SBTS-EXAMPLE')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Download it from UNDM/ })).toHaveAttribute('href', '/api/firmware/images/img1/file');
-    expect(screen.queryByRole('button', { name: 'Make the plan' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check and run…' })).not.toBeInTheDocument();
     const doneButton = screen.getByRole('button', { name: 'Done' });
     expect(doneButton).toBeDisabled();  // what the person saw is noted first
     await userEvent.type(screen.getByLabelText('What you saw'), 'Software page; shows SBTS-EXAMPLE');
@@ -1520,5 +1528,72 @@ describe('Stage a system, steps 1 to 3 (D-121)', () => {
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/settings/defaults' && c.init?.method === 'PUT')).toBe(true));
     const put = calls.find((c) => c.url === '/api/settings/defaults' && c.init?.method === 'PUT');
     expect(JSON.parse(String(put?.init?.body)).modem).toEqual({ login: null });
+  });
+});
+
+describe('Stage a system, run and report (D-121)', () => {
+  const project = { id: 'p1', name: 'Lab A', description: '', site: '', purpose: '', created_at: '', updated_at: '',
+    certificate_subject: null, staged_at: null, staged_by: '', zone: 41, system_id: null };
+  const sw = device({ id: 'sa', name: 'lab-a-sw-a', manufacturer: 'Aruba', model: '2930F', driver_id: 'mock.aruba.aos_switch',
+    management_address: '192.168.1.1', provisioning_status: 'bootstrapped', role: 'Aruba 2930F (OOBM port 2)' });
+  const bb = device({ id: 'bb', name: 'lab-a-bb', manufacturer: 'Black Box', model: 'LIG1014A', driver_id: 'mock.blackbox.switch',
+    management_address: '192.0.2.1' });
+  const pol = { enable_real_device_writes: false, enable_real_device_firmware: false, allow_production_read_only: false,
+    allow_production_deployments: false, require_separate_approver: false, firmware_require_separate_approver: true, locked: [] };
+  const step = (n: number, kind: string, state = 'awaiting_approval') => ({ id: `st${n}`, project_id: 'p1', kind, state, dry_run: false,
+    apply_mode: 'replace', created_by: 'local-user', approved_by: null, created_at: '', updated_at: '', staging_id: 'sp9', staging_step: n,
+    targets: [{ device_id: 'sa', position: 0, config_version_id: null, backup_version_id: null, state: 'previewed', diff: '', message: '' }],
+    events: [], firmware_image_id: null, window_start: null, window_end: null, approved_at: null });
+
+  it('Check and run: staging alone switches the second-approver rule off for this approval only', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    window.localStorage.setItem('undm.stage.p1', JSON.stringify({ aruba_a: { ...{ firstLogin: false, imageId: 'img1', allowDowngrade: false,
+      alsoSecondary: false, baseId: null, siteId: null, fileId: 'v1', loginAfter: null, secrets: {} } } }));
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [sw], '/projects/p1/staging-plans': [], '/policy': pol,
+      '/devices/sa': sw, '/projects/p1/device-staging': { staging_id: 'sp9', steps: [step(1, 'firmware'), step(2, 'configuration')] } });
+    renderAt('/stage/p1?step=3');
+    await userEvent.click(await screen.findByRole('button', { name: 'Check and run…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Check and run: lab-a-sw-a' });
+    const go = await within(dialog).findByRole('button', { name: 'Approve and run' });
+    expect(go).toBeDisabled();
+    expect(go).toHaveAccessibleDescription('Tick “I am staging alone”, or let a second person approve it.');
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'I am staging alone' }));
+    await userEvent.click(go);
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/staging-plans/sp9/execute?background=true')).toBe(true));
+    const seen = calls.filter((c) => c.init?.method === 'PUT' || c.init?.method === 'POST')
+      .map((c) => `${c.init?.method} ${c.url.replace(/\?.*$/, '')} ${c.url.includes('/policy') ? String(c.init?.body) : ''}`.trim());
+    expect(seen).toEqual([
+      'POST /api/projects/p1/device-staging',
+      'PUT /api/policy {"firmware_require_separate_approver":false}',
+      'POST /api/staging-plans/sp9/approve',
+      'PUT /api/policy {"firmware_require_separate_approver":true}',
+      'POST /api/staging-plans/sp9/execute',
+    ]);
+    const approve = calls.find((c) => c.url === '/api/staging-plans/sp9/approve');
+    expect(Object.keys(JSON.parse(String(approve?.init?.body)))).toEqual(['window_start', 'window_end']);
+    window.localStorage.removeItem('undm.stage.p1');
+  });
+
+  it('Start all ready makes, approves and runs a plan per ready device, and says who waits', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const swB = device({ id: 'sb', name: 'lab-a-sw-b', manufacturer: 'Aruba', model: '2930F', driver_id: 'mock.aruba.aos_switch',
+      management_address: '192.168.1.2', provisioning_status: 'bootstrapped', role: 'Aruba 2930F (OOBM port 3)' });
+    const file = { firstLogin: false, imageId: null, allowDowngrade: false, alsoSecondary: false, baseId: null, siteId: null, fileId: 'v1', loginAfter: null, secrets: {} };
+    window.localStorage.setItem('undm.stage.p1', JSON.stringify({ blackbox: file, aruba_a: file, aruba_b: file }));
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [bb, sw, swB], '/projects/p1/staging-plans': [], '/policy': pol,
+      '/projects/p1/device-staging': { staging_id: 'sp9', steps: [step(1, 'configuration')] } });
+    renderAt('/stage/p1?step=3');
+    await userEvent.click(await screen.findByRole('button', { name: 'Start all ready (2)…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Start all ready devices' });
+    expect(within(dialog).getByText('lab-a-sw-b: it starts once lab-a-sw-a is staged (same final address)')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Start 2 devices' }));
+    expect(await within(dialog).findByText('lab-a-bb: started')).toBeInTheDocument();
+    expect(within(dialog).getByText('lab-a-sw-a: started')).toBeInTheDocument();
+    const posts = calls.filter((c) => c.init?.method === 'POST').map((c) => c.url.replace(/\?.*$/, ''));
+    expect(posts.filter((u) => u.endsWith('/device-staging'))).toHaveLength(2);
+    expect(posts.filter((u) => u.endsWith('/approve'))).toHaveLength(2);
+    expect(posts.filter((u) => u.endsWith('/execute'))).toHaveLength(2);
+    expect(calls.some((c) => c.url === '/api/policy' && c.init?.method === 'PUT')).toBe(false);  // no firmware: no rule changed
+    window.localStorage.removeItem('undm.stage.p1');
   });
 });

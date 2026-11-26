@@ -97,7 +97,7 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   await setActor(page, 'e2e-approver');
   await page.goto(planUrl);
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
-  await page.getByRole('button', { name: 'Approve with this window' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Approve', exact: true }).click();
   await page.getByRole('button', { name: 'Run plan' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Confirm' }).click();
   await expect(page.getByText('Plan succeeded')).toBeVisible();

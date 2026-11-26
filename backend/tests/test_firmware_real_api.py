@@ -147,6 +147,26 @@ def test_single_technician_bench_mode_is_an_explicit_setting(bench):
     assert b.approve(dep["id"], headers=ALICE).json()["state"] == "ready"
 
 
+def test_staging_alone_switches_the_rule_off_for_one_approval_only(bench):
+    """The wizard's "I am staging alone" (D-121): off, approve, on again; each change is in
+    force for the next request and audited, and the next plan needs a second person again."""
+    b = bench(enable_real_device_writes=True, enable_real_device_firmware=True)
+    first = b.plan().json()
+    refused = b.approve(first["id"], headers=ALICE)
+    assert refused.status_code in (403, 409) and "approve" in refused.json()["error"].lower()
+    assert b.client.put("/api/policy", headers=ALICE,
+                        json={"firmware_require_separate_approver": False}).status_code == 200
+    assert b.approve(first["id"], headers=ALICE).json()["state"] == "ready"
+    assert b.client.put("/api/policy", headers=ALICE,
+                        json={"firmware_require_separate_approver": True}).status_code == 200
+    second = b.plan().json()
+    assert b.approve(second["id"], headers=ALICE).status_code in (403, 409)
+    changes = [(a["target_id"], a["details"]["after"]) for a in b.client.get("/api/audit").json()
+               if a["action"] == "policy.change" and a["actor"] == "alice"]
+    assert sorted(changes) == [("firmware_require_separate_approver", False),
+                               ("firmware_require_separate_approver", True)]
+
+
 def test_unanswered_question_stops_the_job_and_shows_the_switch_output(bench):
     b = bench(enable_real_device_writes=True, enable_real_device_firmware=True)
     b.switch.copy_question = "Erase ALL images and reformat flash? Type CONFIRM: "

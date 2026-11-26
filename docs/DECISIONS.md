@@ -1919,6 +1919,35 @@ five different directions to where logins live.
   audited change as Settings → Safety (`useSafetySwitch`). A switch fixed in the start-up file
   is still changed only there. The default stays off.
 
+**Decision (steps 4 and 5, approval everywhere).**
+- **Check and run.** Each device card has one primary action. **Check and run…** makes the
+  plan (the check reads the files, the image and the device and changes nothing), shows its
+  steps, and one confirmation, **Approve and run**, approves and starts it. If the check finds
+  a problem, nothing is approved and the dialog says why. A plan already waiting offers
+  **Approve and run…** (or **Run…** once approved); a running plan offers **Stop**. "Make the
+  plan only" and "Open the plan" stay in the card's menu.
+- **Start all ready.** One dialog lists the devices that start now and those that wait, with
+  the reason (`startOrder`, pure): a staged device or a running plan is left alone; console
+  work comes first; switch B waits until switch A is staged (same final address); a last plan
+  that did not succeed is not retried here; the BBU is staged by hand. After one
+  confirmation each ready device gets its plan made (or the one waiting is used), approved
+  and run, one request each, exactly as on its card.
+- **After a failure** the card shows the step and its last error (`failureReason`), with
+  **Open the step** (where a Needs attention step is marked as checked) and **Try again…**.
+- **One approval dialog** (`ApproveRunBody`, `ApproveFields`) in the wizard, on the staging
+  plan page and on the plan page: what will happen, the real device named, the safety switch
+  with its in-place turn-on, the window (now −5 min to +8 h everywhere, at most 24 hours,
+  `features/plans/window.ts`) and who approves. A button that cannot be pressed says why.
+  Engineers keep separate Approve and Run on the plan and staging plan pages.
+- **Staging alone** (product owner: "I am staging alone"): offered only when a firmware step
+  waits, the person approving made the plan, and the rule "A second person approves firmware
+  plans" is on and not fixed in the start-up file. Ticked, UNDM switches the rule off, approves,
+  and switches it on again in all cases (`approveAlone`); each change is a `policy.change` in
+  the audit log, and the server still applies the rule to every request. If it cannot be
+  switched back on, the person is told, and the Finish checklist shows **Put it back on**:
+  Finish staging needs the rule on (unless the start-up file fixes it).
+- **Report.** Each device still to do links to its card in step 4 (`#device-<id>`).
+
 ### D-124 The modem has a default login (2026-11-26)
 
 The 7705 SAR-Hmc's first access sets the approved login (D-112), but Settings had no default

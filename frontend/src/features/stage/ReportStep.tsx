@@ -1,7 +1,10 @@
-import { Button, Card, Group, Stack, Table, Text, Title } from '@mantine/core';
+import { Anchor, Button, Card, Group, Stack, Table, Text, Title } from '@mantine/core';
 import { IconDownload, IconPrinter } from '@tabler/icons-react';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router';
+
+import { paths } from '../../paths';
 
 import { StateBadge } from '../../components/Badges';
 import { api } from '../../services/api';
@@ -64,7 +67,10 @@ export function ReportStep({ project, roles, stagings }: {
         return <Stack className="no-print">
           {open.length > 0 && !project.staged_at && (
             <Notice kind="status" title={`${rows.length - open.length} of ${rows.length} devices are staged`}>
-              Still to do in step 4 (Run): {open.map(({ device }) => device.name).join(', ')}.
+              Still to do in step 4 (Run):{' '}
+              {open.map(({ device }, i) => (
+                <span key={device.id}>{i > 0 && ', '}<Anchor component={Link} to={paths.stageCard(project.id, device.id)} size="sm" c="inherit" fw={600}>{device.name}</Anchor></span>
+              ))}.
             </Notice>
           )}
           <FinishChecklist project={project} rows={roles} allStaged={open.length === 0} ticks={ticks} onTicks={onTicks}

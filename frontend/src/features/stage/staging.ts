@@ -30,3 +30,17 @@ export function stepTitle(step: Deployment): string {
         : 'sent line by line (nothing is removed)';
   return `Step ${step.staging_step} · ${stepName(step.kind, step.apply_mode)}: ${what}`;
 }
+
+const ENDED = ['failed', 'recovery_required', 'rolled_back', 'cancelled'];
+
+/** Why a staging plan ended without finishing (D-121): the step that did not succeed and the
+ *  last error it recorded, so the card can say it without opening the step. */
+export function failureReason(steps: Deployment[]): { step: Deployment; text: string } | null {
+  const step = steps.find((s) => ENDED.includes(s.state));
+  if (!step) return null;
+  const error = [...step.events].reverse().find((e) => e.status === 'error');
+  const target = step.targets.find((t) => t.message);
+  const text = error?.message || target?.message
+    || (step.state === 'cancelled' ? 'It was cancelled.' : 'No reason was recorded: open the step.');
+  return { step, text };
+}

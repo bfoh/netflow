@@ -43,8 +43,7 @@ test('first access of a simulated modem from the wizard, then its file by a plan
   await page.goto(`/stage/${p.id}?step=3`);
   await expect(page.getByText('2. Its configuration file (console)')).toBeVisible();
   const card = page.locator('.mantine-Card-root', { hasText: name });
-  await card.getByRole('button', { name: 'Make the plan' }).click();
-  await card.getByRole('button', { name: 'Approve all steps' }).click();
-  await card.getByRole('button', { name: 'Run', exact: true }).click();
+  await card.getByRole('button', { name: 'Check and run…' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Approve and run' }).click();
   await expect(card.getByText('Staged')).toBeVisible({ timeout: 30_000 });
 });
