@@ -1553,6 +1553,18 @@ the team "breaks" it with a boot-menu procedure, recorded on the console and sup
     plain echo. Otherwise UNDM stops without Enter;
   - each boot-menu step may take 40 s (longer than the 30-second countdown);
   - the raw characters at every boot-menu question are kept as technical details (Q-56).
+- **Third bench run (2026-11-26, v86): the first access worked on hardware**, from the
+  3-second question to "Changes Since Last Save: No". The other boot-menu questions echo
+  plainly (Q-56); `admin save config.cfg` confirms with "OK" and "Completed." (Q-52).
+- **v87:**
+  - UNDM ends with `logout` and checks that the login prompt appears. Nokia documents this:
+    "When the logout command is issued from the console, the login prompt is displayed"
+    (Q-51). The console is no longer left logged in as admin;
+  - `admin save config.cfg` must confirm;
+  - shared text masks SNMP engine IDs (their tail is a MAC address of the unit; one was left
+    unmasked in this run's shared transcript);
+  - the transcript marks a typed password as "(password: not shown)". The sharing filter had
+    garbled "(password sent)" into "(password ***REDACTED***".
 
 ### D-113 Nokia Flexi BBU (FSMF): guided by hand first (2026-11-26)
 Product owner: the BBU is an FSMF staged in the browser through WebEM on the LMP port

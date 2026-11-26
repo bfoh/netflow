@@ -72,6 +72,25 @@ From the run's technical details (control characters written out):
   person typed).
 - UNDM v85 took the redraw for a second question and stopped (fixed in v86).
 
+### The third bench run (2026-11-26, UNDM v86): the first access worked
+All of it, on the factory unit:
+- Enter at the 3-second question, `sros` typed key by key into the redrawn field (Enter
+  once it showed; the "29 seconds" redraw ignored), then the boot menu answers.
+- The other boot-menu questions echo plainly (`Config File URL: none`, `(yes/no) no`),
+  with `\r\r\n` line endings (Q-56).
+- Started without its configuration, the unit printed "CRITICAL: CLI #1001 Cannot locate
+  the configuration file - Using default configuration values." and "MAJOR: CLI #1008 The
+  SNMP daemon is disabled…" before `Login:`, then accepted `admin`/`admin`.
+- `environment no more` printed nothing.
+- `admin save config.cfg` printed "Writing configuration to cf3:\config.cfg", "Saving
+  configuration ... OK", "Completed." (Q-52).
+- `exec cf3:/config.cfg` executed 128 lines.
+- The new password, `bof primary-config`, `show bof`, `bof persist on`, `bof save` and
+  `admin save` all succeeded.
+- `show system information` reported 7705 SAR-Hmc, B-20.5.R1, "Changes Since Last Save: No".
+- Its `SNMP Engine ID` ends with a MAC address of the unit; UNDM masks it in shared text
+  since v87.
+
 ### Nokia's public documentation (read 2026-11-26 on documentation.nokia.com)
 7705 SAR Basic System Configuration Guide 26.4.R1 (generic to the 7705 SAR family) unless
 noted. Quotes are Nokia's words.
@@ -140,7 +159,10 @@ recovery for this family; the team's procedure combines documented boot-menu ste
   modem off and on returns it to its factory start. One difference remains in that case:
   `admin save config.cfg` has already replaced the factory configuration file with the
   default configuration (as in the team's procedure).
-- UNDM does not log out at the end: the console stays logged in as admin (Q-51).
+- At the end UNDM sends `logout` and checks that the login prompt appears. Nokia documents
+  it: "When the logout command is issued from the console, the login prompt is displayed"
+  (Basic System Configuration Guide, CLI usage). A missing prompt is reported, not a
+  failure; everything is saved by then.
 
 ## Not built yet
 - Loading the modem's configuration (today: pasted on the console by hand, then

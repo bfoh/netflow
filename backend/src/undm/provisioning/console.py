@@ -122,7 +122,7 @@ class ConsoleSession:
 
     def write_secret(self, secret: str) -> None:
         """A password at a prompt that does not echo it: never in the transcript."""
-        self._typed("(password sent)")
+        self._typed("(password: not shown)")
         self.transport.write((secret + "\r").encode("utf-8"))
 
     def _fill(self) -> bool:

@@ -241,7 +241,7 @@ class ArubaOSSwitchConsole:
                     f"The switch asked a password question UNDM did not expect at this point "
                     f"('{question}'); nothing was answered.")
             expected.pop(0)
-            self.s.transcript.append("<<< (new password sent)\n")
+            self.s.transcript.append("<<< (new password: not shown)\n")
             self.s.transport.write((self.credentials.password + "\r").encode())
         raise ConsoleError("Could not finish setting the manager credentials")
 
@@ -303,7 +303,7 @@ class ArubaOSSwitchConsole:
                 self.s.write_line(self._credential("username"))
             else:
                 self.password_asked = True
-                self.s.transcript.append("<<< (password sent)\n")
+                self.s.transcript.append("<<< (password: not shown)\n")
                 self.s.transport.write((self._credential("password") + "\r").encode())
         else:
             raise ConsoleError("Could not reach a command prompt on the console")
@@ -320,7 +320,7 @@ class ArubaOSSwitchConsole:
                     self.s.write_line(self._credential("username"))
                 else:
                     self.password_asked = True
-                    self.s.transcript.append("<<< (password sent)\n")
+                    self.s.transcript.append("<<< (password: not shown)\n")
                     self.s.transport.write((self._credential("password") + "\r").encode())
             m = PROMPT.search(text)
             if (m is not None and m["mode"] != "#" and re.search(r"Unable to verify", text)
@@ -370,7 +370,7 @@ class ArubaOSSwitchConsole:
                                    "where UNDM expected its next password question; nothing "
                                    "was saved.")
             expected.pop(0)
-            self.s.transcript.append("<<< (new password sent)\n")
+            self.s.transcript.append("<<< (new password: not shown)\n")
             self.s.transport.write((self.credentials.password + "\r").encode())
         _, text = self.s.read_until_any([PROMPT], timeout=self.login_timeout)
         self.command("end")

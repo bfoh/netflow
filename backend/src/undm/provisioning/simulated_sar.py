@@ -304,9 +304,8 @@ class SimulatedSarConsole:
             if not target and not self.memory.get("primary-config"):
                 return "MINOR: CLI No primary configuration file is set."  # SYNTHETIC
             self.file_password = self.running_password
-            if target:
-                return ""  # the recording shows no answer when a file name is given
             self.unsaved = False
+            # As on the bench (2026-11-26), with or without a file name.
             return ("Writing configuration to cf3:\\config.cfg\r\nSaving configuration ... OK"
                     "\r\nCompleted.")
         if cmd == "exec cf3:/config.cfg":

@@ -183,7 +183,7 @@ def test_new_switch_gets_the_attached_login_then_is_bootstrapped():
     assert r.credentials_set and "manager credentials were set" in r.message
     assert (sim.username, sim.password) == ("manager", "Example-Only-Approved-1")
     assert "Example-Only-Approved-1" not in r.transcript
-    assert r.transcript.count("(new password sent)") == 2
+    assert r.transcript.count("(new password: not shown)") == 2
 
 
 def test_new_switch_without_an_attached_login_is_left_untouched():
@@ -213,7 +213,7 @@ def test_unexpected_password_question_is_not_answered():
                                 setup_password_prompt="Enter the old password: ")
     r = run(sim, creds=APPROVED)
     assert r.status is BootstrapStatus.FAILED and "did not expect" in r.message
-    assert "(new password sent)" not in r.transcript and sim.username is None
+    assert "(new password: not shown)" not in r.transcript and sim.username is None
 
 
 def test_questions_in_another_order_are_not_answered():
@@ -238,7 +238,7 @@ def test_prompts_placed_with_cursor_codes_are_recognised():
     sim = SimulatedArubaConsole(first_login_setup=True, cursor_codes=True)
     r = run(sim, creds=APPROVED)
     assert r.status is BootstrapStatus.BOOTSTRAPPED, (r.message, r.transcript)
-    assert r.credentials_set and r.transcript.count("(new password sent)") == 2
+    assert r.credentials_set and r.transcript.count("(new password: not shown)") == 2
 
 
 def test_unexpected_question_is_quoted_in_the_message():

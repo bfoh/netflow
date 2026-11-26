@@ -246,6 +246,18 @@ class SarConsole:
                         f"answer; last line '{_last_line(out)}'). {saved_so_far}")
         return out
 
+    def logout(self) -> bool:
+        """End the CLI session. Nokia: "When the logout command is issued from the console,
+        the login prompt is displayed" (7705 SAR Basic System Configuration Guide, CLI
+        usage). True when the login prompt is seen."""
+        self.s.write_line("logout")
+        self.sent.append("logout")
+        try:
+            self.s.wait_for([LOGIN_SEEN], self.t.command)
+        except ConsoleTimeoutError:
+            return False
+        return True
+
     def login(self, user: str, password: str, timeout: float) -> bool:
         """Answer "Login:" and "Password:"; False when the unit asks for the login again."""
         self.s.write_line(user)
@@ -324,7 +336,7 @@ def first_access(session: ConsoleSession, new: Credentials | None,
         findings.append("Boot options at power-on: " + ", ".join(
             f"{k} {' / '.join(v)}" for k, v in bof.items()))
         if "auto-discover" not in bof:
-            return _already_done(console, new, result, facts, state)
+            return _already_done(console, new, result, facts, state, findings)
 
         # 2. The boot menu: only the recorded questions, in the recorded order.
         session.write_key(KEY, "(Enter)")
@@ -371,7 +383,8 @@ def first_access(session: ConsoleSession, new: Credentials | None,
         if ERROR.search(console.command("environment no more")):
             findings.append("'environment no more' was not accepted: long answers are paged "
                             "and UNDM presses a key at each page.")
-        console.must("admin save config.cfg", "Saving the starting configuration")
+        console.must("admin save config.cfg", "Saving the starting configuration",
+                     expect=("OK", "Completed."))
         console.must("exec cf3:/config.cfg", "Reading that configuration back in",
                      expect=("Executed",),
                      saved_so_far="The boot options were not saved: switch the modem off "
@@ -427,6 +440,9 @@ def first_access(session: ConsoleSession, new: Credentials | None,
         if not state["verified"]:
             findings.append("The unit did not confirm 'Changes Since Last Save: No'.")
         name = facts.get("name") or "the modem"
+        logged_out = console.logout()
+        if not logged_out:
+            findings.append(_NOT_LOGGED_OUT)
         console.stage("finished")
         return result(
             BootstrapStatus.BOOTSTRAPPED,
@@ -434,7 +450,8 @@ def first_access(session: ConsoleSession, new: Credentials | None,
             + (f" ({facts['type']}, {facts.get('version', '?')})" if facts.get("type") else "")
             + ": it started once without its configuration and auto-discovery, admin has "
               "this device's password, and the boot options and configuration are saved. "
-              "The console is still logged in as admin.")
+            + ("UNDM logged out of the console." if logged_out else
+               "UNDM could not confirm it logged out (see below)."))
     except _Stop as stop:
         return result(stop.status, stop.message)
     except ConsoleTimeoutError as e:
@@ -448,6 +465,8 @@ def first_access(session: ConsoleSession, new: Credentials | None,
         return result(BootstrapStatus.FAILED, session.mask(str(e)))
 
 
+_NOT_LOGGED_OUT = ("UNDM sent 'logout' but did not see the login prompt: log out on the "
+                   "console by hand (type 'logout').")
 _RESTART = ("The boot options file was not written; switch the modem off and on to start "
             "again.")
 
@@ -516,7 +535,8 @@ def _answer(console: SarConsole, step: _Answer) -> None:
 
 def _already_done(console: SarConsole, new: Credentials,
                   result: Callable[[BootstrapStatus, str], BootstrapResult],
-                  facts: dict[str, str], state: dict[str, bool]) -> BootstrapResult:
+                  facts: dict[str, str], state: dict[str, bool],
+                  findings: list[str]) -> BootstrapResult:
     """No auto-discovery in the boot options: not a factory unit. Change nothing; see
     whether it already has this device's login."""
     s, t = console.s, console.t
@@ -535,6 +555,8 @@ def _already_done(console: SarConsole, new: Credentials,
     console.command("environment no more")
     facts.update(parse_system_information(console.command("show system information")))
     state["verified"] = True
+    if not console.logout():
+        findings.append(_NOT_LOGGED_OUT)
     return result(BootstrapStatus.ALREADY_CONFIGURED,
                   f"{facts.get('name') or 'This modem'} has already had its first access: "
                   "its boot options have no auto-discovery and it accepts this device's "

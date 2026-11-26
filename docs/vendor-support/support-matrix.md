@@ -9,7 +9,7 @@ public documentation and Netmiko's source, tested only against fake connections.
 | Aruba AOS-CX | `mock.aruba.aoscx` | simulation | ✔ | ✔ merge | ✔ | ✔ | ✔ (simulated, with rollback) |
 | Aruba AOS-CX | `ssh.aruba.aoscx` | **experimental** | ✔ (`show version`, `show system`, `show running-config`) | ✔ merge, save `copy running-config startup-config` | ✘ | ✘ manual | ✘ |
 | Nokia 7705 SAR-Hmc | `mock.nokia.sar` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✘ |
-| Nokia 7705 SAR-Hmc | `console.nokia.sar` | **experimental**, console cable only | ✘ (no network address; first access over the console only, D-112) | ✘ not built | ✘ | ✘ | ✘ |
+| Nokia 7705 SAR-Hmc | `console.nokia.sar` | **experimental**, console cable only | ✘ (no network address; first access over the console only, D-112: **passed once on hardware** 2026-11-26) | ✘ not built | ✘ | ✘ | ✘ |
 | ArubaOS-Switch (2930F) | `mock.aruba.aos_switch` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✔ (simulated dual image banks, with rollback) |
 | ArubaOS-Switch (2930F) | `ssh.aruba.aos_switch` | **experimental**; read-only operations **lab-accepted** on 2930F-48G-4SFP (JL260A) WC.16.10.0025 | ✔ (`show system`, `show modules`, `show running-config`) ⁵ | ✔ merge, save `write memory` | **experimental**: HTTPS certificate created first (team commands); complete file by TFTP into the startup configuration, restart, address followed, serial and hostname checked (`aruba-2930f-staging.md`) | ✘ manual | **experimental, not run on hardware**: TFTP pull into primary flash, restart, verify (`aruba-2930f-firmware.md`); no automatic rollback |
 | Fortinet FortiOS | `mock.fortinet.fortios` | simulation | ✔ | ✔ merge | ✘ | ✘ | ✔ (simulated, no rollback) |

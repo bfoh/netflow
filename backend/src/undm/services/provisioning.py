@@ -406,7 +406,7 @@ def run_console_bootstrap(
     known = [("hostname", device.name), ("ip", address)]
     shown = sanitize(result.transcript, known)
     # A failed setup keeps the console's last words for the bench log (passwords are never in
-    # the transcript: UNDM writes "(password sent)" instead).
+    # the transcript: UNDM writes "(password: not shown)" instead).
     tail = shown[-1500:] if result.status.value == "failed" else None
     audit.record(session, actor, "provisioning.console_bootstrap", "device", device.id,
                  result.status.value, {

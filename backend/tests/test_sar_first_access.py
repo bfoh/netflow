@@ -45,7 +45,7 @@ def test_first_access_follows_the_recording_and_never_shows_the_password():
         "environment no more", "admin save config.cfg", "exec cf3:/config.cfg",
         f'configure system security user "admin" password {PASSWORD}',
         "bof primary-config cf3:\\config.cfg", "show bof", "bof persist on", "show bof",
-        "bof save", "admin save", "show system information"]
+        "bof save", "admin save", "show system information", "logout"]
     assert sim.bof_writes == 1 and sim.keys == ["\r"]  # Enter, as the team presses
     assert sim.bof == {"primary-image": ["cf3:/TiMOS-SR-20.5.R1"], "wait": ["3"],
                        "persist": ["on"], "console-speed": ["115200"],
@@ -440,3 +440,39 @@ def test_no_echo_means_no_enter():
     assert r.status is BootstrapStatus.FAILED and "did not show it" in r.message
     assert "did not press Enter" in r.message and sim.bof_writes == 0
     assert "primary-config" in sim.bof  # nothing was written
+
+
+# -- the third bench run (2026-11-26, v86): the first access worked on hardware ----------
+def test_logout_at_the_end_shows_the_login_prompt():
+    sim = SimulatedSarConsole()
+    r = run(sim)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED and "UNDM logged out" in r.message
+    assert sim.commands_received[-1] == "logout" and r.commands_sent[-1] == "logout"
+    assert sim._state == "login"  # noqa: SLF001 - the console is back at its login
+    again = run(sim)  # the "already done" path logs out too
+    assert again.status is BootstrapStatus.ALREADY_CONFIGURED
+    assert sim.commands_received[-1] == "logout" and not again.findings[1:]
+
+
+def test_no_login_prompt_after_logout_is_only_a_finding():
+    sim = SimulatedSarConsole(fail_on={"logout"})  # answered with an error, no prompt
+    r = run(sim)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED and r.saved
+    assert "could not confirm it logged out" in r.message
+    assert any("log out on the console by hand" in f for f in r.findings)
+
+
+def test_admin_save_must_confirm():
+    sim = SimulatedSarConsole(fail_on={"admin save config.cfg"})
+    r = run(sim)
+    assert r.status is BootstrapStatus.FAILED and "Saving the starting configuration" in r.message
+    assert sim.bof_writes == 0
+
+
+def test_shared_text_masks_engine_ids_and_keeps_the_password_marker_readable():
+    from undm.security.sanitize import sanitize
+    text = ("SNMP Engine ID         : 0000197f0000aabbccddeeff\n<<< (password: not shown)\n"
+            "<<< (new password: not shown)\n")
+    out = sanitize(text)
+    assert "aabbccddeeff" not in out and "SNMP Engine ID         : <engine-1>" in out
+    assert "<<< (password: not shown)" in out and "<<< (new password: not shown)" in out

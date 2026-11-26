@@ -75,7 +75,7 @@ the first run and send it back.
    logs in, sets the password and saves. While it runs, the dialog shows what UNDM sees
    (stage, time, bytes received, last line). The whole run takes up to about 15 minutes.
 5. The result says "First access done" with the modem's own name, type and software.
-   The console stays logged in as admin.
+   UNDM logs out at the end (the modem shows its login prompt again).
 6. Its configuration is still pasted on the console by hand, then `admin save`.
 
 If it stops:
