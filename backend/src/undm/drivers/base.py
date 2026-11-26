@@ -224,6 +224,8 @@ class DeviceDriver:
     """Base class; subclasses override only what they actually support."""
 
     info: ClassVar[DriverInfo]
+    # The console speed of a device reached over its console (opens a console window).
+    console_speed: ClassVar[int | None] = None
     # Set by a running deployment: True once a stop was requested. Drivers that wait long
     # (transfers, device questions) check it and end the wait early.
     should_stop: Callable[[], bool] | None = None

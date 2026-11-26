@@ -2,8 +2,9 @@
 
 Status: **experimental**. UNDM's first access (D-112) is built from the product owner's
 console recording and Nokia's public guides; it passed on a factory unit on 2026-11-26 (third
-bench run). Loading the modem's configuration file over its console as a plan (D-116) is
-built and has run only on UNDM's simulated console so far (Q-58).
+bench run). Loading the modem's configuration file over its console as a plan (D-116)
+passed on the same unit on 2026-11-26: 149 lines in about one minute, all accepted, saved and
+verified (Q-58).
 
 ## What is known, and from where
 
@@ -186,9 +187,11 @@ access saved (Edit on the device page changes it):
 - a load that stopped is not saved: switched off and on, the modem starts with its saved
   configuration.
 
+## A console window (D-118)
+Device menu → **Open console window**: a terminal on the modem's saved console port at 115200 (PuTTY when installed, else pySerial's terminal). UNDM types nothing into it; close it before UNDM uses the port again.
+
 ## Not built yet
 - Firmware for this model.
-- The bench run of the configuration load (Q-58).
 
 ## Open questions
 See `docs/REFERENCE_ANALYSIS.md`, Q-49 to Q-53, Q-55, Q-56 and Q-58.

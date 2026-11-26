@@ -42,6 +42,10 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
     return api.device(device.id);
   }, undefined);
   const ssh = useAction(() => api.openSsh(device.id), () => `SSH window opened for ${device.name}: type the password there`);
+  // Reached over its console only (the modem): a terminal on its console port instead (D-118).
+  const consoleOnly = can(device, 'supports_serial_console') && !can(device, 'supports_ssh');
+  const terminal = useAction(() => api.openConsole(device.id), (r) => `Console window opened on ${r.console_port}`
+    + (r.program === 'putty' ? ' (PuTTY)' : ' (close it with Ctrl+])') + ': close it before UNDM uses this port again');
   const makeRestart = useAction(() => api.restartPlan(device.id), undefined, { errorInDialog: true });
   const makeLicense = useAction(async () => {
     const stored = await api.uploadLicense(device.id, licenseFile!);
@@ -73,7 +77,8 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
         <Menu.Target><ActionIcon variant="subtle" aria-label={`Actions for ${device.name}`} data-device-menu=""><IconDots size={16} /></ActionIcon></Menu.Target>
         <Menu.Dropdown>
           <Menu.Label>{device.name}</Menu.Label>
-          {real && <Menu.Item leftSection={<IconTerminal size={14} />} onClick={() => ssh.mutate(undefined)}>Open SSH window</Menu.Item>}
+          {real && !consoleOnly && <Menu.Item leftSection={<IconTerminal size={14} />} onClick={() => ssh.mutate(undefined)}>Open SSH window</Menu.Item>}
+          {real && consoleOnly && <Menu.Item leftSection={<IconTerminal size={14} />} onClick={() => terminal.mutate(undefined)}>Open console window</Menu.Item>}
           {real && address && <Menu.Item leftSection={<IconWorld size={14} />} component="a" href={`https://${address}`} target="_blank"
             rel="noreferrer" rightSection={<IconExternalLink size={12} />}>Open web page</Menu.Item>}
           {address && <Menu.Item leftSection={<IconClipboard size={14} />}
@@ -81,14 +86,14 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
           <Menu.Divider />
           <Menu.Item leftSection={<IconInfoCircle size={14} />} onClick={() => check.mutate(undefined, { onSuccess: setInfo })}>Check information</Menu.Item>
           <Menu.Item leftSection={<IconPlugConnected size={14} />} onClick={() => run.mutate({ op: 'check_reachability' })}>Test connection</Menu.Item>
-          <Menu.Item leftSection={<IconActivity size={14} />} onClick={waitUntilAnswers}>Wait until it answers</Menu.Item>
+          {!consoleOnly && <Menu.Item leftSection={<IconActivity size={14} />} onClick={waitUntilAnswers}>Wait until it answers</Menu.Item>}
           <Menu.Item leftSection={<IconFileText size={14} />} onClick={() => run.mutate({ op: 'backup_configuration' })}>Back up now</Menu.Item>
           <Menu.Item component={Link} to={`/devices/${device.id}?tab=configs`} leftSection={<IconFileText size={14} />}>Configurations and compare</Menu.Item>
           <Menu.Item component={Link} to={`/devices/${device.id}?tab=log`} leftSection={<IconActivity size={14} />}>Device log</Menu.Item>
           <Menu.Label>Changes the device (approved plan)</Menu.Label>
           {can(device, 'supports_restart') && <Menu.Item leftSection={<IconPower size={14} />} onClick={restart.open}>Restart…</Menu.Item>}
           {can(device, 'supports_license_file') && <Menu.Item leftSection={<IconCertificate size={14} />} onClick={license.open}>Load license…</Menu.Item>}
-          {device.driver_id.includes('aos_switch') && <Menu.Item component={Link} to={`/provisioning?device=${device.id}`}
+          {(device.driver_id.includes('aos_switch') || consoleOnly) && <Menu.Item component={Link} to={`/provisioning?device=${device.id}`}
             leftSection={<IconTerminal2 size={14} />}>Console setup</Menu.Item>}
           <Menu.Item leftSection={<IconRocket size={14} />} onClick={() => void navigate(`/deployments?project=${device.project_id}&devices=${device.id}`)}>Make a plan…</Menu.Item>
           {onDelete && <><Menu.Divider />

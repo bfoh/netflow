@@ -81,10 +81,12 @@ class NokiaSarConsole(DeviceDriver):
             "Console cable only: the unit has no management address from the factory. UNDM "
             "uses the console port saved on the device (its first access saves it).",
             "First access (Console setup) passed once on hardware, 2026-11-26 (D-112).",
-            "Loading its configuration (D-116) has not run on hardware yet: lines are sent "
-            "one at a time and the load stops at the first refused line, unsaved.",
+            "Loading its configuration (D-116): lines are sent one at a time and the load "
+            "stops at the first refused line, unsaved. Passed once on hardware, 2026-11-26 "
+            "(149 lines, about one minute).",
         ),
     )
+    console_speed: ClassVar[int | None] = sros_sar.CONSOLE_SPEED
     # Replaced in tests by a simulated console.
     open_console: ClassVar[Callable[[str, int], Transport]] = staticmethod(open_serial)
     wake_timeout: ClassVar[float] = 10.0
@@ -322,7 +324,8 @@ class NokiaSarConsole(DeviceDriver):
                 "Every line was accepted, but the configuration may not be saved.",
                 diagnostics={"device_output": out[-1500:]})
         self._saved = True
-        return OperationResult.success(op, message="saved ('admin save': Completed.)")
+        return OperationResult.success(op, {"notes": ["saved ('admin save': Completed.)"]},
+                                       message="saved ('admin save': Completed.)")
 
     def manual_recovery(self) -> str | None:
         if self._saved:

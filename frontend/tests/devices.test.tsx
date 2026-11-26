@@ -55,6 +55,22 @@ describe('device menu, tree and watch (D-099)', () => {
     expect(screen.queryByText('Open SSH window')).not.toBeInTheDocument();
   });
 
+  it('the modem (console only) opens a console window instead of SSH (D-118)', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const modem = device({ id: 'm1', name: 'lab-modem', category: 'router', model: '7705 SAR-Hmc', driver_id: 'console.nokia.sar',
+      management_address: '', console_port: 'COM7', capabilities: ['supports_serial_console', 'supports_configuration_apply'] });
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [modem],
+      '/devices/m1/open-console': { program: 'putty', console_port: 'COM7', command: 'putty -serial COM7' } });
+    renderAt('/projects/p1');
+    const table = await screen.findByRole('table');
+    await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-modem' }));
+    expect(await screen.findByText('Open console window')).toBeInTheDocument();
+    expect(screen.queryByText('Open SSH window')).not.toBeInTheDocument();
+    expect(screen.queryByText('Wait until it answers')).not.toBeInTheDocument();  // no network address
+    await userEvent.click(screen.getByText('Open console window'));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/devices/m1/open-console' && c.init?.method === 'POST')).toBe(true));
+  });
+
   it('a 2930F offers restart and console setup', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     mockApi({ '/projects/p1': project, '/projects/p1/devices': [sw] });

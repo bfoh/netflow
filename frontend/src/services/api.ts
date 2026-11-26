@@ -200,6 +200,7 @@ export const api = {
     request<Device>('POST', `/projects/${pid}/devices`, body),
   updateDevice: (id: string, body: DeviceInput) => request<Device>('PATCH', `/devices/${id}`, body),
   openSsh: (id: string) => request<{ command: string }>('POST', `/devices/${id}/open-ssh`),
+  openConsole: (id: string) => request<{ program: string; console_port: string; command: string }>('POST', `/devices/${id}/open-console`),
   restartPlan: (id: string) => request<Deployment>('POST', `/devices/${id}/restart-plan`),
   uploadLicense: (id: string, file: File) => {
     const form = new FormData();

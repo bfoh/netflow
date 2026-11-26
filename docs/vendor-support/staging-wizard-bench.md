@@ -94,7 +94,7 @@ If it stops:
 - "refused the new admin password": choose a login with a longer, less simple password;
   switch the modem off and on, then run again.
 
-## Nokia modem: its configuration file (since v90, D-116, experimental)
+## Nokia modem: its configuration file (since v90, D-116; passed on hardware 2026-11-26)
 After the first access, with the console cable still on the same COM port:
 1. Step 1: set the zone and system (B007) of the system; step 2: **Generate the files**
    gives the modem its configuration file (its password comes from the modem's login).

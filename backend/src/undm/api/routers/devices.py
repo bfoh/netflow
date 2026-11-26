@@ -229,6 +229,17 @@ def open_ssh(device_id: str, request: Request, session: SessionDep, registry: Re
     return svc.open_ssh(session, d, registry, actor)
 
 
+@router.post("/api/devices/{device_id}/open-console")
+def open_console(device_id: str, request: Request, session: SessionDep, registry: RegistryDep,
+                 actor: ActorDep) -> dict[str, str]:
+    """Open a terminal on the device's console port on this PC (D-118). UNDM types nothing
+    into it; what is done there is outside UNDM's plans and audit."""
+    d = get_device(session, device_id)
+    if not _from_this_pc(request):
+        raise ConflictError("A console window can only be opened from the PC that runs UNDM")
+    return svc.open_console(session, d, registry, actor)
+
+
 @router.get("/api/projects/{project_id}/reachability")
 def reachability(project_id: str, session: SessionDep,
                  registry: RegistryDep) -> list[dict[str, str]]:

@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
@@ -26,6 +27,7 @@ from undm.drivers.base import (
     DeviceTarget,
 )
 from undm.drivers.registry import DriverRegistry
+from undm.provisioning.console import port_lock
 from undm.security import credentials as creds
 from undm.services import audit
 from undm.services.errors import ConflictError, ForbiddenError, ServiceError
@@ -388,6 +390,66 @@ def open_ssh(session: Session, device: Device, registry: DriverRegistry,
     audit.record(session, actor, "device.session_opened", "device", device.id,
                  details={"program": "ssh", "address": argv[-1].split("@", 1)[1]})
     return {"command": " ".join(argv)}
+
+
+# -- a console window on this PC (D-118) ---------------------------------------------------
+
+def _putty() -> str | None:
+    found = shutil.which("putty")
+    if found:
+        return found
+    for base in (os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMFILES(X86)")):
+        path = os.path.join(base, "PuTTY", "putty.exe") if base else ""
+        if path and os.path.exists(path):
+            return path
+    return None
+
+
+def console_command(device: Device, registry: DriverRegistry) -> tuple[str, list[str]]:
+    """(program, command) that opens a terminal on the device's console port. PuTTY when it
+    is installed ("-serial", "-sercfg" from PuTTY's manual), else pySerial's own terminal
+    (miniterm, installed with UNDM). Nothing is typed into it by UNDM."""
+    if device.driver_id not in registry:
+        raise ServiceError(f"Unknown driver {device.driver_id!r}")
+    driver_cls = registry.get(device.driver_id)
+    if driver_cls.info.simulated:
+        raise ConflictError("A simulated device has no console to open")
+    speed = driver_cls.console_speed
+    if speed is None or Capability.SERIAL_CONSOLE not in driver_cls.info.capabilities:
+        raise ConflictError(f"UNDM does not reach {device.name} over a console port")
+    port = device.console_port or _first_access_port(device)
+    if not port:
+        raise ConflictError(f"Say which serial port of this PC {device.name}'s console cable "
+                            "is on: Edit on its device page, Console port.")
+    device.console_port = port
+    if not _CONSOLE_PORT.fullmatch(port) or port.startswith("-"):
+        raise ConflictError("The device's console port cannot be passed to a terminal program")
+    if port_lock(port).locked():
+        raise ConflictError(f"UNDM is using {port} now (Console setup or a plan): open the "
+                            "window when it has finished.")
+    putty = _putty()
+    if putty:
+        return "putty", [putty, "-serial", port, "-sercfg", f"{speed},8,n,1,N"]
+    return "miniterm", [sys.executable, "-m", "serial.tools.miniterm", port, str(speed)]
+
+
+def launch_console(argv: list[str]) -> None:
+    """Start the terminal program in a new window on this PC (Windows only)."""
+    if os.name != "nt":
+        raise ConflictError("Opening a console window is available when UNDM runs on Windows "
+                            "(the bench PC)")
+    subprocess.Popen(argv,  # noqa: S603 - fixed programs, checked arguments
+                     creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+
+
+def open_console(session: Session, device: Device, registry: DriverRegistry,
+                 actor: str) -> dict[str, str]:
+    program, argv = console_command(device, registry)
+    launch_console(argv)
+    audit.record(session, actor, "device.session_opened", "device", device.id,
+                 details={"program": program, "console_port": device.console_port})
+    return {"program": program, "console_port": device.console_port or "",
+            "command": " ".join(argv)}
 
 
 # -- reachability of a system's devices (D-099) --------------------------------------------

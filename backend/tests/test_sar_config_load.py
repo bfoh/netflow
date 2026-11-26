@@ -77,7 +77,9 @@ def test_the_load_logs_in_sends_line_by_line_saves_and_proves_it(modem):
     assert result.ok, result.message
     assert "not sent: 5 comment, 1 echo, 1 'admin save'" in result.data["notes"][0]
     assert modem.unsaved and modem.file_password == PASSWORD  # nothing saved yet
-    assert d.save_configuration().ok and not modem.unsaved
+    saved = d.save_configuration()
+    assert saved.ok and not modem.unsaved and saved.data["notes"] == [
+        "saved ('admin save': Completed.)"]  # its own event in the plan
     verified = d.verify_configuration(FILE, ApplyMode.MERGE)
     assert verified.ok and NAME in verified.message
     running = d.get_running_configuration()
@@ -212,5 +214,48 @@ def test_a_console_only_device_without_its_port_is_told_where_to_set_it(monkeypa
             assert bad.status_code == 422
             ok = client.patch(f"/api/devices/{did}", json={"console_port": "COM9"})
             assert ok.status_code == 200 and ok.json()["console_port"] == "COM9"
+    finally:
+        keyring.set_keyring(previous)
+
+
+def test_a_console_window_on_the_modems_port(monkeypatch):
+    """Device menu → Open console window (D-118): a terminal on the saved port at the
+    modem's speed; UNDM types nothing into it."""
+    from undm.api.routers import devices as router
+    from undm.services import devices as devsvc
+
+    previous = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    started: list[list[str]] = []
+    monkeypatch.setattr(devsvc, "launch_console", started.append)
+    monkeypatch.setattr(router, "_from_this_pc", lambda request: True)
+    client, _ = make_client()
+    try:
+        with client:
+            did = add(client, dict(SIM_MODEM, name="bench-modem", driver_id="console.nokia.sar",
+                                   environment="lab"))
+            r = client.post(f"/api/devices/{did}/open-console")
+            assert r.status_code == 409 and "Console port" in r.json()["error"]
+            client.patch(f"/api/devices/{did}", json={"console_port": "COM7"})
+            monkeypatch.setattr(devsvc, "_putty", lambda: None)
+            out = client.post(f"/api/devices/{did}/open-console").json()
+            assert out["program"] == "miniterm" and started[-1][-3:] == [
+                "serial.tools.miniterm", "COM7", "115200"]
+            monkeypatch.setattr(devsvc, "_putty", lambda: r"C:\PuTTY\putty.exe")
+            out = client.post(f"/api/devices/{did}/open-console").json()
+            assert out["program"] == "putty" and started[-1] == [
+                r"C:\PuTTY\putty.exe", "-serial", "COM7", "-sercfg", "115200,8,n,1,N"]
+            assert PASSWORD not in repr(started) + repr(out)
+            with port_lock("COM7"):  # UNDM itself is using the port
+                busy = client.post(f"/api/devices/{did}/open-console")
+            assert busy.status_code == 409 and "UNDM is using COM7" in busy.json()["error"]
+            opened = [a for a in client.get("/api/audit").json()
+                      if a["action"] == "device.session_opened"]
+            assert opened and opened[0]["details"]["console_port"] == "COM7"
+            sim = add(client, dict(SIM_MODEM, name="practice-modem"))
+            assert client.post(f"/api/devices/{sim}/open-console").status_code == 409
+            monkeypatch.setattr(router, "_from_this_pc", lambda request: False)
+            assert "PC that runs UNDM" in client.post(
+                f"/api/devices/{did}/open-console").json()["error"]
     finally:
         keyring.set_keyring(previous)

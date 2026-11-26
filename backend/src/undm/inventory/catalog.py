@@ -86,8 +86,8 @@ CATALOG: tuple[DeviceModel, ...] = (
                       "follows the team's console recording and Nokia's public guides; "
                       "passed once on hardware 2026-11-26 on a factory unit with TiMOS "
                       "20.5.R1 (experimental). Its configuration file is loaded by a plan over "
-                      "its console port, line by line (experimental, not yet run on "
-                      "hardware, D-116)."),
+                      "its console port, line by line (D-116): passed once on hardware "
+                      "2026-11-26 (experimental)."),
     DeviceModel("cisco-c9300", "Cisco", "Catalyst 9300", "C9300-24T", DeviceCategory.SWITCH,
                 "IOS-XE", ("mock.cisco.iosxe", "ssh.cisco.iosxe"), SupportLevel.SIMULATED_ONLY),
     DeviceModel("cisco-isr4331", "Cisco", "ISR 4000", "ISR4331", DeviceCategory.ROUTER,

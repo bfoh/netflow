@@ -1743,3 +1743,37 @@ access under v87, before the port was saved. When a console-only device has no p
 takes the port of its last successful first access, as audited then. It is the port the
 person chose; UNDM saves it on the device and audits it (`device.console_port_set`). Without
 one, the message says where to set it (Edit on the device page, Console port).
+
+**Amendment (2026-11-26, v92): the first bench run of the load passed.** Real 7705 SAR-Hmc
+(TiMOS 20.5.R1), after its first access, with its generated file:
+- making the plan logged in over the console and read `admin display-config`;
+- the run sent 149 configuration lines one at a time in about one minute, and every one was
+  accepted (no `MINOR:`/`MAJOR:`/`CRITICAL:`/`Error:` line);
+- `admin save` was confirmed;
+- the new login worked when UNDM logged in again, the system name was the file's, and
+  nothing was unsaved.
+
+Q-58 is answered. The save now has its own event in the plan ("saved ('admin save':
+Completed.)"); before, it was folded into the "line(s) accepted" line.
+
+### D-118 Open a console window on a console-only device (2026-11-26)
+**Request (product owner, bench):** the device menu should open the modem through its
+console, as it opens an SSH window for the others (D-098).
+
+**Decision.** Devices reached over their console only (the modem) get **Open console window**
+instead of Open SSH window. "Wait until it answers" is hidden for them (they have no network
+address), and Console setup is offered.
+- **The terminal.** UNDM starts a terminal on the PC, on the device's saved console port, at
+  the speed its driver declares (115200 for the 7705 SAR-Hmc):
+  - PuTTY when it is installed: `putty -serial COMx -sercfg 115200,8,n,1,N`, the options of
+    PuTTY's manual;
+  - otherwise pySerial's own terminal, which is installed with UNDM:
+    `python -m serial.tools.miniterm COMx 115200`; Ctrl+] closes it.
+- **UNDM types nothing into it.** What is done there is outside UNDM's plans and audit, as with
+  the SSH window. Opening the window is audited (`device.session_opened`, program and port).
+- **Refused:**
+  - while UNDM itself uses the port (Console setup or a plan);
+  - for simulated devices;
+  - from another PC than the one running UNDM.
+- **A shared port.** A Windows serial port has one user at a time. While the window is open,
+  UNDM's own use of the port fails with its "could not open" message; close the window first.
