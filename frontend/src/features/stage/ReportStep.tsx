@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { StateBadge } from '../../components/Badges';
 import { api } from '../../services/api';
 import { downloadText, fmtDate } from '../../services/format';
+import { stepName } from '../../services/labels';
 import type { Device, Guided, Project, StagingIndex, StagingPlan } from '../../types/api';
 import { type Role } from './roles';
 import { EmptyState } from '../../components/EmptyState';
@@ -19,9 +20,6 @@ const minutes = (a: string, b: string) => {
   return Number.isFinite(ms) && ms >= 0 ? `${Math.round(ms / 60000)} min` : '—';
 };
 
-function stepName(kind: string, mode: string) {
-  return kind === 'first_login' ? 'First login' : kind === 'free_address' ? 'Make room (other switch moved aside)' : kind === 'license' ? 'License' : kind === 'firmware' ? 'Firmware' : mode === 'replace' ? 'Complete file' : 'Script';
-}
 
 /** Step 5: what was done to each device, to print or keep. */
 export function ReportStep({ project, roles, stagings }: {

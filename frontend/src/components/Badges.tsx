@@ -1,36 +1,42 @@
-import { Badge, Tooltip } from '@mantine/core';
+import { Badge } from '@mantine/core';
 import { IconAlertTriangle, IconCheck, IconX } from '@tabler/icons-react';
+import type { ReactNode } from 'react';
 
-import { stateColor, stateHint, stateLabel } from '../services/labels';
+import { stateColor, stateLabel } from '../services/labels';
 import type { DeviceEnvironment } from '../types/api';
 
-const ENV: Record<DeviceEnvironment, { color: string; label: string; hint: string }> = {
-  simulated: { color: 'violet', label: 'Simulated',
-    hint: 'Exists only inside UNDM, for practice. No physical device is contacted.' },
-  lab: { color: 'yellow', label: 'Real device', hint: 'Real equipment on an isolated bench.' },
-  production: { color: 'red', label: 'Production', hint: 'Real equipment carrying live traffic.' },
+/** The only colours a tag may have (D-119): what each means, not which hue. */
+export type Tone = 'info' | 'success' | 'warning' | 'danger' | 'neutral' | 'simulated';
+const TONE_COLOR: Record<Tone, string> = {
+  info: 'blue', success: 'teal', warning: 'orange', danger: 'red', neutral: 'gray', simulated: 'violet',
+};
+
+const keepWhole = { root: { overflow: 'visible' }, label: { overflow: 'visible' } } as const;
+
+/** A small label with a meaning (Staged, Experimental, Not verified…). */
+export function Tag({ tone = 'neutral', children, icon }: { tone?: Tone; children: ReactNode; icon?: ReactNode }) {
+  return <Badge color={TONE_COLOR[tone]} style={{ flexShrink: 0 }} leftSection={icon} styles={keepWhole}>{children}</Badge>;
+}
+
+const ENV: Record<DeviceEnvironment, { tone: Tone; label: string }> = {
+  simulated: { tone: 'simulated', label: 'Simulated' },
+  lab: { tone: 'warning', label: 'Real device' },
+  production: { tone: 'danger', label: 'Production' },
 };
 
 export function EnvironmentBadge({ env }: { env: DeviceEnvironment }) {
   const e = ENV[env] ?? ENV.simulated;
-  return (
-    <Tooltip label={e.hint} withArrow>
-      <Badge color={e.color} variant="light" radius="sm" style={{ flexShrink: 0 }}
-        styles={{ root: { overflow: 'visible' }, label: { overflow: 'visible' } }}>{e.label}</Badge>
-    </Tooltip>
-  );
+  return <Tag tone={e.tone}>{e.label}</Tag>;
 }
 
-/** A plan, step or device state in words, with its colour (see services/labels). */
+/** A plan, step or device state in words, with its colour and an icon (see services/labels),
+ *  so the meaning does not depend on seeing colours. */
 export function StateBadge({ state }: { state: string }) {
   const color = stateColor(state);
-  // An icon as well as the colour, so the meaning does not depend on seeing colours.
   const Icon = color === 'red' ? IconX : color === 'orange' || color === 'yellow' ? IconAlertTriangle
     : color === 'teal' ? IconCheck : null;
-  // Never cut the label short in a narrow table column.
-  const badge = <Badge color={color} variant="light" radius="sm" style={{ flexShrink: 0 }}
-    leftSection={Icon ? <Icon size={11} stroke={2.2} aria-hidden /> : undefined}
-    styles={{ root: { overflow: 'visible' }, label: { overflow: 'visible' } }}>{stateLabel(state)}</Badge>;
-  const hint = stateHint(state);
-  return hint ? <Tooltip label={hint} withArrow>{badge}</Tooltip> : badge;
+  return (
+    <Badge color={color} style={{ flexShrink: 0 }} styles={keepWhole}
+      leftSection={Icon ? <Icon size={12} stroke={2.2} aria-hidden /> : undefined}>{stateLabel(state)}</Badge>
+  );
 }

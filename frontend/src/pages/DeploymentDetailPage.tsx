@@ -15,19 +15,19 @@ import { fmtDate } from '../services/format';
 import { RUNNING_STATES, useAction, useDeployment, usePolicy, useProjectDevices } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Deployment } from '../types/api';
-import { applyModeLabel, stageLabel, stateLabel } from '../services/labels';
+import { applyModeLabel, PLAN_STAGES, planKind, stageLabel, stateLabel } from '../services/labels';
 import { DialogError } from '../components/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { usePlanDelete } from '../hooks/usePlanDelete';
 
-const STEPS = ['Validate & preview', 'Approve', 'Preflight', 'Back up', 'Deploy', 'Verify', 'Complete'];
+const STEPS: readonly string[] = PLAN_STAGES;
 const STEP_OF: Record<string, number> = {
   draft: 0, validating: 0, awaiting_approval: 1, ready: 2, preflight: 2, backing_up: 3,
   deploying: 4, verifying: 5, recovering: 5, succeeded: 7, rolled_back: 7, recovery_required: 7,
   failed: 7, cancelled: 7,
 };
 // A dry run is not approved and goes from preflight straight to its end: no backup, change or verification.
-const DRY_STEPS = ['Validate & preview', 'Preflight (read only)', 'Complete'];
+const DRY_STEPS = ['Check and preview', 'Device check (read only)', 'Done'];
 const DRY_STEP_OF: Record<string, number> = {
   draft: 0, validating: 0, ready: 1, preflight: 1, succeeded: 3, failed: 3, cancelled: 3,
 };
@@ -298,7 +298,7 @@ export function DeploymentDetailPage() {
 
   return (
     <>
-      <PageHeader title={`${d.kind === 'firmware' ? 'Firmware upgrade' : d.kind === 'first_login' ? 'First login (new unit)' : d.kind === 'free_address' ? 'Temporary address (make room)' : d.kind === 'restart' ? 'Restart' : d.kind === 'license' ? 'License file' : 'Configuration plan'}${d.dry_run ? ' (dry run)' : ''} · ${fmtDate(d.created_at)}`}
+      <PageHeader title={`${planKind(d)} · ${fmtDate(d.created_at)}`}
         description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
           ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : d.kind === 'first_login' ? '' : ` · ${d.apply_mode} mode`}`}
         actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />

@@ -7,6 +7,7 @@ import { StateBadge } from '../../components/Badges';
 import { DialogError } from '../../components/ConfirmDialog';
 import { useAction, useStaging } from '../../hooks/queries';
 import { api } from '../../services/api';
+import { stepName } from '../../services/labels';
 import { fmtDate } from '../../services/format';
 import type { Device, StagingIndex } from '../../types/api';
 import { type Choice, EMPTY_CHOICE, planSteps, wantsFirstLogin } from './choices';
@@ -52,8 +53,7 @@ function LivePlan({ stagingId }: { stagingId: string }) {
       {steps.map((step) => (
         <Group key={step.id} justify="space-between" wrap="nowrap">
           <Anchor component={Link} to={`/deployments/${step.id}`} size="sm">
-            {step.staging_step}. {step.kind === 'first_login' ? 'First login' : step.kind === 'free_address' ? 'Make room (move the other switch aside)' : step.kind === 'license' ? 'License' : step.kind === 'firmware' ? 'Firmware'
-              : step.apply_mode === 'replace' ? 'Complete file' : 'Script'}
+            {step.staging_step}. {stepName(step.kind, step.apply_mode)}
           </Anchor>
           <StateBadge state={step.state} />
         </Group>

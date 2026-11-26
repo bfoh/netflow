@@ -1,10 +1,19 @@
 /**
  * Words shown to people. Internal values (states, driver ids, platform ids, fact keys) are
- * translated here, in one place, so every page uses the same plain wording.
+ * translated here, in one place, so every page uses the same plain wording (D-123).
  *
- * Glossary: a *device* is one switch or firewall; a *system* (internally a project) is the
- * set of devices staged together; a *plan* is one approved piece of work on devices, run
- * in steps (internally a deployment).
+ * Glossary (one word for each thing; tests/conventions.test.ts keeps the synonyms out):
+ * - a *device* is one switch, firewall, modem or BBU; a *system* (internally a project) is
+ *   the set of devices staged together;
+ * - a *plan* (internally a deployment) is one approved piece of work on devices; a *staging
+ *   plan* is a device's plans in order; each is a *step*;
+ * - a plan goes: Check and preview → Approve → Device check → Back up → Change → Verify;
+ * - a *login* (internally a credential) is a user name and password kept in Windows
+ *   Credential Manager; a *file* is a configuration file; a *complete file* replaces the
+ *   configuration, *additions* add to it;
+ * - *console setup* is the first setup over the console cable (a modem's is its *first
+ *   access*); *read information* reads a device's facts; *back up now* saves its
+ *   configuration in UNDM; the *backup slot* is a device's second firmware image.
  */
 import type { Driver } from '../types/api';
 
@@ -107,16 +116,31 @@ export function platformLabel(platform: string): string {
   return PLATFORMS[platform] ?? humanize(platform);
 }
 
-/** Plan type, for lists. */
+/** What a plan step does, in one or two words: the same everywhere (wizard, report, plans). */
+export function stepName(kind: string, applyMode: string): string {
+  switch (kind) {
+    case 'first_login': return 'First login';
+    case 'firmware': return 'Firmware';
+    case 'free_address': return 'Make room';
+    case 'license': return 'License';
+    case 'restart': return 'Restart';
+    default: return applyMode === 'replace' ? 'Complete file' : 'Additions';
+  }
+}
+
+/** Plan type, for lists and titles. */
 export function planKind(d: { kind: string; apply_mode: string; dry_run: boolean }): string {
   const base = d.kind === 'firmware' ? 'Firmware upgrade'
     : d.kind === 'first_login' ? 'First login'
-    : d.kind === 'free_address' ? 'Temporary address'
+    : d.kind === 'free_address' ? 'Make room'
     : d.kind === 'restart' ? 'Restart'
     : d.kind === 'license' ? 'License file'
       : d.apply_mode === 'replace' ? 'Configuration (complete file)' : 'Configuration (additions)';
   return base + (d.dry_run ? ' · dry run' : '');
 }
+
+/** The steps every plan goes through, as shown on a plan's page. */
+export const PLAN_STAGES = ['Check and preview', 'Approve', 'Device check', 'Back up', 'Change', 'Verify', 'Done'] as const;
 
 export function applyModeLabel(mode: string): string {
   return mode === 'replace' ? 'complete file (replaces the configuration)' : 'additions (nothing is removed)';

@@ -14,7 +14,7 @@ export function Hint({ children, more, icon, mb, mt }: {
         <Box c="dimmed" style={{ lineHeight: 0, paddingTop: 2 }}>{icon ?? <IconInfoCircle size={14} />}</Box>
         <Text size="xs" c="dimmed" component="div">
           {children}
-          {more && <> <Anchor component="button" type="button" size="xs" onClick={toggle}>{open ? 'Less' : 'More'}</Anchor></>}
+          {more && <> <Anchor component="button" type="button" size="xs" onClick={toggle} aria-expanded={open}>{open ? 'Less' : 'More'}</Anchor></>}
         </Text>
       </Group>
       {more && <Collapse expanded={open}><Text size="xs" c="dimmed" component="div" pl={20} pt={4}>{more}</Text></Collapse>}

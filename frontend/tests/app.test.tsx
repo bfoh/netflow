@@ -316,7 +316,7 @@ describe('deployment outcome', () => {
     renderAt('/deployments/dep1');
     expect(await screen.findByText('Plan succeeded')).toBeInTheDocument();
     expect(screen.getByText(/Every upgraded device came back/)).toBeInTheDocument();
-    expect(screen.getByText('Deploy')).toBeInTheDocument();
+    expect(screen.getByText('Change')).toBeInTheDocument();  // the stepper's plain words (D-123)
   });
 });
 

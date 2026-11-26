@@ -21,7 +21,13 @@ const LOOK: Record<NoticeKind, { color: string; icon: ReactNode }> = {
   success: { color: 'teal', icon: <IconCircleCheck size={18} /> },
 };
 
-export function Notice({ kind, title, children, action, details, compact, mb, mt, role }: {
+/** How screen readers hear each kind (WCAG 4.1.3): errors interrupt; running status and
+ *  success are announced politely; cautions and settled facts are read in place. */
+const ROLE: Record<NoticeKind, string> = {
+  error: 'alert', status: 'status', success: 'status', caution: 'note', settled: 'note',
+};
+
+export function Notice({ kind, title, children, action, details, compact, mb, mt, role, live = true }: {
   kind: NoticeKind;
   title?: ReactNode;
   children?: ReactNode;
@@ -33,17 +39,19 @@ export function Notice({ kind, title, children, action, details, compact, mb, mt
   mb?: string | number;
   mt?: string | number;
   role?: string;
+  /** false: content that changes by itself (a ticking timer) is not announced each time. */
+  live?: boolean;
 }) {
   const [open, { toggle }] = useDisclosure(false);
   const look = LOOK[kind];
   return (
     <Alert color={look.color} icon={look.icon} title={title} p={compact ? 'xs' : undefined} mb={mb} mt={mt}
-      role={role ?? (kind === 'error' ? 'alert' : undefined)}>
+      role={role ?? (live ? ROLE[kind] : 'note')}>
       <Stack gap={6}>
         {children && <Text size="sm" component="div" style={{ wordBreak: 'break-word' }}>{children}</Text>}
         {(action || details) && (
           <Group gap="sm" justify="space-between" wrap="wrap">
-            {details ? <Anchor component="button" type="button" size="xs" onClick={toggle}>{open ? 'Less' : 'More'}</Anchor> : <span />}
+            {details ? <Anchor component="button" type="button" size="xs" onClick={toggle} aria-expanded={open}>{open ? 'Less' : 'More'}</Anchor> : <span />}
             {action}
           </Group>
         )}

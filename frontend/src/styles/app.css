@@ -1,0 +1,55 @@
+/* UNDM application styles (D-119). Everything else comes from the theme (src/theme.ts). */
+
+/* Inputs: a border of at least 3:1 against the page (WCAG 1.4.11), except while focused or
+   in error, where Mantine's own colours apply. */
+[data-mantine-color-scheme] .mantine-Input-input[data-variant='default']:not([data-error]):not(:focus):not(:focus-within) {
+  --input-bd: var(--undm-input-border);
+}
+
+/* A visible keyboard focus ring everywhere (WCAG 2.4.7). */
+:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}
+
+/* The sticky header never hides the focused element (WCAG 2.4.11). */
+html {
+  scroll-padding-top: 72px;
+}
+
+/* "Skip to content": visible only when focused from the keyboard. */
+.undm-skip-link {
+  position: absolute;
+  left: 8px;
+  top: -120px;
+  z-index: 1000;
+  padding: 8px 12px;
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-anchor);
+  box-shadow: var(--mantine-shadow-md);
+}
+
+.undm-skip-link:focus {
+  top: 8px;
+}
+
+/* Text only screen readers read (e.g. the name of an action column). */
+.undm-visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

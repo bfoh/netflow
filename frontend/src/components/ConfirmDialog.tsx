@@ -23,6 +23,8 @@ export interface ConfirmRequest {
   typed?: string;
   /** May return a promise; an error it throws is shown in the dialog, which stays open. */
   onConfirm: () => unknown;
+  /** The button that closes without acting (default "Cancel"). */
+  cancelLabel?: string;
 }
 
 export function ConfirmDialog({ req, onClose }: { req: ConfirmRequest; onClose: () => void }) {
@@ -52,7 +54,8 @@ export function ConfirmDialog({ req, onClose }: { req: ConfirmRequest; onClose: 
         )}
         <DialogError error={error} />
         <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>Back</Button>
+          {/* Focus starts on the safe choice unless a name must be typed (WCAG 2.4.3). */}
+          <Button variant="default" onClick={onClose} data-autofocus={req.typed ? undefined : true}>{req.cancelLabel ?? 'Cancel'}</Button>
           <Button color={req.color ?? 'red'} disabled={!ready} loading={busy} onClick={() => void go()}>{req.confirmLabel}</Button>
         </Group>
       </Stack>

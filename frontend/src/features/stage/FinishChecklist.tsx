@@ -20,10 +20,10 @@ function Item({ done, title, children, manual, onTick }: {
     <Group align="flex-start" wrap="nowrap" gap="sm">
       {manual
         ? <Checkbox mt={2} checked={done} onChange={(e) => onTick?.(e.currentTarget.checked)} aria-label={title} />
-        : done ? <IconCircleCheck size={20} color="var(--mantine-color-teal-6)" aria-label="done" />
-          : <IconCircleDashed size={20} color="var(--mantine-color-gray-5)" aria-label="to do" />}
+        : done ? <IconCircleCheck size={20} color="var(--mantine-color-teal-text)" aria-label="done" />
+          : <IconCircleDashed size={20} color="var(--mantine-color-dimmed)" aria-label="to do" />}
       <div style={{ flex: 1 }}>
-        <Text size="sm" fw={600} c={done ? undefined : 'dark'}>{title}</Text>
+        <Text size="sm" fw={600}>{title}</Text>
         {children && <Text size="xs" c="dimmed" component="div">{children}</Text>}
       </div>
     </Group>
