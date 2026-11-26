@@ -17,6 +17,11 @@ export function zoneInName(name: string): number | undefined {
   return found.length === 1 ? found[0] : undefined;
 }
 
+/** A template's file formatting in words ("Windows line endings · no final line break"). */
+export function formatWords(t: { line_ending: 'lf' | 'crlf'; final_newline: boolean }): string {
+  return `${t.line_ending === 'crlf' ? 'Windows line endings (CRLF)' : 'Unix line endings (LF)'} · ${t.final_newline ? 'ends with a line break' : 'no final line break'}`;
+}
+
 /** What a zone gives, in words (the team's numbering convention). */
 export function zoneWords(zone: number): string {
   const tag = `z${String(zone).padStart(3, '0')}`;

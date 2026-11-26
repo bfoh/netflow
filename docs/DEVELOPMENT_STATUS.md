@@ -56,6 +56,7 @@ manager, topology._
 | License in the wizard (v81) | FortiGate license file optional in wizard step 2, loaded as the plan's last step; otherwise later from the device menu (D-109, experimental) |
 | Black Box both banks (v81) | 'Also the backup slot' on the LIG1014A runs the upgrade a second time and checks both banks; ticked by default for switches with two banks (D-110, experimental) |
 | Templates by zone (v82) | Team files imported once as templates (verified against a second zone); the system's zone in wizard step 1; Generate makes the four devices' files and chooses them; Compare checks them against the files on the devices line by line (D-111) |
+| Files byte for byte (v83) | A template keeps the team file's line endings and final line break; Download the files for zone N (zip) in the wizard and per template in Settings gives the team's files byte for byte; stored device files stay normalised (D-111) |
 | Erase dialog (v73) | Shows the login the switch gets after the erase and blocks early when it has no password or is the login being erased (D-101) |
 | FortiGate license (v72) | "Load license…" in a FortiGate's menu: the team's file is kept for the device (never shown or exported) and loaded through an approved plan with `execute restore manual-license tftp` (Fortinet-documented; **experimental, not yet run on hardware**, Q-46, D-100) |
 | Working with devices (v71) | Device menu everywhere (⋯ and right-click): Open SSH window (PC's own SSH program, password typed by the person, D-098), web page, check information, test, wait until it answers, back up, log, restart (approved plan; 2930F and LIG1014A), console setup. System tree with tick boxes, watch devices (reachability dots), device log (D-099) |
@@ -87,16 +88,16 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-26, v82)
+## Test results (2026-11-26, v83)
 | Suite | Result |
 |---|---|
-| Backend pytest | 514 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
+| Backend pytest | 517 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
-| ruff / mypy --strict | clean / clean (79 files) |
-| Frontend Vitest | 85 passed |
+| ruff / mypy --strict | clean / clean (87 files) |
+| Frontend Vitest | 86 passed |
 | tsc / oxlint / vite build | clean / clean / success |
-| Playwright E2E | 8 passed (a file generated from a template for the system's zone; wizard now ends with Finish staging; a login for all systems and its default reach a new system; device menu, check information, test and log on a simulated switch; acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box; export and import of a system) |
+| Playwright E2E | 8 passed (a file generated from a template for the system's zone, downloaded byte for byte; wizard now ends with Finish staging; a login for all systems and its default reach a new system; device menu, check information, test and log on a simulated switch; acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box; export and import of a system) |
 
 ## Known issues and limitations
 - Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole

@@ -11,7 +11,9 @@ convention, not vendor facts:
 4. ``10.0.<zone>.x``;
 5. ``130.<zone>.x.x``.
 
-Everything else is copied unchanged. Pure functions: no database, no web framework.
+Everything else is copied unchanged. A template also keeps the file's formatting (line
+endings, final line break) so a download is the team's file byte for byte (``as_file``).
+Pure functions: no database, no web framework.
 """
 
 from __future__ import annotations
@@ -118,6 +120,38 @@ def render(template: str, zone: int) -> str:
 
 def markers(template: str) -> int:
     return len(MARKER.findall(template))
+
+
+LINE_ENDINGS = ("lf", "crlf")
+
+
+@dataclass(frozen=True)
+class FileFormat:
+    """How a team file is written: its line endings and whether its last line ends."""
+
+    line_ending: str = "lf"  # "lf" | "crlf"
+    final_newline: bool = True
+
+
+def file_format(raw: str) -> FileFormat:
+    """The formatting of a file as supplied (before UNDM normalises it to LF): the line
+    ending most of its lines use, and whether it ends with a line break."""
+    crlf = raw.count("\r\n")
+    lf = raw.count("\n") - crlf
+    return FileFormat(line_ending="crlf" if crlf > lf else "lf",
+                      final_newline=raw.endswith(("\n", "\r")))
+
+
+def as_file(text: str, fmt: FileFormat) -> bytes:
+    """A normalised text (LF, ending with one line break) written in a file's formatting,
+    byte for byte. Only the line ending of each line changes; nothing else is touched."""
+    if fmt.line_ending not in LINE_ENDINGS:
+        raise ZoneError(f"Unknown line ending '{fmt.line_ending}'")
+    if not fmt.final_newline and text.endswith("\n"):
+        text = text[:-1]
+    if fmt.line_ending == "crlf":
+        text = text.replace("\n", "\r\n")
+    return text.encode("utf-8")
 
 
 @dataclass

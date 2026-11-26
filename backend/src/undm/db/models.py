@@ -20,6 +20,7 @@ from sqlalchemy import (
     TypeDecorator,
     UniqueConstraint,
     false,
+    true,
 )
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -347,6 +348,9 @@ class ConfigTemplate(Base):
     sha256: Mapped[str] = mapped_column(String(64))  # of the imported file
     counts: Mapped[dict[str, Any]] = mapped_column(default=dict)
     verified_zone: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The team file's formatting, so a download is byte for byte like it (v83).
+    line_ending: Mapped[str] = mapped_column(String(4), default="lf", server_default="lf")
+    final_newline: Mapped[bool] = mapped_column(default=True, server_default=true())
     created_by: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now)
 

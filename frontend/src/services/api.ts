@@ -118,7 +118,12 @@ export const api = {
   // Team templates and generated files (D-111).
   templates: () => request<ConfigTemplate[]>('GET', '/templates'),
   importTemplate: (body: TemplateFile & { role: TemplateRole; verify?: TemplateFile }) =>
-    request<{ template: ConfigTemplate; to_check: string[] }>('POST', '/templates', body),
+    request<{ template: ConfigTemplate; to_check: string[]; verified_bytes: boolean | null }>('POST', '/templates', body),
+  /** Every template for a zone, byte for byte as the team writes the files (one zip). */
+  downloadTemplateFiles: (zone: number) =>
+    download(`/templates/files.zip?zone=${zone}`, `z${String(zone).padStart(3, '0')}-files.zip`),
+  downloadTemplateFile: (role: TemplateRole, zone: number | null) =>
+    download(`/templates/${role}/file${zone ? `?zone=${zone}` : ''}`, `${role}.txt`),
   deleteTemplate: (id: string) => request<void>('DELETE', `/templates/${id}`),
   previewTemplate: (role: TemplateRole, zone: number) =>
     request<{ filename: string; text: string }>('GET', `/templates/${role}/preview?zone=${zone}`),

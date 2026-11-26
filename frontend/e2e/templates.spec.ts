@@ -4,7 +4,10 @@ import { expect, test } from '@playwright/test';
  *  the wizard. Fictional zone 41/7, RFC 1918 / 5737 addresses; nothing contacted. */
 test('generate a device file from a template for the system zone', async ({ page, request }) => {
   const id = String(Date.now()).slice(-5);
-  const text = 'hostname "z041e2esw01"\nip route 0.0.0.0 0.0.0.0 10.168.248.254\nvlan 222\n   untagged 2\n   ip address 192.168.1.1 255.255.255.0\n   exit\n';
+  // Written as many team files are: Windows line endings, no line break after the last line.
+  const lines = ['hostname "z041e2esw01"', 'ip route 0.0.0.0 0.0.0.0 10.168.248.254', 'vlan 222', '   untagged 2',
+    '   ip address 192.168.1.1 255.255.255.0', '   exit'];
+  const text = lines.join('\r\n');
   const tpl = await request.post('/api/templates', { data: { role: 'bhdmz', filename: `z041-E2eSw-v${id}.pcc`, text } });
   expect(tpl.status()).toBe(201);
   const p = await (await request.post('/api/projects', { data: { name: `E2E z007 ${id}`, purpose: 'Staging' } })).json();
@@ -22,4 +25,10 @@ test('generate a device file from a template for the system zone', async ({ page
   await expect(page.getByRole('combobox', { name: 'Team file' })).toHaveValue(new RegExp(`z007-E2eSw-v${id}\\.pcc`));
   await page.getByRole('button', { name: "Compare with the devices' files" }).click();
   await expect(page.getByText('no file on the device to compare')).toBeVisible();
+  // The download is byte for byte as the team writes the file.
+  const [download] = await Promise.all([page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Download the files for zone 7' }).click()]);
+  expect(download.suggestedFilename()).toBe('z007-files.zip');
+  const one = await request.get('/api/templates/bhdmz/file?zone=7');
+  expect((await one.body()).toString('utf8')).toBe(text.replace('z041', 'z007').replace('10.168.', '10.134.'));
 });

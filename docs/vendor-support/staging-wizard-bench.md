@@ -54,6 +54,10 @@ checked) and the FortiGate base file. Then, for each system:
    they are chosen.
 3. If the team's own files for that zone are already on the devices, press **Compare with
    the devices' files**: every line must be identical.
+4. To keep the files or hand them on, press **Download the files for zone N**: one zip with
+   the team's file names, byte for byte as the team writes them (a byte comparison such as
+   `fc /b` shows no difference). Templates imported before v83 were kept with Unix line
+   endings: import them once again to have the team's formatting.
 
 ## Cabling (all four at once)
 One small switch, connected to nothing else, one cable per device (two would make a loop):

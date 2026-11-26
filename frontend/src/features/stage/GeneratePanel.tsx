@@ -1,5 +1,5 @@
 import { Anchor, Badge, Button, Card, Group, NumberInput, Stack, Table, Text, Title } from '@mantine/core';
-import { IconFileCode, IconScale } from '@tabler/icons-react';
+import { IconDownload, IconFileCode, IconScale } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
@@ -48,6 +48,7 @@ export function GeneratePanel({ project, roles, choices, onReplace }: {
   const generate = useAction(() => api.generateFiles(project.id, assignments),
     (r) => `${r.length} files made for zone ${project.zone}`, { errorInDialog: true });
   const compare = useAction(() => api.compareFiles(project.id, assignments), undefined, { errorInDialog: true });
+  const save = useAction(() => api.downloadTemplateFiles(project.zone!), (n) => `Downloaded ${n}`, { errorInDialog: true });
   const apply = (made: { role: TemplateRole; version_id: string }[]) => {
     const next: Choices = { ...choices };
     for (const m of made) {
@@ -83,8 +84,11 @@ export function GeneratePanel({ project, roles, choices, onReplace }: {
                 onConfirm: async () => run() }) : run())}>Generate the files for zone {project.zone}</Button>
             <Button variant="default" leftSection={<IconScale size={16} />} loading={compare.isPending}
               onClick={() => compare.mutate(undefined, { onSuccess: setCompared })}>Compare with the devices&apos; files</Button>
+            <Button variant="default" leftSection={<IconDownload size={16} />} loading={save.isPending}
+              onClick={() => save.mutate(undefined)}>Download the files for zone {project.zone}</Button>
           </Group>
-          <DialogError error={generate.error ?? compare.error} />
+          <Text size="xs" c="dimmed">The download is byte for byte as the team writes the files (their line endings and last line).</Text>
+          <DialogError error={generate.error ?? compare.error ?? save.error} />
           {compared && (
             <Table.ScrollContainer minWidth={520}>
               <Table verticalSpacing={4} aria-label="Comparison with the devices' files">
@@ -109,6 +113,7 @@ export function GeneratePanel({ project, roles, choices, onReplace }: {
               </Table>
             </Table.ScrollContainer>
           )}
+          {compared && <Text size="xs" c="dimmed">Compared line by line: line endings are not compared (the devices get the same lines either way).</Text>}
         </Stack>
       )}
     </Card>

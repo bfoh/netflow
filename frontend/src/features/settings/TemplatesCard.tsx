@@ -1,5 +1,5 @@
 import { Badge, Button, Card, FileInput, Group, Modal, NumberInput, Stack, Table, Text, Title } from '@mantine/core';
-import { IconFileImport } from '@tabler/icons-react';
+import { IconDownload, IconFileImport } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import { DialogError } from '../../components/ConfirmDialog';
@@ -9,7 +9,7 @@ import { useAction, useTemplates } from '../../hooks/queries';
 import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import type { ConfigTemplate, TemplateRole } from '../../types/api';
-import { TEMPLATE_ROLES, zoneInName } from '../stage/zone';
+import { formatWords, TEMPLATE_ROLES, zoneInName } from '../stage/zone';
 
 const RULE_WORDS: Record<string, string> = {
   zone_tag: 'zone tag', ten_plus127: '10.(127+zone)', ten_zone: '10.zone', ten_zero_zone: '10.0.zone', onethirty_zone: '130.zone',
@@ -21,7 +21,7 @@ function ImportTemplate({ role, label, onClose }: { role: TemplateRole; label: s
   const [zone, setZone] = useState<number | string>('');
   const [other, setOther] = useState<File | null>(null);
   const [otherZone, setOtherZone] = useState<number | string>('');
-  const [done, setDone] = useState<{ template: ConfigTemplate; to_check: string[] } | null>(null);
+  const [done, setDone] = useState<{ template: ConfigTemplate; to_check: string[]; verified_bytes: boolean | null } | null>(null);
   const base = role === 'fortigate_base';
   const run = useAction(async () => ({
     ...(await api.importTemplate({
@@ -34,7 +34,14 @@ function ImportTemplate({ role, label, onClose }: { role: TemplateRole; label: s
     return (
       <Stack>
         <Text size="sm">Kept <b>{label} {t.version}</b>{t.reference_zone ? ` (from zone ${t.reference_zone})` : ''}.</Text>
-        {t.verified_zone && <Badge color="teal" variant="light" tt="none">Gives the zone {t.verified_zone} file exactly</Badge>}
+        {t.verified_zone && (
+          <Group gap="xs">
+            <Badge color="teal" variant="light" tt="none">Gives the zone {t.verified_zone} file exactly</Badge>
+            {done.verified_bytes === true && <Badge color="teal" variant="light" tt="none">byte for byte</Badge>}
+            {done.verified_bytes === false && <Text size="xs" c="dimmed">line for line; that file&apos;s line endings differ from this one&apos;s</Text>}
+          </Group>
+        )}
+        <Text size="xs" c="dimmed">Kept as written: {formatWords(t)}.</Text>
         {!base && <Text size="xs" c="dimmed">{Object.entries(t.counts).filter(([, n]) => n).map(([k, n]) => `${RULE_WORDS[k] ?? k} ×${n}`).join(' · ')}</Text>}
         {done.to_check.length > 0 && (
           <Stack gap={2}>
@@ -72,6 +79,10 @@ export function TemplatesCard() {
   const templates = useTemplates();
   const [importing, setImporting] = useState<TemplateRole | null>(null);
   const del = useAction((id: string) => api.deleteTemplate(id), 'Template removed');
+  const [zone, setZone] = useState<number | string>('');
+  const z = typeof zone === 'number' && zone >= 1 && zone <= 128 ? zone : null;
+  const one = useAction((r: TemplateRole) => api.downloadTemplateFile(r, r === 'fortigate_base' ? null : z), (n) => `Downloaded ${n}`);
+  const all = useAction(() => api.downloadTemplateFiles(z!), (n) => `Downloaded ${n}`);
   const [ask, confirmDialog] = useConfirm();
   const byRole = new Map((templates.data ?? []).map((t) => [t.role, t]));
   const label = (r: TemplateRole) => TEMPLATE_ROLES.find((x) => x.role === r)?.label ?? r;
@@ -82,8 +93,13 @@ export function TemplatesCard() {
       <Hint>
         The team&apos;s files, kept on this PC (never in UNDM&apos;s code). From them UNDM makes every system&apos;s files for its zone:
         the zone tag (z041), 10.(127+zone).x, 10.zone.x, 10.0.zone.x and 130.zone.x change; everything else is copied as it is.
-        Import a new version when the team releases one.
+        Import a new version when the team releases one. Downloads are byte for byte as the team writes each file.
       </Hint>
+      <Group align="flex-end" gap="sm" mt="xs">
+        <NumberInput label="Download for zone" w={150} min={1} max={128} value={zone} onChange={setZone} />
+        <Button variant="default" leftSection={<IconDownload size={16} />} disabled={!z || byRole.size === 0}
+          loading={all.isPending} onClick={() => all.mutate(undefined)}>All files for zone {z ?? '…'}</Button>
+      </Group>
       <Table.ScrollContainer minWidth={560}>
         <Table verticalSpacing="xs" mt="sm">
           <Table.Thead><Table.Tr><Table.Th>File</Table.Th><Table.Th>Version</Table.Th><Table.Th>Checked</Table.Th><Table.Th>Imported</Table.Th><Table.Th /></Table.Tr></Table.Thead>
@@ -93,13 +109,17 @@ export function TemplatesCard() {
               return (
                 <Table.Tr key={role}>
                   <Table.Td><Text size="sm">{name}</Text></Table.Td>
-                  <Table.Td>{t ? <Text size="sm">{t.version || '—'}{t.reference_zone ? ` · from zone ${t.reference_zone}` : ''}</Text> : <Text size="sm" c="dimmed">not imported</Text>}</Table.Td>
+                  <Table.Td>{t ? <><Text size="sm">{t.version || '—'}{t.reference_zone ? ` · from zone ${t.reference_zone}` : ''}</Text>
+                    <Text size="xs" c="dimmed">{formatWords(t)}</Text></> : <Text size="sm" c="dimmed">not imported</Text>}</Table.Td>
                   <Table.Td>{!t ? null : role === 'fortigate_base' ? <Text size="xs" c="dimmed">same for every zone</Text>
                     : t.verified_zone ? <Badge color="teal" variant="light" tt="none">against zone {t.verified_zone}</Badge>
                       : <Badge color="gray" variant="light" tt="none">not checked</Badge>}</Table.Td>
                   <Table.Td><Text size="xs" c="dimmed">{t ? `${fmtDate(t.created_at)} · ${t.created_by}` : ''}</Text></Table.Td>
                   <Table.Td>
                     <Group gap={4} justify="flex-end" wrap="nowrap">
+                      {t && <Button size="compact-xs" variant="subtle" aria-label={`Download ${name}`} leftSection={<IconDownload size={14} />}
+                        disabled={role !== 'fortigate_base' && !z} loading={one.isPending && one.variables === role}
+                        onClick={() => one.mutate(role)}>{role === 'fortigate_base' ? 'Download' : `Zone ${z ?? '…'}`}</Button>}
                       <Button size="compact-xs" variant="light" onClick={() => setImporting(role)}>{t ? 'Import a new version…' : 'Import…'}</Button>
                       {t && <Button size="compact-xs" variant="subtle" color="red" aria-label={`Remove ${name}`}
                         onClick={() => ask({ title: `Remove the ${name} template?`, confirmLabel: 'Remove',

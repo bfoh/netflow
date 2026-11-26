@@ -9,7 +9,9 @@ certificate requirement, naming from the hostname).
 from __future__ import annotations
 
 import hashlib
+import io
 import re
+import zipfile
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
@@ -63,6 +65,9 @@ def version_of(filename: str) -> str:
 class Imported:
     template: ConfigTemplate
     to_check: list[tuple[int, str]] = field(default_factory=list)
+    # With a second zone's file: whether the download is also that file byte for byte
+    # (same line endings and final line break), not only line for line.
+    verified_bytes: bool | None = None
 
 
 def import_template(session: Session, actor: str, role: str, filename: str, text: str,
@@ -71,6 +76,7 @@ def import_template(session: Session, actor: str, role: str, filename: str, text
     """Make a team file into the current template of its role. ``verify`` (file name, text,
     zone) is the same file for another zone: the template must give it exactly."""
     _role(role)
+    fmt = zr.file_format(text)  # before cleaning: the team file as supplied
     text = _clean(text)
     name = filename.strip()[:200] or f"{role}.txt"
     if role in NO_ZONE:
@@ -89,6 +95,7 @@ def import_template(session: Session, actor: str, role: str, filename: str, text
             raise ServiceError(f"Nothing in this file depends on zone {ref}: is it the right "
                                "file and zone?")
     verified: int | None = None
+    verified_bytes: bool | None = None
     if verify is not None:
         v_name, v_text, v_zone = verify
         other = v_zone if v_zone is not None else zr.zone_from_text(v_name)
@@ -108,19 +115,23 @@ def import_template(session: Session, actor: str, role: str, filename: str, text
                 details=[f"line {n}: UNDM '{a[:80]}' / file '{b[:80]}'"
                          for n, a, b in result.differences])
         verified = other
+        verified_bytes = (zr.as_file(zr.render(templated.text, other), fmt)
+                          == v_text.lstrip("\ufeff").encode("utf-8"))
     file_pattern = zr.templatize(name, ref).text if ref is not None else name
     tpl = ConfigTemplate(role=role, version=version_of(name), filename=file_pattern,
                          reference_zone=ref, text=templated.text,
                          sha256=hashlib.sha256(text.encode()).hexdigest(),
                          counts=templated.counts if ref is not None else {},
-                         verified_zone=verified, created_by=actor)
+                         verified_zone=verified, line_ending=fmt.line_ending,
+                         final_newline=fmt.final_newline, created_by=actor)
     session.add(tpl)
     session.flush()
     audit.record(session, actor, "template.import", "template", tpl.id, details={
         "role": role, "version": tpl.version, "reference_zone": ref, "verified_zone": verified,
         "counts": tpl.counts, "sha256": tpl.sha256, "lines": text.count("\n"),
-        "to_check": len(templated.to_check)})
-    return Imported(tpl, templated.to_check)
+        "line_ending": fmt.line_ending, "final_newline": fmt.final_newline,
+        "verified_bytes": verified_bytes, "to_check": len(templated.to_check)})
+    return Imported(tpl, templated.to_check, verified_bytes)
 
 
 def current(session: Session) -> dict[str, ConfigTemplate]:
@@ -160,10 +171,57 @@ def render_for(tpl: ConfigTemplate, zone: int | None) -> tuple[str, str]:
 
 
 def preview(session: Session, role: str, zone: int | None) -> tuple[str, str]:
+    return render_for(_current(session, role), zone)
+
+
+def _current(session: Session, role: str) -> ConfigTemplate:
     tpl = current(session).get(_role(role))
     if tpl is None:
         raise NotFoundError(f"No template for {ROLES[role]} yet")
-    return render_for(tpl, zone)
+    return tpl
+
+
+def file_of(tpl: ConfigTemplate) -> zr.FileFormat:
+    return zr.FileFormat(line_ending=tpl.line_ending, final_newline=tpl.final_newline)
+
+
+def file_for(session: Session, role: str, zone: int | None) -> tuple[str, bytes]:
+    """(file name, bytes) of a role's current template for a zone, written exactly as the
+    team writes the file (line endings, final line break)."""
+    tpl = _current(session, role)
+    name, text = render_for(tpl, zone)
+    return name, zr.as_file(text, file_of(tpl))
+
+
+def files_zip(session: Session, actor: str, zone: int) -> tuple[bytes, list[str]]:
+    """Every current template for a zone, in one zip with the team's file names. Read-only
+    (nothing is stored); the export is audited without content."""
+    templates = current(session)
+    if not templates:
+        raise NotFoundError("No templates yet: import them in Settings → For all systems")
+    buf = io.BytesIO()
+    names: list[str] = []
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for role in ROLES:  # a fixed order
+            tpl = templates.get(role)
+            if tpl is None:
+                continue
+            name, text = render_for(tpl, zone)
+            name = safe_name(name, role)
+            if name in names:
+                name = f"{role}-{name}"
+            z.writestr(name, zr.as_file(text, file_of(tpl)))
+            names.append(name)
+    audit.record(session, actor, "template.files_export", "template", f"zone-{zone}", details={
+        "zone": zone, "files": names})
+    return buf.getvalue(), names
+
+
+def safe_name(name: str, role: str) -> str:
+    """A template's file name as a plain zip entry (no folders, no drive letters)."""
+    base = re.split(r"[\\/]", name)[-1].strip()
+    base = re.sub(r"[^A-Za-z0-9._ -]+", "_", base).strip(" .")
+    return base or f"{role}.txt"
 
 
 @dataclass

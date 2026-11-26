@@ -189,3 +189,73 @@ def test_compare_with_the_files_already_on_the_devices(client):
                        json={"assignments": {"bhdmz": b}}).json()[0]
     assert not diff["same"] and diff["differences"] == [
         [6, "logging 10.169.201.65", "logging 10.1.1.1"]]
+
+
+# -- byte for byte (v83): a template keeps the team file's line endings and final break ------
+def windows(text: str) -> str:
+    """A file as the team writes many of theirs: CRLF, no line break after the last line."""
+    return text.rstrip("\n").replace("\n", "\r\n")
+
+
+def test_file_format_and_as_file_round_trip_byte_for_byte():
+    for raw in (windows(ZONE41), ZONE41, windows(ZONE41) + "\r\n", ZONE41.rstrip("\n"),
+                windows(ZONE41).rstrip("\r\n") + "  "):  # trailing spaces on the last line
+        fmt = zr.file_format(raw)
+        normal = raw.replace("\r\n", "\n")
+        normal = normal if normal.endswith("\n") else normal + "\n"
+        assert zr.as_file(normal, fmt) == raw.encode()
+    assert zr.file_format(windows(ZONE41)) == zr.FileFormat("crlf", False)
+    assert zr.file_format(ZONE41) == zr.FileFormat("lf", True)
+    # Mixed endings: the one most lines use.
+    assert zr.file_format("a\r\nb\r\nc\nd\r\n").line_ending == "crlf"
+    assert zr.file_format("a\nb\nc\r\n").line_ending == "lf"
+    with pytest.raises(zr.ZoneError):
+        zr.as_file("x\n", zr.FileFormat("cr", True))
+
+
+def test_downloads_are_the_team_files_byte_for_byte(client):
+    import io
+    import zipfile
+
+    r = imp(client, text=windows(ZONE41),
+            verify={"filename": "z042-LabSw-v03.pcc", "text": windows(zone42())})
+    assert r.status_code == 201, r.text
+    tpl = r.json()["template"]
+    assert tpl["line_ending"] == "crlf" and tpl["final_newline"] is False
+    assert r.json()["verified_bytes"] is True
+    # Line for line the same but other line endings: kept, and said.
+    lf = imp(client, text=windows(ZONE41), verify={"filename": "z042-LabSw-v03.pcc",
+                                                   "text": zone42()})
+    assert lf.status_code == 201 and lf.json()["verified_bytes"] is False
+    imp(client, role="tetra", filename="z041-Tetra-v06.txt",
+        text=ZONE41.replace("labsw", "tetra"))  # LF with a final line break
+    one = client.get("/api/templates/bhdmz/file?zone=42")
+    assert one.status_code == 200
+    assert one.content == windows(zone42()).encode()
+    assert 'filename="z042-LabSw-v03.pcc"' in one.headers["content-disposition"]
+    z = client.get("/api/templates/files.zip?zone=42")
+    assert z.status_code == 200 and 'filename="z042-files.zip"' in z.headers["content-disposition"]
+    files = zipfile.ZipFile(io.BytesIO(z.content))
+    assert sorted(files.namelist()) == ["z042-LabSw-v03.pcc", "z042-Tetra-v06.txt"]
+    assert files.read("z042-LabSw-v03.pcc") == windows(zone42()).encode()
+    assert files.read("z042-Tetra-v06.txt") == zone42().replace("labsw", "tetra").encode()
+    assert client.get("/api/templates/files.zip?zone=0").status_code == 422
+    assert client.get("/api/templates/lte/file?zone=42").status_code == 404
+    entry = next(a for a in client.get("/api/audit").json()
+                 if a["action"] == "template.files_export")
+    assert entry["details"]["zone"] == 42 and "z042-Tetra-v06.txt" in entry["details"]["files"]
+    # The file stored on a device for its plans stays normalised, as every imported file.
+    pid = client.post("/api/projects", json={"name": "Lab z042"}).json()["id"]
+    client.patch(f"/api/projects/{pid}", json={"zone": 42})
+    a = client.post(f"/api/projects/{pid}/devices", json={
+        "name": "sw-a", "manufacturer": "Aruba", "category": "switch", "model": "2930F",
+        "driver_id": "mock.aruba.aos_switch", "management_address": "192.0.2.10"}).json()["id"]
+    made = client.post(f"/api/projects/{pid}/generate-files",
+                       json={"assignments": {"bhdmz": a}}).json()[0]
+    text = client.get(f"/api/configs/{made['version_id']}").json()["text"]
+    assert "\r" not in text and text == zone42()
+
+
+def test_no_templates_no_zip(client):
+    r = client.get("/api/templates/files.zip?zone=5")
+    assert r.status_code == 404 and "No templates yet" in r.json()["error"]

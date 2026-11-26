@@ -1433,7 +1433,29 @@ two zones.
 - Generated files reach devices only through approved plans, as before.
 - Audited: `template.import`, `template.delete`, `config.generate` (versions, zone, hashes;
   never content).
-- **Local check (2026-11-26, not committed):** the four zone-92 files imported with the
-  zone-93 files as proof all verified. Generating for zone 93 through the API gave the
-  zone-93 files identical line for line.
+- **Local check (2026-11-26, not committed):** the four files of the first zone supplied,
+  imported with the second zone's files as proof, all verified. Generating for the second
+  zone through the API gave its files identical line for line.
+- **Byte for byte (v83, product owner decision 2026-11-26).** The product owner compared
+  UNDM's files for a third zone with the team's own: all four were identical line for line, and the
+  Black Box file byte for byte. Three of the team's files are written with Windows line
+  endings (CRLF) and no line break after the last line. UNDM had written LF with a final
+  line break. Decision: generated files must match byte for byte.
+  - A template keeps the imported file's formatting (`line_ending` lf|crlf, the one most
+    lines use; `final_newline`), detected from the file as supplied, before UNDM normalises
+    it (migration e1c8964a4d52; existing templates default to LF with a final line break,
+    so re-import them once).
+  - `configgen.zone.as_file` writes a normalised text in that formatting; only line endings
+    change. Downloads use it: `GET /api/templates/{role}/file?zone=N` and
+    `GET /api/templates/files.zip?zone=N` (every current template, the team's file names;
+    audited `template.files_export`, names only). The wizard's step 2 has **Download the
+    files for zone N**; Settings has a download per template for a chosen zone.
+  - Files stored on devices for plans stay normalised, as every imported file is: the
+    drivers send them line by line, so the devices get the same lines either way.
+    **Compare** stays line by line and says that line endings are not compared.
+  - An import with a second zone's file also reports whether the download is that file byte
+    for byte (`verified_bytes`).
+  - Local check (not committed): the first zone's files imported with the second zone's as
+    proof (all four byte for byte); the third zone's zip compared with `cmp` against the
+    product owner's files for that zone: all four identical byte for byte.
 

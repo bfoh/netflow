@@ -394,6 +394,9 @@ export interface ConfigTemplate {
   reference_zone: number | null;
   counts: Record<string, number>;
   verified_zone: number | null;
+  /** The team file's formatting, kept byte for byte on download (v83). */
+  line_ending: 'lf' | 'crlf';
+  final_newline: boolean;
   created_by: string;
   created_at: string;
   older: number;

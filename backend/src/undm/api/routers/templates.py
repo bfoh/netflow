@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 
 from undm.api.deps import ActorDep, RegistryDep, SessionDep
 from undm.api.routers.projects import get_project
@@ -15,6 +15,7 @@ from undm.api.schemas import (
     TemplateOut,
     TemplatePreviewOut,
 )
+from undm.configgen import zone as zr
 from undm.services import templates as svc
 
 router = APIRouter(tags=["templates"])
@@ -36,7 +37,28 @@ def import_template(body: TemplateImportIn, session: SessionDep,
     done = svc.import_template(session, actor, body.role, body.filename, body.text, body.zone,
                                verify)
     return TemplateImportOut(template=TemplateOut.model_validate(done.template),
-                             to_check=[f"line {n}: {text}" for n, text in done.to_check[:20]])
+                             to_check=[f"line {n}: {text}" for n, text in done.to_check[:20]],
+                             verified_bytes=done.verified_bytes)
+
+
+@router.get("/api/templates/files.zip", responses={200: {"content": {"application/zip": {}}}})
+def download_files(session: SessionDep, actor: ActorDep,
+                   zone: Annotated[int, Query(ge=1, le=128)]) -> Response:
+    """Every current template for a zone in one zip, each file byte for byte as the team
+    writes it (its line endings and final line break). Nothing is stored."""
+    data, _ = svc.files_zip(session, actor, zone)
+    return Response(data, media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="{zr.zone_tag(zone)}-files.zip"'})
+
+
+@router.get("/api/templates/{role}/file",
+            responses={200: {"content": {"application/octet-stream": {}}}})
+def download_file(role: str, session: SessionDep,
+                  zone: Annotated[int | None, Query(ge=1, le=128)] = None) -> Response:
+    """One role's file for a zone, byte for byte as the team writes it."""
+    name, data = svc.file_for(session, role, zone)
+    return Response(data, media_type="application/octet-stream", headers={
+        "Content-Disposition": f'attachment; filename="{svc.safe_name(name, role)}"'})
 
 
 @router.delete("/api/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -653,6 +653,8 @@ class TemplateOut(ORM):
     reference_zone: int | None
     counts: dict[str, int]
     verified_zone: int | None
+    line_ending: Literal["lf", "crlf"] = "lf"  # the team file's formatting, kept on download
+    final_newline: bool = True
     created_by: str
     created_at: datetime
     older: int = 0
@@ -661,6 +663,7 @@ class TemplateOut(ORM):
 class TemplateImportOut(BaseModel):
     template: TemplateOut
     to_check: list[str] = []
+    verified_bytes: bool | None = None  # the second zone's file also matched byte for byte
 
 
 class TemplatePreviewOut(BaseModel):

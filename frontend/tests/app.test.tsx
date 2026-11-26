@@ -943,7 +943,7 @@ describe('files from the team templates (D-111)', () => {
   const sw = (id: string, role: string) => device({ id, name: `lab-${id}`, manufacturer: 'Aruba', model: '2930F', role,
     driver_id: 'mock.aruba.aos_switch', management_address: '192.168.1.1' });
   const tpl = (role: string) => ({ id: `t-${role}`, role, version: 'v03', filename: '${zone_tag}-x-v03.pcc', reference_zone: 41,
-    counts: {}, verified_zone: 42, created_by: 't', created_at: '', older: 0 });
+    counts: {}, verified_zone: 42, line_ending: 'crlf', final_newline: false, created_by: 't', created_at: '', older: 0 });
 
   it('the zone starts from the system name and is saved on the system', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
@@ -989,5 +989,28 @@ describe('files from the team templates (D-111)', () => {
     expect(table).toBeInTheDocument();
     expect(await screen.findByText('against zone 42')).toBeInTheDocument();
     expect(screen.getAllByText('not imported').length).toBe(4);
+    expect(screen.getByText('Windows line endings (CRLF) · no final line break')).toBeInTheDocument();
+  });
+
+  it('downloads the files byte for byte: all for the zone from the wizard, one per template in Settings', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() }));
+    const calls = mockApi({
+      '/projects/p1': project({ zone: 45 }), '/projects/p1/staging-plans': [],
+      '/projects/p1/devices': [sw('a', 'Aruba 2930F (OOBM port 2)')], '/templates': [tpl('bhdmz')],
+      '/credential-refs': [], '/settings/certificate': { subject: null },
+    });
+    const view = renderAt('/stage/p1?step=1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Download the files for zone 45' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/templates/files.zip?zone=45')).toBe(true));
+    view.unmount();
+    renderAt('/settings');
+    const one = await screen.findByRole('button', { name: 'Download BH-DMZ switch (2930F, OOBM port 2)' });
+    expect(one).toBeDisabled(); // needs a zone first
+    await userEvent.type(screen.getByLabelText('Download for zone'), '7');
+    await userEvent.click(one);
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/templates/bhdmz/file?zone=7')).toBe(true));
+    await userEvent.click(screen.getByRole('button', { name: 'All files for zone 7' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/templates/files.zip?zone=7')).toBe(true));
   });
 });
