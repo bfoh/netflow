@@ -36,6 +36,9 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
           <List.Item>Connect the PC and every device to one small switch that is connected to nothing else, with one cable per device (two would make a loop).</List.Item>
           <List.Item>Give the PC's wired adapter two addresses, one per factory network, for example <Code>192.168.1.50/24</Code> and <Code>192.0.2.50/24</Code> (Windows: adapter settings → IPv4 → Advanced). UNDM does not change your PC's network settings.</List.Item>
           <List.Item>Aruba switches: the USB console cable goes to the PC first, for the console setup. One cable is enough: move it from one switch to the other.</List.Item>
+          {roles.some(({ role }) => role.guided) && (
+            <List.Item>Nokia Flexi BBU: its LMP port to this PC (or to the small switch). Add <Code>192.168.255.126/24</Code> to the PC&apos;s adapter on that cable; its portal answers at 192.168.255.129 in the browser.</List.Item>
+          )}
           {roles.some(({ role }) => role.consoleCable) && (
             <List.Item>Nokia modem: its console cable only, at speed 115200. It is not plugged into the small switch.</List.Item>
           )}
@@ -103,7 +106,7 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
                     <Table.Td>
                       {role.consoleCable && device.environment !== 'simulated' && !CONSOLE_DONE.has(device.provisioning_status) ? (
                         <Text size="sm" c="dimmed">After its first access (it saves the console port)</Text>
-                      ) : device.environment !== 'simulated' && !device.credential_ref_id ? (
+                      ) : device.environment !== 'simulated' && !device.credential_ref_id && !role.guided ? (
                         <Text size="sm">Choose its login first:{' '}
                           <Anchor component={Link} to="?step=0" size="sm">step 1, “Its login”</Anchor></Text>
                       ) : (

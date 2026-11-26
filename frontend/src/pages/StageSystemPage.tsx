@@ -57,6 +57,7 @@ const LOGIN_HINT: Record<RoleKey, string> = {
   aruba_a: 'The approved login. Preconfigured switch: the console setup erases it first with its current login (add that login too).',
   aruba_b: 'The approved login. Preconfigured switch: the console setup erases it first with its current login (add that login too).',
   modem: 'The approved login, user name admin: its first access gives the modem this password. The modem refuses a password it finds too simple.',
+  bbu: 'No login in UNDM: UNDM never logs in to the BBU. Its portal login is typed by the person in the browser.',
 };
 
 /** One role: its device, or a button that adds it with the bench defaults. */
@@ -73,7 +74,8 @@ function RoleCard({ role, device, projectId, systemName, simulated }: {
     name: `${slug}-${role.nameSuffix}`, manufacturer: model?.manufacturer ?? '', product_family: model?.product_family ?? '',
     model: role.model, category: model?.category ?? 'switch', os_family: model?.os_family ?? '',
     driver_id: simulated ? role.simulatedDriver : role.realDriver, environment: simulated ? 'simulated' : 'lab',
-    ...(role.address ? { management_address: role.address, management_protocol: 'ssh' as const } : {}), role: role.title,
+    ...(role.address ? { management_address: role.address, management_protocol: role.protocol ?? 'ssh' as const,
+      ...(role.port ? { management_port: role.port } : {}) } : {}), role: role.title,
     // Its login from Settings → For all systems (D-105); simulated devices need none.
     ...(real && roleDefaults(role, defaults.data).login ? { credential_ref_id: roleDefaults(role, defaults.data).login } : {}),
   }), `${role.title} added`, { errorInDialog: true });
@@ -89,11 +91,11 @@ function RoleCard({ role, device, projectId, systemName, simulated }: {
         <Stack gap={6}>
           <Group gap="xs"><Anchor component={Link} to={`/devices/${device.id}`} fw={600} size="sm">{device.name}</Anchor>
             <Text size="sm" ff="monospace" c="dimmed">{device.management_address || (role.consoleCable ? `console cable${device.console_port ? ` · ${device.console_port}` : ' only'}` : '')}</Text></Group>
-          <Select size="xs" label="Its login" clearable w="100%" maw={320}
+          {role.guided ? <Text size="xs" c="dimmed">{LOGIN_HINT[role.key]}</Text> : <Select size="xs" label="Its login" clearable w="100%" maw={320}
             description={LOGIN_HINT[role.key]}
             placeholder={refs.data?.length ? 'Choose a login' : 'Add logins on the system page first'}
             data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
-            value={device.credential_ref_id} onChange={(v) => setLogin.mutate(v)} />
+            value={device.credential_ref_id} onChange={(v) => setLogin.mutate(v)} />}
         </Stack>
       ) : (
         <Stack gap={6}>

@@ -20,9 +20,10 @@ import { driverLabel, platformLabel, stateLabel } from '../services/labels';
 const PLATFORMS = [
   { value: 'aos_switch', label: 'ArubaOS-Switch (e.g. 2930F)' }, { value: 'aoscx', label: 'Aruba AOS-CX' },
   { value: 'fortios', label: 'Fortinet FortiOS' }, { value: 'blackbox_lig1014a', label: 'Black Box LIG1014A' }, { value: 'iosxe', label: 'Cisco IOS-XE' },
+  { value: 'flexi_sbts', label: 'Nokia Flexi BBU (SBTS package, loaded by hand)' },
 ];
-const VENDOR_OF: Record<string, string> = { aos_switch: 'Aruba', aoscx: 'Aruba', fortios: 'Fortinet', iosxe: 'Cisco', blackbox_lig1014a: 'Black Box' };
-const OS_OF: Record<string, string> = { aos_switch: 'ArubaOS-Switch', aoscx: 'AOS-CX', fortios: 'FortiOS', iosxe: 'IOS-XE', blackbox_lig1014a: 'Black Box managed switch' };
+const VENDOR_OF: Record<string, string> = { aos_switch: 'Aruba', aoscx: 'Aruba', fortios: 'Fortinet', iosxe: 'Cisco', blackbox_lig1014a: 'Black Box', flexi_sbts: 'Nokia' };
+const OS_OF: Record<string, string> = { aos_switch: 'ArubaOS-Switch', aoscx: 'AOS-CX', fortios: 'FortiOS', iosxe: 'IOS-XE', blackbox_lig1014a: 'Black Box managed switch', flexi_sbts: 'SBTS (Flexi Multiradio 10)' };
 const fmtSize = (b: number) => (b > 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)} MiB` : `${(b / 1024).toFixed(1)} KiB`);
 
 function UploadForm() {

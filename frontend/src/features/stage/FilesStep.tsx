@@ -125,11 +125,14 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
             description="Leave this off for a unit that already has the approved password." />
         )}
         {role.steps.includes('firmware') && <Stack gap={4}>
-          <Select label="Firmware" description={fitting.length ? 'An approved image for this model, or leave it as it is.' : 'No approved image for this model yet (Firmware page).'}
-            placeholder="Keep the firmware it has" clearable w="100%" maw={420}
+          <Select label={role.guided ? 'Software package' : 'Firmware'}
+            description={role.guided
+              ? (fitting.length ? 'The approved package UNDM hands out for its portal (with its SHA-256).' : 'No approved package for this model yet: upload it on the Firmware page with its SHA-256 and approve it.')
+              : (fitting.length ? 'An approved image for this model, or leave it as it is.' : 'No approved image for this model yet (Firmware page).')}
+            placeholder={role.guided ? 'Choose the package' : 'Keep the firmware it has'} clearable w="100%" maw={420}
             data={fitting.map((i) => ({ value: i.id, label: `${i.version} · ${i.filename}` }))}
             value={choice.imageId} onChange={(v) => set({ imageId: v, alsoSecondary: !!v && bothBanks })} />
-          {choice.imageId && (
+          {choice.imageId && !role.guided && (
             <Group gap="md">
               <Checkbox size="xs" label="Allowed to install an older approved version" checked={choice.allowDowngrade}
                 onChange={(e) => set({ allowDowngrade: e.currentTarget.checked })} />

@@ -66,6 +66,7 @@ manager, topology._
 | Logins for all systems from the systems (v89) | Settings → For all systems → Logins made in the systems: a preview with suggested names (devices' model + user name), editable; one step moves them, merging logins with the same user name and password; devices, plans and the wizard's choices follow (D-115) |
 | Modem configuration load over the console (v90) | The modem's file (from its template) loaded by a plan over the console port its first access saved: line by line, stop at the first refused line unsaved, `admin save`, then log in again and check the system name (D-116). Experimental: passed once on a real modem, 2026-11-26 (149 lines, about one minute, saved and verified; Q-58). Finish staging needs the modem's plan; a modem first accessed before v90 gets its port from that first access (v91) |
 | Console window for console-only devices (v92) | Device menu → Open console window on the modem's saved port at 115200: PuTTY when installed, else pySerial's terminal; refused while UNDM uses the port; audited (D-118) |
+| Flexi BBU in the wizard, guided (v93) | Role Nokia Flexi BBU (FSMF): no login, no plan; UNDM checks its portal answers (port 443), hands out the approved package and the generated SCF (byte for byte) with their SHA-256, and records each step done by hand in the portal (who, when, notes, file hashes); Finish staging and the report count it (D-117). Not yet used on a BBU |
 | Erase dialog (v73) | Shows the login the switch gets after the erase and blocks early when it has no password or is the login being erased (D-101) |
 | FortiGate license (v72) | "Load license…" in a FortiGate's menu: the team's file is kept for the device (never shown or exported) and loaded through an approved plan with `execute restore manual-license tftp` (Fortinet-documented; **experimental, not yet run on hardware**, Q-46, D-100) |
 | Working with devices (v71) | Device menu everywhere (⋯ and right-click): Open SSH window (PC's own SSH program, password typed by the person, D-098), web page, check information, test, wait until it answers, back up, log, restart (approved plan; 2930F and LIG1014A), console setup. System tree with tick boxes, watch devices (reachability dots), device log (D-099) |
@@ -97,16 +98,16 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-26, v92)
+## Test results (2026-11-26, v93)
 | Suite | Result |
 |---|---|
-| Backend pytest | 584 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
-| Backend PostgreSQL integration | 2 passed; new migration 6532b887f06e down/up OK |
+| Backend pytest | 603 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
+| Backend PostgreSQL integration | 2 passed; new migration 4dbe2fd28d85 down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
-| ruff / mypy --strict | clean / clean (96 files) |
-| Frontend Vitest | 98 passed |
+| ruff / mypy --strict | clean / clean (100 files) |
+| Frontend Vitest | 100 passed |
 | tsc / oxlint / vite build | clean / clean / success |
-| Playwright E2E | 9 passed (first access of a simulated Nokia modem from the wizard, then its file by a plan; a file generated from a template for the system's zone, downloaded byte for byte; wizard now ends with Finish staging; a login for all systems and its default reach a new system; device menu, check information, test and log on a simulated switch; acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box; export and import of a system) |
+| Playwright E2E | 10 passed (the Flexi BBU's guided steps on a simulated unit; first access of a simulated Nokia modem from the wizard, then its file by a plan; a file generated from a template for the system's zone, downloaded byte for byte; wizard now ends with Finish staging; a login for all systems and its default reach a new system; device menu, check information, test and log on a simulated switch; acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box; export and import of a system) |
 
 ## Known issues and limitations
 - Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole

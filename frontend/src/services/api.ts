@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, Guided, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -200,6 +200,12 @@ export const api = {
     request<Device>('POST', `/projects/${pid}/devices`, body),
   updateDevice: (id: string, body: DeviceInput) => request<Device>('PATCH', `/devices/${id}`, body),
   openSsh: (id: string) => request<{ command: string }>('POST', `/devices/${id}/open-ssh`),
+  guided: (id: string) => request<Guided>('GET', `/devices/${id}/guided`),
+  guidedDone: (id: string, step: string, body: { note?: string; version_id?: string | null; image_id?: string | null }) =>
+    request<Guided>('POST', `/devices/${id}/guided/${step}`, body),
+  guidedUndo: (id: string, step: string) => request<Guided>('DELETE', `/devices/${id}/guided/${step}`),
+  guidedFileUrl: (id: string, versionId: string) => `/api/devices/${id}/guided-file/${versionId}`,
+  firmwareFileUrl: (imageId: string) => `/api/firmware/images/${imageId}/file`,
   openConsole: (id: string) => request<{ program: string; console_port: string; command: string }>('POST', `/devices/${id}/open-console`),
   restartPlan: (id: string) => request<Deployment>('POST', `/devices/${id}/restart-plan`),
   uploadLicense: (id: string, file: File) => {

@@ -1,6 +1,8 @@
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from undm.api.deps import ActorDep, RegistryDep, SessionDep, SettingsDep
@@ -53,6 +55,16 @@ def upload_image(
 @router.get("/images/{image_id}", response_model=FirmwareImageOut)
 def read_image(image_id: str, session: SessionDep, settings: SettingsDep) -> FirmwareImage:
     return _repo(session, settings).get(image_id)
+
+
+@router.get("/images/{image_id}/file")
+def image_file(image_id: str, session: SessionDep) -> FileResponse:
+    """The stored image itself, e.g. for a person to load it in a device's portal (D-117)."""
+    img = session.get(FirmwareImage, image_id)
+    if img is None or not Path(img.storage_path).is_file():
+        raise NotFoundError("Firmware image file not found")
+    return FileResponse(img.storage_path, filename=img.filename,
+                        media_type="application/octet-stream")
 
 
 @router.post("/images/{image_id}/checksum", response_model=FirmwareImageOut)

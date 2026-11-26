@@ -1165,6 +1165,59 @@ describe('Nokia modem: first access over the console (D-112)', () => {
   });
 });
 
+describe('the Flexi BBU: staged by hand in its portal, guided and recorded (D-117)', () => {
+  const project = { id: 'p1', name: 'Lab z045', description: '', site: '', purpose: '', created_at: '', updated_at: '',
+    certificate_subject: null, staged_at: null, staged_by: '', zone: 45, system_id: 'B007' };
+  const bbu = device({ id: 'b1', name: 'lab-bbu', manufacturer: 'Nokia', model: 'FSMF', category: 'other',
+    role: 'Nokia Flexi BBU (FSMF)', driver_id: 'guided.nokia.flexi', management_address: '192.0.2.129', credential_ref_id: null, environment: 'lab',
+    capabilities: ['supports_guided_staging'] });
+  const step = (key: string, title: string, kind: string, over: Record<string, unknown> = {}) => ({ key, title, detail: `${title} detail`, kind,
+    note_label: kind === 'check' ? '' : 'What you saw', done_by: null, done_at: null, note: '', file_name: null, file_sha256: null, ...over });
+  const guided = (done: number) => ({ procedure: 'flexi_bbu', title: 'Flexi BBU', steps: [
+    step('portal', 'Its portal answers', 'check'), step('software', 'Software package loaded and in use', 'software'),
+    step('scf', 'Site configuration file (SCF) loaded and in use', 'file'), step('state', 'Its state checked', 'manual'),
+  ].map((s, i) => (i < done ? { ...s, done_by: 'tester', done_at: '2026-01-01T10:00:00Z', note: 'ok',
+    ...(s.kind === 'software' ? { file_name: 'SBTS_EXAMPLE.zip', file_sha256: 'ab'.repeat(32) } : {}) } : s)) });
+  const image = { id: 'img1', vendor: 'Nokia', platform: 'flexi_sbts', version: 'SBTS-EXAMPLE', filename: 'SBTS_EXAMPLE.zip',
+    size_bytes: 10, sha256: 'ab'.repeat(32), vendor_sha256: null, status: 'approved', compatible_models: ['FSMF'] };
+  const scf = { id: 'v1', device_id: 'b1', kind: 'imported', sha256: 'x', platform: 'flexi_sbts', template_version: 'v1',
+    verification: 'generated_from_team_template', reference: 'Full_scf_MRBTS-7_x.xml', created_by: 't', created_at: '' };
+
+  it('the run board guides each step and records it; no login, no plan', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    window.localStorage.setItem('undm.stage.p1', JSON.stringify({ bbu: { firstLogin: false, imageId: 'img1', allowDowngrade: false,
+      alsoSecondary: false, baseId: null, siteId: null, fileId: 'v1', loginAfter: null, secrets: {} } }));
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [bbu], '/projects/p1/staging-plans': [],
+      '/devices/b1/guided': guided(1), '/firmware/images': [image], '/devices/b1/configs': [scf], '/devices/b1/guided/software': guided(2) });
+    const first = renderAt('/stage/p1?step=0');
+    expect(await screen.findByText(/No login in UNDM: UNDM never logs in to the BBU/)).toBeInTheDocument();
+    first.unmount();
+    renderAt('/stage/p1?step=3');
+    expect(await screen.findByText('2. Software package loaded and in use')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open its portal' })).toHaveAttribute('href', 'https://192.0.2.129');
+    expect(await screen.findByText('SBTS_EXAMPLE.zip · SBTS-EXAMPLE')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Download it from UNDM/ })).toHaveAttribute('href', '/api/firmware/images/img1/file');
+    expect(screen.queryByRole('button', { name: 'Make the plan' })).not.toBeInTheDocument();
+    const doneButton = screen.getByRole('button', { name: 'Done' });
+    expect(doneButton).toBeDisabled();  // what the person saw is noted first
+    await userEvent.type(screen.getByLabelText('What you saw'), 'Software page; shows SBTS-EXAMPLE');
+    await userEvent.click(doneButton);
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/devices/b1/guided/software' && c.init?.method === 'POST')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/devices/b1/guided/software');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ note: 'Software page; shows SBTS-EXAMPLE', image_id: 'img1', version_id: 'v1' });
+    window.localStorage.removeItem('undm.stage.p1');
+  });
+
+  it('the report lists the steps, and the BBU counts as staged once all are recorded', async () => {
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': [bbu], '/projects/p1/staging-plans': [], '/devices/b1/guided': guided(4),
+      '/policy': { enable_real_device_writes: false, enable_real_device_firmware: false, firmware_require_separate_approver: false, locked: [] } });
+    renderAt('/stage/p1?step=4');
+    const table = await screen.findByRole('table', { name: 'Steps done in the portal of lab-bbu' });
+    await vi.waitFor(() => expect(table.textContent).toContain('SBTS_EXAMPLE.zip · SHA-256 ' + 'ab'.repeat(32)));
+    expect(screen.queryByText(/Still to do in step 4/)).not.toBeInTheDocument();
+  });
+});
+
 describe('the modem and the BBU: files by zone and system (D-114)', () => {
   const project = (over: Record<string, unknown> = {}) => ({ id: 'p1', name: 'Lab B7z045', description: '', site: '', purpose: '',
     created_at: '', updated_at: '', certificate_subject: null, staged_at: null, staged_by: '', zone: null, system_id: null, ...over });

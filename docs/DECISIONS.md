@@ -1777,3 +1777,45 @@ address), and Console setup is offered.
   - from another PC than the one running UNDM.
 - **A shared port.** A Windows serial port has one user at a time. While the window is open,
   UNDM's own use of the port fails with its "could not open" message; close the window first.
+
+### D-117 The Flexi BBU in the wizard: guided steps, recorded (2026-11-26)
+**Request (product owner):** the BBU as a wizard device. Its staging is done in its web portal
+(WebEM) by hand first; automation comes after a first run done together (D-113).
+
+**Decision.** The wizard gets the role **Nokia Flexi BBU (FSMF)** (driver
+`guided.nokia.flexi`, simulated twin `mock.nokia.flexi`). Its address is 192.168.255.129 on
+its LMP port, checked on port 443.
+- **What UNDM does and doesn't do.**
+  - UNDM never logs in to the BBU and changes nothing on it, so it has no login in UNDM, no
+    plan, and no real-device switch applies.
+  - Its only check is read-only: something answers on port 443 at its address.
+  - New capability `supports_guided_staging`; the driver contract test now says such drivers
+    refuse configuration changes.
+- **Choices in step 2.**
+  - The approved software package from the Firmware page, uploaded with its SHA-256 (new
+    platform "Nokia Flexi BBU (SBTS)").
+  - The SCF, made by **Generate** for the system's zone and system, with the cells' PCIs from
+    the PCI table (D-114).
+- **The steps (step 4).** The BBU's card shows **Open its portal** and four steps, in order:
+  1. **Its portal answers.** UNDM checks.
+  2. **Software package loaded and in use.**
+     - The card shows the file name, version and SHA-256, and offers a download from UNDM.
+     - The person notes where in the portal and the version shown.
+  3. **SCF loaded and in use.**
+     - The card offers the SCF byte for byte as the team writes it (the template's line
+       endings).
+     - The person notes where in the portal and what it reported.
+  4. **Its state checked.** The person notes what the portal shows.
+
+  Each step records who and when, the note, and the file's name and SHA-256 (table
+  `guided_steps`, migration 4dbe2fd28d85; audited `guided.step_done`).
+  **Undo** clears a step and the ones after it (`guided.step_undone`).
+- **Where in the portal.** UNDM's steps do not say where in the portal each step is done: no
+  Nokia document is available. The notes of the first run done together record it (Q-54), and
+  that is what any automation will be built from.
+- **Finish staging and the report.** The BBU counts as staged when all four steps are
+  recorded. The report lists the steps with who, when, the notes and the files' SHA-256.
+- **Downloads.**
+  - The firmware repository serves a stored package (`GET /api/firmware/images/{id}/file`),
+    so the person loads exactly the approved file.
+  - The guided step serves the SCF (`GET /api/devices/{id}/guided-file/{version}`).

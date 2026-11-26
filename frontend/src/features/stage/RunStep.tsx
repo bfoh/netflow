@@ -10,6 +10,7 @@ import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import type { Device, StagingIndex } from '../../types/api';
 import { type Choice, EMPTY_CHOICE, planSteps, wantsFirstLogin } from './choices';
+import { GuidedRun } from './GuidedRun';
 import { addressTakenBy, canMoveAside, CONSOLE_DONE, portOff, type Role, STEP_TIME, STEP_WORDS, type StepKind } from './roles';
 import { StagingControls } from './StagingControls';
 import { stagingStatus } from './staging';
@@ -148,11 +149,13 @@ export function RunStep({ projectId, roles, choices, stagings }: {
         leave this page. Order inside each device: as listed. Two devices that end at the same address (the two 2930F) run one
         after the other: the card says which to unplug first.</Text>
       <SimpleGrid cols={{ base: 1, md: 2, xl: 4 }}>
-        {roles.map(({ role, device }) => (
+        {roles.map(({ role, device }) => (role.guided ? (
+          <GuidedRun key={role.key} role={role} device={device} choice={choices[role.key] ?? EMPTY_CHOICE} />
+        ) : (
           <DeviceRun key={role.key} projectId={projectId} role={role} device={device}
             choice={choices[role.key] ?? EMPTY_CHOICE}
             latest={stagings.find((x) => x.device_id === device.id)} all={roles} />
-        ))}
+        )))}
       </SimpleGrid>
     </Stack>
   );

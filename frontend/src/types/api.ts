@@ -440,3 +440,23 @@ export interface ComparedFile {
   role: TemplateRole; device_id: string; generated_name: string; file_name: string | null;
   same: boolean; lines: number; differences: [number, string, string][];
 }
+
+/** Guided staging (D-117): a step a person does in the device's own portal. */
+export interface GuidedStepState {
+  key: string;
+  title: string;
+  detail: string;
+  kind: 'check' | 'software' | 'file' | 'manual';
+  note_label: string;
+  done_by: string | null;
+  done_at: string | null;
+  note: string;
+  file_name: string | null;
+  file_sha256: string | null;
+}
+
+export interface Guided {
+  procedure: string;
+  title: string;
+  steps: GuidedStepState[];
+}

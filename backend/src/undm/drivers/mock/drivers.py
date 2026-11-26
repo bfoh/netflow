@@ -383,11 +383,28 @@ class MockNokiaSarDriver(MockDriver):
     )
 
 
+class MockNokiaFlexiDriver(MockDriver):
+    model = "SIM-FSMF"
+    initial_os_version = "sim-SBTS"
+    info = DriverInfo(
+        driver_id="mock.nokia.flexi",
+        vendor="Nokia",
+        platform="flexi_sbts",
+        os_family="SBTS (Flexi Multiradio 10)",
+        description="Simulated Nokia Flexi BBU (FSMF) for practising the guided steps; the "
+                    "steps are done by a person in the real portal",
+        simulated=True,
+        capabilities=frozenset({C.GUIDED_STAGING}),
+    )
+    guided_procedure = "flexi_bbu"
+
+
 MOCK_DRIVERS: tuple[type[MockDriver], ...] = (
     MockArubaOSSwitchDriver,
     MockFortiGateDriver,
     MockBlackBoxSwitchDriver,
     MockNokiaSarDriver,
+    MockNokiaFlexiDriver,
     MockArubaAOSCXDriver,
     MockCiscoIOSXEDriver,
 )

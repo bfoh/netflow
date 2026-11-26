@@ -46,6 +46,9 @@ class Capability(StrEnum):
     # Restarts on request, outside a firmware step (D-099). REBOOT alone means only "restarts
     # as part of a firmware upgrade" on some drivers.
     RESTART = "supports_restart"
+    # Staged by a person in the device's own portal, following UNDM's steps (D-117): UNDM
+    # never logs in to it or changes it; it checks that the portal answers and records.
+    GUIDED_STAGING = "supports_guided_staging"
     # Loads a license file the team supplies, fetched from UNDM (D-100).
     LICENSE_FILE = "supports_license_file"
 
@@ -231,6 +234,8 @@ class DeviceDriver:
     should_stop: Callable[[], bool] | None = None
     # Set by the service for jobs in which devices pull files from UNDM.
     file_server: FileServer | None = None
+    # Guided staging (D-117): the procedure a person follows (``undm.domain.guided``).
+    guided_procedure: ClassVar[str | None] = None
 
     def __init__(self, target: DeviceTarget, credentials: Credentials | None = None) -> None:
         self.target = target

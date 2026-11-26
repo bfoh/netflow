@@ -88,6 +88,13 @@ CATALOG: tuple[DeviceModel, ...] = (
                       "20.5.R1 (experimental). Its configuration file is loaded by a plan over "
                       "its console port, line by line (D-116): passed once on hardware "
                       "2026-11-26 (experimental)."),
+    DeviceModel("nokia-flexi-fsmf", "Nokia", "Flexi Multiradio 10", "FSMF",
+                DeviceCategory.OTHER, "SBTS (Flexi Multiradio 10)",
+                ("mock.nokia.flexi", "guided.nokia.flexi"), SupportLevel.SIMULATED_ONLY,
+                notes="Staging target (a system's LTE base station unit). Staged by hand in "
+                      "its web portal (WebEM) on its LMP port; UNDM checks the portal answers, "
+                      "hands out the software package and the generated SCF with their "
+                      "SHA-256, and records each step (D-113, D-117). UNDM never logs in."),
     DeviceModel("cisco-c9300", "Cisco", "Catalyst 9300", "C9300-24T", DeviceCategory.SWITCH,
                 "IOS-XE", ("mock.cisco.iosxe", "ssh.cisco.iosxe"), SupportLevel.SIMULATED_ONLY),
     DeviceModel("cisco-isr4331", "Cisco", "ISR 4000", "ISR4331", DeviceCategory.ROUTER,

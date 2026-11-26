@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { StateBadge } from '../../components/Badges';
 import { api } from '../../services/api';
 import { downloadText, fmtDate } from '../../services/format';
-import type { Device, Project, StagingIndex, StagingPlan } from '../../types/api';
+import type { Device, Guided, Project, StagingIndex, StagingPlan } from '../../types/api';
 import { type Role } from './roles';
 import { EmptyState } from '../../components/EmptyState';
 import { BenchLogButton } from '../systems/BenchLogButton';
@@ -31,7 +31,12 @@ export function ReportStep({ project, roles, stagings }: {
   const plans = useQueries({
     queries: latest.map((l) => ({ queryKey: ['staging', l?.staging_id ?? ''], queryFn: () => api.staging(l!.staging_id), enabled: !!l })),
   });
-  const rows = roles.map(({ role, device }, i) => ({ role, device, plan: plans[i]?.data as StagingPlan | undefined }));
+  // Devices staged by hand in their portal (the Flexi BBU, D-117): their recorded steps.
+  const guided = useQueries({
+    queries: roles.map(({ role, device }) => ({ queryKey: ['guided', device.id], queryFn: () => api.guided(device.id), enabled: !!role.guided })),
+  });
+  const rows = roles.map(({ role, device }, i) => ({ role, device, plan: plans[i]?.data as StagingPlan | undefined,
+    guided: role.guided ? guided[i]?.data as Guided | undefined : undefined }));
   const [madeAt] = useState(() => new Date().toISOString());
   const [ticks, setTicks] = useState<Ticks>(() => loadTicks(project.id));
   const onTicks = (t: Ticks) => { setTicks(t); saveTicks(project.id, t); };
@@ -56,7 +61,8 @@ export function ReportStep({ project, roles, stagings }: {
       {roles.length === 0 && <EmptyState>No devices yet: add them in step 1.</EmptyState>}
       {roles.length > 0 && (() => {
         // The end of the run, said plainly (bench 2026-11-25: "how does it complete?").
-        const open = rows.filter(({ plan }) => !plan || plan.steps.length === 0 || plan.steps.some((s) => s.state !== 'succeeded'));
+        const open = rows.filter(({ role, plan, guided: g }) => (role.guided ? !g || g.steps.some((s) => !s.done_by)
+          : !plan || plan.steps.length === 0 || plan.steps.some((s) => s.state !== 'succeeded')));
         return <Stack className="no-print">
           {open.length > 0 && !project.staged_at && (
             <Notice kind="status" title={`${rows.length - open.length} of ${rows.length} devices are staged`}>
@@ -73,7 +79,7 @@ export function ReportStep({ project, roles, stagings }: {
         <Text size="sm" c="dimmed" mb="md">Made {fmtDate(madeAt)}. One section per device: its latest staging plan.
           {project.staged_at ? ` Staging finished ${fmtDate(project.staged_at)}${project.staged_by ? ` by ${project.staged_by}` : ''}.` : ' Staging not finished yet.'}</Text>
         <Stack>
-          {rows.map(({ role, device, plan }) => {
+          {rows.map(({ role, device, plan, guided: g }) => {
             const facts = (device.observed_facts ?? {}) as Record<string, unknown>;
             const steps = plan?.steps ?? [];
             const warnings = steps.flatMap((s) => s.events).filter((e) => e.status === 'warning');
@@ -86,7 +92,23 @@ export function ReportStep({ project, roles, stagings }: {
                 <Text size="sm" mb="xs">Firmware now: <b>{String(facts.os_version ?? '—')}</b> · serial / MAC: <b>{String(facts.serial_number ?? '—')}</b>
                   {facts.hostname ? <> · hostname: <b>{String(facts.hostname)}</b></> : null}
                   {device.facts_retrieved_at ? ` (read ${fmtDate(device.facts_retrieved_at)})` : ' (not read yet: use Retrieve information on the device page)'}</Text>
-                {steps.length === 0 ? <Text size="sm" c="dimmed">No staging plan yet.</Text> : (
+                {role.guided ? (
+                  <Table.ScrollContainer minWidth={520}>
+                    <Table verticalSpacing={4} aria-label={`Steps done in the portal of ${device.name}`}>
+                      <Table.Thead><Table.Tr><Table.Th>Step (by hand, in its portal)</Table.Th><Table.Th>Done by</Table.Th><Table.Th>When</Table.Th><Table.Th>Noted</Table.Th></Table.Tr></Table.Thead>
+                      <Table.Tbody>
+                        {(g?.steps ?? []).map((s, i) => (
+                          <Table.Tr key={s.key}>
+                            <Table.Td>{i + 1}. {s.title}{s.file_name && <Text size="xs" c="dimmed">{s.file_name} · SHA-256 {s.file_sha256}</Text>}</Table.Td>
+                            <Table.Td>{s.done_by ?? '—'}</Table.Td>
+                            <Table.Td>{s.done_at ? fmtDate(s.done_at) : 'not yet'}</Table.Td>
+                            <Table.Td>{s.note || '—'}</Table.Td>
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </Table.ScrollContainer>
+                ) : steps.length === 0 ? <Text size="sm" c="dimmed">No staging plan yet.</Text> : (
                   <Table.ScrollContainer minWidth={520}>
                     <Table verticalSpacing={4}>
                       <Table.Thead><Table.Tr><Table.Th>Step</Table.Th><Table.Th>Result</Table.Th><Table.Th>Started</Table.Th><Table.Th>Took</Table.Th><Table.Th>Approved by</Table.Th></Table.Tr></Table.Thead>

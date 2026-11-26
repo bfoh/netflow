@@ -44,7 +44,8 @@ def test_health_drivers_models(client):
     drivers = client.get("/api/drivers").json()
     assert {d["driver_id"] for d in drivers} == {
         "mock.aruba.aoscx", "mock.fortinet.fortios", "mock.cisco.iosxe", "mock.aruba.aos_switch",
-        "mock.blackbox.switch", "mock.nokia.sar", "console.nokia.sar",
+        "mock.blackbox.switch", "mock.nokia.sar", "console.nokia.sar", "mock.nokia.flexi",
+        "guided.nokia.flexi",
         "ssh.aruba.aoscx", "ssh.fortinet.fortios", "ssh.cisco.iosxe", "ssh.aruba.aos_switch",
         "ssh.blackbox.lig1014a"}
     for d in drivers:

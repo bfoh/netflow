@@ -246,3 +246,20 @@ It is also the first hardware run of:
 - the first login as a plan;
 - the generic staging plan (four steps, one approval);
 - the wizard as a whole.
+
+## Nokia Flexi BBU: guided steps (since v93, D-117)
+Done by hand in its portal; UNDM checks, hands out the files and records:
+1. **Before.**
+   - Upload the software package once on the Firmware page (platform "Nokia Flexi BBU
+     (SBTS)") with its SHA-256 from `certutil -hashfile <file> SHA256`, then approve it.
+   - Import the SCF template and the PCI table (Settings → For all systems).
+2. **Step 1.** Add the BBU (no login). **Step 2.** Generate (it gets its SCF) and choose the
+   software package.
+3. **Cabling.** The LMP cable goes to the PC (or the small switch). Add 192.168.255.126/24 to
+   that adapter. Step 3 Test checks port 443.
+4. **Step 4, the BBU's card.**
+   - **Open its portal**, then **Check now**.
+   - For the software and the SCF: use UNDM's download, do it in the portal, write where and
+     what it showed, then **Done**.
+   - Last, note the state the portal shows.
+5. **Undo** clears a step and those after it, if one was recorded by mistake.

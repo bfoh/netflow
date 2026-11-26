@@ -56,7 +56,7 @@ from undm.orchestration.free_address import FreeAddressOrchestrator
 from undm.orchestration.license import LicenseOrchestrator
 from undm.orchestration.restart import RestartOrchestrator
 from undm.security import credentials as creds
-from undm.services import app_settings, audit
+from undm.services import app_settings, audit, guided
 from undm.services.devices import (
     build_driver,
     inspect_config,
@@ -713,7 +713,13 @@ class DeploymentService:
                 raise NotFoundError(f"Device {did} not found in project")
             names.append(device.name)
             mine = latest.get(did)
-            if not mine and self._console_only(device):
+            guided_left = (guided.all_done(self.s, device, self.registry)
+                           if guided.procedure_of(device, self.registry) else None)
+            if guided_left is not None:
+                # Staged by hand in its portal (D-117): every step recorded.
+                if guided_left:
+                    problems.append(f"{device.name}: not recorded yet: {guided_left[0]}")
+            elif not mine and self._console_only(device):
                 # Staged over its console only, with no plan: its console setup is its
                 # staging.
                 if device.provisioning_status not in (ProvisioningStatus.BOOTSTRAPPED.value,

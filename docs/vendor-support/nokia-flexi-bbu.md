@@ -1,7 +1,9 @@
 # Nokia Flexi Multiradio 10 BBU (FSMF): staging through WebEM
 
-Status: **nothing built yet**. This page records what the product owner said, what a web
-search found, and the decision on how UNDM will help (D-113).
+Status: **guided staging built (v93, D-117)**, not yet used on a BBU. UNDM never logs in to
+the BBU: a person does each step in its portal, UNDM checks the portal answers (port 443),
+hands out the files with their SHA-256 and records each step. This page records what the
+product owner said, what a web search found, and the decisions (D-113, D-117).
 
 ## What the product owner said (2026-11-26)
 - The BBU is the main node of the system's LTE radio access network: a Flexi Multiradio 10
@@ -58,3 +60,24 @@ decides on browser automation after bench screenshots of every screen (experimen
 
 ## Needed from the product owner before building
 See `docs/REFERENCE_ANALYSIS.md`, Q-54.
+
+## In UNDM (v93, D-117)
+Stage a system:
+1. **Step 1.** Add **Nokia Flexi BBU (FSMF)**, address 192.168.255.129. It has no login in
+   UNDM.
+2. **Step 2.**
+   - **Generate** makes its SCF for the system's zone and system, with the cells' PCIs from the
+     PCI table.
+   - Choose the approved **software package**. Upload it once on the Firmware page, platform
+     "Nokia Flexi BBU (SBTS)", with its SHA-256, then approve it.
+3. **Step 3.** The PC needs 192.168.255.126/24 on the adapter of the LMP cable. Test checks
+   port 443.
+4. **Step 4.** The BBU's card has **Open its portal** and the four steps:
+   - its portal answers;
+   - software package loaded and in use;
+   - SCF loaded and in use;
+   - its state checked.
+
+   For each step, note where in the portal it was done and what the portal showed. The notes
+   of the first run done together are what any automation will be built from.
+5. **Finish staging** counts the BBU once all four steps are recorded. The report lists them.

@@ -2,8 +2,7 @@ import type { TemplateRole } from '../../types/api';
 import type { RoleKey } from './roles';
 
 /** Team templates per wizard role (D-111): which file of which device each one gives. The
- * modem's and BBU's files also depend on the system (D-114); the BBU is not a wizard device
- * yet, so its SCF comes only in the download. */
+ * modem's and BBU's files also depend on the system (D-114). */
 export const TEMPLATE_ROLES: {
   role: TemplateRole; label: string; wizardRole?: RoleKey; slot: 'baseId' | 'siteId' | 'fileId';
   /** Its file depends on the system (B007). */ system?: boolean;
@@ -15,7 +14,7 @@ export const TEMPLATE_ROLES: {
   { role: 'lte', label: 'LTE switch (2930F, OOBM port 3)', wizardRole: 'aruba_b', slot: 'fileId' },
   { role: 'tetra', label: 'Tetra switch (Black Box)', wizardRole: 'blackbox', slot: 'fileId' },
   { role: 'modem', label: 'LTE modem (Nokia 7705 SAR-Hmc)', wizardRole: 'modem', slot: 'fileId', system: true, secret: true },
-  { role: 'bbu_scf', label: 'Flexi BBU site configuration file (SCF)', slot: 'fileId', system: true },
+  { role: 'bbu_scf', label: 'Flexi BBU site configuration file (SCF)', wizardRole: 'bbu', slot: 'fileId', system: true },
 ];
 
 const sys3 = (n: number) => `B${String(n).padStart(3, '0')}`;

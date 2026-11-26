@@ -338,6 +338,26 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now, onupdate=_now)
 
 
+class GuidedStepRecord(Base):
+    """A step of a guided staging done by a person in the device's own portal (D-117): who,
+    when, what they noted, and the file they were given (name and SHA-256, never content).
+    One record per device and step; undoing a step deletes it (the audit keeps the history)."""
+
+    __tablename__ = "guided_steps"
+    __table_args__ = (UniqueConstraint("device_id", "step"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    device_id: Mapped[str] = mapped_column(
+        ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    procedure: Mapped[str] = mapped_column(String(40))
+    step: Mapped[str] = mapped_column(String(40))
+    done_by: Mapped[str] = mapped_column(String(120))
+    done_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now)
+    note: Mapped[str] = mapped_column(Text, default="")
+    file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    file_ref: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+
 class ConfigTemplate(Base):
     """A team configuration file made into a zone template (D-111), for all systems.
 

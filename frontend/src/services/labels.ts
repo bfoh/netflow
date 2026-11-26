@@ -100,7 +100,7 @@ export function driverLabel(driverId: string, drivers?: Driver[]): string {
 
 const PLATFORMS: Record<string, string> = {
   aos_switch: 'ArubaOS-Switch (2930F)', aoscx: 'Aruba AOS-CX', fortios: 'FortiGate (FortiOS)',
-  iosxe: 'Cisco IOS-XE', blackbox_lig1014a: 'Black Box LIG1014A',
+  iosxe: 'Cisco IOS-XE', blackbox_lig1014a: 'Black Box LIG1014A', flexi_sbts: 'Nokia Flexi BBU (SBTS)',
 };
 
 export function platformLabel(platform: string): string {

@@ -6,6 +6,7 @@ from undm.domain.operations import DeviceOperation
 from undm.drivers.base import (
     REQUIRED_CAPABILITIES,
     ApplyMode,
+    Capability,
     ConfigurationBackup,
     DeviceTarget,
     FirmwareImageRef,
@@ -72,6 +73,11 @@ def test_operations_fail_cleanly_when_not_connected(driver_id):
 def test_apply_then_read_back(driver_id):
     d = make(driver_id)
     d.connect()
+    if Capability.GUIDED_STAGING in d.capabilities():
+        # Staged by a person in its own portal (D-117): UNDM never changes it.
+        assert d.apply_configuration("hostname abc\n", ApplyMode.MERGE).status \
+            is ResultStatus.UNSUPPORTED
+        return
     assert d.apply_configuration("hostname abc\n", ApplyMode.MERGE).ok
     assert "hostname abc" in d.get_running_configuration().data
     assert d.get_device_facts().data.hostname == "abc"

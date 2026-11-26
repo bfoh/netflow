@@ -133,7 +133,7 @@ def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
                                         device.credential_ref.locator)
         except creds.CredentialResolutionError as e:
             raise ServiceError(str(e)) from e
-    elif not driver_cls.info.simulated:
+    elif not driver_cls.info.simulated and Capability.GUIDED_STAGING not in caps:
         raise ServiceError(
             f"{device.name} has no login chosen. Choose one on its device page (Edit), or in "
             "Stage a system, step 1 ('Its login'). Logins are added on the system page's "

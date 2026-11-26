@@ -82,6 +82,12 @@ export function wantsFirstLogin(c: Choice, device?: Device): boolean {
 export function planSteps(role: Role, c: Choice, device?: Device, inTheWay?: Device): { steps: StagingStepInput[]; missing: string[] } {
   const steps: StagingStepInput[] = [];
   const missing: string[] = [];
+  if (role.guided) {
+    // Staged by hand in its portal (D-117): no plan; its choices are what UNDM hands out.
+    if (!c.imageId) missing.push('the software package');
+    if (!c.fileId) missing.push('the SCF');
+    return { steps, missing };
+  }
   for (const kind of role.steps) {
     if (kind === 'first_login' && wantsFirstLogin(c, device)) steps.push({ kind: 'first_login' });
     if (kind === 'firmware' && c.imageId) {

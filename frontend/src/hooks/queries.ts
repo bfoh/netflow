@@ -80,6 +80,9 @@ export const useSharedLogins = () => useQuery({ queryKey: ['shared-logins'], que
 export const useLoginDefaults = () => useQuery({ queryKey: ['login-defaults'], queryFn: api.loginDefaults });
 export const useSharedCertificate = () => useQuery({ queryKey: ['shared-certificate'], queryFn: api.sharedCertificate });
 export const useTemplates = () => useQuery({ queryKey: ['templates'], queryFn: api.templates });
+/** Guided staging of one device (D-117); the BBU's steps done in its portal. */
+export const useGuided = (deviceId: string, enabled = true) =>
+  useQuery({ queryKey: ['guided', deviceId], queryFn: () => api.guided(deviceId), enabled: enabled && !!deviceId });
 export const useDeviceModels = () => useQuery({ queryKey: keys.models, queryFn: api.deviceModels });
 
 /** Mutation that refreshes all cached data afterwards and reports errors as notifications. */

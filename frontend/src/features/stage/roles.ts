@@ -4,7 +4,7 @@
  */
 import type { Device, LoginDefaults } from '../../types/api';
 
-export type RoleKey = 'firewall' | 'blackbox' | 'aruba_a' | 'aruba_b' | 'modem';
+export type RoleKey = 'firewall' | 'blackbox' | 'aruba_a' | 'aruba_b' | 'modem' | 'bbu';
 export type StepKind = 'console' | 'first_login' | 'firmware' | 'base' | 'site' | 'file';
 
 export interface Role {
@@ -39,6 +39,12 @@ export interface Role {
   /** Its file sets the password of its own login (the modem's comes from the login): no
    * "login after loading". */
   fileKeepsLogin?: boolean;
+  /** Staged by a person in its own portal with UNDM's guided steps (D-117): no plan, no
+   * login in UNDM. */
+  guided?: boolean;
+  /** How UNDM checks it answers (the portal's HTTPS port), when not SSH. */
+  protocol?: 'https_api';
+  port?: number;
 }
 
 export const ROLES: Role[] = [
@@ -75,6 +81,14 @@ export const ROLES: Role[] = [
     hint: 'Console cable only. Its first access starts it once without its factory configuration and sets the admin password.',
     cable: 'USB console cable only (speed 115200); no network cable on the bench', addressAfter: '',
     consoleWords: 'First access (console)' },
+  // Staged by hand in its portal (WebEM) on its LMP port; UNDM guides and records (D-113, D-117).
+  { key: 'bbu', title: 'Nokia Flexi BBU (FSMF)', model: 'FSMF', modelId: 'nokia-flexi-fsmf',
+    realDriver: 'guided.nokia.flexi', simulatedDriver: 'mock.nokia.flexi', nameSuffix: 'bbu',
+    address: '192.168.255.129', protocol: 'https_api', port: 443, steps: ['firmware', 'file'], guided: true,
+    fileKeepsLogin: true,
+    fileWords: "The site configuration file (SCF): Generate above makes it for this system's zone and system, with its cells' PCIs from the PCI table.",
+    hint: 'Staged by hand in its portal (WebEM): UNDM hands out the software package and the SCF and records each step. UNDM never logs in to it.',
+    cable: 'LMP port → this PC (or the small switch); the PC also needs 192.168.255.126/24', addressAfter: '192.168.255.129' },
 ];
 
 
@@ -162,5 +176,6 @@ export function roleDefaults(role: Role, d: LoginDefaults | undefined): {
   if (role.key === 'firewall') return { ...none, login: d.firewall.login, loginAfter: d.firewall.login_after, tunnelKey: d.firewall.tunnel_key };
   if (role.key === 'blackbox') return { ...none, login: d.blackbox.login, loginAfter: d.blackbox.login_after };
   if (role.key === 'modem') return none; // no default login for the modem yet
+  if (role.guided) return none; // UNDM never logs in to it (D-117)
   return { ...none, login: d.aruba.login, current: d.aruba.current };
 }
