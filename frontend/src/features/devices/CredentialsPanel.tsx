@@ -1,4 +1,5 @@
-import { ActionIcon, Anchor, Badge, Button, Card, Checkbox, Group, Modal, PasswordInput, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
+import { ActionIcon, Anchor, Button, Card, Checkbox, Group, Modal, PasswordInput, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
+import { Tag } from '../../components/Badges';
 import { useDisclosure } from '@mantine/hooks';
 import { IconKey, IconPlus, IconShieldLock, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -13,7 +14,7 @@ import { Hint } from '../../components/Hint';
 import { paths } from '../../paths';
 
 /** Username/password entry. The password goes straight to the backend, which writes it to
- *  the OS credential store; it is never shown again or stored in the UNDM database. */
+ *  the system's password store (Windows Credential Manager); it is never shown again or stored in the UNDM database. */
 function SecretForm({ onSubmit, busy, submitLabel }:
   { onSubmit: (u: string, p: string) => void; busy: boolean; submitLabel: string }) {
   const [u, setU] = useState('');
@@ -65,15 +66,15 @@ export function CredentialsPanel({ projectId }: { projectId?: string }) {
       <Group><Button leftSection={<IconPlus size={16} />} onClick={() => { setName(''); open(); }}>Add login</Button></Group>
       <Card withBorder padding={0}>
         <Table.ScrollContainer minWidth={480}>
-          <Table verticalSpacing="xs" horizontalSpacing="md">
+          <Table aria-label="Logins" verticalSpacing="xs" horizontalSpacing="md">
             <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Stored in</Table.Th><Table.Th>Password set</Table.Th><Table.Th w={110} /></Table.Tr></Table.Thead>
             <Table.Tbody>
               {(refs.data ?? []).map((r) => (
                 <Table.Tr key={r.id}>
-                  <Table.Td>{r.name}{projectId && r.shared && <Badge ml="xs" size="xs" color="gray" variant="light" tt="none">all systems</Badge>}</Table.Td>
+                  <Table.Td>{r.name}{projectId && r.shared && <Tag ml="xs" size="xs" tone="neutral">all systems</Tag>}</Table.Td>
                   <Table.Td>{r.provider === 'keyring' ? 'Credential Manager' : `environment (${r.locator})`}</Table.Td>
-                  <Table.Td>{r.has_secret === null ? <Badge color="yellow" variant="light">store unavailable</Badge>
-                    : r.has_secret ? <Badge color="teal" variant="light">yes</Badge> : <Badge color="gray" variant="light">no</Badge>}</Table.Td>
+                  <Table.Td>{r.has_secret === null ? <Tag tone="warning">store unavailable</Tag>
+                    : r.has_secret ? <Tag tone="success">yes</Tag> : <Tag tone="neutral">no</Tag>}</Table.Td>
                   <Table.Td>
                     {projectId && r.shared ? <Anchor component={Link} to={paths.settings('logins')} size="xs">In Settings</Anchor> : <Group gap={4}>
                       {r.provider === 'keyring' && <Tooltip label="Set username/password"><ActionIcon variant="subtle" aria-label={`Set password for ${r.name}`} onClick={() => setEditing(r)}><IconKey size={16} /></ActionIcon></Tooltip>}

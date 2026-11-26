@@ -1,9 +1,10 @@
-import { Anchor, Badge, Button, Card, Code, Group, List, Stack, Table, Text, Title } from '@mantine/core';
+import { Box, Anchor, Button, Card, Code, Group, List, Stack, Table, Text, Title } from '@mantine/core';
+import { InlineStatus } from '../../components/InlineStatus';
 import { IconPlugConnected, IconTerminal2 } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
-import { EnvironmentBadge, StateBadge } from '../../components/Badges';
+import { EnvironmentBadge, StateBadge, Tag } from '../../components/Badges';
 import { Hint } from '../../components/Hint';
 import { SafetyHint } from '../../components/SafetyHint';
 import { useAction, usePolicy } from '../../hooks/queries';
@@ -136,12 +137,12 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
                             <Button size="xs" variant="light" leftSection={<IconPlugConnected size={14} />}
                               loading={test.isPending && test.variables?.id === device.id} disabled={testAll.isPending}
                               onClick={() => test.mutate(device)}>Test</Button>
-                            {r && <Badge color={r.ok ? 'teal' : expected ? 'gray' : 'red'} variant="light" tt="none">
-                              {r.ok ? 'Connected' : expected ? 'Expected now' : 'Did not connect'}</Badge>}
+                            {r && <Tag tone={r.ok ? 'success' : expected ? 'neutral' : 'danger'}>
+                              {r.ok ? 'Connected' : expected ? 'Expected now' : 'Did not connect'}</Tag>}
                           </Group>
                           {expected
                             ? <Text size="xs" c="dimmed" mt={2}>A factory FortiGate has no password yet: the first step of its plan logs in as admin with no password and sets this login&apos;s password. Go on to step 4.</Text>
-                            : r && !r.ok && <Text size="xs" c="red" mt={2}>{r.message}</Text>}
+                            : r && !r.ok && <Box mt={2}><InlineStatus tone="danger" size="xs">{r.message}</InlineStatus></Box>}
                         </>
                       )}
                     </Table.Td>

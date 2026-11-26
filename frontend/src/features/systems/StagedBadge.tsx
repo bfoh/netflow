@@ -1,4 +1,5 @@
-import { Badge, Tooltip } from '@mantine/core';
+import { Tooltip } from '@mantine/core';
+import { Tag } from '../../components/Badges';
 
 import { fmtDate } from '../../services/format';
 import type { Project } from '../../types/api';
@@ -9,7 +10,7 @@ export function StagedBadge({ project }: { project: Project }) {
   const day = fmtDate(project.staged_at).split(' ')[0];
   return (
     <Tooltip label={`Staging finished ${fmtDate(project.staged_at)}${project.staged_by ? ` by ${project.staged_by}` : ''}`}>
-      <Badge color="teal" variant="light" tt="none" radius="sm">Staged {day}</Badge>
+      <Tag tone="success">Staged {day}</Tag>
     </Tooltip>
   );
 }

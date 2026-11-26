@@ -1,4 +1,6 @@
-import { Anchor, Badge, Button, Card, Code, Group, Stack, Text, Textarea, ThemeIcon, Title } from '@mantine/core';
+import { Anchor, Button, Card, Code, Group, Stack, Text, Textarea, ThemeIcon, Title } from '@mantine/core';
+import { InlineStatus } from '../../components/InlineStatus';
+import { Tag } from '../../components/Badges';
 import { IconCheck, IconDownload, IconExternalLink, IconPlugConnected } from '@tabler/icons-react';
 import { useState } from 'react';
 
@@ -38,7 +40,7 @@ export function GuidedRun({ role, device, choice }: { role: Role; device: Device
           <Text size="xs">SHA-256 <Code>{image.sha256}</Code></Text>
           <Anchor size="xs" href={api.firmwareFileUrl(image.id)}><IconDownload size={12} /> Download it from UNDM</Anchor>
         </Stack>
-      ) : <Text size="sm" c="orange">Choose the software package in step 2.</Text>;
+      ) : <InlineStatus tone="warning" size="sm">Choose the software package in step 2.</InlineStatus>;
     }
     if (s.kind === 'file') {
       return scf ? (
@@ -46,7 +48,7 @@ export function GuidedRun({ role, device, choice }: { role: Role; device: Device
           <Text size="sm">{scf.reference}</Text>
           <Anchor size="xs" href={api.guidedFileUrl(device.id, scf.id)}><IconDownload size={12} /> Download the SCF (as the team writes it)</Anchor>
         </Stack>
-      ) : <Text size="sm" c="orange">Generate or choose the SCF in step 2.</Text>;
+      ) : <InlineStatus tone="warning" size="sm">Generate or choose the SCF in step 2.</InlineStatus>;
     }
     return null;
   };
@@ -55,10 +57,10 @@ export function GuidedRun({ role, device, choice }: { role: Role; device: Device
     <Card withBorder>
       <Group justify="space-between" mb="xs" wrap="nowrap">
         <div>
-          <Title order={3} size="h5">{device.name}</Title>
+          <Title order={3}>{device.name}</Title>
           <Text size="xs" c="dimmed">{role.title} · {device.management_address} · by hand in its portal</Text>
         </div>
-        {steps.length > 0 && !next && <Badge color="teal" variant="filled" tt="none">Staged</Badge>}
+        {steps.length > 0 && !next && <Tag tone="success" variant="filled">Staged</Tag>}
       </Group>
       <Stack gap="xs">
         {real && device.management_address && (
@@ -68,7 +70,7 @@ export function GuidedRun({ role, device, choice }: { role: Role; device: Device
             <Text size="xs" c="dimmed">UNDM never logs in to it: you log in and work in the portal; UNDM records each step.</Text>
           </Group>
         )}
-        {missing.length > 0 && <Text size="xs" c="orange">Still needed: {missing.join(', ')} (step 2).</Text>}
+        {missing.length > 0 && <InlineStatus tone="warning" size="xs">Still needed: {missing.join(', ')} (step 2).</InlineStatus>}
         {steps.map((s, i) => (
           <Stack key={s.key} gap={4} pl="xs" style={{ borderLeft: `3px solid var(--mantine-color-${s.done_by ? 'teal' : s === next ? 'blue' : 'gray'}-4)` }}>
             <Group gap="xs" wrap="nowrap">

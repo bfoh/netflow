@@ -1,4 +1,4 @@
-import { Accordion, ActionIcon, Anchor, Badge, Button, Card, Code, CopyButton, Group, Menu, Modal, Stack, Stepper, Text, Textarea, Timeline, Title } from '@mantine/core';
+import { Accordion, ActionIcon, Anchor, Button, Card, Code, CopyButton, Group, Menu, Modal, Stack, Stepper, Text, Textarea, Timeline, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -270,7 +270,7 @@ function AttentionPanel({ d }: { d: Deployment }) {
             maxLength={500} value={note} onChange={(e) => setNote(e.currentTarget.value)} data-autofocus />
           <DialogError error={mark.error} />
           <Group justify="flex-end">
-            <Button variant="default" onClick={close}>Back</Button>
+            <Button variant="default" onClick={close} data-autofocus>Cancel</Button>
             <Button disabled={note.trim().length < 5} loading={mark.isPending}
               onClick={() => mark.mutate(undefined, { onSuccess: close })}>Mark as checked</Button>
           </Group>
@@ -334,7 +334,7 @@ export function DeploymentDetailPage() {
         </Stepper>
       </Card>
 
-      <Title order={2} size="h4" mb="xs">Targets</Title>
+      <Title order={2} mb="xs">Targets</Title>
       <Accordion variant="separated" multiple mb="lg">
         {d.targets.map((t) => {
           const dev = byId.get(t.device_id);
@@ -345,7 +345,7 @@ export function DeploymentDetailPage() {
                   <Group gap="xs">
                     <Text fw={600}>{dev?.name ?? t.device_id}</Text>
                     {dev && <EnvironmentBadge env={dev.environment} />}
-                    {t.to_version && <Badge variant="outline" color="gray">{t.from_version ?? '?'} → {t.to_version}</Badge>}
+                    {t.to_version && <Tag variant="outline" tone="neutral">{t.from_version ?? '?'} → {t.to_version}</Tag>}
                   </Group>
                   <StateBadge state={t.state} />
                 </Group>
@@ -354,10 +354,10 @@ export function DeploymentDetailPage() {
                 <Stack gap="xs">
                   {t.message && <Text size="sm" c={t.state.includes('fail') || t.state.includes('manual') ? 'red' : undefined}>{t.message}</Text>}
                   {t.credential_after_ref_id && (
-                    <Text size="xs" c="dimmed">After loading, UNDM logs in with the credential chosen for this file and keeps it for the device.</Text>
+                    <Text size="xs" c="dimmed">After loading, UNDM logs in with the login chosen for this file and keeps it for the device.</Text>
                   )}
                   {t.secret_refs && Object.keys(t.secret_refs).length > 0 && (
-                    <Text size="xs" c="dimmed">{Object.keys(t.secret_refs).length} secret setting(s) filled from the credential store when sent (values are never shown).</Text>
+                    <Text size="xs" c="dimmed">{Object.keys(t.secret_refs).length} secret setting(s) filled from the stored logins when sent (values are never shown).</Text>
                   )}
                   <Text size="sm">
                     <Anchor component={Link} to={paths.device(t.device_id)}>Device</Anchor>
@@ -375,7 +375,7 @@ export function DeploymentDetailPage() {
       </Accordion>
 
       <Group justify="space-between" mb="xs">
-        <Title order={2} size="h4">Events ({d.events.length})</Title>
+        <Title order={2}>Events ({d.events.length})</Title>
         <CopyButton value={d.events.map((e) => `${fmtDate(e.timestamp)}  ${e.stage}${e.device_id ? ` · ${byId.get(e.device_id)?.name ?? ''}` : ''} — ${e.status}: ${e.message}`).join('\n')}>
           {({ copied, copy }) => <Button size="xs" variant="light" onClick={copy}>{copied ? 'Copied' : 'Copy events as text'}</Button>}
         </CopyButton>

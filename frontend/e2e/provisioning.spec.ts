@@ -30,22 +30,22 @@ test('console bootstrap on the simulated console: run, verify, re-run is a no-op
   await expect(page.getByText('write memory', { exact: false }).first()).toBeVisible();
 
   const runBootstrap = async () => {
-    await page.getByRole('button', { name: 'Run console bootstrap…' }).click();
+    await page.getByRole('button', { name: 'Run console setup…' }).click();
     const modal = page.getByRole('dialog');
-    await expect(modal.getByRole('button', { name: 'Run bootstrap' })).toBeDisabled();
+    await expect(modal.getByRole('button', { name: 'Run console setup' })).toBeDisabled();
     await modal.getByLabel(/Type the device name to confirm/).fill(name);
-    await modal.getByRole('button', { name: 'Run bootstrap' }).click();
+    await modal.getByRole('button', { name: 'Run console setup' }).click();
     await expect(modal).toBeHidden();
   };
 
   await runBootstrap();
-  await expect(page.getByText('Bootstrap complete')).toBeVisible();
+  await expect(page.getByText('Console setup done').first()).toBeVisible();
   await expect(page.getByText('read back and verified')).toBeVisible();
   await expect(page.getByText('saved (write memory)')).toBeVisible();
   await expect(page.getByText('<<< untagged 2')).toBeVisible();
 
   await runBootstrap();
-  await expect(page.getByText('Already bootstrapped — nothing was changed')).toBeVisible();
+  await expect(page.getByText('Already set up — nothing was changed')).toBeVisible();
 
   await page.getByRole('link', { name: 'Continue on the device page' }).click();
   await expect(page.getByText('192.168.1.2', { exact: true })).toBeVisible();

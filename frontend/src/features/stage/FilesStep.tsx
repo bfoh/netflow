@@ -1,4 +1,6 @@
-import { Anchor, Badge, Button, Card, Checkbox, FileButton, Group, Select, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { Box, Anchor, Button, Card, Checkbox, FileButton, Group, Select, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { InlineStatus } from '../../components/InlineStatus';
+import { Tag } from '../../components/Badges';
 import { IconAlertTriangle, IconCheck, IconUpload } from '@tabler/icons-react';
 import { useEffect } from 'react';
 import { Link } from 'react-router';
@@ -73,7 +75,7 @@ function LicensePick({ device, choice, onChange }: {
       <Text size="sm" fw={500}>License file (optional)</Text>
       {choice.licenseId ? (
         <Group gap="xs">
-          <Badge color="teal" variant="light" tt="none">{choice.licenseName || 'license file'}</Badge>
+          <Tag tone="success">{choice.licenseName || 'license file'}</Tag>
           <Text size="xs" c="dimmed">loaded as the last step of the plan</Text>
           <Button size="compact-xs" variant="subtle" color="red" onClick={() => onChange(null)}>Remove</Button>
         </Group>
@@ -85,7 +87,7 @@ function LicensePick({ device, choice, onChange }: {
           <Text size="xs" c="dimmed">Not here yet? Leave it: load it later from the FortiGate's menu (⋯ → Load license…).</Text>
         </Group>
       )}
-      {upload.error && <Text size="xs" c="red">{upload.error.message}</Text>}
+      {upload.error && <InlineStatus tone="danger" size="xs">{upload.error.message}</InlineStatus>}
     </Stack>
   );
 }
@@ -125,12 +127,12 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
   return (
     <Card withBorder>
       <Group justify="space-between" mb={4} wrap="nowrap" align="flex-start">
-        <Title order={3} size="h5">{role.title} · {device.name}</Title>
+        <Title order={3}>{role.title} · {device.name}</Title>
         {missing.length === 0
-          ? <Badge color="teal" variant="light" leftSection={<IconCheck size={12} />} tt="none" style={{ flexShrink: 0 }}>Ready</Badge>
-          : <Badge color="orange" variant="light" leftSection={<IconAlertTriangle size={12} />} tt="none" style={{ flexShrink: 0 }}>To choose</Badge>}
+          ? <Tag tone="success" icon={<IconCheck size={12} />} style={{ flexShrink: 0 }}>Ready</Tag>
+          : <Tag tone="warning" icon={<IconAlertTriangle size={12} />} style={{ flexShrink: 0 }}>To choose</Tag>}
       </Group>
-      {missing.length > 0 && <Text size="xs" c="orange" mb="xs">Still needed: {missing.join(', ')}.</Text>}
+      {missing.length > 0 && <Box mb="xs"><InlineStatus tone="warning" size="xs">Still needed: {missing.join(', ')}.</InlineStatus></Box>}
       <Stack gap="sm">
         {role.steps.includes('first_login') && device.capabilities.includes('supports_first_login_setup') && (
           <Checkbox checked={choice.firstLogin} onChange={(e) => set({ firstLogin: e.currentTarget.checked })}

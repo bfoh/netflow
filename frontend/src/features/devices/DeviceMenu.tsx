@@ -87,7 +87,7 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
           {address && <Menu.Item leftSection={<IconClipboard size={14} />}
             onClick={() => void navigator.clipboard?.writeText(address).then(() => showSuccess(`Copied ${address}`))}>Copy address</Menu.Item>}
           <Menu.Divider />
-          <Menu.Item leftSection={<IconInfoCircle size={14} />} onClick={() => check.mutate(undefined, { onSuccess: setInfo })}>Check information</Menu.Item>
+          <Menu.Item leftSection={<IconInfoCircle size={14} />} onClick={() => check.mutate(undefined, { onSuccess: setInfo })}>Read information</Menu.Item>
           <Menu.Item leftSection={<IconPlugConnected size={14} />} onClick={() => run.mutate({ op: 'check_reachability' })}>Test connection</Menu.Item>
           {!consoleOnly && <Menu.Item leftSection={<IconActivity size={14} />} onClick={waitUntilAnswers}>Wait until it answers</Menu.Item>}
           <Menu.Item leftSection={<IconFileText size={14} />} onClick={() => run.mutate({ op: 'backup_configuration' })}>Back up now</Menu.Item>
@@ -147,14 +147,14 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
   );
 }
 
-/** What UNDM last read from the device, in a few rows (Check information). */
+/** What UNDM last read from the device, in a few rows (Read information). */
 export function DeviceInfo({ device }: { device: Device }) {
   const facts = { ...((device.observed_facts ?? {}) as Record<string, unknown>), ...(((device.observed_facts ?? {}) as { extra?: Record<string, unknown> }).extra ?? {}) };
   const rows = MAIN_FACTS.filter((k) => facts[k] !== undefined && facts[k] !== null && facts[k] !== '');
   const text = rows.map((k) => `${factLabel(k)}: ${String(facts[k])}`).join('\n');
   return (
     <Stack gap="xs">
-      <Table verticalSpacing={4}>
+      <Table aria-label="Information read from the device" verticalSpacing={4}>
         <Table.Tbody>
           {rows.map((k) => <Table.Tr key={k}><Table.Td c="dimmed">{factLabel(k)}</Table.Td><Table.Td ff="monospace">{String(facts[k])}</Table.Td></Table.Tr>)}
         </Table.Tbody>

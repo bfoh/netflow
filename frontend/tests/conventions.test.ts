@@ -10,15 +10,15 @@ const count = (re: RegExp, skip: string[] = []) => files
   .filter((f) => !skip.some((s) => f.endsWith(s)))
   .reduce((n, f) => n + (sources[f].match(re) ?? []).length, 0);
 
-/** What is left to clean, per rule. Lower these as pages are reworked; never raise them. */
+/** What is left to clean, per rule: all cleaned in v94 (D-123). Keep them at 0. */
 const BUDGET = {
-  colouredText: 18,
-  badgeColor: 52,
-  titleSize: 42,
-  tableWithoutLabel: 27,
+  colouredText: 0,
+  badgeColor: 0,
+  titleSize: 0,
+  tableWithoutLabel: 0,
   routeStrings: 0,
-  synonyms: 17,
-  dismissBack: 13,
+  synonyms: 0,
+  dismissBack: 0,
 } as const;
 
 const RULES: Record<keyof typeof BUDGET, () => number> = {

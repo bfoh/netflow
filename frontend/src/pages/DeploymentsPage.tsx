@@ -1,4 +1,5 @@
 import { Accordion, ActionIcon, Anchor, Button, Card, Checkbox, Group, SegmentedControl, Select, Stack, Switch, Table, Text, Title } from '@mantine/core';
+import { InlineStatus } from '../components/InlineStatus';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
@@ -25,7 +26,7 @@ function ConfigChoice({ deviceId, value, onChange }: { deviceId: string; value: 
   const fallback = versions.find((v) => v.kind === 'generated') ?? versions.find((v) => v.kind === 'imported');
   useEffect(() => { if (!value && fallback) onChange(fallback.id); }, [value, fallback, onChange]);
   if (configs.data && versions.length === 0) {
-    return <Text size="xs" c="orange">No file yet: import one (Files page) or generate one from its settings.</Text>;
+    return <InlineStatus tone="warning" size="xs">No file yet: import one (Files page) or generate one from its settings.</InlineStatus>;
   }
   return <Select size="xs" w="100%" maw={320} aria-label="Configuration to deploy" placeholder="Choose the file"
     data={versions.map((v) => ({ value: v.id, label: versionLabel(v) }))} value={value}
@@ -36,7 +37,7 @@ import { applyModeLabel, stateLabel } from '../services/labels';
 import { paths } from '../paths';
 
 /**
- * What the chosen file needs: the apply mode its kind requires, and a credential for each
+ * What the chosen file needs: the apply mode its kind requires, and a login for each
  * secret setting (e.g. a tunnel pre-shared key). Values never pass through the browser.
  */
 function FileNeeds({ projectId, versionId, secrets, onSecrets, onMode, loginAfter, onLoginAfter }: {
@@ -88,7 +89,7 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
   const [mode, setMode] = useState('merge');
   // The mode each chosen file requires by its kind (complete file → replace, script → merge).
   const [fileModes, setFileModes] = useState<Record<string, string>>({});
-  // Opened from "Deploy this version…": that version is chosen for its device.
+  // Opened from "Make a plan with this version…": that version is chosen for its device.
   const [choice, setChoice] = useState<Record<string, string>>(
     () => (version && preselected.length === 1 ? { [preselected[0]]: version } : {}));
   const [secrets, setSecrets] = useState<Record<string, Record<string, string>>>({});
@@ -112,7 +113,7 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
 
   return (
     <Card withBorder>
-      <Title order={2} size="h4" mb="xs">New configuration plan</Title>
+      <Title order={2} mb="xs">New configuration plan</Title>
       <Text size="sm" c="dimmed" mb="md">
         Tick the devices and choose the file each one gets (it starts with the latest generated file, else the latest
         imported one). The plan is checked and previewed against each device; it then needs approval before it runs. A dry
@@ -120,7 +121,7 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
       </Text>
       <QueryState isLoading={devices.isLoading} error={devices.error} />
       <Table.ScrollContainer minWidth={760}>
-      <Table verticalSpacing={4} mb="md">
+      <Table aria-label="What the file needs" verticalSpacing={4} mb="md">
         <Table.Thead><Table.Tr><Table.Th w={36} /><Table.Th>Device</Table.Th><Table.Th>Model</Table.Th><Table.Th>Kind</Table.Th><Table.Th>Status</Table.Th><Table.Th>File to load</Table.Th></Table.Tr></Table.Thead>
         <Table.Tbody>
           {(devices.data ?? []).map((d) => (
@@ -206,7 +207,7 @@ function NewStagingPlan({ projectId }: { projectId: string }) {
 
   return (
     <Card withBorder>
-      <Title order={2} size="h4" mb="xs">New staging plan (base file, then site file)</Title>
+      <Title order={2} mb="xs">New staging plan (base file, then site file)</Title>
       <Text size="sm" c="dimmed" mb="md">
         For a FortiGate staged with two files: step 1 restores the base file (replace, the device restarts), step 2 loads the
         site file (merge) once step 1 has succeeded. The site file therefore always lands on a clean base, never on an earlier
@@ -248,7 +249,7 @@ function NewFirstLogin({ projectId }: { projectId: string }) {
     (d) => `First login planned: ${stateLabel(d.state).toLowerCase()}`);
   return (
     <Card withBorder>
-      <Title order={2} size="h4" mb="xs">First login on a new unit</Title>
+      <Title order={2} mb="xs">First login on a new unit</Title>
       <Text size="sm" c="dimmed" mb="md">
         A new FortiGate lets admin in without a password and then asks for a new one. UNDM checks this without answering
         (preview); once approved it sets the device&apos;s login (the approved password stored with the device) and logs in with it.

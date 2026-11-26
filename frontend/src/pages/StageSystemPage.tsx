@@ -1,4 +1,5 @@
-import { Anchor, Badge, Button, Card, Group, Menu, SegmentedControl, Select, SimpleGrid, Stack, Stepper, Text, TextInput, Title } from '@mantine/core';
+import { Anchor, Button, Card, Group, Menu, SegmentedControl, Select, SimpleGrid, Stack, Stepper, Text, TextInput, Title } from '@mantine/core';
+import { Tag } from '../components/Badges';
 import { IconArrowLeft, IconCheck, IconPlus } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -37,7 +38,7 @@ function ChooseSystem() {
   return (
     <SimpleGrid cols={{ base: 1, md: 2 }}>
       <Card withBorder>
-        <Title order={2} size="h5" mb="xs">A new system</Title>
+        <Title order={2} mb="xs">A new system</Title>
         <Stack gap="xs">
           <TextInput label="System name" placeholder="e.g. site 12 staging" value={name} onChange={(e) => setName(e.currentTarget.value)} />
           <DialogError error={create.error} />
@@ -46,7 +47,7 @@ function ChooseSystem() {
         </Stack>
       </Card>
       <Card withBorder>
-        <Title order={2} size="h5" mb="xs">A system you have</Title>
+        <Title order={2} mb="xs">A system you have</Title>
         <Select label="System" placeholder={projects.data?.length ? 'Choose a system' : 'No systems yet'} searchable
           data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
           onChange={(v) => { if (v) void navigate(paths.stage(v)); }} />
@@ -179,7 +180,9 @@ function StageSystem({ projectId }: { projectId: string }) {
         secondary={<Button variant="default" component={Link} to={paths.system(projectId)}>System page</Button>}
         menu={<Menu.Item component={Link} to={paths.stageChooser}>Stage another system</Menu.Item>} />
       {/* A finished system shows every step done (D-108); the content still follows `active`. */}
-      <Stepper active={project.data.staged_at ? STEPS.length : active} onStepClick={setActive} size="sm" mb="lg" allowNextStepsSelect>
+      {/* A phone has no room for five steps side by side: it shows where you are in words. */}
+      <Text hiddenFrom="sm" size="sm" fw={600} mb="md">Step {active + 1} of {STEPS.length} · {STEPS[active]}</Text>
+      <Stepper visibleFrom="sm" active={project.data.staged_at ? STEPS.length : active} onStepClick={setActive} size="sm" mb="lg" allowNextStepsSelect>
         {STEPS.map((label, i) => (
           <Stepper.Step key={label} label={label}
             completedIcon={<IconCheck size={16} />}
@@ -222,10 +225,10 @@ function StageSystem({ projectId }: { projectId: string }) {
       {!consoleId && active === 3 && <RunStep projectId={projectId} roles={roles} choices={choices} stagings={stagings.data ?? []} />}
       {!consoleId && active === 4 && <ReportStep project={project.data} roles={roles} stagings={stagings.data ?? []} />}
       {!consoleId && <Group justify="space-between" mt="lg" className="no-print">
-        <Button variant="default" disabled={active === 0} onClick={() => setActive(active - 1)}>Back</Button>
+        {active > 0 ? <Button variant="default" onClick={() => setActive(active - 1)}>Previous: {STEPS[active - 1]}</Button> : <span />}
         {active < STEPS.length - 1 && <Button onClick={() => setActive(active + 1)}>Next: {STEPS[active + 1]}</Button>}
       </Group>}
-      {active === 0 && roles.length === 0 && <Badge mt="xs" color="gray" variant="light" tt="none">Add at least one device to continue usefully</Badge>}
+      {active === 0 && roles.length === 0 && <Tag mt="xs" tone="neutral">Add at least one device to continue usefully</Tag>}
     </>
   );
 }

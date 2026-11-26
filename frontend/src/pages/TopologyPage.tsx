@@ -143,7 +143,7 @@ function Side({ topo, onEdit }: { topo: Topology; onEdit?: (l: Topology['links']
     <Stack>
       <Card withBorder>
         <Group justify="space-between" mb="xs">
-          <Title order={2} size="h4">Validation</Title>
+          <Title order={2}>Validation</Title>
           {topo.issues.length === 0
             ? <Tag tone="success" icon={<IconCircleCheck size={12} aria-hidden />}>no issues</Tag>
             : <Tag tone={errors.length ? 'danger' : 'warning'}>{errors.length} errors · {topo.issues.length - errors.length} warnings</Tag>}
@@ -158,7 +158,7 @@ function Side({ topo, onEdit }: { topo: Topology; onEdit?: (l: Topology['links']
         </Stack>
       </Card>
       <Card withBorder padding={0}>
-        <Title order={2} size="h4" p="sm" pb={0}>Links ({topo.links.length})</Title>
+        <Title order={2} p="sm" pb={0}>Links ({topo.links.length})</Title>
         <Table.ScrollContainer minWidth={520}>
           <Table verticalSpacing={4} horizontalSpacing="sm" aria-label="Links">
             <Table.Tbody>

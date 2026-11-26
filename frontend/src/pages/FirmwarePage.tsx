@@ -1,7 +1,8 @@
-import {
-  Badge, Box, Button, Card, Checkbox, FileInput, Group, Modal, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput,
+import { Box, Button, Card, Checkbox, FileInput, Group, Modal, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput,
   Text, Textarea, TextInput, Tooltip,
 } from '@mantine/core';
+import { InlineStatus } from '../components/InlineStatus';
+import { Tag } from '../components/Badges';
 import { IconAlertTriangle, IconCheck, IconShieldCheck, IconUpload, IconX } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -155,7 +156,7 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
     {confirmDialog}
     <Card withBorder padding={0}>
       <Table.ScrollContainer minWidth={900}>
-        <Table verticalSpacing="xs" horizontalSpacing="md">
+        <Table aria-label="Firmware images" verticalSpacing="xs" horizontalSpacing="md">
           <Table.Thead><Table.Tr><Table.Th>Version</Table.Th><Table.Th>For</Table.Th><Table.Th>File</Table.Th><Table.Th>Models</Table.Th>
             <Table.Th>Checksum</Table.Th><Table.Th>Status</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>
@@ -166,15 +167,15 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
                 <Table.Td><Text size="sm">{i.filename}</Text><Text size="xs" c="dimmed">{fmtSize(i.size_bytes)}</Text></Table.Td>
                 <Table.Td><Text size="sm">{i.compatible_models.join(', ')}</Text></Table.Td>
                 <Table.Td>{i.integrity_verified
-                  ? <Tooltip label={`${i.vendor_sha512 ? 'SHA-512' : 'SHA-256'} matched the vendor-published checksum`}><Badge color="teal" variant="light" leftSection={<IconShieldCheck size={12} />}>Verified</Badge></Tooltip>
+                  ? <Tooltip label={`${i.vendor_sha512 ? 'SHA-512' : 'SHA-256'} matched the vendor-published checksum`}><Tag tone="success" icon={<IconShieldCheck size={12} />}>Verified</Tag></Tooltip>
                   : <Group gap={4} wrap="nowrap">
                       {i.status === 'approved' && i.unverified_reason
                         ? <Tooltip multiline w={320} label={`Approved by ${i.approved_by ?? '?'} without the vendor's checksum. Reason: ${i.unverified_reason}`}>
-                            <Badge color="orange" variant="light" leftSection={<IconAlertTriangle size={12} />}>Not verified · approved with reason</Badge></Tooltip>
-                        : <Tooltip label="No vendor checksum was supplied. Add it, or approve the image with a written reason."><Badge color="yellow" variant="light" leftSection={<IconAlertTriangle size={12} />}>Not verified</Badge></Tooltip>}
+                            <Tag tone="warning" icon={<IconAlertTriangle size={12} />}>Not verified · approved with reason</Tag></Tooltip>
+                        : <Tooltip label="No vendor checksum was supplied. Add it, or approve the image with a written reason."><Tag tone="warning" icon={<IconAlertTriangle size={12} />}>Not verified</Tag></Tooltip>}
                       {i.status !== 'retired' && <Button size="compact-xs" variant="light" onClick={() => { setChecksum(''); setChecking(i); }}>Add vendor checksum…</Button>}
                     </Group>}</Table.Td>
-                <Table.Td><Badge color={i.status === 'approved' ? 'teal' : i.status === 'retired' ? 'gray' : 'blue'} variant="light">{stateLabel(i.status)}</Badge>
+                <Table.Td><Tag tone={i.status === 'approved' ? 'success' : i.status === 'retired' ? 'neutral' : 'info'}>{stateLabel(i.status)}</Tag>
                   {i.approved_by && <Text size="xs" c="dimmed">by {i.approved_by}</Text>}</Table.Td>
                 <Table.Td>
                   <Group gap={4}>
@@ -239,7 +240,7 @@ function Planner({ images }: { images: FirmwareImage[] }) {
       {projectId && (
         <Card withBorder>
           <Table.ScrollContainer minWidth={520}>
-            <Table verticalSpacing={4}>
+            <Table aria-label="Devices to upgrade" verticalSpacing={4}>
               <Table.Thead><Table.Tr><Table.Th w={36} /><Table.Th>Device</Table.Th><Table.Th>Model</Table.Th><Table.Th>Connects by</Table.Th><Table.Th>Firmware now (last read)</Table.Th><Table.Th>Compatibility</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>
                 {(devices.data ?? []).map((d) => {
@@ -249,11 +250,11 @@ function Planner({ images }: { images: FirmwareImage[] }) {
                       <Table.Td><Checkbox aria-label={`Upgrade ${d.name}`} checked={sel.includes(d.id)}
                         onChange={() => { setResults(null); setSel((s) => (s.includes(d.id) ? s.filter((x) => x !== d.id) : [...s, d.id])); }} /></Table.Td>
                       <Table.Td>{d.name}</Table.Td><Table.Td>{d.model}</Table.Td><Table.Td><Text size="xs">{driverLabel(d.driver_id)}</Text></Table.Td>
-                      <Table.Td>{String(d.observed_facts?.os_version ?? '— (use Retrieve information on the device page)')}</Table.Td>
-                      <Table.Td>{r && (r.compatible ? <Stack gap={2}><Badge color="teal" variant="light" leftSection={<IconCheck size={12} />}>Compatible</Badge>
-                          {r.issues.map((i) => <Text key={i.code} size="xs" c="orange">{i.message}</Text>)}</Stack>
-                        : <Stack gap={2}><Badge color="red" variant="light" leftSection={<IconX size={12} />}>Not compatible</Badge>
-                          {r.issues.map((i) => <Text key={i.code} size="xs" c="red">{i.message}</Text>)}</Stack>)}</Table.Td>
+                      <Table.Td>{String(d.observed_facts?.os_version ?? '— (use Read information on the device page)')}</Table.Td>
+                      <Table.Td>{r && (r.compatible ? <Stack gap={2}><Tag tone="success" icon={<IconCheck size={12} />}>Compatible</Tag>
+                          {r.issues.map((i) => <InlineStatus key={i.code} tone="warning" size="xs">{i.message}</InlineStatus>)}</Stack>
+                        : <Stack gap={2}><Tag tone="danger" icon={<IconX size={12} />}>Not compatible</Tag>
+                          {r.issues.map((i) => <InlineStatus key={i.code} tone="danger" size="xs">{i.message}</InlineStatus>)}</Stack>)}</Table.Td>
                     </Table.Tr>
                   );
                 })}
@@ -267,7 +268,7 @@ function Planner({ images }: { images: FirmwareImage[] }) {
             <Checkbox label="Install the approved version even on devices that run a newer one (downgrade)"
               description="For a system that requires an older approved release, e.g. new units shipping with a newer one."
               checked={allowDowngrade} onChange={(e) => setAllowDowngrade(e.currentTarget.checked)} />
-            <Checkbox label="Also write the approved version into the secondary flash"
+            <Checkbox label="Also write the approved version into the backup slot"
               description="After the device runs it from primary (it keeps booting from primary). Devices already on the version get only their secondary written."
               checked={alsoSecondary} onChange={(e) => setAlsoSecondary(e.currentTarget.checked)} />
             <Button disabled={!allOk} loading={create.isPending}

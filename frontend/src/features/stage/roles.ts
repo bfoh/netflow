@@ -69,7 +69,7 @@ export const ROLES: Role[] = [
   { key: 'aruba_b', title: 'Aruba 2930F (OOBM port 3)', model: '2930F', modelId: 'aruba-2930f',
     realDriver: 'ssh.aruba.aos_switch', simulatedDriver: 'mock.aruba.aos_switch', nameSuffix: 'sw-b',
     address: '192.168.1.2', steps: ['console', 'firmware', 'file'],
-    hint: 'Temporary address so both switches fit on the bench; its file sets the final one.',
+    hint: 'A spare address so both switches fit on the bench; its file sets the final one.',
     cable: 'USB console cable first; after its console setup, port 3 → small switch', addressAfter: '192.168.1.1',
     consolePort: '3' },
   // Console cable only: no bench address. Its first access (D-112), then its file over the same

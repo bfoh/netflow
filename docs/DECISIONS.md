@@ -1992,6 +1992,33 @@ mode, and Cancel and Delete sat next to Approve and Run.
   every link in the list has an **Edit** button, so links can be edited from the keyboard; the
   side panel goes below the canvas under 1408 px.
 
+### D-123 One word for each thing, and a checklist on Home (2026-11-26)
+
+**Found:** several names for the same thing (system/project, plan/deployment/"Deploy",
+login/credential, console setup/bootstrap, Retrieve/Check information, backup slot/secondary
+flash, temporary address); plan and step names written out in five places; colours, badge
+colours and heading sizes picked by hand page by page; "Getting started" on Home taught the
+old manual flow.
+
+**Decision.**
+- **Glossary** (`services/labels.ts`): System, Device, Plan, Staging plan, Step, Login, File,
+  Template, Firmware image; Complete file and Additions; Console setup (the modem: First
+  access); Check and preview, Approve, Run, Stop, Test connection, Read information, Back up
+  now; Backup slot; Make room. Dialogs close with Cancel (forms) or Close (read-only). The
+  wizard's buttons say where they go ("Previous: Files and firmware", "Next: Run").
+- **Checked on the source** (`tests/conventions.test.ts`), every rule now at 0: no colour-only
+  text (warnings and errors are `InlineStatus` or `Notice`), no badge colour picked by hand
+  (`Tag` tones), no heading size set by hand (the theme sizes headings by level: h1 26 px,
+  h2 18 px, h3 16 px, h4 15 px), every table named for screen readers, no address written out
+  of `paths.ts`, none of the old synonyms, no "Back" in a dialog. The number of
+  "experimental" labels may not go down.
+- **Home** (`features/home/SetupChecklist`): **Set up once** lists, from what UNDM already
+  has, your name, logins for all systems (with their passwords stored), the default login per
+  device (4), the templates (7), the PCI table, the certificate answers and an approved image
+  for every model that gets firmware; each item not done has a button to the exact place. It
+  folds to one line when all is done. **Continue staging <system>** returns to the unfinished
+  system at its step; **Stage a system** is Home's one main action.
+
 ### D-124 The modem has a default login (2026-11-26)
 
 The 7705 SAR-Hmc's first access sets the approved login (D-112), but Settings had no default

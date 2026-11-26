@@ -1,4 +1,6 @@
-import { Badge, Card, Group, Stack, Switch, Text, Title } from '@mantine/core';
+import { Card, Group, Stack, Switch, Text, Title } from '@mantine/core';
+import { InlineStatus } from '../../components/InlineStatus';
+import { Tag } from '../../components/Badges';
 import { IconLock, IconShieldCheck } from '@tabler/icons-react';
 
 import { usePolicy } from '../../hooks/queries';
@@ -29,13 +31,13 @@ export function SafetyPanel() {
               <Stack gap={4}>
                 <Group gap="xs">
                   <Title order={2}>{info.label}</Title>
-                  <Badge radius="sm" variant={on === info.riskyValue ? 'filled' : 'light'} color={on === info.riskyValue ? 'red' : 'gray'}>
+                  <Tag variant={on === info.riskyValue ? 'filled' : 'light'} tone={on === info.riskyValue ? 'danger' : 'neutral'}>
                     {on ? 'ON' : 'off'}
-                  </Badge>
+                  </Tag>
                 </Group>
                 <Text size="sm" c="dimmed">{info.risky}</Text>
                 {info.needs && <Text size="xs" c="dimmed">Works only together with Real-device changes.</Text>}
-                {blockedBy && <Text size="xs" c="orange">Real-device changes are off, so this has no effect yet.</Text>}
+                {blockedBy && <InlineStatus tone="warning" size="xs">Real-device changes are off, so this has no effect yet.</InlineStatus>}
                 {locked && (
                   <Group gap={4}><IconLock size={14} /><Text size="xs">Fixed in backend\.env (<code>UNDM_{info.key.toUpperCase()}</code>). Delete that line once and restart the backend: this switch is then changed here.</Text></Group>
                 )}

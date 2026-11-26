@@ -1,4 +1,6 @@
-import { Badge, Button, Card, FileInput, Group, Modal, NumberInput, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Button, Card, FileInput, Group, Modal, NumberInput, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { InlineStatus } from '../../components/InlineStatus';
+import { Tag } from '../../components/Badges';
 import { IconDownload, IconFileImport } from '@tabler/icons-react';
 import { useRef, useState } from 'react';
 
@@ -49,7 +51,7 @@ function useFileFields(bySystem: boolean) {
 }
 
 function Disagree({ items }: { items: string[] }) {
-  return items.length ? <Text size="xs" c="orange">Check this file: {items.join('; ')}.</Text> : null;
+  return items.length ? <InlineStatus tone="warning" size="xs">Check this file: {items.join('; ')}.</InlineStatus> : null;
 }
 
 /** Import a team file as the template of a role, optionally checked against another zone's file. */
@@ -82,10 +84,10 @@ function ImportTemplate({ role, label, onClose }: { role: TemplateRole; label: s
         <Text size="sm">Kept <b>{label} {t.version}</b>{t.reference_zone ? ` (from zone ${t.reference_zone}${t.reference_system ? `, ${t.reference_system}` : ''})` : ''}.</Text>
         {t.verified_zone && (
           <Group gap="xs">
-            <Badge color="teal" variant="light" tt="none">
+            <Tag tone="success">
               {done.accepted.length ? 'Gives' : 'Gives exactly'} the zone {t.verified_zone}{t.verified_system ? `, ${t.verified_system}` : ''} file
-              {done.accepted.length ? ` except ${done.accepted.length} accepted line(s)` : ''}</Badge>
-            {done.verified_bytes === true && <Badge color="teal" variant="light" tt="none">byte for byte</Badge>}
+              {done.accepted.length ? ` except ${done.accepted.length} accepted line(s)` : ''}</Tag>
+            {done.verified_bytes === true && <Tag tone="success">byte for byte</Tag>}
             {done.verified_bytes === false && <Text size="xs" c="dimmed">line for line; that file&apos;s line endings differ from this one&apos;s</Text>}
           </Group>
         )}
@@ -100,7 +102,7 @@ function ImportTemplate({ role, label, onClose }: { role: TemplateRole; label: s
         {secretRole(role) && <Text size="xs" c="dimmed">The admin password was left out of the template: a file handed out gets the password of the modem&apos;s login.</Text>}
         {done.to_check.length > 0 && (
           <Stack gap={2}>
-            <Text size="sm" fw={600} c="orange">Check these lines: they hold the zone&apos;s number in another form and were kept as they are</Text>
+            <InlineStatus tone="warning" size="sm"><b>Check these lines: they hold the zone&apos;s number in another form and were kept as they are</b></InlineStatus>
             {done.to_check.map((l) => <Text key={l} size="xs" ff="monospace">{l}</Text>)}
           </Stack>
         )}
@@ -143,7 +145,7 @@ function ImportTemplate({ role, label, onClose }: { role: TemplateRole; label: s
         </Notice>
       ) : <DialogError error={run.error} />}
       <Group justify="flex-end">
-        <Button variant="default" onClick={onClose}>Back</Button>
+        <Button variant="default" onClick={onClose} data-autofocus>Cancel</Button>
         {differences && <Button variant="light" color="orange" loading={run.isPending}
           onClick={() => run.mutate(true, { onSuccess: setDone })}>Keep it anyway</Button>}
         <Button disabled={!file} loading={run.isPending} leftSection={<IconFileImport size={16} />}
@@ -191,7 +193,7 @@ export function TemplatesCard() {
         <Notice kind="settled" compact mt="xs" title="Not in the download">{skipped.map((x) => <div key={x}>{x}</div>)}</Notice>
       )}
       <Table.ScrollContainer minWidth={560}>
-        <Table verticalSpacing="xs" mt="sm">
+        <Table aria-label="Templates" verticalSpacing="xs" mt="sm">
           <Table.Thead><Table.Tr><Table.Th>File</Table.Th><Table.Th>Version</Table.Th><Table.Th>Checked</Table.Th><Table.Th>Imported</Table.Th><Table.Th /></Table.Tr></Table.Thead>
           <Table.Tbody>
             {TEMPLATE_ROLES.map(({ role, label: name }) => {
@@ -202,9 +204,9 @@ export function TemplatesCard() {
                   <Table.Td>{t ? <><Text size="sm">{t.version || '—'}{t.reference_zone ? ` · from zone ${t.reference_zone}` : ''}{t.reference_system ? ` · ${t.reference_system}` : ''}</Text>
                     <Text size="xs" c="dimmed">{formatWords(t)}</Text></> : <Text size="sm" c="dimmed">not imported</Text>}</Table.Td>
                   <Table.Td>{!t ? null : role === 'fortigate_base' ? <Text size="xs" c="dimmed">same for every zone</Text>
-                    : t.verified_zone ? <Badge color="teal" variant="light" tt="none">against zone {t.verified_zone}{t.verified_system ? ` · ${t.verified_system}` : ''}
-                      {t.counts.accepted_differences ? ` (${t.counts.accepted_differences} accepted)` : ''}</Badge>
-                      : <Badge color="gray" variant="light" tt="none">not checked</Badge>}</Table.Td>
+                    : t.verified_zone ? <Tag tone="success">against zone {t.verified_zone}{t.verified_system ? ` · ${t.verified_system}` : ''}
+                      {t.counts.accepted_differences ? ` (${t.counts.accepted_differences} accepted)` : ''}</Tag>
+                      : <Tag tone="neutral">not checked</Tag>}</Table.Td>
                   <Table.Td><Text size="xs" c="dimmed">{t ? `${fmtDate(t.created_at)} · ${t.created_by}` : ''}</Text></Table.Td>
                   <Table.Td>
                     <Group gap={4} justify="flex-end" wrap="nowrap">

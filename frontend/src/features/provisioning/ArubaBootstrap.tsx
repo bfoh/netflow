@@ -1,7 +1,7 @@
-import {
-  Badge, Button, Card, Checkbox, Code, CopyButton, Group, List, Modal, NumberInput, Select, SimpleGrid, Stack,
+import { Button, Card, Checkbox, Code, CopyButton, Group, List, Modal, NumberInput, Select, SimpleGrid, Stack,
   Text, TextInput, Title,
 } from '@mantine/core';
+import { Tag } from '../../components/Badges';
 import { useDisclosure } from '@mantine/hooks';
 import { IconDownload, IconPlugConnected, IconRefresh, IconTerminal2 } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -19,10 +19,10 @@ import { roleOf } from '../stage/roles';
 
 const BAUD = ['9600', '19200', '38400', '57600', '115200'];
 const STATUS: Record<BootstrapResult['status'], { kind: NoticeKind; title: string }> = {
-  bootstrapped: { kind: 'success', title: 'Bootstrap complete' },
-  already_configured: { kind: 'success', title: 'Already bootstrapped — nothing was changed' },
+  bootstrapped: { kind: 'success', title: 'Console setup done' },
+  already_configured: { kind: 'success', title: 'Already set up — nothing was changed' },
   refused: { kind: 'caution', title: 'Refused — the switch does not look factory default' },
-  failed: { kind: 'error', title: 'Bootstrap failed' },
+  failed: { kind: 'error', title: 'Console setup failed' },
 };
 
 /** The console setup of an Aruba 2930F (D-025, D-057, D-095): its first address and login, after
@@ -70,7 +70,7 @@ export function ArubaBootstrap({ device, simulated, back }: {
 
   const profile: BootstrapProfile = { vlan_id: Number(vlanId), vlan_name: vlanName.trim(), untagged_port: port.trim(), address: address.trim() };
   const complete = !!profile.vlan_id && !!profile.vlan_name && !!profile.untagged_port && /^\d+\.\d+\.\d+\.\d+\/\d+$/.test(profile.address);
-  const save = useAction(() => api.updateDevice(device.id, { bootstrap_profile: profile }), 'Bootstrap settings saved');
+  const save = useAction(() => api.updateDevice(device.id, { bootstrap_profile: profile }), 'Console setup settings saved');
   const chooseOwn = useAction((ref: string | null) => api.updateDevice(device.id, { credential_ref_id: ref }), 'Approved login chosen');
   const loginOptions = (refs.data ?? []).map((r) => ({ value: r.id, label: r.name }));
   const doPreview = useAction(() => api.bootstrapPreview(device.id, profile));
@@ -91,7 +91,7 @@ export function ArubaBootstrap({ device, simulated, back }: {
   return (
     <Stack>
       <Card withBorder>
-        <Title order={2} size="h5" mb="xs">1 · Management settings for this switch</Title>
+        <Title order={2} mb="xs">1 · Management settings for this switch</Title>
         <Text size="sm" c="dimmed" mb="sm">
           An out-of-band management VLAN with one untagged port and an address. Saved per device, so each switch keeps its own
           port and (temporary) address.
@@ -123,7 +123,7 @@ export function ArubaBootstrap({ device, simulated, back }: {
       </Card>
 
       <Card withBorder>
-        <Title order={2} size="h5" mb="xs">2 · Console connection</Title>
+        <Title order={2} mb="xs">2 · Console connection</Title>
         <Group align="flex-end">
           <Select label="Serial port" w="100%" maw={380} placeholder={portOptions.length ? 'Choose the console cable’s port' : 'No serial ports found'}
             data={portOptions} value={serialPort} onChange={setSerialPort} />
@@ -138,7 +138,7 @@ export function ArubaBootstrap({ device, simulated, back }: {
         )}
         <Group mt="md">
           <Button leftSection={<IconTerminal2 size={16} />} disabled={!complete || !serialPort || !!blocked}
-            onClick={() => { setConfirm(''); open(); }}>Run console bootstrap…</Button>
+            onClick={() => { setConfirm(''); open(); }}>Run console setup…</Button>
           <SafetyHint real={!simulated} />
         </Group>
       </Card>
@@ -151,13 +151,13 @@ export function ArubaBootstrap({ device, simulated, back }: {
             {result.network_hint && <Text size="sm" mt={6}>{result.network_hint}</Text>}
           </Notice>
           <Group gap="xs" mb="xs">
-            {result.erased && <Badge variant="light" color="orange">erased “{result.erased}” first</Badge>}
-            {result.no_password && <Badge variant="light" color="yellow">no manager password</Badge>}
-            {result.password_set && <Badge variant="light" color="teal">manager password set</Badge>}
-            <Badge variant="light" color={result.verified ? 'teal' : 'gray'}>{result.verified ? 'read back and verified' : 'not verified'}</Badge>
-            <Badge variant="light" color={result.saved ? 'teal' : 'gray'}>{result.saved ? 'saved (write memory)' : 'not saved'}</Badge>
-            {result.network_reachable !== null && <Badge variant="light" color={result.network_reachable ? 'teal' : 'yellow'}>
-              {result.network_reachable ? 'reachable over the network' : 'not reachable over the network yet'}</Badge>}
+            {result.erased && <Tag tone="warning">erased “{result.erased}” first</Tag>}
+            {result.no_password && <Tag tone="warning">no manager password</Tag>}
+            {result.password_set && <Tag tone="success">manager password set</Tag>}
+            <Tag tone={result.verified ? 'success' : 'neutral'}>{result.verified ? 'read back and verified' : 'not verified'}</Tag>
+            <Tag tone={result.saved ? 'success' : 'neutral'}>{result.saved ? 'saved (write memory)' : 'not saved'}</Tag>
+            {result.network_reachable !== null && <Tag tone={result.network_reachable ? 'success' : 'warning'}>
+              {result.network_reachable ? 'reachable over the network' : 'not reachable over the network yet'}</Tag>}
           </Group>
           <Text size="sm" fw={600}>Console transcript</Text>
           <Code block mah={360} style={{ overflow: 'auto', fontSize: 11 }}>{result.transcript}</Code>
@@ -174,7 +174,7 @@ export function ArubaBootstrap({ device, simulated, back }: {
         </Card>
       )}
 
-      <Modal opened={opened} onClose={close} title="Run console bootstrap">
+      <Modal opened={opened} onClose={close} title="Run console setup">
         <Stack>
           <Text size="sm">
             UNDM will log in on <b>{serialPort}</b>, check that the switch is factory default, type the previewed commands, read the
@@ -223,12 +223,12 @@ export function ArubaBootstrap({ device, simulated, back }: {
                 )}
             </Stack>
           )}
-          {!erase && <Checkbox label="The switch already has configuration — bootstrap it anyway" checked={allowConfigured}
+          {!erase && <Checkbox label="The switch already has configuration — set it up anyway" checked={allowConfigured}
             onChange={(e) => setAllowConfigured(e.currentTarget.checked)} />}
           <TextInput label={`Type the device name to confirm: ${device.name}`} value={confirm} onChange={(e) => setConfirm(e.currentTarget.value)} />
           {run.isPending && (
             <Notice kind="status" compact title="Working on the console">{erase
-              ? 'Erasing, then the switch restarts (1–2 minutes), then UNDM presses Enter every 10 seconds until it answers and bootstraps it. This can take up to 8 minutes. Keep the console cable connected and this window open.'
+              ? 'Erasing, then the switch restarts (1–2 minutes), then UNDM presses Enter every 10 seconds until it answers and sets it up. This can take up to 8 minutes. Keep the console cable connected and this window open.'
               : 'Keep the cable connected.'}</Notice>
           )}
           <DialogError error={run.error} />
@@ -236,7 +236,7 @@ export function ArubaBootstrap({ device, simulated, back }: {
             <Button variant="default" onClick={close}>Cancel</Button>
             <Button color={erase ? 'red' : 'orange'} disabled={confirm.trim() !== device.name || (erase && (!currentLogin || !hostname || !eraseOk || !!ownProblem))}
               loading={run.isPending}
-              onClick={() => run.mutate(undefined, { onSuccess: (r) => { setResult(r); close(); } })}>{erase ? 'Erase and bootstrap' : 'Run bootstrap'}</Button>
+              onClick={() => run.mutate(undefined, { onSuccess: (r) => { setResult(r); close(); } })}>{erase ? 'Erase and set up' : 'Run console setup'}</Button>
           </Group>
         </Stack>
       </Modal>

@@ -1,4 +1,5 @@
-import { Badge, Button, Card, FileButton, Group, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Button, Card, FileButton, Group, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Tag } from '../../components/Badges';
 import { IconFileImport } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -24,7 +25,7 @@ export function PciTableCard() {
     <Card withBorder>
       <Group justify="space-between" mb={4}>
         <Title order={2}>PCI table (Flexi BBU cells)</Title>
-        {t ? <Badge color="teal" variant="light" tt="none">{t.systems} systems</Badge> : <Badge color="gray" variant="light" tt="none">not imported</Badge>}
+        {t ? <Tag tone="success">{t.systems} systems</Tag> : <Tag tone="neutral">not imported</Tag>}
       </Group>
       <Hint>
         The team&apos;s PCI mapping workbook (.xlsx, or the same table saved as CSV). Each system&apos;s BBU cells take their PCIs from its

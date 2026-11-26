@@ -134,7 +134,7 @@ describe('application shell', () => {
     expect(await screen.findByText(/untagged 2/)).toBeInTheDocument();
     const sent = calls.find((c) => c.url.endsWith('/console-bootstrap/preview'));
     expect(JSON.parse(String(sent?.init?.body)).profile.untagged_port).toBe('2');
-    expect(screen.getByRole('button', { name: 'Run console bootstrap…' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Run console setup…' })).toBeEnabled();
   });
 
   it('console setup starts from the port and address of the switch\'s wizard role', async () => {
@@ -168,11 +168,11 @@ describe('application shell', () => {
       '/projects/p1/credential-refs': [{ id: 'factory', name: 'Aruba Factory', has_secret: true, empty_password: true }],
     });
     renderAt('/console?device=sw');
-    await userEvent.click(await screen.findByRole('button', { name: 'Run console bootstrap…' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Run console bootstrap' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Run console setup…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Run console setup' });
     await userEvent.click(within(dialog).getByRole('checkbox', { name: /preconfigured/ }));
     expect(within(dialog).getByText(/Its login "Aruba Factory" has no password/)).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Erase and bootstrap' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Erase and set up' })).toBeDisabled();
   });
 
   it('erasing a preconfigured switch: UNDM reads its name, the person confirms it (D-095)', async () => {
@@ -191,11 +191,11 @@ describe('application shell', () => {
         network_reachable: null, network_hint: '' },
     });
     renderAt('/console?device=sw');
-    await userEvent.click(await screen.findByRole('button', { name: 'Run console bootstrap…' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Run console bootstrap' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Run console setup…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Run console setup' });
     await userEvent.click(within(dialog).getByRole('checkbox', { name: /preconfigured/ }));
     await userEvent.type(within(dialog).getByLabelText(/Type the device name to confirm/), 'dmz-sw');
-    const go = within(dialog).getByRole('button', { name: 'Erase and bootstrap' });
+    const go = within(dialog).getByRole('button', { name: 'Erase and set up' });
     expect(go).toBeDisabled();  // current login and hostname still missing
     await userEvent.click(within(dialog).getByPlaceholderText('Choose its current login'));
     await userEvent.click((await screen.findAllByRole('option', { name: 'preconfigured login', hidden: true }))[0]);
@@ -952,8 +952,8 @@ describe('Settings for all systems (D-105, D-120)', () => {
     renderAt('/console?device=sw');
     await userEvent.click(await screen.findByPlaceholderText('Choose the console cable’s port'));
     await userEvent.click((await screen.findAllByRole('option', { name: /COM7/, hidden: true }))[0]);
-    await userEvent.click(await screen.findByRole('button', { name: 'Run console bootstrap…' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Run console bootstrap' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Run console setup…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Run console setup' });
     expect(within(dialog).getByDisplayValue('aruba factory')).toBeInTheDocument();
   });
 
@@ -1619,5 +1619,24 @@ describe('Stage a system, run and report (D-121)', () => {
     expect(posts.filter((u) => u.endsWith('/execute'))).toHaveLength(2);
     expect(calls.some((c) => c.url === '/api/policy' && c.init?.method === 'PUT')).toBe(false);  // no firmware: no rule changed
     window.localStorage.removeItem('undm.stage.p1');
+  });
+});
+
+describe('Home (D-123)', () => {
+  it('the setup checklist says what is set and links to the exact place for the rest', async () => {
+    mockApi({
+      '/credential-refs': [{ id: 'ok', name: 'approved', provider: 'keyring', locator: 'credential/ok', has_secret: true, shared: true }],
+      '/settings/defaults': { firewall: { login: 'ok', login_after: null, tunnel_key: null }, blackbox: { login: 'ok', login_after: null },
+        aruba: { login: 'ok', current: null }, modem: { login: null } },
+      '/templates': [{ role: 'tetra' }], '/settings/pci-mapping': null, '/settings/certificate': { subject: null }, '/firmware/images': [],
+    });
+    renderAt('/');
+    const card = (await screen.findByRole('heading', { name: 'Set up once' })).closest('.mantine-Card-root') as HTMLElement;
+    expect(within(card).getByText('3 of 4 (FortiGate, Black Box, Aruba 2930F, modem).')).toBeInTheDocument();
+    expect(within(card).getByText('1 of 7 imported.')).toBeInTheDocument();
+    expect(within(card).getByText('1 login, passwords stored.')).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: 'Import templates' })).toHaveAttribute('href', '/settings?tab=templates');
+    expect(within(card).getByRole('link', { name: 'Upload' })).toHaveAttribute('href', '/firmware?model=FortiGate-101F');
+    expect(within(card).getByRole('link', { name: 'Set your name' })).toHaveAttribute('href', '/settings?tab=identity');
   });
 });

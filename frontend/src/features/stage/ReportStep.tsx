@@ -1,4 +1,5 @@
 import { Anchor, Button, Card, Group, Stack, Table, Text, Title } from '@mantine/core';
+import { InlineStatus } from '../../components/InlineStatus';
 import { IconDownload, IconPrinter } from '@tabler/icons-react';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -79,7 +80,7 @@ export function ReportStep({ project, roles, stagings }: {
         </Stack>;
       })()}
       <div id="staging-report">
-        <Title order={2} size="h4" mb="xs">Staging report · {project.name}</Title>
+        <Title order={2} mb="xs">Staging report · {project.name}</Title>
         <Text size="sm" c="dimmed" mb="md">Made {fmtDate(madeAt)}. One section per device: its latest staging plan.
           {project.staged_at ? ` Staging finished ${fmtDate(project.staged_at)}${project.staged_by ? ` by ${project.staged_by}` : ''}.` : ' Staging not finished yet.'}</Text>
         <Stack>
@@ -90,12 +91,12 @@ export function ReportStep({ project, roles, stagings }: {
             return (
               <Card withBorder key={role.key}>
                 <Group justify="space-between" mb="xs" wrap="wrap">
-                  <Title order={3} size="h5">{device.name} · {role.title}</Title>
+                  <Title order={3}>{device.name} · {role.title}</Title>
                   <Text size="sm" c="dimmed">{device.manufacturer} {device.model} · {device.management_address}</Text>
                 </Group>
                 <Text size="sm" mb="xs">Firmware now: <b>{String(facts.os_version ?? '—')}</b> · serial / MAC: <b>{String(facts.serial_number ?? '—')}</b>
                   {facts.hostname ? <> · hostname: <b>{String(facts.hostname)}</b></> : null}
-                  {device.facts_retrieved_at ? ` (read ${fmtDate(device.facts_retrieved_at)})` : ' (not read yet: use Retrieve information on the device page)'}</Text>
+                  {device.facts_retrieved_at ? ` (read ${fmtDate(device.facts_retrieved_at)})` : ' (not read yet: use Read information on the device page)'}</Text>
                 {role.guided ? (
                   <Table.ScrollContainer minWidth={520}>
                     <Table verticalSpacing={4} aria-label={`Steps done in the portal of ${device.name}`}>
@@ -114,7 +115,7 @@ export function ReportStep({ project, roles, stagings }: {
                   </Table.ScrollContainer>
                 ) : steps.length === 0 ? <Text size="sm" c="dimmed">No staging plan yet.</Text> : (
                   <Table.ScrollContainer minWidth={520}>
-                    <Table verticalSpacing={4}>
+                    <Table aria-label={`Steps of ${device.name}`} verticalSpacing={4}>
                       <Table.Thead><Table.Tr><Table.Th>Step</Table.Th><Table.Th>Result</Table.Th><Table.Th>Started</Table.Th><Table.Th>Took</Table.Th><Table.Th>Approved by</Table.Th></Table.Tr></Table.Thead>
                       <Table.Tbody>
                         {steps.map((s) => {
@@ -136,7 +137,7 @@ export function ReportStep({ project, roles, stagings }: {
                 {warnings.length > 0 && (
                   <Stack gap={2} mt="xs">
                     <Text size="sm" fw={600}>Warnings ({warnings.length})</Text>
-                    {warnings.slice(0, 6).map((w) => <Text key={`${w.seq}-${w.timestamp}`} size="xs" c="orange">{w.message}</Text>)}
+                    {warnings.slice(0, 6).map((w) => <InlineStatus key={`${w.seq}-${w.timestamp}`} tone="warning" size="xs">{w.message}</InlineStatus>)}
                   </Stack>
                 )}
               </Card>

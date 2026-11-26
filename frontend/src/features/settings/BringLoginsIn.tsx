@@ -1,4 +1,5 @@
-import { Badge, Button, Card, Group, Modal, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Button, Card, Group, Modal, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Tag } from '../../components/Badges';
 import { IconArrowsJoin } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -29,14 +30,14 @@ function Bring({ groups, onClose }: { groups: SharedLoginGroup[]; onClose: () =>
         The names are suggested from the devices that use each login and its user name: change any of them.
       </Hint>
       <Table.ScrollContainer minWidth={560}>
-        <Table verticalSpacing="xs">
+        <Table aria-label="Logins to bring here" verticalSpacing="xs">
           <Table.Thead><Table.Tr><Table.Th>Name for all systems</Table.Th><Table.Th>From</Table.Th><Table.Th>Devices</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>
             {groups.map((g) => (
               <Table.Tr key={g.id}>
                 <Table.Td miw={260}>
                   {g.existing
-                    ? <Group gap="xs"><Text size="sm">{g.name}</Text><Badge size="xs" color="gray" variant="light" tt="none">already here: joins it</Badge></Group>
+                    ? <Group gap="xs"><Text size="sm">{g.name}</Text><Tag size="xs" tone="neutral">already here: joins it</Tag></Group>
                     : <TextInput size="xs" aria-label={`Name for ${g.members.map((m) => m.name).join(', ')}`} value={names[g.id] ?? ''}
                       onChange={(e) => { const v = e.currentTarget.value; setNames((n) => ({ ...n, [g.id]: v })); }} />}
                 </Table.Td>
@@ -49,7 +50,7 @@ function Bring({ groups, onClose }: { groups: SharedLoginGroup[]; onClose: () =>
       </Table.ScrollContainer>
       <DialogError error={run.error} />
       <Group justify="flex-end">
-        <Button variant="default" onClick={onClose}>Back</Button>
+        <Button variant="default" onClick={onClose} data-autofocus>Cancel</Button>
         <Button leftSection={<IconArrowsJoin size={16} />} loading={run.isPending} disabled={blank}
           onClick={() => run.mutate(undefined, { onSuccess: onClose })}>
           Bring {plural(logins, 'login')} here

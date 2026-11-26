@@ -62,7 +62,7 @@ export function StagingPage() {
         {!running && !done && !ended && <Hint>
           One approval covers every step. Steps after the first are checked when they run, because the earlier steps change the
           device; running a step on its own is refused until the steps before it have succeeded.</Hint>}
-        <Title order={2} size="h4">Steps</Title>
+        <Title order={2}>Steps</Title>
         {steps.map((s) => <StepCard key={s.id} step={s} />)}
       </Stack>
     </>

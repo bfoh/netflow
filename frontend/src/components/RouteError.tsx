@@ -12,7 +12,7 @@ export function RouteError() {
     : error instanceof Error ? error.message : String(error);
   return (
     <Stack maw={720} gap="md">
-      <Title order={1} size="h2">This page hit an error</Title>
+      <Title order={1}>This page hit an error</Title>
       <Notice kind="error">Something went wrong while showing this page. Your data has not been changed.</Notice>
       <Code block>{message}</Code>
       <Text size="sm" c="dimmed">Please report what you clicked just before this happened, together with the message above.</Text>

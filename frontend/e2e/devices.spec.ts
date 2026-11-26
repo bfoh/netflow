@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-/** The device menu on a simulated switch (D-099): right-click, Check information, Test, then its log.
+/** The device menu on a simulated switch (D-099): right-click, Read information, Test, then its log.
  *  Fictional names, RFC 5737 address. */
 test('device menu: check information, test, and the device log', async ({ page, request }) => {
   const id = String(Date.now()).slice(-6);
@@ -12,7 +12,7 @@ test('device menu: check information, test, and the device log', async ({ page, 
   await page.goto(`/systems/${p.id}`);
   const row = page.getByRole('row', { name: new RegExp(`menu-sw-${id}`) });
   await row.click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Check information' }).click();
+  await page.getByRole('menuitem', { name: 'Read information' }).click();
   const info = page.getByRole('dialog', { name: `Information · menu-sw-${id}` });
   await expect(info.getByText('Firmware', { exact: false }).first()).toBeVisible();
   await page.keyboard.press('Escape');

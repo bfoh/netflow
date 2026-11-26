@@ -1,4 +1,4 @@
-import { Badge } from '@mantine/core';
+import { Badge, type BadgeProps } from '@mantine/core';
 import { IconAlertTriangle, IconCheck, IconX } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 
@@ -13,9 +13,11 @@ const TONE_COLOR: Record<Tone, string> = {
 
 const keepWhole = { root: { overflow: 'visible' }, label: { overflow: 'visible' } } as const;
 
-/** A small label with a meaning (Staged, Experimental, Not verified…). */
-export function Tag({ tone = 'neutral', children, icon }: { tone?: Tone; children: ReactNode; icon?: ReactNode }) {
-  return <Badge color={TONE_COLOR[tone]} style={{ flexShrink: 0 }} leftSection={icon} styles={keepWhole}>{children}</Badge>;
+/** A small label with a meaning (Staged, Experimental, Not verified…). Its colour comes from
+ *  its tone, never picked by hand (D-119); size, variant and spacing pass through. */
+export function Tag({ tone = 'neutral', children, icon, ...rest }: { tone?: Tone; children: ReactNode; icon?: ReactNode }
+  & Omit<BadgeProps, 'color' | 'children' | 'leftSection'> & { title?: string }) {
+  return <Badge color={TONE_COLOR[tone]} style={{ flexShrink: 0 }} leftSection={icon} styles={keepWhole} {...rest}>{children}</Badge>;
 }
 
 const ENV: Record<DeviceEnvironment, { tone: Tone; label: string }> = {

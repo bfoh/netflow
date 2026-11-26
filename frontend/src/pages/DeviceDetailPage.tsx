@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { useConfirm } from '../hooks/useConfirm';
 
-import { EnvironmentBadge, StateBadge } from '../components/Badges';
+import { EnvironmentBadge, StateBadge, Tag } from '../components/Badges';
 import { Hint } from '../components/Hint';
 import { Notice } from '../components/Notice';
 import { PageHeader, QueryState } from '../components/Page';
@@ -81,7 +81,7 @@ function Overview({ d }: { d: Device }) {
     <SimpleGrid cols={{ base: 1, lg: 2 }}>
       <Card withBorder>
         <Title order={2} mb="xs">What you entered</Title>
-        <Table verticalSpacing={4}><Table.Tbody>
+        <Table aria-label="What you entered" verticalSpacing={4}><Table.Tbody>
           <Row k="Model" v={`${d.manufacturer} ${d.model}`} />
           <Row k="Role" v={d.role} />
           <Row k="Address" v={<Text size="sm" ff="monospace">{d.management_address}</Text>} />
@@ -94,7 +94,7 @@ function Overview({ d }: { d: Device }) {
           <Row k="Notes" v={d.notes} />
         </Table.Tbody></Table>
         <Technical>
-          <Table verticalSpacing={4}><Table.Tbody>
+          <Table aria-label="Technical details" verticalSpacing={4}><Table.Tbody>
             <Row k="Product family" v={d.product_family} />
             <Row k="Hardware revision" v={d.hardware_revision} />
             <Row k="Category" v={humanize(d.category)} />
@@ -112,7 +112,7 @@ function Overview({ d }: { d: Device }) {
             <Button size="xs" variant="default" leftSection={<IconRefresh size={14} />} loading={op.isPending} onClick={() => op.mutate('get_facts')}>Read information</Button>
           </Group>
           {facts ? (
-            <Table verticalSpacing={4}><Table.Tbody>
+            <Table aria-label="What the device reported" verticalSpacing={4}><Table.Tbody>
               {main.map((k) => <Row key={k} k={factLabel(k)} v={String(flat[k])} />)}
               <Row k="Retrieved" v={fmtDate(d.facts_retrieved_at)} />
             </Table.Tbody></Table>
@@ -120,7 +120,7 @@ function Overview({ d }: { d: Device }) {
           {facts && (
             <Technical>
               {rest.length > 0 && (
-                <Table verticalSpacing={4}><Table.Tbody>
+                <Table aria-label="More values the device reported" verticalSpacing={4}><Table.Tbody>
                   {rest.map((k) => <Row key={k} k={factLabel(k)} v={String(flat[k])} />)}
                 </Table.Tbody></Table>
               )}
@@ -131,7 +131,7 @@ function Overview({ d }: { d: Device }) {
         </Card>
         <Card withBorder>
           <Title order={2} mb="xs">Status</Title>
-          <Table verticalSpacing={4}><Table.Tbody>
+          <Table aria-label="Status" verticalSpacing={4}><Table.Tbody>
             <Row k="Status" v={<StateBadge state={d.deployment_status} />} />
             <Row k="Last connection" v={fmtDate(d.last_connection_at)} />
             <Row k="Last backup" v={fmtDate(d.last_backup_at)} />
@@ -139,8 +139,8 @@ function Overview({ d }: { d: Device }) {
           </Table.Tbody></Table>
         </Card>
         <Card withBorder>
-          <Title order={2} size="h5" mb="xs">What UNDM can do with it</Title>
-          <Group gap={6}>{d.capabilities.map((c) => <Badge key={c} variant="light" color="gray" tt="none">{capabilityLabel(c)}</Badge>)}</Group>
+          <Title order={2} mb="xs">What UNDM can do with it</Title>
+          <Group gap={6}>{d.capabilities.map((c) => <Tag key={c} tone="neutral">{capabilityLabel(c)}</Tag>)}</Group>
           <Text size="xs" c="dimmed" mt="xs">{d.environment === 'simulated'
             ? 'A simulated device: this says nothing about real hardware.'
             : 'What UNDM implements for this model. Real-device procedures stay marked experimental until tested on the bench.'}</Text>
@@ -174,7 +174,7 @@ function DeviceLog({ deviceId }: { deviceId: string }) {
       <QueryState isLoading={log.isLoading} error={log.error} />
       <Card withBorder padding={0}>
         <Table.ScrollContainer minWidth={620}>
-          <Table verticalSpacing={6} horizontalSpacing="md">
+          <Table aria-label="Device log" verticalSpacing={6} horizontalSpacing="md">
             <Table.Thead><Table.Tr><Table.Th>Time</Table.Th><Table.Th>What</Table.Th><Table.Th>Result</Table.Th><Table.Th>Detail</Table.Th></Table.Tr></Table.Thead>
             <Table.Tbody>{rows.map((r, i) => (
               <Table.Tr key={`${r.time}-${i}`}>
@@ -194,7 +194,7 @@ function DeviceLog({ deviceId }: { deviceId: string }) {
   );
 }
 
-/** Shown for platforms that have a console bootstrap procedure. */
+/** Shown for platforms that have a console setup procedure. */
 /** For a real device: what may happen to it now, in one or two quiet lines (D-089). */
 function RealDeviceNotice({ d }: { d: Device }) {
   const drivers = useDrivers();

@@ -111,7 +111,7 @@ export function DeviceTable({ devices, showProject, projectNames, selected: oute
         </Group>
       </Group>
       <Table.ScrollContainer minWidth={900}>
-        <Table highlightOnHover verticalSpacing="xs" horizontalSpacing="sm">
+        <Table aria-label="Devices" highlightOnHover verticalSpacing="xs" horizontalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
               <Table.Th w={36}>

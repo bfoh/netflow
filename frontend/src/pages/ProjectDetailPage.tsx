@@ -1,4 +1,5 @@
 import { ActionIcon, Anchor, Button, Card, Grid, Group, Menu, SegmentedControl, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Textarea, Title, Tooltip } from '@mantine/core';
+import { InlineStatus } from '../components/InlineStatus';
 import { useDisclosure } from '@mantine/hooks';
 import { IconDownload, IconFileText, IconListCheck, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -61,7 +62,7 @@ function CertificateSettings({ project }: { project: Project }) {
   return (
     <Card withBorder maw={640}>
       <Stack>
-        <Title order={2} size="h5">HTTPS certificate (Aruba 2930F)</Title>
+        <Title order={2}>HTTPS certificate (Aruba 2930F)</Title>
         <Text size="sm" c="dimmed">
           Before loading a 2930F file that makes the web interface HTTPS-only, UNDM creates the self-signed certificate with
           your team's commands and answers the switch's questions. The answers are set once in{' '}
@@ -72,7 +73,7 @@ function CertificateSettings({ project }: { project: Project }) {
         ) : shared.data?.subject ? (
           <Text size="sm">This system uses the answers for all systems (common name <b>{shared.data.subject.common_name}</b>).</Text>
         ) : (
-          <Text size="sm" c="orange">No answers are set for all systems yet: a 2930F file that needs the certificate cannot be loaded.</Text>
+          <InlineStatus tone="warning" size="sm">No answers are set for all systems yet: a 2930F file that needs the certificate cannot be loaded.</InlineStatus>
         )}
         <Switch label="Different answers for this system" checked={override || own}
           onChange={(e) => { const on = e.currentTarget.checked; setOverride(on); if (!on && own) save.mutate(null); }} />
@@ -157,7 +158,7 @@ export function ProjectDetailPage() {
           {deleteDialog}
           <Card withBorder padding={0}>
             <Table.ScrollContainer minWidth={560}>
-              <Table verticalSpacing="xs" horizontalSpacing="md">
+              <Table aria-label="Plans of this system" verticalSpacing="xs" horizontalSpacing="md">
                 <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th><Table.Th w={40} /></Table.Tr></Table.Thead>
                 <Table.Tbody>
                   {(deployments.data ?? []).map((d) => (
@@ -181,7 +182,7 @@ export function ProjectDetailPage() {
           <SimpleGrid cols={1}>
             <ProjectSettings key={p.updated_at} project={p} />
             <CertificateSettings key={`cert-${p.updated_at}`} project={p} />
-            <Title order={3} size="h6" c="dimmed">Created {fmtDate(p.created_at)} · updated {fmtDate(p.updated_at)}</Title>
+            <Title order={3} c="dimmed">Created {fmtDate(p.created_at)} · updated {fmtDate(p.updated_at)}</Title>
           </SimpleGrid>
         </Tabs.Panel>
       </Tabs>

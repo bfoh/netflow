@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Badge, Button, Card, Group, Menu, Modal, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { ActionIcon, Anchor, Button, Card, Group, Menu, Modal, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconCheck, IconClock, IconDots, IconPlayerPlay, IconTerminal2 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
@@ -41,8 +41,8 @@ function PlannedSteps({ role, choice, device }: { role: Role; choice: Choice; de
             : k === 'file' && role.consoleCable ? 'Its configuration file (console)' : STEP_WORDS[k]}</Text>
           {k === 'console'
             ? (CONSOLE_DONE.has(device.provisioning_status)
-              ? <Badge color="teal" variant="light" tt="none">Done</Badge>
-              : <Badge color="orange" variant="light" tt="none">To do first</Badge>)
+              ? <Tag tone="success">Done</Tag>
+              : <Tag tone="warning">To do first</Tag>)
             : <Text size="xs" c="dimmed"><IconClock size={11} /> {STEP_TIME[k]}</Text>}
         </Group>
       ))}
@@ -145,7 +145,7 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
     <Card id={`device-${device.id}`} style={{ scrollMarginTop: 72 }}>
       <Group justify="space-between" mb="xs" wrap="nowrap" align="flex-start">
         <div>
-          <Title order={2} size="h4">{device.name}</Title>
+          <Title order={2}>{device.name}</Title>
           <Text size="xs" c="dimmed">{role.title} · {role.consoleCable
             ? `console ${device.console_port || '(port saved by its first access)'}` : device.management_address}</Text>
         </div>

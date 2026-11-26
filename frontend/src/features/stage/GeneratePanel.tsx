@@ -1,4 +1,5 @@
 import { Anchor, Badge, Button, Card, Group, NumberInput, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Tag } from '../../components/Badges';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconDownload, IconFileCode, IconScale } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
@@ -110,7 +111,7 @@ export function GeneratePanel({ project, roles, choices, onReplace }: {
     <Card withBorder>
       {confirmDialog}
       <Group justify="space-between" mb={4} wrap="wrap">
-        <Title order={3} size="h5">Files from the team&apos;s templates</Title>
+        <Title order={3}>Files from the team&apos;s templates</Title>
         {project.zone ? <Badge variant="light" tt="none">zone {project.zone}</Badge> : null}
       </Group>
       {!project.zone ? (
@@ -154,9 +155,9 @@ export function GeneratePanel({ project, roles, choices, onReplace }: {
                       <Table.Td><Text size="sm">{c.file_name ?? '—'}</Text></Table.Td>
                       <Table.Td>
                         {!c.file_name ? <Text size="sm" c="dimmed">no file on the device to compare</Text>
-                          : c.same ? <Badge color="teal" variant="light" tt="none">identical · {c.lines} lines</Badge>
+                          : c.same ? <Tag tone="success">identical · {c.lines} lines</Tag>
                             : <Stack gap={2}>
-                              <Badge color="red" variant="light" tt="none">differs</Badge>
+                              <Tag tone="danger">differs</Tag>
                               {c.differences.map(([n, a, b]) => (
                                 <Text key={n} size="xs" ff="monospace">line {n}: template “{a}” · file “{b}”</Text>))}
                             </Stack>}

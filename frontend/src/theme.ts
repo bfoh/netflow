@@ -59,8 +59,9 @@ export const theme = createTheme({
     fontWeight: '600',
     sizes: {
       h1: { fontSize: '1.625rem', lineHeight: '1.25' },
-      h2: { fontSize: '1.25rem', lineHeight: '1.3' },
-      h3: { fontSize: '1.0625rem', lineHeight: '1.35' },
+      // Section and card titles (D-123): one size per level, no size set by hand.
+      h2: { fontSize: '1.125rem', lineHeight: '1.35' },
+      h3: { fontSize: '1rem', lineHeight: '1.4' },
       h4: { fontSize: '0.9375rem', lineHeight: '1.4' },
       h5: { fontSize: '0.875rem', lineHeight: '1.4' },
       h6: { fontSize: '0.8125rem', lineHeight: '1.4' },

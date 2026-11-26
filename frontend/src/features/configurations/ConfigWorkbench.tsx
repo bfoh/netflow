@@ -1,4 +1,5 @@
 import { ActionIcon, Badge, Button, Card, Code, CopyButton, FileButton, Group, List, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { Tag } from '../../components/Badges';
 import { IconCopy, IconDownload, IconFileImport, IconRocket, IconWand } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -85,15 +86,15 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
         <SimpleGrid cols={{ base: 1, lg: 2 }}>
           <Card withBorder>
             <Group justify="space-between" mb="xs">
-              <Title order={2} size="h5">Preview</Title>
+              <Title order={2}>Preview</Title>
               <Select size="xs" w={300} aria-label="Configuration version" data={list.map((v) => ({ value: v.id, label: label(v) }))} value={current} onChange={setSelected} />
             </Group>
             {shown.data && (
               <>
                 <Group gap="xs" mb="xs">
                   <Badge variant="light">{shown.data.kind}</Badge>
-                  {shown.data.platform && <Badge variant="light" color="gray">{shown.data.template_version ? `${shown.data.platform} template v${shown.data.template_version}` : shown.data.platform}</Badge>}
-                  {shown.data.verification && <Badge variant="light" color="yellow">{humanize(shown.data.verification)}</Badge>}
+                  {shown.data.platform && <Tag tone="neutral">{shown.data.template_version ? `${shown.data.platform} template v${shown.data.template_version}` : shown.data.platform}</Tag>}
+                  {shown.data.verification && <Tag tone="warning">{humanize(shown.data.verification)}</Tag>}
                 </Group>
                 {shown.data.kind === 'imported' && (
                   <Hint mb="xs">Imported from <b>{shown.data.reference}</b>: sent exactly as written, not checked against the
@@ -131,7 +132,7 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
           </Card>
           <Card withBorder>
             <Group justify="space-between" mb="xs">
-              <Title order={2} size="h5">Compare</Title>
+              <Title order={2}>Compare</Title>
               <Select size="xs" w={300} clearable placeholder="Compare with…" aria-label="Compare with version"
                 data={list.filter((v) => v.id !== current).map((v) => ({ value: v.id, label: label(v) }))} value={compareTo} onChange={setCompareTo} />
             </Group>
@@ -143,7 +144,7 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
       {list.length > 0 && (
         <Card withBorder padding={0}>
           <Table.ScrollContainer minWidth={560}>
-            <Table verticalSpacing={6} horizontalSpacing="md">
+            <Table aria-label="Files of this device" verticalSpacing={6} horizontalSpacing="md">
               <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>Kind</Table.Th><Table.Th>By</Table.Th><Table.Th>From</Table.Th><Table.Th /></Table.Tr></Table.Thead>
               <Table.Tbody>
                 {list.map((v) => (

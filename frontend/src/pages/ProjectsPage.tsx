@@ -40,7 +40,7 @@ export function ProjectsPage() {
       {confirmDialog}
       <Card withBorder padding={0}>
         <Table.ScrollContainer minWidth={600}>
-          <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+          <Table aria-label="Systems" highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
             <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Site</Table.Th><Table.Th>Purpose</Table.Th><Table.Th>Devices</Table.Th><Table.Th>Updated</Table.Th><Table.Th w={40} /></Table.Tr></Table.Thead>
             <Table.Tbody>
               {(projects.data ?? []).map((p) => (

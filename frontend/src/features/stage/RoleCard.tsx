@@ -37,7 +37,7 @@ export function RoleCard({ role, device, projectId, systemName, simulated }: {
   return (
     <Card>
       <Group justify="space-between" wrap="nowrap" mb={4}>
-        <Title order={2} size="h4">{role.title}</Title>
+        <Title order={2}>{role.title}</Title>
         {device && <EnvironmentBadge env={device.environment} />}
       </Group>
       <Text size="xs" c="dimmed" mb="xs">{role.hint}</Text>

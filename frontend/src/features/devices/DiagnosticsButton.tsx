@@ -1,4 +1,5 @@
-import { Button, Code, CopyButton, Group, Modal, Stack, Text } from '@mantine/core';
+import { Button, Code, CopyButton, Group, Modal, Stack } from '@mantine/core';
+import { InlineStatus } from '../../components/InlineStatus';
 import { useDisclosure } from '@mantine/hooks';
 import { IconDownload, IconFileReport } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -30,7 +31,7 @@ export function DiagnosticsButton({ device }: { device: Device }) {
   return (
     <>
       <Button size="xs" variant="light" leftSection={<IconFileReport size={14} />} loading={busy} onClick={load}>Sanitized diagnostics</Button>
-      {error && <Text size="xs" c="red">{error}</Text>}
+      {error && <InlineStatus tone="danger" size="xs">{error}</InlineStatus>}
       <Modal opened={opened} onClose={close} title="Sanitized diagnostics" size="xl">
         <Stack>
           <Notice kind="caution" compact title="Read it through before sharing"

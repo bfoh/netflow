@@ -44,7 +44,7 @@ describe('device menu, tree and watch (D-099)', () => {
     const menu = await screen.findByRole('menu');
     expect(within(menu).getByText('Open SSH window')).toBeInTheDocument();
     expect(within(menu).getByText('Open web page').closest('a')).toHaveAttribute('href', 'https://192.168.1.99');
-    expect(within(menu).getByText('Check information')).toBeInTheDocument();
+    expect(within(menu).getByText('Read information')).toBeInTheDocument();
     expect(within(menu).queryByText('Restart…')).not.toBeInTheDocument();  // no verified restart for it
   });
 
@@ -54,7 +54,7 @@ describe('device menu, tree and watch (D-099)', () => {
     renderAt('/systems/p1');
     const table = await screen.findByRole('table');
     await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-bb' }));
-    expect(await screen.findByText('Check information')).toBeInTheDocument();  // the menu is open
+    expect(await screen.findByText('Read information')).toBeInTheDocument();  // the menu is open
     expect(screen.queryByText('Open SSH window')).not.toBeInTheDocument();
   });
 

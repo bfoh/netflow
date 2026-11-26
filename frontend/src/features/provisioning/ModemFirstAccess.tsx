@@ -1,4 +1,5 @@
-import { Badge, Button, Card, Code, CopyButton, Group, List, Modal, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Button, Card, Code, CopyButton, Group, List, Modal, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Tag } from '../../components/Badges';
 import { useDisclosure } from '@mantine/hooks';
 import { IconDownload, IconRefresh, IconTerminal2 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
@@ -81,7 +82,7 @@ export function ModemFirstAccess({ device, simulated, back }: {
   return (
     <Stack>
       <Card withBorder>
-        <Title order={2} size="h5" mb="xs">1 · Its login after the first access</Title>
+        <Title order={2} mb="xs">1 · Its login after the first access</Title>
         <Select label="Approved login (user name admin)" w="100%" maw={380} clearable
           description="Its password becomes the modem's admin password. The modem refuses a password it finds too simple."
           placeholder={refs.data?.length ? 'Choose the approved login' : "Add it on the system's Logins tab, or in Settings → Logins"}
@@ -91,7 +92,7 @@ export function ModemFirstAccess({ device, simulated, back }: {
       </Card>
 
       <Card withBorder>
-        <Title order={2} size="h5" mb="xs">2 · What UNDM does on the console</Title>
+        <Title order={2} mb="xs">2 · What UNDM does on the console</Title>
         <Text size="sm" c="dimmed" mb="xs">
           For a modem straight from the factory, which does not accept the default login. UNDM starts it once without its
           configuration and auto-discovery, logs in with the factory login, sets the admin password and saves.
@@ -108,7 +109,7 @@ export function ModemFirstAccess({ device, simulated, back }: {
       </Card>
 
       <Card withBorder>
-        <Title order={2} size="h5" mb="xs">3 · Console connection</Title>
+        <Title order={2} mb="xs">3 · Console connection</Title>
         <Group align="flex-end">
           <Select label="Serial port" w="100%" maw={380} placeholder={portOptions.length ? 'Choose the console cable’s port' : 'No serial ports found'}
             data={portOptions} value={serialPort} onChange={setSerialPort} />
@@ -136,10 +137,10 @@ export function ModemFirstAccess({ device, simulated, back }: {
             {result.network_hint && <Text size="sm" mt={6}>{result.network_hint}</Text>}
           </Notice>
           <Group gap="xs" mb="xs">
-            {result.password_set && <Badge variant="light" color="teal" tt="none">admin password set</Badge>}
-            <Badge variant="light" color={result.saved ? 'teal' : 'gray'} tt="none">{result.saved ? 'boot options and configuration saved' : 'not saved'}</Badge>
-            <Badge variant="light" color={result.verified ? 'teal' : 'gray'} tt="none">{result.verified ? 'read back and verified' : 'not verified'}</Badge>
-            {result.facts?.type && <Badge variant="light" color="gray" tt="none">{result.facts.type} · {result.facts.version ?? ''}</Badge>}
+            {result.password_set && <Tag tone="success">admin password set</Tag>}
+            <Tag tone={result.saved ? 'success' : 'neutral'}>{result.saved ? 'boot options and configuration saved' : 'not saved'}</Tag>
+            <Tag tone={result.verified ? 'success' : 'neutral'}>{result.verified ? 'read back and verified' : 'not verified'}</Tag>
+            {result.facts?.type && <Tag tone="neutral">{result.facts.type} · {result.facts.version ?? ''}</Tag>}
           </Group>
           <Text size="sm" fw={600}>Console transcript</Text>
           <Code block mah={360} style={{ overflow: 'auto', fontSize: 11 }}>{result.transcript}</Code>

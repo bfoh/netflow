@@ -1,6 +1,6 @@
-import { Badge, Group, Tooltip } from '@mantine/core';
+import { Group, Tooltip } from '@mantine/core';
 
-import { StateBadge } from '../../components/Badges';
+import { StateBadge, Tag } from '../../components/Badges';
 import type { DeploymentSummary } from '../../types/api';
 
 /** A plan's status; a plan that needed attention also says why it no longer waits (D-088). */
@@ -14,7 +14,7 @@ export function PlanStatus({ d }: { d: Pick<DeploymentSummary, 'state' | 'attent
       <Tooltip withArrow multiline w={260} label={checked
         ? 'A person checked the device and recorded what they found (see the plan\'s events).'
         : 'A later plan on the same device(s) succeeded, so the device was checked again.'}>
-        <Badge color="gray" variant="light" radius="sm" tt="none">{checked ? 'checked' : 'later plan succeeded'}</Badge>
+        <Tag tone="neutral">{checked ? 'checked' : 'later plan succeeded'}</Tag>
       </Tooltip>
     </Group>
   );
