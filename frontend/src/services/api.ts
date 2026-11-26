@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, LoginDefaults, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -119,6 +119,15 @@ export const api = {
   setCredentialSecret: (refId: string, username: string, password: string) =>
     request<CredentialRef>('PUT', `/credential-refs/${refId}/secret`, { username, password }),
   deleteCredentialRef: (refId: string) => request<void>('DELETE', `/credential-refs/${refId}`),
+  // For all systems (D-105).
+  sharedLogins: () => request<CredentialRef[]>('GET', '/credential-refs'),
+  createSharedLogin: (body: { name: string; provider?: string; locator?: string }) =>
+    request<CredentialRef>('POST', '/credential-refs', body),
+  loginDefaults: () => request<LoginDefaults>('GET', '/settings/defaults'),
+  setLoginDefaults: (body: LoginDefaults) => request<LoginDefaults>('PUT', '/settings/defaults', body),
+  sharedCertificate: () => request<{ subject: CertificateSubject | null }>('GET', '/settings/certificate'),
+  setSharedCertificate: (subject: CertificateSubject | null) =>
+    request<{ subject: CertificateSubject | null }>('PUT', '/settings/certificate', { subject }),
   deviceModels: () => request<DeviceModel[]>('GET', '/device-models'),
 
   projects: () => request<Project[]>('GET', '/projects'),

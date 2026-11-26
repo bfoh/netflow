@@ -1,24 +1,37 @@
 import { Badge, Button, Card, Checkbox, FileButton, Group, Select, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { IconAlertTriangle, IconCheck, IconUpload } from '@tabler/icons-react';
+import { useEffect } from 'react';
 
-import { useAction, useConfig, useConfigs, useCredentialRefs, useFirmwareImages } from '../../hooks/queries';
+import { useAction, useConfig, useConfigs, useCredentialRefs, useFirmwareImages, useLoginDefaults } from '../../hooks/queries';
 import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import type { Device } from '../../types/api';
 import { keptPreviousLogin, type Choice, EMPTY_CHOICE, planSteps } from './choices';
-import type { Role } from './roles';
+import { roleDefaults, type Role } from './roles';
 import { EmptyState } from '../../components/EmptyState';
 
 /** Choose one of the device's imported files, or import one; shows what UNDM found in it. */
-function FilePick({ device, label, description, value, onChange, secrets, onSecrets, logins }: {
+function FilePick({ device, label, description, value, onChange, secrets, onSecrets, logins, defaultSecret }: {
   device: Device; label: string; description: string; value: string | null; onChange: (id: string | null) => void;
-  secrets?: Record<string, string>; onSecrets?: (s: Record<string, string>) => void; logins: { value: string; label: string }[];
+  secrets?: Record<string, string>; onSecrets?: (s: Record<string, string>, filled: boolean) => void; logins: { value: string; label: string }[];
+  /** Login filled into the file's secret settings once (the tunnel key for all systems). */
+  defaultSecret?: string | null;
 }) {
   const configs = useConfigs(device.id);
   const chosen = useConfig(value);
   const imp = useAction(async (f: File) => api.importConfig(device.id, f.name, await f.text()), 'File imported and checked');
   const files = (configs.data ?? []).filter((v) => v.kind === 'imported');
   const report = chosen.data?.inspection;
+  const slots = report?.secret_slots ?? [];
+  useEffect(() => {
+    if (!defaultSecret || !secrets || !onSecrets || slots.length === 0) return;
+    const empty = slots.filter((slot) => !secrets[slot.slot_id]);
+    if (empty.length === 0) return;
+    const next = { ...secrets };
+    for (const slot of empty) next[slot.slot_id] = defaultSecret;
+    onSecrets(next, true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultSecret, slots.map((x) => x.slot_id).join(',')]);
   return (
     <Stack gap={4}>
       <Group align="flex-end" gap="xs" wrap="wrap">
@@ -38,7 +51,7 @@ function FilePick({ device, label, description, value, onChange, secrets, onSecr
         <Select key={slot.slot_id} size="xs" w="100%" maw={420} clearable label={`Value for ${slot.setting}`}
           description={secrets[slot.slot_id] ? 'Sent from Credential Manager; never shown or stored with the plan.' : 'Not chosen: the value written in the file is sent.'}
           data={logins} value={secrets[slot.slot_id] ?? null}
-          onChange={(v) => { const next = { ...secrets }; if (v) next[slot.slot_id] = v; else delete next[slot.slot_id]; onSecrets(next); }} />
+          onChange={(v) => { const next = { ...secrets }; if (v) next[slot.slot_id] = v; else delete next[slot.slot_id]; onSecrets(next, false); }} />
       ))}
     </Stack>
   );
@@ -54,6 +67,17 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
   const { missing } = planSteps(role, choice, device);
   const hasFile = role.steps.includes('base') || role.steps.includes('file');
   const needsLoginAfter = (!!role.loginAfter && device.environment !== 'simulated') || keptPreviousLogin(device);
+  // Defaults for all systems (D-105), each filled once for a real device; a cleared choice stays cleared.
+  const defaults = useLoginDefaults();
+  const real = device.environment !== 'simulated';
+  const preset = roleDefaults(role, defaults.data);
+  const filled = choice.filled ?? [];
+  useEffect(() => {
+    if (real && hasFile && preset.loginAfter && !choice.loginAfter && !filled.includes('loginAfter')) {
+      onChange({ ...choice, loginAfter: preset.loginAfter, filled: [...filled, 'loginAfter'] });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset.loginAfter]);
   return (
     <Card withBorder>
       <Group justify="space-between" mb={4} wrap="nowrap" align="flex-start">
@@ -91,7 +115,9 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
         )}
         {role.steps.includes('site') && (
           <FilePick device={device} label="Site file" description="The script loaded after the base file (additions)." logins={logins}
-            value={choice.siteId} onChange={(v) => set({ siteId: v })} secrets={choice.secrets} onSecrets={(s) => set({ secrets: s })} />
+            value={choice.siteId} onChange={(v) => set({ siteId: v })} secrets={choice.secrets}
+            defaultSecret={real && !filled.includes('secrets') ? preset.tunnelKey : null}
+            onSecrets={(s, byDefault) => set({ secrets: s, ...(byDefault ? { filled: [...filled, 'secrets'] } : {}) })} />
         )}
         {role.steps.includes('file') && (
           <FilePick device={device} label="Team file" description="The complete file this switch gets." logins={logins}

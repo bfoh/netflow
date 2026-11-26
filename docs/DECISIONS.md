@@ -1266,3 +1266,41 @@ invalid port: 83"); the free-text port field held 83 on a 48-port switch (ports 
   refusal UNDM now reads the switch's `show ip` (read-only) and quotes the lines that hold
   an address in that network; the DHCP advice is given only when that line says DHCP.
 
+### D-105 Logins, default logins and certificate answers for all systems (2026-11-26)
+Product owner: every system of this project uses the same logins (the tunnel key included)
+and the same 2930F certificate answers; entering them per system, then choosing them device
+by device, is repetitive.
+- **Logins for all systems**: `CredentialRef` without a system (`project_id` NULL,
+  migration 2abfdc4c7344). Settings → For all systems lists, adds, sets and deletes them
+  (`GET/POST /api/credential-refs`). A system's login list returns its own logins, then the
+  shared ones (`shared: true`), so every picker offers them; the system page shows them
+  read-only. A device, plan, secret or console setup may use its own system's logins or a
+  shared one (`app_settings.usable_by`), never another system's. Shared names are unique
+  among shared logins. Deleting a system keeps them; deleting one unassigns it everywhere.
+- **Default logins per device** (`app_settings` table, `GET/PUT /api/settings/defaults`):
+  FortiGate login / login after loading / tunnel key; Black Box login / login after
+  loading; 2930F login / login it has now. Only shared logins can be defaults. Stage a
+  system's **Add it** sets the device's login; **Use the default logins** fills devices with
+  none; step 2 fills the login after loading and the site file's secret once (a cleared
+  choice stays cleared); the console setup's "Login it has now" starts at the 2930F default.
+  Simulated devices are left alone. Every choice stays editable per device.
+- **Certificate answers for all systems** (`GET/PUT /api/settings/certificate`): used when a
+  system has none of its own; a system can still override them (System settings tab).
+- Existing systems keep their own logins and answers (product owner's choice); export lists
+  shared logins by name and import matches them with this PC's shared logins of that name.
+- Audited: `credential_ref.create` (with `shared`), `settings.defaults` (login names only),
+  `settings.certificate` (whether set). No password ever leaves the credential store.
+
+### D-106 "Make room" uses a spare address in the other bench network (2026-11-26)
+Bench: B's "Make room" step on switch A ended "The switch took the command but does not
+answer at 192.168.1.3". The SSH driver did not recognise the 2930F's refusal wording ("An
+interface with the same IP address or subnet or an overlapping network … already exists",
+seen on the console on 2026-11-25, D-103), so it took a refusal for acceptance. The step
+recorded no device output, so the refusal is inferred, not seen; A was left at 192.168.1.1.
+- The wording is now a rejection in the ArubaOS-Switch SSH driver. A move refused before any
+  change ends **Failed: nothing was changed**, not Needs attention.
+- The spare address is **192.0.2.3** (same mask as A's own), in the PC's other bench
+  network, so it is not a second address in A's network. Unverified: whether the 2930F takes
+  an address of another network next to its own; a refusal stops the step with nothing
+  changed. Q-45 updated.
+

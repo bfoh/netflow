@@ -25,16 +25,16 @@ printed, with addresses, serials, names and logins masked (D-090).
 4. **Stage a system → A new system**: give it a placeholder name. Then **Real devices on the
    bench**, and **Add it** for each of the four roles. Change an address on the device
    page if this bench differs.
-5. **System page → Logins**: add
-   - **approved**: the approved user and password;
-   - **black box factory**: user `admin`, tick **No password**;
-   - **2930F current**: the preconfigured switch's current manager login;
-   - **FortiGate base**: the password the base file sets (as before);
-   - the tunnel key, if the site file needs it.
-6. **Wizard step 1**, set each device's login:
-   - FortiGate: approved (its first login sets it);
-   - Black Box: black box factory;
-   - both 2930F: approved.
+5. **Settings → For all systems** (since v78, once for every system, D-105):
+   - **Logins for all systems**: approved; black box factory (user `admin`, tick **No
+     password**); aruba factory / 2930F current; FortiGate base; the tunnel key.
+   - **Default logins per device**: FortiGate: approved, after loading FortiGate base,
+     tunnel key; Black Box: black box factory, after loading approved; 2930F: approved, login
+     it has now aruba factory.
+   - **HTTPS certificate (Aruba 2930F)**: the team's answers.
+6. **Wizard step 1**: **Add it** gives each new device its default login; for devices added
+   before, press **Use the default logins**. A device that differs can get another login
+   there.
 7. **Wizard step 2** (files and firmware):
    - **FortiGate**: tick "New unit", choose 7.6.5, the base file, the site file and the
      tunnel key, and as login after loading **FortiGate base**.
@@ -60,9 +60,12 @@ cable is enough, moved from A to B. Plug a 2930F's port into the small switch on
 console setup: a preconfigured unit may still use an address another device has.
 
 **Both 2930F end at 192.168.1.1.** Once B's file loads, A and B would share the address. Since
-v68 (D-096, experimental until this has run once on the bench) B's plan has a step "Make
-room": UNDM moves A to 192.168.1.3 in its running configuration only, nothing saved, so A
-returns to 192.168.1.1 at its next power-on. Stage A first, then run B's plan; no cable to
+v68 (D-096, experimental) B's plan has a step "Make room": UNDM moves A aside in its running
+configuration only, nothing saved, so A returns to 192.168.1.1 at its next power-on. Since v78
+(D-106) the spare address is **192.0.2.3**, in the PC's other bench network: on 2026-11-26 the
+2930F refused 192.168.1.3 next to 192.168.1.1 (same network). Whether it takes an address of
+another network next to its own is not yet seen on hardware; if it refuses, the step stops
+with "Nothing was changed". Stage A first, then run B's plan; no cable to
 unplug. If the step stops, nothing was saved on A: restart A, unplug it from the small switch
 as before, and make a new plan for B. A device UNDM cannot move (or a step that is absent)
 still means: unplug A before B's plan; the v61 check stops B's file step otherwise.

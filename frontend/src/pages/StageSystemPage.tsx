@@ -10,10 +10,10 @@ import { BenchStep } from '../features/stage/BenchStep';
 import { type Choice, type Choices, EMPTY_CHOICE, loadChoices, planSteps, saveChoices } from '../features/stage/choices';
 import { FilesStep } from '../features/stage/FilesStep';
 import { ReportStep } from '../features/stage/ReportStep';
-import { assignRoles, ROLES, type Role, type RoleKey } from '../features/stage/roles';
+import { assignRoles, roleDefaults, ROLES, type Role, type RoleKey } from '../features/stage/roles';
 import { RunStep } from '../features/stage/RunStep';
 import {
-  useAction, useCredentialRefs, useDeviceModels, useProject, useProjectDevices, useProjects, useProjectStagings,
+  useAction, useCredentialRefs, useDeviceModels, useLoginDefaults, useProject, useProjectDevices, useProjects, useProjectStagings,
 } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Device } from '../types/api';
@@ -62,6 +62,8 @@ function RoleCard({ role, device, projectId, systemName, simulated }: {
 }) {
   const models = useDeviceModels();
   const refs = useCredentialRefs(projectId);
+  const defaults = useLoginDefaults();
+  const real = !simulated;
   const model = models.data?.find((m) => m.model_id === role.modelId);
   const slug = systemName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'system';
   const add = useAction(() => api.createDevice(projectId, {
@@ -69,6 +71,8 @@ function RoleCard({ role, device, projectId, systemName, simulated }: {
     model: role.model, category: model?.category ?? 'switch', os_family: model?.os_family ?? '',
     driver_id: simulated ? role.simulatedDriver : role.realDriver, environment: simulated ? 'simulated' : 'lab',
     management_address: role.address, management_protocol: 'ssh', role: role.title,
+    // Its login from Settings → For all systems (D-105); simulated devices need none.
+    ...(real && roleDefaults(role, defaults.data).login ? { credential_ref_id: roleDefaults(role, defaults.data).login } : {}),
   }), `${role.title} added`, { errorInDialog: true });
   const setLogin = useAction((ref: string | null) => api.updateDevice(device!.id, { credential_ref_id: ref }), 'Login chosen');
   return (
@@ -97,6 +101,33 @@ function RoleCard({ role, device, projectId, systemName, simulated }: {
         </Stack>
       )}
     </Card>
+  );
+}
+
+/** Gives the devices without a login their default login (Settings → For all systems). */
+function DefaultLoginsBar({ roles }: { roles: { role: Role; device: Device }[] }) {
+  const defaults = useLoginDefaults();
+  const todo = roles.filter(({ role, device }) => device.environment !== 'simulated' && !device.credential_ref_id
+    && roleDefaults(role, defaults.data).login);
+  const apply = useAction(async () => {
+    for (const { role, device } of todo) {
+      await api.updateDevice(device.id, { credential_ref_id: roleDefaults(role, defaults.data).login });
+    }
+  }, 'Default logins chosen');
+  const anyDefault = !!defaults.data?.firewall && Object.values(defaults.data).some((k) => Object.values(k).some(Boolean));
+  if (!anyDefault) {
+    return (
+      <Hint>Logins are set once for all systems in <Anchor component={Link} to="/settings?tab=shared" size="xs">Settings → For all systems</Anchor>,
+        with a default login per device; new devices then start with theirs.</Hint>
+    );
+  }
+  return (
+    <Group gap="sm">
+      {todo.length > 0 && <Button size="xs" variant="light" loading={apply.isPending} onClick={() => apply.mutate(undefined)}>
+        Use the default logins ({todo.length} {todo.length === 1 ? 'device' : 'devices'})</Button>}
+      <Text size="xs" c="dimmed">Default logins come from <Anchor component={Link} to="/settings?tab=shared" size="xs">Settings → For all systems</Anchor>;
+        a device that differs can have another one here.</Text>
+    </Group>
   );
 }
 
@@ -161,8 +192,7 @@ function StageSystem({ projectId }: { projectId: string }) {
                 systemName={project.data!.name} simulated={simulated === 'simulated'} />
             ))}
           </SimpleGrid>
-          <Text size="xs" c="dimmed">Logins are kept on the system page (<Anchor component={Link} to={`/projects/${projectId}`} size="xs">Logins tab</Anchor>):
-            add the approved login, and for the FortiGate base file the login it sets.</Text>
+          <DefaultLoginsBar roles={roles} />
         </Stack>
       )}
       {active === 1 && <FilesStep roles={roles} choices={choices} onChange={setChoice} />}

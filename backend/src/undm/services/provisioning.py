@@ -32,7 +32,7 @@ from undm.provisioning.console import (
 from undm.provisioning.simulated import SimulatedArubaConsole
 from undm.security import credentials as creds
 from undm.security.sanitize import sanitize
-from undm.services import audit
+from undm.services import app_settings, audit
 from undm.services.devices import set_login_after_loading_needed
 from undm.services.errors import ConflictError, ForbiddenError, ServiceError
 from undm.services.policy import Policy
@@ -142,7 +142,7 @@ def identify_console(
     current: Credentials | None = None
     if current_credential_ref_id:
         ref = session.get(CredentialRef, current_credential_ref_id)
-        if ref is None or ref.project_id != device.project_id:
+        if not app_settings.usable_by(ref, device.project_id):
             raise ConflictError("Current login: credential not found in this project")
         try:
             current = creds.resolve(ref.provider, ref.locator)
@@ -238,7 +238,7 @@ def run_console_bootstrap(
     if current_credential_ref_id and not erase_existing:
         # The login the switch has now (D-102): tried when the approved login is refused.
         current_ref = session.get(CredentialRef, current_credential_ref_id)
-        if current_ref is None or current_ref.project_id != device.project_id:
+        if not app_settings.usable_by(current_ref, device.project_id):
             raise ConflictError("Current login: credential not found in this project")
         try:
             current = creds.resolve(current_ref.provider, current_ref.locator)
@@ -249,7 +249,7 @@ def run_console_bootstrap(
             raise ConflictError("To erase a preconfigured switch, choose its current login and "
                                 "type its current hostname (as shown in its console prompt)")
         current_ref = session.get(CredentialRef, current_credential_ref_id)
-        if current_ref is None or current_ref.project_id != device.project_id:
+        if not app_settings.usable_by(current_ref, device.project_id):
             raise ConflictError("Current login: credential not found in this project")
         if credentials is None or not credentials.password:
             raise ConflictError(

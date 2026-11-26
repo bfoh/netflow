@@ -15,7 +15,7 @@ export function SafetyHint({ real, firmware = false }: { real: boolean; firmware
   const fw = policy.data.enable_real_device_firmware;
   const allowed = writes && (!firmware || fw);
   const what = firmware ? 'Firmware changes' : 'Real-device changes';
-  const settings = <Anchor component={Link} to="/settings" size="xs">Settings → Safety</Anchor>;
+  const settings = <Anchor component={Link} to="/settings?tab=safety" size="xs">Settings → Safety</Anchor>;
   return (
     <Group gap={6} wrap="nowrap" align="center">
       {allowed

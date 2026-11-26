@@ -68,7 +68,7 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
       {real && <><SafetyHint real /><SafetyHint real firmware /></>}
       {real && policy.data?.firmware_require_separate_approver !== false && (
         <Hint>Staging alone? Firmware plans need a second person to approve them, unless you turn that off in{' '}
-          <Anchor component={Link} to="/settings" size="xs">Settings → Safety</Anchor>.</Hint>
+          <Anchor component={Link} to="/settings?tab=safety" size="xs">Settings → Safety</Anchor>.</Hint>
       )}
       <Card withBorder padding={0}>
         <Table.ScrollContainer minWidth={640}>

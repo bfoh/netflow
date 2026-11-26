@@ -1,11 +1,12 @@
-import { ActionIcon, Badge, Button, Card, Checkbox, Group, Modal, PasswordInput, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Card, Checkbox, Group, Modal, PasswordInput, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconKey, IconPlus, IconShieldLock, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
+import { Link } from 'react-router';
 
 import { DialogError } from '../../components/ConfirmDialog';
 import { useConfirm } from '../../hooks/useConfirm';
-import { useAction, useCredentialRefs } from '../../hooks/queries';
+import { useAction, useCredentialRefs, useSharedLogins } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { CredentialRef } from '../../types/api';
 import { Hint } from '../../components/Hint';
@@ -27,13 +28,18 @@ function SecretForm({ onSubmit, busy, submitLabel }:
   );
 }
 
-export function CredentialsPanel({ projectId }: { projectId: string }) {
-  const refs = useCredentialRefs(projectId);
+/** Logins of one system (with the logins for all systems listed read-only), or, without a
+ *  system, the logins for all systems (Settings → For all systems, D-105). */
+export function CredentialsPanel({ projectId }: { projectId?: string }) {
+  const own = useCredentialRefs(projectId ?? '');
+  const all = useSharedLogins();
+  const refs = projectId ? own : all;
   const [opened, { open, close }] = useDisclosure();
   const [name, setName] = useState('');
   const [editing, setEditing] = useState<CredentialRef | null>(null);
   const create = useAction(async ({ u, p }: { u: string; p: string }) => {
-    const ref = await api.createCredentialRef(projectId, { name, provider: 'keyring' });
+    const ref = projectId ? await api.createCredentialRef(projectId, { name, provider: 'keyring' })
+      : await api.createSharedLogin({ name, provider: 'keyring' });
     try {
       return await api.setCredentialSecret(ref.id, u, p);
     } catch (e) {
@@ -50,7 +56,10 @@ export function CredentialsPanel({ projectId }: { projectId: string }) {
       {confirmDialog}
       <Hint icon={<IconShieldLock size={14} />}>
         A login is a user name and password for a device. Passwords are kept in your Windows Credential Manager, not in UNDM,
-        and cannot be viewed again here. Choose a device's login on its <b>Edit device</b> form.
+        and cannot be viewed again here.{' '}
+        {projectId
+          ? <>Logins used by every system belong in <Anchor component={Link} to="/settings?tab=shared" size="xs">Settings → For all systems</Anchor>; add one here only for a device of this system that differs.</>
+          : <>Every system can use these logins, the tunnel key included: store them once here.</>}
       </Hint>
       <Group><Button leftSection={<IconPlus size={16} />} onClick={() => { setName(''); open(); }}>Add login</Button></Group>
       <Card withBorder padding={0}>
@@ -60,22 +69,22 @@ export function CredentialsPanel({ projectId }: { projectId: string }) {
             <Table.Tbody>
               {(refs.data ?? []).map((r) => (
                 <Table.Tr key={r.id}>
-                  <Table.Td>{r.name}</Table.Td>
+                  <Table.Td>{r.name}{projectId && r.shared && <Badge ml="xs" size="xs" color="gray" variant="light" tt="none">all systems</Badge>}</Table.Td>
                   <Table.Td>{r.provider === 'keyring' ? 'Credential Manager' : `environment (${r.locator})`}</Table.Td>
                   <Table.Td>{r.has_secret === null ? <Badge color="yellow" variant="light">store unavailable</Badge>
                     : r.has_secret ? <Badge color="teal" variant="light">yes</Badge> : <Badge color="gray" variant="light">no</Badge>}</Table.Td>
                   <Table.Td>
-                    <Group gap={4}>
+                    {projectId && r.shared ? <Anchor component={Link} to="/settings?tab=shared" size="xs">In Settings</Anchor> : <Group gap={4}>
                       {r.provider === 'keyring' && <Tooltip label="Set username/password"><ActionIcon variant="subtle" aria-label={`Set password for ${r.name}`} onClick={() => setEditing(r)}><IconKey size={16} /></ActionIcon></Tooltip>}
                       <Tooltip label="Delete"><ActionIcon variant="subtle" color="red" aria-label={`Delete ${r.name}`}
                         onClick={() => ask({ title: `Delete login "${r.name}"?`, confirmLabel: 'Delete login',
-                          message: 'Devices using it lose their login until you choose another one. The password is removed from Credential Manager.',
+                          message: `${r.shared ? 'Devices of every system' : 'Devices'} using it lose their login until you choose another one. The password is removed from Credential Manager.`,
                           onConfirm: () => del.mutateAsync(r.id) })}><IconTrash size={16} /></ActionIcon></Tooltip>
-                    </Group>
+                    </Group>}
                   </Table.Td>
                 </Table.Tr>
               ))}
-              {refs.data?.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text c="dimmed" ta="center" p="md">No logins yet. Add the factory login and your approved login.</Text></Table.Td></Table.Tr>}
+              {refs.data?.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text c="dimmed" ta="center" p="md">{projectId ? 'No logins yet. Add the factory login and your approved login.' : 'No logins for all systems yet. Add the approved, factory and FortiGate base logins and the tunnel key.'}</Text></Table.Td></Table.Tr>}
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>

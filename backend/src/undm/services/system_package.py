@@ -39,7 +39,7 @@ from undm.db.models import (
     TopologyPosition,
 )
 from undm.drivers.registry import DriverRegistry
-from undm.services import audit
+from undm.services import app_settings, audit
 from undm.services.devices import MAX_IMPORT_BYTES, import_config
 from undm.services.errors import ConflictError, ServiceError
 from undm.services.firmware import FirmwareRepository
@@ -72,6 +72,10 @@ def export_system(session: Session, project: Project, actor: str, *,
                                    .order_by(Device.name)))
     keys = {d.id: f"d{i + 1}" for i, d in enumerate(devices)}
     refs = {r.id: r for r in project.credential_refs}
+    # Logins for all systems that the devices use (D-105): listed by name, matched by name
+    # with this PC's own logins for all systems on import.
+    shared = {r.id: r for r in app_settings.shared_logins(session)
+              if any(d.credential_ref_id == r.id for d in devices)}
     buf = io.BytesIO()
     manifest: dict[str, Any] = {
         "format": FORMAT, "version": VERSION, "undm_version": __version__,
@@ -80,6 +84,7 @@ def export_system(session: Session, project: Project, actor: str, *,
                    "site": project.site, "purpose": project.purpose,
                    "certificate_subject": project.certificate_subject},
         "logins": sorted({r.name for r in refs.values()}),
+        "shared_logins": sorted({r.name for r in shared.values()}),
         "devices": [], "files": [], "links": [], "firmware": [],
         "contains_passwords": "Configuration files are included as written; they may hold "
                               "passwords. Handle this package as confidential.",
@@ -88,8 +93,9 @@ def export_system(session: Session, project: Project, actor: str, *,
         for d in devices:
             entry = {f: getattr(d, f) for f in DEVICE_FIELDS}
             entry["key"] = keys[d.id]
-            ref = refs.get(d.credential_ref_id or "")
+            ref = refs.get(d.credential_ref_id or "") or shared.get(d.credential_ref_id or "")
             entry["login"] = ref.name if ref else None
+            entry["login_shared"] = bool(ref is not None and ref.project_id is None)
             pos = session.get(TopologyPosition, d.id)
             entry["position"] = {"x": pos.x, "y": pos.y} if pos else None
             manifest["devices"].append(entry)
@@ -211,18 +217,34 @@ def import_system(session: Session, package: BinaryIO, actor: str,
         session.add(project)
         session.flush()
         logins: dict[str, CredentialRef] = {}
-        for login in manifest.get("logins") or []:
-            ref = CredentialRef(project_id=project.id, name=str(login)[:120], provider="keyring",
+        here = {r.name: r for r in app_settings.shared_logins(session)}
+        matched: list[str] = []
+
+        def own_login(name: str) -> CredentialRef:
+            ref = CredentialRef(project_id=project.id, name=name[:120], provider="keyring",
                                 locator="pending")
             session.add(ref)
             session.flush()
             ref.locator = f"credential/{ref.id}"
-            logins[ref.name] = ref
+            return ref
+
+        for login in manifest.get("logins") or []:
+            logins[str(login)[:120]] = own_login(str(login))
+        shared_logins: dict[str, CredentialRef] = {}
+        for login in manifest.get("shared_logins") or []:
+            name = str(login)[:120]
+            if name in here:
+                shared_logins[name] = here[name]
+                matched.append(name)
+            else:  # not on this PC: a login of the new system, password to be stored
+                shared_logins[name] = logins.get(name) or own_login(name)
+                logins[name] = shared_logins[name]
         made: dict[str, Device] = {}
         for d in devices:
             fields = {f: d.get(f) for f in DEVICE_FIELDS if d.get(f) is not None}
             device = Device(project_id=project.id, **fields)
-            login = logins.get(str(d.get("login") or ""))
+            name = str(d.get("login") or "")
+            login = shared_logins.get(name) if d.get("login_shared") else logins.get(name)
             device.credential_ref_id = login.id if login else None
             session.add(device)
             session.flush()
@@ -254,6 +276,7 @@ def import_system(session: Session, package: BinaryIO, actor: str,
                         release_notes=str(f.get("release_notes", "")), actor=actor)
             added += 1
         summary = {"devices": len(made), "files": len(files), "logins": sorted(logins),
+                   "shared_logins_used": sorted(matched),
                    "links": len(manifest.get("links") or []), "firmware_added": added,
                    "firmware_already_here": known, "exported_by": manifest.get("created_by"),
                    "exported_at": manifest.get("created_at")}

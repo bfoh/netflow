@@ -58,13 +58,13 @@ describe('making room for the second switch (D-096)', () => {
     const a = sw('a', '192.168.1.1', ['supports_temporary_address']);
     const { steps } = planSteps(role('aruba_b'), { ...EMPTY_CHOICE, imageId: 'i', fileId: 'f' }, b, a);
     expect(steps.map((s) => s.kind)).toEqual(['firmware', 'free_address', 'configuration']);
-    expect(steps[1]).toEqual({ kind: 'free_address', other_device_id: 'a', address: '192.168.1.3' });
+    expect(steps[1]).toEqual({ kind: 'free_address', other_device_id: 'a', address: '192.0.2.3' });
   });
 
   it('not when the other device cannot be moved by UNDM, or already was', () => {
     const plain = sw('a', '192.168.1.1', []);
     expect(planSteps(role('aruba_b'), { ...EMPTY_CHOICE, fileId: 'f' }, b, plain).steps.map((s) => s.kind)).toEqual(['configuration']);
-    const moved = sw('a', '192.168.1.1', ['supports_temporary_address'], { temporary_address: '192.168.1.3' });
+    const moved = sw('a', '192.168.1.1', ['supports_temporary_address'], { temporary_address: '192.0.2.3' });
     expect(addressTakenBy(role('aruba_b'), b, [{ device: moved }, { device: b }])).toBeUndefined();
   });
 });

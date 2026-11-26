@@ -12,7 +12,7 @@ import { PageHeader, QueryState } from '../components/Page';
 import { DialogError } from '../components/ConfirmDialog';
 import { Notice, type NoticeKind } from '../components/Notice';
 import { SafetyHint } from '../components/SafetyHint';
-import { useAction, useAllDevices, useCredentialRefs, useDrivers, usePolicy, useProjects, useSerialPorts } from '../hooks/queries';
+import { useAction, useAllDevices, useCredentialRefs, useDrivers, useLoginDefaults, usePolicy, useProjects, useSerialPorts } from '../hooks/queries';
 import { api } from '../services/api';
 import { downloadText } from '../services/format';
 import { driverLabel, stateLabel } from '../services/labels';
@@ -46,7 +46,11 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
   const [allowConfigured, setAllowConfigured] = useState(false);
   // Preconfigured switch (e.g. BH-DMZ units): erase its configuration first (D-057).
   const [erase, setErase] = useState(false);
-  const [currentLogin, setCurrentLogin] = useState<string | null>(null);
+  // "Login it has now": the 2930F default for all systems (D-105) until the person chooses.
+  const defaults = useLoginDefaults();
+  const [chosenLogin, setCurrentLogin] = useState<string | null | undefined>(undefined);
+  const currentLogin = chosenLogin !== undefined ? chosenLogin
+    : simulated ? null : defaults.data?.aruba?.current ?? null;
   // The name is read from the console by UNDM and confirmed by the person (D-095).
   const [seen, setSeen] = useState<{ state: string; hostname: string; message: string } | null>(null);
   const [eraseOk, setEraseOk] = useState(false);

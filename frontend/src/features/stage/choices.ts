@@ -15,6 +15,9 @@ export interface Choice {
   loginAfter: string | null;
   /** Secret setting of the site file -> login holding its value. */
   secrets: Record<string, string>;
+  /** Choices already filled from the defaults for all systems (D-105): a default fills a
+   *  choice once, so clearing it afterwards sticks. */
+  filled?: string[];
 }
 
 export const EMPTY_CHOICE: Choice = {

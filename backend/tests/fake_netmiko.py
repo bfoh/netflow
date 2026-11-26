@@ -110,7 +110,10 @@ class FakeConnection:
     def send_config_set(self, lines, error_pattern: str = "", read_timeout: int = 0) -> str:
         self.s.calls.append(("send_config_set", list(lines)))
         if hasattr(self.s.device, "configure"):
-            return str(self.s.device.configure(list(lines)))
+            output = str(self.s.device.configure(list(lines)))
+            if error_pattern and re.search(error_pattern, output):  # as Netmiko does
+                raise ConfigInvalidException(f"Invalid input detected: {output}")
+            return output
         applied = []
         for ln in lines:
             if ln.strip() in self.s.bad_lines:

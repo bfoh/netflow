@@ -80,8 +80,8 @@ def test_a_spare_address_in_use_or_outside_the_network_changes_nothing(switch):
     switch.addresses.add("127.0.0.3")  # e.g. another device already there
     r = driver().set_temporary_address("127.0.0.3")
     assert r.status is ResultStatus.FAILED and "already answers at 127.0.0.3" in r.message
-    r = driver().set_temporary_address("192.0.2.3")
-    assert r.status is ResultStatus.FAILED and "not another address of the network" in r.message
+    r = driver().set_temporary_address("127.255.255.255")
+    assert r.status is ResultStatus.FAILED and "cannot be a spare address" in r.message
     assert switch.running_config == RUNNING
 
 
@@ -90,6 +90,30 @@ def test_a_rejected_removal_is_reported_with_what_still_holds(switch):
     r = driver().set_temporary_address("127.0.0.3")
     assert r.status is ResultStatus.FAILED
     assert "127.0.0.1 is still in use by it" in r.message and switch.saves == 0
+
+
+def test_a_second_address_in_the_same_network_refused_by_the_switch_changes_nothing(switch):
+    """Bench 2026-11-26: the step reported "took the command but does not answer" because the
+    refusal's wording was not recognised. It is a rejection now; the switch keeps its
+    address."""
+    switch.refuse_overlap = True
+    r = driver().set_temporary_address("127.0.0.3")
+    assert r.status is ResultStatus.FAILED
+    assert "rejected 'ip address 127.0.0.3 255.0.0.0'" in r.message
+    assert "overlapping network" in r.diagnostics["device_output"]
+    assert switch.running_config == RUNNING and switch.addresses == {"127.0.0.1"}
+
+
+def test_a_spare_in_another_network_is_added_next_to_the_own_address(switch):
+    """D-106: the spare is in another network the PC has, so the switch, which refuses a
+    second address in its own network, can hold both for a moment."""
+    switch.refuse_overlap = True
+    d = driver()
+    r = d.set_temporary_address("10.0.0.3")
+    assert r.ok, r.message
+    assert switch.addresses == {"10.0.0.3"} and "ip address 10.0.0.3 255.0.0.0" in \
+        switch.running_config and "127.0.0.1" not in switch.running_config
+    assert switch.saves == 0
 
 
 def test_other_drivers_do_not_support_it():
@@ -184,6 +208,17 @@ def test_api_a_failed_move_needs_attention_and_says_a_restart_restores(api, swit
     events = " | ".join(e["message"] for e in done["events"])
     assert done["state"] == "recovery_required", events
     assert "restarting it returns it to its saved configuration" in events
+
+
+def test_api_a_refused_move_fails_cleanly_and_the_switch_keeps_its_address(api, switch):
+    client, pid, a, b = api
+    switch.refuse_overlap = True
+    sid = _plan(client, pid, a, b).json()["staging_id"]
+    client.post(f"/api/staging-plans/{sid}/approve", json={})
+    done = client.post(f"/api/staging-plans/{sid}/execute?background=false").json()["steps"][0]
+    assert done["state"] == "failed", [e["message"] for e in done["events"]]
+    assert any("Nothing was changed" in e["message"] for e in done["events"])
+    assert switch.running_config == RUNNING and switch.saves == 0
 
 
 def test_api_only_a_capable_other_device_of_the_system(api):

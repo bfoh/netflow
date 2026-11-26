@@ -88,8 +88,9 @@ class CredentialRef(TimestampMixin, Base):
     __tablename__ = "credential_refs"
     __table_args__ = (UniqueConstraint("project_id", "name"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    project_id: Mapped[str] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    # None: shared by all systems (D-105).
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=True
     )
     name: Mapped[str] = mapped_column(String(120))
     provider: Mapped[str] = mapped_column(String(40), default="env")
@@ -314,3 +315,12 @@ class TopologyPosition(Base):
     )
     x: Mapped[float] = mapped_column(default=0.0)
     y: Mapped[float] = mapped_column(default=0.0)
+
+
+class AppSetting(Base):
+    """A setting for all systems (D-105), e.g. default logins per role. JSON value."""
+
+    __tablename__ = "app_settings"
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now, onupdate=_now)

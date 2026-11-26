@@ -29,7 +29,7 @@ from undm.domain.operations import DeviceOperation
 from undm.drivers.registry import DriverRegistry
 from undm.inventory.rules import environment_problem
 from undm.security.sanitize import new_mapper, sanitize
-from undm.services import audit
+from undm.services import app_settings, audit
 from undm.services import devices as svc
 from undm.services.errors import ConflictError, NotFoundError, ServiceError
 from undm.services.policy import Policy
@@ -65,7 +65,7 @@ def _check_refs(session: SessionDep, registry: RegistryDep, project_id: str,
     ref_id = values.get("credential_ref_id")
     if ref_id:
         ref = session.get(CredentialRef, ref_id)
-        if ref is None or ref.project_id != project_id:
+        if not app_settings.usable_by(ref, project_id):
             raise ServiceError("Credential reference not found in this project")
 
 

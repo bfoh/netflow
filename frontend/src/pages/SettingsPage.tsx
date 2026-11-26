@@ -3,11 +3,13 @@ import { notifications } from '@mantine/notifications';
 import { useQuery } from '@tanstack/react-query';
 
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 
 import { PageHeader } from '../components/Page';
 import { useDeviceModels, useDrivers } from '../hooks/queries';
 import { api, getActor, setActor } from '../services/api';
 import { SafetyPanel } from '../features/settings/SafetyPanel';
+import { SharedSettings } from '../features/settings/SharedSettings';
 import { capabilityLabel, driverLabel, humanize, stateLabel } from '../services/labels';
 import { Hint } from '../components/Hint';
 
@@ -20,17 +22,21 @@ export function SettingsPage() {
   const models = useDeviceModels();
   const health = useQuery({ queryKey: ['health'], queryFn: api.health });
   const [actor, setActorState] = useState(getActor());
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') ?? 'shared';
   return (
     <>
-      <PageHeader title="Settings" description="Safety switches, your name for the audit log, supported models and information about this copy of UNDM." />
-      <Tabs defaultValue="safety" keepMounted={false}>
+      <PageHeader title="Settings" description="Logins and answers for all systems, safety switches, your name for the audit log, supported models and information about this copy of UNDM." />
+      <Tabs value={tab} onChange={(v) => setParams(v ? { tab: v } : {})} keepMounted={false}>
         <Tabs.List mb="md">
+          <Tabs.Tab value="shared">For all systems</Tabs.Tab>
           <Tabs.Tab value="safety">Safety</Tabs.Tab>
           <Tabs.Tab value="identity">Your name</Tabs.Tab>
           <Tabs.Tab value="models">Device models</Tabs.Tab>
           <Tabs.Tab value="drivers">Drivers</Tabs.Tab>
           <Tabs.Tab value="system">About</Tabs.Tab>
         </Tabs.List>
+        <Tabs.Panel value="shared"><SharedSettings /></Tabs.Panel>
         <Tabs.Panel value="safety"><SafetyPanel /></Tabs.Panel>
         <Tabs.Panel value="identity">
           <Card withBorder maw={560}>

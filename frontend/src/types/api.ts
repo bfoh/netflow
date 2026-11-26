@@ -107,6 +107,15 @@ export interface CredentialRef {
   has_secret: boolean | null;
   /** A login without a password (factory logins); the value itself is never sent. */
   empty_password?: boolean | null;
+  /** A login for all systems (Settings → For all systems), D-105. */
+  shared?: boolean;
+}
+
+/** Default logins per device kind: ids of logins for all systems (D-105). */
+export interface LoginDefaults {
+  firewall: { login: string | null; login_after: string | null; tunnel_key: string | null };
+  blackbox: { login: string | null; login_after: string | null };
+  aruba: { login: string | null; current: string | null };
 }
 
 export interface Policy {

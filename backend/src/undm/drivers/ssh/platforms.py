@@ -129,7 +129,10 @@ class ArubaOSSwitchSsh(SshCliDriver):
                            "2930F-48G-4SFP (JL260A) WC.16.11.0001")
     running_config_command = "show running-config"
     skip_line_patterns = (r"^\s*;", r"^Running configuration:")
-    error_pattern = SshCliDriver.error_pattern + r"|Incomplete input|Ambiguous input"
+    # "overlapping network": an address in a network the switch already has (bench,
+    # 2026-11-25 on the console and 2026-11-26 over SSH).
+    error_pattern = (SshCliDriver.error_pattern + r"|Incomplete input|Ambiguous input"
+                     r"|same IP address or subnet|overlapping network")
     info = DriverInfo(
         driver_id="ssh.aruba.aos_switch",
         vendor="Aruba",
@@ -195,7 +198,7 @@ class ArubaOSSwitchSsh(SshCliDriver):
         (r"Enter Country\(C\)\s*:", "country"),
     )
 
-    # -- temporary address (EXPERIMENTAL, D-096; not yet run on hardware) -------------------
+    # -- temporary address (EXPERIMENTAL, D-096, D-106; refused on hardware 2026-11-26) ----
     # The team's own console commands (staging use case): 'vlan <id>' / 'ip address <a> <m>'.
     # 'no ip address <a> <m>' removes one address; whether a second 'ip address' adds to or
     # replaces the first is not verified (Q-45): both are handled. Never 'write memory'.
@@ -225,15 +228,18 @@ class ArubaOSSwitchSsh(SshCliDriver):
             for address, mask in addresses:
                 if address != current:
                     continue
+                # The spare takes the same mask. Since 2026-11-26 it is in another network
+                # (the bench's 192.0.2.0/24): the switch refused a second address in the
+                # network it already has ("overlapping network").
                 try:
-                    net = ipaddress.ip_network(f"{address}/{mask}", strict=False)
-                    ok = ipaddress.ip_address(spare) in net and spare != address
+                    spare_if = ipaddress.ip_interface(f"{spare}/{mask}")
+                    ok = (spare != address and spare_if.ip not in (
+                        spare_if.network.network_address, spare_if.network.broadcast_address))
                 except ValueError:
                     ok = False
                 if not ok:
                     return OperationResult.failed(
-                        op, f"{spare} is not another address of the network of {address} "
-                            f"({mask})"), 0, "", ""
+                        op, f"{spare} cannot be a spare address with the mask {mask}"), 0, "", ""
                 return None, vid, address, mask
         return OperationResult.failed(
             op, f"The running configuration shows no VLAN with the address {current}; "
@@ -278,8 +284,9 @@ class ArubaOSSwitchSsh(SshCliDriver):
         rejected = self._config_lines([f"vlan {vid}", f"ip address {spare} {mask}"])
         if rejected:
             return OperationResult.failed(
-                op, f"The switch rejected 'ip address {spare} {mask}' in VLAN {vid}; its own "
-                    "address was not removed", {"device_output": rejected})
+                op, f"The switch rejected 'ip address {spare} {mask}' in VLAN {vid}: "
+                    f"\"{' '.join(rejected.split())[-200:]}\". Nothing was changed: it still "
+                    f"answers at {old}.", {"device_output": rejected, "unchanged": True})
         # From here on the switch is reached at the spare address.
         self.disconnect()
         home = self.target

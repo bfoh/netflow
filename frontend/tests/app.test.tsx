@@ -168,7 +168,7 @@ describe('application shell', () => {
     mockApi({ '/policy': pol, '/deployments/dep1': dep, '/projects/p1/devices': [device({ environment: 'lab', driver_id: 'ssh.aruba.aoscx' })] });
     const view = renderAt('/deployments/dep1');
     expect(await screen.findByText(/Real-device changes are off: real devices can only be read/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Settings → Safety' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: 'Settings → Safety' })).toHaveAttribute('href', '/settings?tab=safety');
     view.unmount();
     mockApi({ '/policy': pol, '/deployments/dep1': dep, '/projects/p1/devices': [device({})] });  // simulated
     renderAt('/deployments/dep1');
@@ -454,7 +454,7 @@ describe('Settings → Safety', () => {
   it('turning a switch on needs a confirmation; turning it off does not', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     const calls = mockApi({ '/policy': policy });
-    renderAt('/settings');
+    renderAt('/settings?tab=safety');
     await userEvent.click(await screen.findByRole('switch', { name: 'Real-device changes' }));
     const dialog = await screen.findByRole('dialog');
     const go = within(dialog).getByRole('button', { name: 'Turn on' });
@@ -468,7 +468,7 @@ describe('Settings → Safety', () => {
 
   it('a switch fixed by the start-up settings cannot be changed here', async () => {
     mockApi({ '/policy': { ...policy, enable_real_device_writes: true, locked: ['enable_real_device_writes'] } });
-    renderAt('/settings');
+    renderAt('/settings?tab=safety');
     expect(await screen.findByRole('switch', { name: 'Real-device changes' })).toBeDisabled();
     expect(screen.getByText(/Fixed by the start-up settings file/)).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Firmware changes' })).toBeEnabled();
@@ -726,5 +726,117 @@ describe('bench log (D-090)', () => {
     expect(within(dialog).getByText('Read it through before sharing')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Download .txt' })).toBeEnabled();
     expect(calls.some((u) => u === '/api/projects/p1/bench-log?hours=48')).toBe(true);
+  });
+});
+
+describe('For all systems (D-105)', () => {
+  const login = (id: string, name: string, over: Record<string, unknown> = {}) =>
+    ({ id, name, provider: 'keyring', locator: `credential/${id}`, has_secret: true, empty_password: false, shared: true, ...over });
+  const defaults = {
+    firewall: { login: 'ok', login_after: 'base', tunnel_key: 'psk' },
+    blackbox: { login: 'bbf', login_after: 'ok' },
+    aruba: { login: 'ok', current: 'arf' },
+  };
+  const project = { id: 'p1', name: 'Lab A', description: '', site: '', purpose: '', created_at: '', updated_at: '', certificate_subject: null };
+
+  it('Settings stores the logins, the default login per device and the certificate answers once', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({
+      '/credential-refs': [login('ok', 'approved'), login('arf', 'aruba factory', { empty_password: true })],
+      '/settings/defaults': { firewall: { login: null, login_after: null, tunnel_key: null },
+        blackbox: { login: null, login_after: null }, aruba: { login: null, current: null } },
+      '/settings/certificate': { subject: null },
+    });
+    renderAt('/settings');
+    expect(await screen.findByRole('tab', { name: 'For all systems', selected: true })).toBeInTheDocument();
+    expect(await screen.findByRole('cell', { name: 'approved' })).toBeInTheDocument();
+    const label = screen.getByText('Login it has now (console setup)').closest('label')!;
+    await userEvent.click(document.getElementById(label.htmlFor)!);
+    const list = document.getElementById(document.getElementById(label.htmlFor)!.getAttribute('aria-controls')!)!;
+    await userEvent.click(within(list).getByRole('option', { name: 'aruba factory', hidden: true }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save default logins' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/settings/defaults' && c.init?.method === 'PUT')).toBe(true));
+    const put = calls.find((c) => c.url === '/api/settings/defaults' && c.init?.method === 'PUT');
+    expect(JSON.parse(String(put?.init?.body)).aruba).toEqual({ login: null, current: 'arf' });
+    await userEvent.type(screen.getAllByLabelText(/Common Name/)[0], 'lab-cn');
+    await userEvent.click(screen.getByRole('button', { name: 'Save certificate answers' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/settings/certificate' && c.init?.method === 'PUT')).toBe(true));
+    const cert = calls.find((c) => c.url === '/api/settings/certificate' && c.init?.method === 'PUT');
+    expect(JSON.parse(String(cert?.init?.body)).subject.common_name).toBe('lab-cn');
+  });
+
+  it('the wizard adds a real device with its default login and fills the ones without', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({
+      '/projects/p1': project, '/settings/defaults': defaults, '/projects/p1/staging-plans': [],
+      '/projects/p1/credential-refs': [login('ok', 'approved'), login('bbf', 'bb factory')],
+      '/device-models': [{ model_id: 'aruba-2930f', manufacturer: 'Aruba', product_family: '2930F', model: '2930F', category: 'switch', os_family: 'ArubaOS-Switch', drivers: [], support: 'lab_validated', notes: '' },
+        { model_id: 'fortinet-fg-101f', manufacturer: 'Fortinet', product_family: 'FortiGate', model: 'FortiGate-101F', category: 'firewall', os_family: 'FortiOS', drivers: [], support: 'lab_validated', notes: '' }],
+      '/projects/p1/devices': [device({ id: 'bb', name: 'lab-a-bb', manufacturer: 'Black Box', model: 'LIG1014A', role: 'Black Box LIG1014A',
+        driver_id: 'ssh.blackbox.lig1014a', environment: 'lab', management_address: '192.0.2.1', credential_ref_id: null })],
+    });
+    renderAt('/stage/p1?step=0');
+    await userEvent.click(await screen.findByRole('button', { name: /Use the default logins \(1 device\)/ }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/devices/bb' && c.init?.method === 'PATCH')).toBe(true));
+    const patch = calls.find((c) => c.url === '/api/devices/bb' && c.init?.method === 'PATCH');
+    expect(JSON.parse(String(patch?.init?.body))).toEqual({ credential_ref_id: 'bbf' });
+    await userEvent.click(screen.getByRole('button', { name: 'Add it (192.168.1.99)' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1/devices' && c.init?.method === 'POST')).toBe(true));
+    const add = calls.find((c) => c.url === '/api/projects/p1/devices' && c.init?.method === 'POST');
+    expect(JSON.parse(String(add?.init?.body))).toMatchObject({ role: 'FortiGate 101F', credential_ref_id: 'ok' });
+  });
+
+  it('step 2 starts with the login after loading for all systems, once', async () => {
+    window.localStorage.removeItem('undm.stage.p1');
+    mockApi({
+      '/projects/p1': project, '/settings/defaults': defaults, '/projects/p1/staging-plans': [],
+      '/projects/p1/credential-refs': [login('ok', 'approved'), login('bbf', 'bb factory')],
+      '/projects/p1/devices': [device({ id: 'bb', name: 'lab-a-bb', manufacturer: 'Black Box', model: 'LIG1014A', role: 'Black Box LIG1014A',
+        driver_id: 'ssh.blackbox.lig1014a', environment: 'lab', management_address: '192.0.2.1', credential_ref_id: 'bbf' })],
+    });
+    renderAt('/stage/p1?step=1');
+    expect(await screen.findByDisplayValue('approved')).toBeInTheDocument();
+    await vi.waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem('undm.stage.p1') ?? '{}');
+      expect(stored.blackbox).toMatchObject({ loginAfter: 'ok', filled: ['loginAfter'] });
+    });
+    window.localStorage.removeItem('undm.stage.p1');
+  });
+
+  it('the console setup starts with the login it has now from the defaults', async () => {
+    const sw = device({ id: 'sw', name: 'lab-sw', model: '2930F', role: 'Aruba 2930F (OOBM port 2)', driver_id: 'ssh.aruba.aos_switch',
+      environment: 'lab', credential_ref_id: 'ok' });
+    mockApi({
+      '/devices': [sw], '/settings/defaults': defaults,
+      '/drivers': [{ driver_id: 'ssh.aruba.aos_switch', platform: 'aos_switch', simulated: false, vendor: 'Aruba', os_family: 'ArubaOS-Switch', description: '', capabilities: [], maturity: 'experimental', transport: 'ssh', notes: [] }],
+      '/projects/p1/credential-refs': [login('ok', 'approved'), login('arf', 'aruba factory', { empty_password: true })],
+      '/provisioning/serial-ports': [{ port: 'COM7', description: 'USB Serial', hardware_id: '' }],
+      '/policy': { enable_real_device_writes: true, enable_real_device_firmware: false, allow_production_read_only: false,
+        allow_production_deployments: false, require_separate_approver: false, firmware_require_separate_approver: false, locked: [] },
+    });
+    const { default: userEvent } = await import('@testing-library/user-event');
+    renderAt('/provisioning?device=sw');
+    await userEvent.click(await screen.findByPlaceholderText('Choose the console cable’s port'));
+    await userEvent.click((await screen.findAllByRole('option', { name: /COM7/, hidden: true }))[0]);
+    await userEvent.click(await screen.findByRole('button', { name: 'Run console bootstrap…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Run console bootstrap' });
+    expect(within(dialog).getByDisplayValue('aruba factory')).toBeInTheDocument();
+  });
+
+  it('a system lists the logins for all systems read-only, and its certificate uses the shared answers', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    mockApi({
+      '/projects/p1': project, '/projects/p1/devices': [], '/projects/p1/deployments': [],
+      '/projects/p1/credential-refs': [login('own', 'local', { shared: false }), login('ok', 'approved')],
+      '/settings/certificate': { subject: { common_name: 'lab-cn', org_unit: '', org_name: '', locality: '', state: '', country: '',
+        profile_name: 'Profile', certificate_name: 'certificate' } },
+    });
+    renderAt('/projects/p1');
+    await userEvent.click(await screen.findByRole('tab', { name: 'Logins' }));
+    expect(await screen.findByText('all systems')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete local' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete approved' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', { name: 'System settings' }));
+    expect(await screen.findByText(/uses the answers for all systems/)).toBeInTheDocument();
   });
 });

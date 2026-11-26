@@ -449,10 +449,42 @@ def test_api_https_only_file_needs_the_certificate_subject(api):
     r = client.post(f"/api/deployments/{dep['id']}/execute")
     assert r.status_code == 409, r.text
     assert "without an HTTPS certificate" in r.json()["error"]
-    assert "Project settings → HTTPS certificate" in r.json()["error"]
+    assert "Settings → For all systems → HTTPS certificate" in r.json()["error"]
     assert not any(c.startswith("copy") for c in switch.commands)  # nothing was sent
     refused = client.post(f"/api/projects/{pid}/deployments", json=plan)
     assert refused.status_code == 409 and "set it first" in refused.json()["error"]
+
+
+def test_api_the_certificate_for_all_systems_serves_a_system_without_its_own(api):
+    """D-105: answered once in Settings → For all systems; a system's own answers win."""
+    client, pid, did, switch, hub = api
+    cleared = client.patch(f"/api/projects/{pid}", json={"certificate_subject": None})
+    assert cleared.status_code == 200
+    assert client.put("/api/settings/certificate",
+                      json={"subject": SUBJECT}).status_code == 200
+    assert client.get("/api/settings/certificate").json()["subject"]["common_name"] == "lab-cn"
+    v = client.post(f"/api/devices/{did}/configs/import",
+                    json={"filename": "oobm-switch.pcc", "text": sample()}).json()
+    plan = {"device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]}}
+    r = client.post(f"/api/projects/{pid}/deployments", json=plan)
+    assert r.status_code == 201 and r.json()["state"] == "awaiting_approval", r.text
+    actions = [a["action"] for a in client.get("/api/audit").json()]
+    assert "settings.certificate" in actions
+
+
+def test_effective_certificate_prefers_the_systems_own():
+    from types import SimpleNamespace
+
+    from undm.services import app_settings
+
+    class Session:
+        def get(self, model, key):
+            return SimpleNamespace(value={"common_name": "all"})
+
+    own = SimpleNamespace(certificate_subject={"common_name": "own"})
+    none = SimpleNamespace(certificate_subject=None)
+    assert app_settings.effective_certificate(Session(), own)["common_name"] == "own"
+    assert app_settings.effective_certificate(Session(), none)["common_name"] == "all"
 
 
 def test_verification_warnings_are_grouped(rig):

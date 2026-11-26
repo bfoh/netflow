@@ -15,7 +15,8 @@ import { BenchLogButton } from '../features/systems/BenchLogButton';
 import { SystemTree } from '../features/systems/SystemTree';
 import { DownloadBackupsButton, ExportSystemButton } from '../features/systems/SystemPackage';
 import { useConfirm } from '../hooks/useConfirm';
-import { useAction, useDeployments, useProject, useProjectDevices, useReachability } from '../hooks/queries';
+import { useAction, useDeployments, useProject, useProjectDevices, useReachability, useSharedCertificate } from '../hooks/queries';
+import { CertificateForm } from '../features/settings/CertificateForm';
 import { api } from '../services/api';
 import type { CertificateSubject, Project } from '../types/api';
 
@@ -48,43 +49,36 @@ function ProjectSettings({ project }: { project: Project }) {
   );
 }
 
-const EMPTY_SUBJECT: CertificateSubject = {
-  common_name: '', org_unit: '', org_name: '', locality: '', state: '', country: '',
-  profile_name: 'Profile', certificate_name: 'certificate',
-};
-
-/** Answers UNDM gives to the 2930F's certificate questions before loading an HTTPS-only file. */
+/** The 2930F certificate answers: those for all systems, or this system's own (D-105). */
 function CertificateSettings({ project }: { project: Project }) {
-  const [form, setForm] = useState<CertificateSubject>(project.certificate_subject ?? EMPTY_SUBJECT);
+  const shared = useSharedCertificate();
+  const [override, setOverride] = useState(!!project.certificate_subject);
   const save = useAction((subject: CertificateSubject | null) =>
-    api.updateProject(project.id, { certificate_subject: subject }), 'Certificate subject saved');
-  const field = (key: keyof CertificateSubject, label: string, extra: Record<string, unknown> = {}) => (
-    <TextInput label={label} value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.currentTarget.value })} {...extra} />
-  );
+    api.updateProject(project.id, { certificate_subject: subject }), (r) => (r.certificate_subject ? 'Certificate answers saved for this system' : 'This system uses the answers for all systems'));
+  const own = !!project.certificate_subject;
   return (
     <Card withBorder maw={640}>
       <Stack>
         <Title order={2} size="h5">HTTPS certificate (Aruba 2930F)</Title>
         <Text size="sm" c="dimmed">
           Before loading a 2930F file that makes the web interface HTTPS-only, UNDM creates the self-signed certificate with
-          your team's commands and answers the switch's questions with these values. They are stored only in this UNDM
-          database. Leave empty to create the certificate by hand.
+          your team's commands and answers the switch's questions. The answers are set once in{' '}
+          <Anchor component={Link} to="/settings?tab=shared" size="sm">Settings → For all systems</Anchor>.
         </Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          {field('common_name', 'Common Name (CN)', { required: true })}
-          {field('org_unit', 'Org Unit (OU)')}
-          {field('org_name', 'Org Name (O)')}
-          {field('locality', 'Locality (L)')}
-          {field('state', 'State (ST)')}
-          {field('country', 'Country (C)', { description: 'Two letters, or empty', maxLength: 2 })}
-          {field('profile_name', 'Identity profile name')}
-          {field('certificate_name', 'Certificate name')}
-        </SimpleGrid>
-        <Group justify="space-between">
-          <Button variant="subtle" color="red" disabled={!project.certificate_subject} loading={save.isPending}
-            onClick={() => save.mutate(null)}>Remove</Button>
-          <Button loading={save.isPending} disabled={!form.common_name.trim()} onClick={() => save.mutate(form)}>Save certificate subject</Button>
-        </Group>
+        {own ? (
+          <Text size="sm">This system uses its own answers (common name <b>{project.certificate_subject!.common_name}</b>).</Text>
+        ) : shared.data?.subject ? (
+          <Text size="sm">This system uses the answers for all systems (common name <b>{shared.data.subject.common_name}</b>).</Text>
+        ) : (
+          <Text size="sm" c="orange">No answers are set for all systems yet: a 2930F file that needs the certificate cannot be loaded.</Text>
+        )}
+        <Switch label="Different answers for this system" checked={override || own}
+          onChange={(e) => { const on = e.currentTarget.checked; setOverride(on); if (!on && own) save.mutate(null); }} />
+        {(override || own) && (
+          <CertificateForm value={project.certificate_subject ?? shared.data?.subject ?? null} saving={save.isPending}
+            onSave={(s) => { if (s === null) setOverride(false); save.mutate(s); }}
+            saveLabel="Save for this system" removeLabel="Use the answers for all systems" />
+        )}
       </Stack>
     </Card>
   );

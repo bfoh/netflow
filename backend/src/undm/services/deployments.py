@@ -56,7 +56,7 @@ from undm.orchestration.free_address import FreeAddressOrchestrator
 from undm.orchestration.license import LicenseOrchestrator
 from undm.orchestration.restart import RestartOrchestrator
 from undm.security import credentials as creds
-from undm.services import audit
+from undm.services import app_settings, audit
 from undm.services.devices import (
     build_driver,
     inspect_config,
@@ -77,7 +77,8 @@ S = DeploymentState
 
 
 # Where a person sets each project setting a file can require.
-_SETTING_LABELS = {"certificate_subject": "Project settings → HTTPS certificate"}
+_SETTING_LABELS = {"certificate_subject": "Settings → For all systems → HTTPS certificate, "
+                                         "or the system page"}
 
 MAX_STAGING_STEPS = 8
 _STEP_WORDS = {"first_login": "first login", "firmware": "firmware",
@@ -185,9 +186,9 @@ class DeploymentService:
                                   text, expected_serial=serial)
             dt.state = TargetState(t.state)
             dt.checkpoint_label = label
-            project = device.project
-            if project is not None and project.certificate_subject:
-                dt.settings["certificate_subject"] = dict(project.certificate_subject)
+            subject = app_settings.effective_certificate(self.s, device.project)
+            if subject:
+                dt.settings["certificate_subject"] = subject
             dt.from_version, dt.target_version = t.from_version, t.to_version
             if rec.kind == "first_login" and device.credential_ref_id:
                 # The login the first login sets on the unit (D-073).
@@ -728,13 +729,15 @@ class DeploymentService:
                 f"{apply_mode.value} mode")
         project = self.s.get(Project, device.project_id)
         for name, why in report.required_settings.items():
-            if not getattr(project, name, None):
+            value = (app_settings.effective_certificate(self.s, project)
+                     if name == "certificate_subject" else getattr(project, name, None))
+            if not value:
                 label = _SETTING_LABELS.get(name, name)
                 raise ConflictError(f"{what}. {why}: set it first ({label}).")
 
     def _credentials_for(self, device: Device, ref_id: str) -> Credentials:
         ref = self.s.get(CredentialRef, ref_id)
-        if ref is None or ref.project_id != device.project_id:
+        if not app_settings.usable_by(ref, device.project_id):
             raise ConflictError(f"{device.name}: login after loading: credential not found")
         try:
             return creds.resolve(ref.provider, ref.locator)
@@ -746,7 +749,7 @@ class DeploymentService:
         values: dict[str, str] = {}
         for slot_id, ref_id in refs.items():
             ref = self.s.get(CredentialRef, ref_id)
-            if ref is None or ref.project_id != device.project_id:
+            if not app_settings.usable_by(ref, device.project_id):
                 raise ConflictError(f"{device.name}: credential for '{slot_id}' not found")
             try:
                 values[slot_id] = creds.resolve(ref.provider, ref.locator).password

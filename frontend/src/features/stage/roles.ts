@@ -2,7 +2,7 @@
  * The four devices of a system, by role (staging use case, docs/requirements). Addresses are
  * the bench defaults of docs/requirements/staging-run-design.md; they can be changed per device.
  */
-import type { Device } from '../../types/api';
+import type { Device, LoginDefaults } from '../../types/api';
 
 export type RoleKey = 'firewall' | 'blackbox' | 'aruba_a' | 'aruba_b';
 export type StepKind = 'console' | 'first_login' | 'firmware' | 'base' | 'site' | 'file';
@@ -127,7 +127,21 @@ export function temporaryAddress(d: Device): string | undefined {
 }
 
 /** Spare bench address a device is moved to while another takes its address (D-096). */
-export const SPARE_ADDRESS = '192.168.1.3';
+/** Where the first 2930F waits, unsaved, while the second takes its address (D-096). In the
+ * bench's other network, which the PC already has: the 2930F refuses a second address in
+ * the network it already has (bench, 2026-11-26, D-106). */
+export const SPARE_ADDRESS = '192.0.2.3';
 
 /** Whether UNDM can move this device aside itself (real 2930F); else it must be unplugged. */
 export const canMoveAside = (d: Device) => d.capabilities.includes('supports_temporary_address');
+
+/** The defaults for all systems of a role's kind (both 2930F share one), D-105. */
+export function roleDefaults(role: Role, d: LoginDefaults | undefined): {
+  login: string | null; loginAfter: string | null; tunnelKey: string | null; current: string | null;
+} {
+  const none = { login: null, loginAfter: null, tunnelKey: null, current: null };
+  if (!d?.firewall || !d.blackbox || !d.aruba) return none;
+  if (role.key === 'firewall') return { ...none, login: d.firewall.login, loginAfter: d.firewall.login_after, tunnelKey: d.firewall.tunnel_key };
+  if (role.key === 'blackbox') return { ...none, login: d.blackbox.login, loginAfter: d.blackbox.login_after };
+  return { ...none, login: d.aruba.login, current: d.aruba.current };
+}

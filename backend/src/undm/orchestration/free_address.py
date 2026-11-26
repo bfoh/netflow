@@ -124,6 +124,12 @@ class FreeAddressOrchestrator(DeploymentOrchestrator):
             for t in present:
                 t.touched = True
                 r = t.driver.set_temporary_address(str(t.target_version))
+                if not r.ok and r.diagnostics.get("unchanged"):
+                    # Refused before anything changed: the device is as it was.
+                    self._fail_target(dep, t, "deploy", TargetState.APPLY_FAILED, r.message)
+                    self._move(dep, S.FAILED, "the device refused the move; nothing was "
+                               "changed on it")
+                    return dep.state
                 if not r.ok:
                     self._fail_target(dep, t, "deploy", TargetState.MANUAL_RECOVERY_REQUIRED,
                                       r.message)

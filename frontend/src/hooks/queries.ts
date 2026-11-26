@@ -75,6 +75,10 @@ export const usePolicy = () => useQuery({ queryKey: ['policy'], queryFn: api.pol
 export const useHealth = () => useQuery({ queryKey: ['health'], queryFn: api.health });
 export const useCredentialRefs = (pid: string) =>
   useQuery({ queryKey: ['credential-refs', pid], queryFn: () => api.credentialRefs(pid), enabled: !!pid });
+/** Settings for all systems (D-105). */
+export const useSharedLogins = () => useQuery({ queryKey: ['shared-logins'], queryFn: api.sharedLogins });
+export const useLoginDefaults = () => useQuery({ queryKey: ['login-defaults'], queryFn: api.loginDefaults });
+export const useSharedCertificate = () => useQuery({ queryKey: ['shared-certificate'], queryFn: api.sharedCertificate });
 export const useDeviceModels = () => useQuery({ queryKey: keys.models, queryFn: api.deviceModels });
 
 /** Mutation that refreshes all cached data afterwards and reports errors as notifications. */

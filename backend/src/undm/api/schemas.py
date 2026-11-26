@@ -100,6 +100,38 @@ class ProjectOut(ORM):
     updated_at: datetime
 
 
+class LoginDefaults(BaseModel):
+    """Default logins per device kind (ids of logins for all systems), D-105."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    class Firewall(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        login: str | None = None
+        login_after: str | None = None
+        tunnel_key: str | None = None
+
+    class BlackBox(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        login: str | None = None
+        login_after: str | None = None
+
+    class Aruba(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        login: str | None = None
+        current: str | None = None
+
+    firewall: Firewall = Field(default_factory=Firewall)
+    blackbox: BlackBox = Field(default_factory=BlackBox)
+    aruba: Aruba = Field(default_factory=Aruba)
+
+
+class CertificateSetting(BaseModel):
+    """The HTTPS certificate answers for all systems (null: none set)."""
+
+    subject: CertificateSubject | None = None
+
+
 class CredentialRefIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     provider: Literal["keyring", "env"] = "keyring"
@@ -114,6 +146,7 @@ class CredentialRefOut(ORM):
     locator: str
     has_secret: bool | None = None  # None: the credential store could not be queried
     empty_password: bool | None = None  # a login without a password (never the value)
+    shared: bool = False  # a login for all systems (D-105)
 
 
 class CredentialSecretIn(BaseModel):

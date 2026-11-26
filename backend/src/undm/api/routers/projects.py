@@ -4,20 +4,23 @@ from sqlalchemy.exc import IntegrityError
 
 from undm.api.deps import ActorDep, SessionDep
 from undm.api.schemas import (
+    CertificateSetting,
     CredentialRefIn,
     CredentialRefOut,
     CredentialSecretIn,
+    LoginDefaults,
     ProjectIn,
     ProjectOut,
     ProjectPatch,
 )
 from undm.db.models import CredentialRef, Device, Project
 from undm.security import credentials as creds
-from undm.services import audit
+from undm.services import app_settings, audit
 from undm.services.errors import ConflictError, NotFoundError, ServiceError
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 credentials_router = APIRouter(prefix="/api/credential-refs", tags=["credentials"])
+settings_router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 
 def get_project(session: SessionDep, project_id: str) -> Project:
@@ -86,6 +89,7 @@ def delete_project(project_id: str, session: SessionDep, actor: ActorDep) -> Non
 
 def _ref_out(ref: CredentialRef) -> CredentialRefOut:
     out = CredentialRefOut.model_validate(ref)
+    out.shared = ref.project_id is None
     out.has_secret = creds.has_secret(ref.provider, ref.locator)
     out.empty_password = (creds.has_empty_password(ref.provider, ref.locator)
                           if out.has_secret else None)
@@ -94,7 +98,9 @@ def _ref_out(ref: CredentialRef) -> CredentialRefOut:
 
 @router.get("/{project_id}/credential-refs", response_model=list[CredentialRefOut])
 def list_credential_refs(project_id: str, session: SessionDep) -> list[CredentialRefOut]:
-    return [_ref_out(r) for r in get_project(session, project_id).credential_refs]
+    """The system's own logins, then the logins for all systems (D-105)."""
+    own = list(get_project(session, project_id).credential_refs)
+    return [_ref_out(r) for r in own + app_settings.shared_logins(session)]
 
 
 @router.post("/{project_id}/credential-refs", response_model=CredentialRefOut,
@@ -103,8 +109,16 @@ def create_credential_ref(
     project_id: str, body: CredentialRefIn, session: SessionDep, actor: ActorDep
 ) -> CredentialRefOut:
     get_project(session, project_id)
+    return _create_ref(session, actor, body, project_id)
+
+
+def _create_ref(session: SessionDep, actor: str, body: CredentialRefIn,
+                project_id: str | None) -> CredentialRefOut:
     if body.provider == "env" and not body.locator:
         raise ServiceError("The 'env' provider needs a locator (environment variable stem)")
+    if project_id is None and any(r.name == body.name
+                                  for r in app_settings.shared_logins(session)):
+        raise ConflictError(f"A login for all systems is already called '{body.name}'")
     ref = CredentialRef(project_id=project_id, name=body.name, provider=body.provider,
                         locator=body.locator or "pending")
     session.add(ref)
@@ -115,8 +129,22 @@ def create_credential_ref(
     if body.provider == "keyring":
         ref.locator = f"credential/{ref.id}"
     audit.record(session, actor, "credential_ref.create", "credential_ref", ref.id,
-                 details={"name": ref.name, "provider": ref.provider})
+                 details={"name": ref.name, "provider": ref.provider,
+                          "shared": project_id is None})
     return _ref_out(ref)
+
+
+@credentials_router.get("", response_model=list[CredentialRefOut])
+def list_shared_logins(session: SessionDep) -> list[CredentialRefOut]:
+    """Logins for all systems (D-105)."""
+    return [_ref_out(r) for r in app_settings.shared_logins(session)]
+
+
+@credentials_router.post("", response_model=CredentialRefOut,
+                         status_code=status.HTTP_201_CREATED)
+def create_shared_login(body: CredentialRefIn, session: SessionDep,
+                        actor: ActorDep) -> CredentialRefOut:
+    return _create_ref(session, actor, body, None)
 
 
 def _get_ref(session: SessionDep, ref_id: str) -> CredentialRef:
@@ -153,3 +181,27 @@ def delete_credential_ref(ref_id: str, session: SessionDep, actor: ActorDep) -> 
     session.delete(ref)
     audit.record(session, actor, "credential_ref.delete", "credential_ref", ref_id,
                  details={"name": ref.name})
+
+
+@settings_router.get("/defaults", response_model=LoginDefaults)
+def get_defaults(session: SessionDep) -> LoginDefaults:
+    return LoginDefaults.model_validate(app_settings.defaults(session))
+
+
+@settings_router.put("/defaults", response_model=LoginDefaults)
+def put_defaults(body: LoginDefaults, session: SessionDep, actor: ActorDep) -> LoginDefaults:
+    return LoginDefaults.model_validate(
+        app_settings.set_defaults(session, actor, body.model_dump()))
+
+
+@settings_router.get("/certificate", response_model=CertificateSetting)
+def get_certificate(session: SessionDep) -> CertificateSetting:
+    return CertificateSetting.model_validate({"subject": app_settings.certificate(session)})
+
+
+@settings_router.put("/certificate", response_model=CertificateSetting)
+def put_certificate(body: CertificateSetting, session: SessionDep,
+                    actor: ActorDep) -> CertificateSetting:
+    subject = body.subject.model_dump() if body.subject is not None else None
+    app_settings.set_certificate(session, actor, subject)
+    return CertificateSetting.model_validate({"subject": subject})

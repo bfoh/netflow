@@ -63,6 +63,9 @@ class FakeArubaSwitch:
     # hardware: both are modelled, Q-45).
     addresses: set[str] | None = None
     ip_address_replaces: bool = False
+    # As on the bench (2026-11-25/26, WC.16.10/16.11): an address in a network the switch
+    # already has on an interface is refused with this wording, and nothing changes.
+    refuse_overlap: bool = False
     _config: bool = False
     _subject_left: list[str] = field(default_factory=list)
     # Observations.
@@ -104,6 +107,15 @@ class FakeArubaSwitch:
             m = re.match(r"^(no )?ip address (\S+) (\S+)$", ln)
             if not m or vid is None:
                 continue
+            if self.refuse_overlap and not m.group(1):
+                import ipaddress
+                new = ipaddress.ip_interface(f"{m.group(2)}/{m.group(3)}")
+                held = [ipaddress.ip_interface(f"{a}/{b}") for a, b in re.findall(
+                    r"^\s*ip address (\d\S*) (\d\S*)$", self.running_config, re.M)]
+                if any(h.network.overlaps(new.network) for h in held):
+                    return ("An interface with the same IP address or subnet or an "
+                            f"overlapping network\n {new.ip}/{new.network.prefixlen} already "
+                            "exists.\n")
             out, inside = [], False
             for row in self.running_config.splitlines():
                 s = row.strip()

@@ -25,7 +25,7 @@ from undm.config import Settings
 from undm.db.models import AuditEvent, ConfigVersion, DeploymentRecord, Device, Project
 from undm.drivers.registry import DriverRegistry
 from undm.security.sanitize import new_mapper, sanitize
-from undm.services import audit
+from undm.services import app_settings, audit
 from undm.services.safety_settings import effective
 
 _FILE_HOSTNAME = re.compile(r'^\s*(?:set\s+)?hostname\s+"?([^"\s]+)"?', re.M | re.I)
@@ -62,6 +62,7 @@ def bench_log(session: Session, project: Project, registry: DriverRegistry, sett
     # What belongs to this system and must not leave the bench in clear.
     known: list[tuple[str, str]] = [("system", project.name), ("site", project.site)]
     known += [("login", r.name) for r in project.credential_refs]
+    known += [("login", r.name) for r in app_settings.shared_logins(session)]
     for d in devices:
         facts = dict(d.observed_facts or {})
         extra = dict(facts.get("extra") or {})
