@@ -12,7 +12,7 @@ export interface Crumb { label: string; to?: string }
  * The top of every page (D-119): where you are, what this page is for, and what you do here.
  * One primary action at most; a second one if it is common; everything else in "More".
  */
-export function PageHeader({ title, description, badges, primary, secondary, menu, breadcrumbs, actions }: {
+export function PageHeader({ title, description, badges, primary, secondary, menu, more, breadcrumbs, actions }: {
   title: string;
   description?: ReactNode;
   /** State shown next to the title (e.g. Staged). */
@@ -23,6 +23,8 @@ export function PageHeader({ title, description, badges, primary, secondary, men
   secondary?: ReactNode;
   /** Less frequent actions, as Menu.Item elements under "More". */
   menu?: ReactNode;
+  /** A ready-made "More" menu of its own (e.g. the device menu), shown where "More" goes. */
+  more?: ReactNode;
   breadcrumbs?: Crumb[];
   /** Deprecated: free-form actions, kept while pages move to primary/secondary/menu. */
   actions?: ReactNode;
@@ -45,7 +47,7 @@ export function PageHeader({ title, description, badges, primary, secondary, men
           </Group>
           {description && <Text c="dimmed" size="sm" maw={820}>{description}</Text>}
         </Stack>
-        {(primary || secondary || menu || actions) && (
+        {(primary || secondary || menu || more || actions) && (
           <Group gap="sm" wrap="wrap">
             {actions}
             {secondary}
@@ -58,6 +60,7 @@ export function PageHeader({ title, description, badges, primary, secondary, men
                 <Menu.Dropdown>{menu}</Menu.Dropdown>
               </Menu>
             )}
+            {more}
           </Group>
         )}
       </Group>

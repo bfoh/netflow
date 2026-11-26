@@ -10,7 +10,9 @@ test('export a system and import it under another name', async ({ page }) => {
   await page.getByRole('button', { name: 'Create system' }).click();
   await expect(page.getByRole('heading', { name })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Export…' }).click();
+  // D-122: under the system page's More menu.
+  await page.getByRole('button', { name: 'More actions' }).click();
+  await page.getByRole('menuitem', { name: 'Export the system…' }).click();
   const downloading = page.waitForEvent('download');
   await page.getByRole('dialog').getByRole('button', { name: 'Export' }).click();
   const download = await downloading;

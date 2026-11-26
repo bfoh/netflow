@@ -1948,6 +1948,34 @@ five different directions to where logins live.
   Finish staging needs the rule on (unless the start-up file fixes it).
 - **Report.** Each device still to do links to its card in step 4 (`#device-<id>`).
 
+### D-122 Device, system and plan pages: one main action, the rest under More (2026-11-26)
+
+**Found:** the device page had Test connection twice, Retrieve information, Back up, Console
+bootstrap, Edit and Delete as separate buttons; the system page header had six buttons; the
+Plans page mixed four forms and the list of every plan; the plan page showed the raw apply
+mode, and Cancel and Delete sat next to Approve and Run.
+
+**Decision.**
+- **Device page.** Header: environment and setup state as badges; **Test connection**
+  (primary), **Edit**, and the device's own menu (⋯), which now also holds Edit and Delete
+  next to console setup, restart, license, back up, files and log. The card "What the device
+  reported" has one **Read information**. The login is changed where it is shown (the shared
+  login picker).
+- **Edit device.** Name, address, login (console port for the modem), site, rack, tags and
+  notes first; connection details, environment, model, operating system and declared
+  firmware under **Advanced settings** (opened by itself when the operating system does not
+  match the driver).
+- **System page.** **Stage this system** (primary) and **Add device**; bench log, backups and
+  export under More. The devices are shown as a table, or as table and tree side by side
+  (`undm.system.view`, remembered); the tick boxes and bulk actions are shared.
+- **Plans.** The list has filters (system, type, and Waiting / Running / Needs attention /
+  Finished) kept in the address, and **New plan**. **New plan** (`/plans/new`) holds the
+  configuration-file plan; First login and Base-then-site (FortiGate, outside Stage a system)
+  are folded under "More plan types"; firmware upgrades are planned on the Firmware page.
+- **Plan page.** State and options as badges ("Backup slot too", "Older approved version
+  allowed"); no raw apply mode; Approve or Run as the main action; **Cancel plan…** and
+  **Delete…** under More.
+
 ### D-124 The modem has a default login (2026-11-26)
 
 The 7705 SAR-Hmc's first access sets the approved login (D-112), but Settings had no default

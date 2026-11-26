@@ -1,11 +1,11 @@
-import { Accordion, Anchor, Badge, Button, Card, Code, CopyButton, Group, Modal, Stack, Stepper, Text, Textarea, Timeline, Title } from '@mantine/core';
+import { Accordion, ActionIcon, Anchor, Badge, Button, Card, Code, CopyButton, Group, Menu, Modal, Stack, Stepper, Text, Textarea, Timeline, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { IconAlertTriangle, IconTrash, IconX } from '@tabler/icons-react';
+import { IconAlertTriangle, IconDots, IconTrash, IconX } from '@tabler/icons-react';
 import { Link, useNavigate, useParams } from 'react-router';
 
-import { EnvironmentBadge, StateBadge } from '../components/Badges';
+import { EnvironmentBadge, StateBadge, Tag } from '../components/Badges';
 import { DiffView } from '../components/DiffView';
 import { PageHeader, QueryState } from '../components/Page';
 import { useSystemCrumbs } from '../features/systems/crumbs';
@@ -98,15 +98,22 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
         </Stack>
       </Modal>
       {dep.state === 'ready' && !started && <Button color={dep.dry_run ? 'indigo' : 'orange'} onClick={open} loading={running}>{dep.dry_run ? 'Run dry run' : 'Run plan'}</Button>}
-      {canCancel && !active && <Button variant="default" loading={cancel.isPending} onClick={() => ask({
-        title: 'Cancel this plan?', confirmLabel: 'Cancel plan',
-        message: 'The plan will not run and cannot be approved or run later. No device has been changed by it. Make a new plan if you need it again.',
-        onConfirm: () => cancel.mutateAsync(),
-      })}>Cancel plan</Button>}
       {confirmDialog}
       {deleteDialog}
-      {!active && canDelete(dep) && <Button variant="subtle" color="red" leftSection={<IconTrash size={16} />}
-        onClick={() => askToDelete(dep, () => void navigate(paths.plans))}>Delete</Button>}
+      {!active && (canCancel || canDelete(dep)) && (
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target><ActionIcon variant="default" size="lg" aria-label="More actions"><IconDots size={18} /></ActionIcon></Menu.Target>
+          <Menu.Dropdown>
+            {canCancel && <Menu.Item onClick={() => ask({
+              title: 'Cancel this plan?', confirmLabel: 'Cancel plan', cancelLabel: 'Keep it',
+              message: 'The plan will not run and cannot be approved or run later. No device has been changed by it. Make a new plan if you need it again.',
+              onConfirm: () => cancel.mutateAsync(),
+            })}>Cancel plan…</Menu.Item>}
+            {canDelete(dep) && <Menu.Item color="red" leftSection={<IconTrash size={14} />}
+              onClick={() => askToDelete(dep, () => void navigate(paths.plans))}>Delete…</Menu.Item>}
+          </Menu.Dropdown>
+        </Menu>
+      )}
       {active && <Button color="red" variant="light" onClick={openStop} loading={stop.isPending}
         disabled={stop.isSuccess}>{stop.isSuccess ? 'Stopping…' : 'Stop'}</Button>}
       <Modal opened={stopOpen} onClose={closeStop} title="Stop this plan?">
@@ -307,9 +314,11 @@ export function DeploymentDetailPage() {
   return (
     <>
       <PageHeader title={`${planKind(d)} · ${fmtDate(d.created_at)}`} breadcrumbs={crumbs}
-        description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
-          ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : d.kind === 'first_login' ? '' : ` · ${d.apply_mode} mode`}`}
-        actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
+        description={`Made by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
+          && d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)} UTC` : ''}`}
+        badges={<><StateBadge state={d.state} />{d.allow_downgrade && <Tag tone="warning">Older approved version allowed</Tag>}
+          {d.also_secondary && <Tag tone="info">Backup slot too</Tag>}</>}
+        actions={<Actions dep={d} onRunning={setRunning} />} />
       {d.staging_id && (
         <Hint mb="md">Step {d.staging_step} of a <Anchor component={Link} to={paths.staging(d.staging_id)} size="xs">staging plan</Anchor>
           {d.staging_step === 1 ? ': the next step runs only after this one has succeeded.'

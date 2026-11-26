@@ -1,5 +1,6 @@
 import { Anchor, Badge, Button, Card, Group, Menu, SegmentedControl, Select, SimpleGrid, Stack, Stepper, Text, TextInput, Title } from '@mantine/core';
 import { IconArrowLeft, IconCheck, IconPlus } from '@tabler/icons-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 
@@ -152,6 +153,8 @@ function StageSystem({ projectId }: { projectId: string }) {
   // Console setup inside the wizard (D-121): the stepper stays, "Back to <step>" and the
   // browser's Back both return to the step it was opened from.
   const consoleId = params.get('console');
+  // Coming back from the console, the step shows what the console work just changed.
+  const qc = useQueryClient();
   const project = useProject(projectId);
   const devices = useProjectDevices(projectId);
   const stagings = useProjectStagings(projectId, active === 3 || active === 4);
@@ -186,7 +189,7 @@ function StageSystem({ projectId }: { projectId: string }) {
       </Stepper>
       {consoleId && (
         <WizardConsole device={(devices.data ?? []).find((d) => d.id === consoleId)} loading={devices.isLoading}
-          back={{ label: `Back to ${STEPS[active]}`, onClick: () => setActive(active) }} />
+          back={{ label: `Back to ${STEPS[active]}`, onClick: () => { void qc.invalidateQueries(); setActive(active); } }} />
       )}
       {!consoleId && active === 0 && (
         <Stack>

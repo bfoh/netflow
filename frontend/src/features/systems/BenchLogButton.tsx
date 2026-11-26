@@ -13,12 +13,20 @@ import { downloadText } from '../../services/format';
  *  screenshots (D-090). Shown first, so it can be read before it is shared. */
 export function BenchLogButton({ projectId, size = 'sm' }: { projectId: string; size?: 'xs' | 'sm' }) {
   const [opened, { open, close }] = useDisclosure();
+  return (
+    <>
+      <Button size={size} variant="default" leftSection={<IconFileText size={16} />} onClick={open}>Bench log…</Button>
+      <BenchLogDialog projectId={projectId} opened={opened} onClose={close} />
+    </>
+  );
+}
+
+export function BenchLogDialog({ projectId, opened, onClose: close }: { projectId: string; opened: boolean; onClose: () => void }) {
   const [hours, setHours] = useState('48');
   const log = useQuery({ queryKey: ['bench-log', projectId, hours], queryFn: () => api.benchLog(projectId, Number(hours)),
     enabled: opened, staleTime: 0 });
   return (
     <>
-      <Button size={size} variant="default" leftSection={<IconFileText size={16} />} onClick={open}>Bench log…</Button>
       <Modal opened={opened} onClose={close} title="Bench log" size="xl">
         <Stack>
           <Notice kind="caution" compact title="Read it through before sharing">

@@ -2,8 +2,7 @@ import { ActionIcon, Button, FileInput, Group, Menu, Modal, Stack, Table, Text }
 import { useDisclosure } from '@mantine/hooks';
 import {
   IconActivity, IconCertificate, IconClipboard, IconDots, IconExternalLink, IconFileText, IconInfoCircle, IconPlugConnected,
-  IconPower, IconRocket, IconTerminal, IconTerminal2, IconTrash, IconWorld,
-} from '@tabler/icons-react';
+  IconPower, IconRocket, IconTerminal, IconTerminal2, IconTrash, IconWorld, IconEdit } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 
@@ -24,7 +23,9 @@ const can = (d: Device, c: string) => d.capabilities.includes(c);
  * on its row (`openDeviceMenu`). Read-only items run at once; a restart is a plan
  * (preview, approval, run) like every other change.
  */
-export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: () => void }) {
+export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
+  device: Device; onDelete?: () => void; onEdit?: () => void; size?: 'md' | 'lg';
+}) {
   const navigate = useNavigate();
   const real = device.environment !== 'simulated';
   const address = device.management_address;
@@ -75,7 +76,8 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
   return (
     <>
       <Menu position="bottom-end" withinPortal>
-        <Menu.Target><ActionIcon variant="subtle" aria-label={`Actions for ${device.name}`} data-device-menu=""><IconDots size={16} /></ActionIcon></Menu.Target>
+        <Menu.Target><ActionIcon variant={size === 'lg' ? 'default' : 'subtle'} size={size === 'lg' ? 'lg' : 'md'}
+          aria-label={`Actions for ${device.name}`} data-device-menu=""><IconDots size={size === 'lg' ? 18 : 16} /></ActionIcon></Menu.Target>
         <Menu.Dropdown>
           <Menu.Label>{device.name}</Menu.Label>
           {real && !consoleOnly && <Menu.Item leftSection={<IconTerminal size={14} />} onClick={() => ssh.mutate(undefined)}>Open SSH window</Menu.Item>}
@@ -97,6 +99,8 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
           {(device.driver_id.includes('aos_switch') || consoleOnly) && <Menu.Item component={Link} to={paths.console(device.id)}
             leftSection={<IconTerminal2 size={14} />}>Console setup</Menu.Item>}
           <Menu.Item leftSection={<IconRocket size={14} />} onClick={() => void navigate(paths.planNew({ system: device.project_id, devices: device.id }))}>Make a plan…</Menu.Item>
+          {onEdit && <><Menu.Divider />
+            <Menu.Item leftSection={<IconEdit size={14} />} disabled={!!device.locked_by_deployment_id} onClick={onEdit}>Edit device…</Menu.Item></>}
           {onDelete && <><Menu.Divider />
             <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!!device.locked_by_deployment_id} onClick={onDelete}>Delete…</Menu.Item></>}
         </Menu.Dropdown>
@@ -116,7 +120,7 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
             check the license status on its web page (System → FortiGuard).</Notice>}
           <DialogError error={makeLicense.error} />
           <Group justify="flex-end">
-            <Button variant="default" onClick={license.close}>Back</Button>
+            <Button variant="default" onClick={license.close} data-autofocus>Cancel</Button>
             <Button disabled={!licenseFile} loading={makeLicense.isPending} leftSection={<IconCertificate size={16} />}
               onClick={() => makeLicense.mutate(undefined, { onSuccess: (p) => { license.close(); setLicenseFile(null); void navigate(paths.plan(p.id)); } })}>
               Make the license plan</Button>
@@ -132,7 +136,7 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
 </Notice>
           <DialogError error={makeRestart.error} />
           <Group justify="flex-end">
-            <Button variant="default" onClick={restart.close}>Back</Button>
+            <Button variant="default" onClick={restart.close} data-autofocus>Cancel</Button>
             <Button color="orange" loading={makeRestart.isPending} leftSection={<IconPower size={16} />}
               onClick={() => makeRestart.mutate(undefined, { onSuccess: (p) => { restart.close(); void navigate(paths.plan(p.id)); } })}>
               Make the restart plan</Button>

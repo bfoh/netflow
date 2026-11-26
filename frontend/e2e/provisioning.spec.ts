@@ -18,7 +18,9 @@ test('console bootstrap on the simulated console: run, verify, re-run is a no-op
   await expect(dialog).toBeHidden();
 
   await page.getByRole('link', { name }).click();
-  await page.getByRole('link', { name: 'Console bootstrap' }).click();
+  // D-122: console setup is in the device's menu (⋯), with the rest of what can be done to it.
+  await page.getByRole('button', { name: `Actions for ${name}` }).click();
+  await page.getByRole('menuitem', { name: 'Console setup' }).click();
   await expect(page.getByRole('heading', { name: 'Console setup' })).toBeVisible();
 
   await page.getByLabel('Untagged port').fill('2');

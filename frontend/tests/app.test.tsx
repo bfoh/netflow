@@ -330,7 +330,7 @@ describe('deployment outcome', () => {
     expect(screen.queryByText('Deploy')).not.toBeInTheDocument();
     expect(screen.queryByText('Back up')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy events as text' })).toBeInTheDocument();
-    expect(screen.getByText('Secondary flash too')).toBeInTheDocument();
+    expect(screen.getByText('Backup slot too')).toBeInTheDocument();  // D-123: one word for it
   });
 
   it('a running deployment can be stopped after a confirmation', async () => {
@@ -561,7 +561,9 @@ describe('confirmations', () => {
     const calls = mockApi({ '/deployments/dep1': plan({ dry_run: false, state: 'awaiting_approval' }),
       '/projects/p1/devices': [device({})] });
     renderAt('/plans/dep1');
-    await userEvent.click(await screen.findByRole('button', { name: 'Cancel plan' }));
+    // D-122: under the plan's More menu.
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Cancel plan…' }));
     const dialog = await screen.findByRole('dialog', { name: 'Cancel this plan?' });
     expect(calls.some((c) => c.url.endsWith('/cancel'))).toBe(false);
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'Synthetic refusal' }),
@@ -790,7 +792,9 @@ describe('bench log (D-090)', () => {
       return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }));
     renderAt('/systems/p1');
-    await userEvent.click(await screen.findByRole('button', { name: 'Bench log…' }));
+    // D-122: under the system page's More menu.
+    await userEvent.click(await screen.findByRole('button', { name: 'More actions' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Bench log…' }));
     const dialog = await screen.findByRole('dialog', { name: 'Bench log' });
     expect(await within(dialog).findByText(/system: <system-1>/)).toBeInTheDocument();
     expect(within(dialog).getByText('Read it through before sharing')).toBeInTheDocument();

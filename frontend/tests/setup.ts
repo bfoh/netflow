@@ -7,7 +7,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   // Where the wizard was (D-120) must not carry from one test to the next.
-  for (const k of Object.keys(window.localStorage)) if (k.startsWith('undm.wizard.')) window.localStorage.removeItem(k);
+  for (const k of Object.keys(window.localStorage)) if (k.startsWith('undm.wizard.') || k === 'undm.system.view') window.localStorage.removeItem(k);
 });
 
 // jsdom lacks these browser APIs that Mantine uses.

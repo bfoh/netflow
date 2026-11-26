@@ -1,5 +1,5 @@
 import { Accordion, Anchor, Badge, Button, Card, Code, Group, SegmentedControl, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
-import { IconEdit, IconPlugConnected, IconTerminal2, IconTrash } from '@tabler/icons-react';
+import { IconEdit, IconPlugConnected, IconRefresh } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { type ReactNode, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -15,9 +15,10 @@ import { SafetyHint } from '../components/SafetyHint';
 import { fmtDate } from '../services/format';
 import { ConfigWorkbench } from '../features/configurations/ConfigWorkbench';
 import { DiagnosticsButton } from '../features/devices/DiagnosticsButton';
+import { LoginSelect } from '../features/logins/LoginSelect';
 import { EditDeviceModal } from '../features/devices/EditDeviceModal';
 import { IntentEditor } from '../features/devices/IntentEditor';
-import { useAction, useCredentialRefs, useDevice, useDeviceLog, useDrivers } from '../hooks/queries';
+import { useAction, useDevice, useDeviceLog, useDrivers } from '../hooks/queries';
 import { showSuccess } from '../services/notify';
 import { DeviceMenu } from '../features/devices/DeviceMenu';
 import { api } from '../services/api';
@@ -67,8 +68,8 @@ function Technical({ children, label = 'Technical details' }: { children: ReactN
 function Overview({ d }: { d: Device }) {
   const op = useAction((o: string) => api.runOperation(d.id, o), (r) => `${stateLabel(r.status)}${r.message ? ` — ${r.message}` : ''}`);
   const drivers = useDrivers();
-  const refs = useCredentialRefs(d.project_id);
-  const login = refs.data?.find((r) => r.id === d.credential_ref_id);
+  // The login is changed where it is shown (D-122).
+  const setLogin = useAction((ref: string | null) => api.updateDevice(d.id, { credential_ref_id: ref }), 'Login chosen');
   const facts = d.observed_facts as Record<string, unknown> | null;
   const extra = ((facts?.extra ?? {}) as Record<string, unknown>);
   const flat: Record<string, unknown> = { ...extra, ...(facts ?? {}) };
@@ -79,12 +80,13 @@ function Overview({ d }: { d: Device }) {
   return (
     <SimpleGrid cols={{ base: 1, lg: 2 }}>
       <Card withBorder>
-        <Title order={2} size="h5" mb="xs">What you entered</Title>
+        <Title order={2} mb="xs">What you entered</Title>
         <Table verticalSpacing={4}><Table.Tbody>
           <Row k="Model" v={`${d.manufacturer} ${d.model}`} />
           <Row k="Role" v={d.role} />
           <Row k="Address" v={<Text size="sm" ff="monospace">{d.management_address}</Text>} />
-          <Row k="Login" v={login?.name ?? (d.credential_ref_id ? 'attached' : <Text span size="sm" c="orange">none yet: use Edit device</Text>)} />
+          <Row k="Login" v={<LoginSelect projectId={d.project_id} size="xs" maw={260} label={null} placeholder="None yet: choose one"
+            value={d.credential_ref_id} disabled={!!d.locked_by_deployment_id} onChange={(v) => setLogin.mutate(v)} />} />
           <Row k="Connects by" v={driverLabel(d.driver_id, drivers.data)} />
           <Row k="Setup" v={<StateBadge state={d.provisioning_status} />} />
           <Row k="Site / rack" v={[d.site, d.rack_location].filter(Boolean).join(' · ')} />
@@ -106,19 +108,15 @@ function Overview({ d }: { d: Device }) {
       <Stack>
         <Card withBorder>
           <Group justify="space-between" mb="xs">
-            <Title order={2} size="h5">What the device reported</Title>
-            <Group gap="xs">
-              <Button size="xs" variant="light" leftSection={<IconPlugConnected size={14} />} loading={op.isPending} onClick={() => op.mutate('check_reachability')}>Test connection</Button>
-              <Button size="xs" variant="light" loading={op.isPending} onClick={() => op.mutate('get_facts')}>Retrieve information</Button>
-              <Button size="xs" variant="light" loading={op.isPending} onClick={() => op.mutate('backup_configuration')}>Back up</Button>
-            </Group>
+            <Title order={2}>What the device reported</Title>
+            <Button size="xs" variant="default" leftSection={<IconRefresh size={14} />} loading={op.isPending} onClick={() => op.mutate('get_facts')}>Read information</Button>
           </Group>
           {facts ? (
             <Table verticalSpacing={4}><Table.Tbody>
               {main.map((k) => <Row key={k} k={factLabel(k)} v={String(flat[k])} />)}
               <Row k="Retrieved" v={fmtDate(d.facts_retrieved_at)} />
             </Table.Tbody></Table>
-          ) : <Text size="sm" c="dimmed">Nothing retrieved yet. Use Retrieve information: the values on the left are what you entered, not what the device says.</Text>}
+          ) : <Text size="sm" c="dimmed">Nothing read yet. Use Read information: the values on the left are what you entered, not what the device says.</Text>}
           {facts && (
             <Technical>
               {rest.length > 0 && (
@@ -132,7 +130,7 @@ function Overview({ d }: { d: Device }) {
           )}
         </Card>
         <Card withBorder>
-          <Title order={2} size="h5" mb="xs">Status</Title>
+          <Title order={2} mb="xs">Status</Title>
           <Table verticalSpacing={4}><Table.Tbody>
             <Row k="Status" v={<StateBadge state={d.deployment_status} />} />
             <Row k="Last connection" v={fmtDate(d.last_connection_at)} />
@@ -197,13 +195,6 @@ function DeviceLog({ deviceId }: { deviceId: string }) {
 }
 
 /** Shown for platforms that have a console bootstrap procedure. */
-function ConsoleBootstrapLink({ d }: { d: Device }) {
-  const drivers = useDrivers();
-  const platform = drivers.data?.find((x) => x.driver_id === d.driver_id)?.platform;
-  if (platform !== 'aos_switch') return null;
-  return <Button variant="default" component={Link} to={paths.console(d.id)} leftSection={<IconTerminal2 size={16} />}>Console bootstrap</Button>;
-}
-
 /** For a real device: what may happen to it now, in one or two quiet lines (D-089). */
 function RealDeviceNotice({ d }: { d: Device }) {
   const drivers = useDrivers();
@@ -231,6 +222,7 @@ export function DeviceDetailPage() {
   const [ask, confirmDialog] = useConfirm();
   const navigate = useNavigate();
   const del = useAction(() => api.deleteDevice(deviceId), 'Device deleted', { errorInDialog: true });
+  const test = useAction(() => api.runOperation(deviceId, 'check_reachability'), (r) => `${stateLabel(r.status)}${r.message ? ` — ${r.message}` : ''}`);
   const [params, setParams] = useSearchParams();
   // `configs` was the Files tab's name before D-120: old links still open it.
   const raw = params.get('tab') ?? 'overview';
@@ -241,18 +233,15 @@ export function DeviceDetailPage() {
     <>
       <PageHeader title={d.name}
         breadcrumbs={crumbs}
-        description={<Group gap="xs" component="span"><EnvironmentBadge env={d.environment} /><span>{d.manufacturer} {d.model}</span></Group>}
-        actions={<>
-          <DeviceMenu device={d} />
-          <ConsoleBootstrapLink d={d} />
-          <Button variant="default" leftSection={<IconEdit size={16} />} onClick={openEdit} disabled={!!d.locked_by_deployment_id}>Edit device</Button>
-          <Button variant="subtle" color="red" leftSection={<IconTrash size={16} />} disabled={!!d.locked_by_deployment_id}
-            onClick={() => ask({
-              title: `Delete ${d.name}?`, confirmLabel: 'Delete device', typed: d.name,
-              message: 'The device, its files, backups and history are removed from UNDM. The device itself is not touched. Its login stays on the system page.',
-              onConfirm: async () => { await del.mutateAsync(); void navigate(paths.system(d.project_id)); },
-            })}>Delete</Button>
-        </>} />
+        badges={<><EnvironmentBadge env={d.environment} />{d.provisioning_status !== 'planned' && <StateBadge state={d.provisioning_status} />}</>}
+        description={`${d.manufacturer} ${d.model}${d.management_address ? ` · ${d.management_address}` : ''}`}
+        secondary={<Button variant="default" leftSection={<IconEdit size={16} />} onClick={openEdit} disabled={!!d.locked_by_deployment_id}>Edit</Button>}
+        primary={<Button leftSection={<IconPlugConnected size={16} />} loading={test.isPending} onClick={() => test.mutate(undefined)}>Test connection</Button>}
+        more={<DeviceMenu device={d} size="lg" onEdit={openEdit} onDelete={() => ask({
+          title: `Delete ${d.name}?`, confirmLabel: 'Delete device', typed: d.name,
+          message: 'The device, its files, backups and history are removed from UNDM. The device itself is not touched. Its login stays on the system page.',
+          onConfirm: async () => { await del.mutateAsync(); void navigate(paths.system(d.project_id)); },
+        })} />} />
       {confirmDialog}
       <RealDeviceNotice d={d} />
       {editing && <EditDeviceModal device={d} opened={editing} onClose={closeEdit} />}

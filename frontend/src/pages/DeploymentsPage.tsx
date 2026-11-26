@@ -1,5 +1,5 @@
-import { ActionIcon, Anchor, Button, Card, Checkbox, Group, SegmentedControl, Select, Stack, Switch, Table, Text, Title, Tooltip } from '@mantine/core';
-import { IconTrash } from '@tabler/icons-react';
+import { Accordion, ActionIcon, Anchor, Button, Card, Checkbox, Group, SegmentedControl, Select, Stack, Switch, Table, Text, Title } from '@mantine/core';
+import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
@@ -10,8 +10,9 @@ import { PageHeader, QueryState } from '../components/Page';
 import { PlanStatus } from '../features/plans/AttentionBadge';
 import { usePlanDelete } from '../hooks/usePlanDelete';
 import { fmtDate, planKind } from '../services/format';
-import { useAction, useAllDeployments, useConfig, useConfigs, useCredentialRefs, useProjectDevices, useProjects } from '../hooks/queries';
-import type { ConfigVersion } from '../types/api';
+import { RUNNING_STATES, useAction, useAllDeployments, useConfig, useConfigs, useCredentialRefs, useProjectDevices, useProjects } from '../hooks/queries';
+import type { ConfigVersion, DeploymentSummary } from '../types/api';
+import { ActionsHeader, DataTable } from '../components/DataTable';
 
 const versionLabel = (v: ConfigVersion) =>
   `${v.kind}${v.reference ? ` · ${v.reference}` : ''} · ${fmtDate(v.created_at)} · ${v.sha256.slice(0, 8)}`;
@@ -266,55 +267,110 @@ function NewFirstLogin({ projectId }: { projectId: string }) {
   );
 }
 
-export function DeploymentsPage() {
+/** The state groups of the plans list (D-122): what the person wants to find. */
+const GROUPS: Record<string, (d: DeploymentSummary) => boolean> = {
+  all: () => true,
+  waiting: (d) => ['draft', 'awaiting_approval', 'ready'].includes(d.state),
+  running: (d) => RUNNING_STATES.has(d.state),
+  attention: (d) => d.state === 'recovery_required' && d.needs_attention !== false,
+  finished: (d) => ['succeeded', 'failed', 'rolled_back', 'cancelled'].includes(d.state)
+    || (d.state === 'recovery_required' && d.needs_attention === false),
+};
+
+/** Advanced → Plans: every plan of every system, filtered (D-122). New plans are made under
+ *  "New plan"; Stage a system makes its own. */
+export function PlansPage() {
   const [askToDelete, deleteDialog, canDelete] = usePlanDelete();
   const [params, setParams] = useSearchParams();
   const projects = useProjects();
   const all = useAllDeployments();
+  const system = params.get('system');
+  const group = params.get('show') ?? 'all';
+  const kind = params.get('type');
+  const names = new Map((projects.data ?? []).map((p) => [p.id, p.name]));
+  const kinds = [...new Set((all.data ?? []).map((d) => planKind({ ...d, dry_run: false })))].sort();
+  const set = (k: string, v: string | null) => {
+    const next = new URLSearchParams(params);
+    if (v && !(k === 'show' && v === 'all')) next.set(k, v); else next.delete(k);
+    setParams(next, { replace: true });
+  };
+  const shown = (all.data ?? []).filter((d) => (!system || d.project_id === system)
+    && (GROUPS[group] ?? GROUPS.all)(d) && (!kind || planKind({ ...d, dry_run: false }) === kind));
+  return (
+    <>
+      <PageHeader title="Plans" description="Every plan of every system. A plan is one approved piece of work on devices; Stage a system makes them for you."
+        primary={<Button component={Link} to={paths.planNew(system ? { system } : {})} leftSection={<IconPlus size={16} />}>New plan</Button>} />
+      <Card mb="md">
+        <Group align="flex-end" wrap="wrap">
+          <Select label="System" placeholder="All systems" clearable w={260} value={system}
+            data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))} onChange={(v) => set('system', v)} />
+          <Select label="Type" placeholder="All types" clearable w={260} value={kind} data={kinds} onChange={(v) => set('type', v)} />
+          <SegmentedControl aria-label="Show" value={group} onChange={(v) => set('show', v)}
+            data={[{ value: 'all', label: 'All' }, { value: 'waiting', label: 'Waiting' }, { value: 'running', label: 'Running' },
+              { value: 'attention', label: 'Needs attention' }, { value: 'finished', label: 'Finished' }]} />
+        </Group>
+      </Card>
+      {deleteDialog}
+      <Card padding={0}>
+        <DataTable label="Plans" loading={all.isLoading} error={all.error} rowCount={shown.length} minWidth={720}
+          empty={all.data?.length ? 'No plan matches these filters.' : 'No plans yet. Stage a system to make them.'}>
+          <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>System</Table.Th><Table.Th>Type</Table.Th><Table.Th>Made by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th><ActionsHeader /></Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {shown.map((d) => (
+              <Table.Tr key={d.id}>
+                <Table.Td><Anchor component={Link} to={paths.plan(d.id)} size="sm">{fmtDate(d.created_at)}</Anchor></Table.Td>
+                <Table.Td>{names.get(d.project_id) ?? '—'}</Table.Td>
+                <Table.Td>{planKind(d)}
+                  {d.staging_id && <> · <Anchor component={Link} to={paths.staging(d.staging_id)} size="sm">staging plan, step {d.staging_step}</Anchor></>}</Table.Td>
+                <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
+                <Table.Td><PlanStatus d={d} /></Table.Td>
+                <Table.Td>{canDelete(d) && <ActionIcon variant="subtle" color="red" aria-label={`Delete plan of ${fmtDate(d.created_at)}`}
+                  onClick={() => askToDelete(d)}><IconTrash size={16} /></ActionIcon>}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </DataTable>
+      </Card>
+    </>
+  );
+}
+
+/** Advanced → Plans → New plan (D-122): a configuration file for chosen devices; the plan
+ *  types outside Stage a system are folded away. */
+export function PlanNewPage() {
+  const [params, setParams] = useSearchParams();
+  const projects = useProjects();
   // `project` is the parameter's name before D-120.
   const projectId = params.get('system') ?? params.get('project');
   const preselected = (params.get('devices') ?? '').split(',').filter(Boolean);
   const version = params.get('version');
-  const names = new Map((projects.data ?? []).map((p) => [p.id, p.name]));
-
   return (
     <>
-      <PageHeader title="Plans" description="A plan is one approved piece of work on devices: load a file, upgrade firmware or set the first login. Make one, approve it, then run it." />
+      <PageHeader title="New plan" breadcrumbs={[{ label: 'Plans', to: paths.plans }]}
+        description="For engineers. Stage a system makes the plans for a new system by itself; here you make one for chosen devices." />
       <Stack>
-        <Card withBorder>
-          <Select label="System for a new plan" placeholder="Choose a system" maw={420}
+        <Card>
+          <Select label="System" placeholder="Choose a system" maw={420}
             data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
             value={projectId} onChange={(v) => setParams(v ? { system: v } : {})} />
+          <Text size="xs" c="dimmed" mt={6}>A firmware upgrade is planned on the{' '}
+            <Anchor component={Link} to={paths.firmware()} size="xs">Firmware page</Anchor>.</Text>
         </Card>
         {projectId && <NewPlan key={projectId + preselected.join() + (version ?? '')} projectId={projectId}
           preselected={preselected} version={version} />}
-        {projectId && <NewFirstLogin key={`first-${projectId}`} projectId={projectId} />}
-        {projectId && <NewStagingPlan key={`staging-${projectId}`} projectId={projectId} />}
-        <Card withBorder padding={0}>
-          {deleteDialog}
-          <Title order={2} size="h5" p="md" pb={0}>All plans</Title>
-          <QueryState isLoading={all.isLoading} error={all.error} />
-          <Table.ScrollContainer minWidth={640}>
-            <Table verticalSpacing="xs" horizontalSpacing="md" highlightOnHover>
-              <Table.Thead><Table.Tr><Table.Th>Created</Table.Th><Table.Th>System</Table.Th><Table.Th>Type</Table.Th><Table.Th>Created by</Table.Th><Table.Th>Approved by</Table.Th><Table.Th>Status</Table.Th><Table.Th w={40} /></Table.Tr></Table.Thead>
-              <Table.Tbody>
-                {(all.data ?? []).map((d) => (
-                  <Table.Tr key={d.id}>
-                    <Table.Td><Anchor component={Link} to={paths.plan(d.id)} size="sm">{fmtDate(d.created_at)}</Anchor></Table.Td>
-                    <Table.Td>{names.get(d.project_id) ?? '—'}</Table.Td>
-                    <Table.Td>{planKind(d)}
-                      {d.staging_id && <> · <Anchor component={Link} to={paths.staging(d.staging_id)} size="sm">staging step {d.staging_step}</Anchor></>}</Table.Td>
-                    <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
-                    <Table.Td><PlanStatus d={d} /></Table.Td>
-                    <Table.Td>{canDelete(d) && <Tooltip label="Delete plan"><ActionIcon variant="subtle" color="red" aria-label={`Delete plan of ${fmtDate(d.created_at)}`}
-                      onClick={() => askToDelete(d)}><IconTrash size={16} /></ActionIcon></Tooltip>}</Table.Td>
-                  </Table.Tr>
-                ))}
-                {all.data?.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text c="dimmed" ta="center" p="md">No plans yet.</Text></Table.Td></Table.Tr>}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        </Card>
+        {projectId && (
+          <Accordion variant="separated">
+            <Accordion.Item value="more">
+              <Accordion.Control>More plan types (FortiGate, outside Stage a system)</Accordion.Control>
+              <Accordion.Panel>
+                <Stack>
+                  <NewFirstLogin key={`first-${projectId}`} projectId={projectId} />
+                  <NewStagingPlan key={`staging-${projectId}`} projectId={projectId} />
+                </Stack>
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        )}
       </Stack>
     </>
   );

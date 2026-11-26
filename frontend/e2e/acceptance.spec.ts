@@ -76,7 +76,8 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
 
   // 11. simulated deployment plan with both devices
   await openFromNav(page, 'Plans');
-  await page.getByRole('combobox', { name: 'System for a new plan' }).click();
+  await page.getByRole('link', { name: 'New plan' }).click();
+  await page.getByRole('combobox', { name: 'System' }).click();
   await page.getByRole('option', { name: project }).click();
   await page.getByLabel(`Include sw-${suffix}`).check();
   await page.getByLabel(`Include fw-${suffix}`).check();

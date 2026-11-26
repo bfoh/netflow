@@ -6,7 +6,7 @@ import { RouteError } from './components/RouteError';
 import { AuditPage } from './pages/AuditPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { DeploymentDetailPage } from './pages/DeploymentDetailPage';
-import { DeploymentsPage } from './pages/DeploymentsPage';
+import { PlanNewPage, PlansPage } from './pages/DeploymentsPage';
 import { DeviceDetailPage } from './pages/DeviceDetailPage';
 import { DevicesPage } from './pages/DevicesPage';
 import { FirmwarePage } from './pages/FirmwarePage';
@@ -52,8 +52,8 @@ export const routes: RouteObject[] = [
           { path: 'systems/:projectId', element: <ProjectDetailPage /> },
           { path: 'devices', element: <DevicesPage /> },
           { path: 'devices/:deviceId', element: <DeviceDetailPage /> },
-          { path: 'plans', element: <DeploymentsPage /> },
-          { path: 'plans/new', element: <DeploymentsPage /> },
+          { path: 'plans', element: <PlansPage /> },
+          { path: 'plans/new', element: <PlanNewPage /> },
           { path: 'plans/staging/:stagingId', element: <StagingPage /> },
           { path: 'plans/:deploymentId', element: <DeploymentDetailPage /> },
           { path: 'console', element: <ProvisioningPage /> },

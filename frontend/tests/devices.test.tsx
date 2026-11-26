@@ -26,6 +26,9 @@ describe('device menu, tree and watch (D-099)', () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     mockApi({ '/projects/p1': project, '/projects/p1/devices': [fw, sw, sim] });
     renderAt('/systems/p1');
+    // D-122: the tree is shown beside the table on request, remembered.
+    await userEvent.click(await screen.findByRole('radio', { name: 'Table and tree' }));
+    expect(window.localStorage.getItem('undm.system.view')).toBe('tree');
     const tree = await screen.findByLabelText('Devices of Lab A');
     expect(within(tree).getByText('Firewalls')).toBeInTheDocument();
     expect(within(tree).getByText('Switches')).toBeInTheDocument();
@@ -101,11 +104,13 @@ describe('device menu, tree and watch (D-099)', () => {
       '/projects/p1/reachability': [{ device_id: 'sw', address: '192.0.2.10', state: 'no_answer' },
         { device_id: 'sim', address: '192.0.2.1', state: 'simulated' }] });
     window.localStorage.removeItem('undm.watch.p1');
+    window.localStorage.setItem('undm.system.view', 'tree');
     renderAt('/systems/p1');
     await userEvent.click(await screen.findByRole('switch', { name: /Watch devices/ }));
     expect((await screen.findAllByRole('img', { name: 'No answer on its management port' })).length).toBe(2);  // tree and table
     expect(calls.some((c) => c.url === '/api/projects/p1/reachability')).toBe(true);
     window.localStorage.removeItem('undm.watch.p1');
+    window.localStorage.removeItem('undm.system.view');
   });
 
   it('the device log lists entries and filters them', async () => {

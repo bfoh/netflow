@@ -13,11 +13,19 @@ import { paths } from '../../paths';
 /** Export a system to one .undm file (D-087): no passwords, files as written. */
 export function ExportSystemButton({ projectId }: { projectId: string }) {
   const [opened, { open, close }] = useDisclosure();
+  return (
+    <>
+      <Button variant="default" leftSection={<IconDownload size={16} />} onClick={open}>Export…</Button>
+      <ExportSystemDialog projectId={projectId} opened={opened} onClose={close} />
+    </>
+  );
+}
+
+export function ExportSystemDialog({ projectId, opened, onClose: close }: { projectId: string; opened: boolean; onClose: () => void }) {
   const [firmware, setFirmware] = useState(false);
   const run = useAction(() => api.exportSystem(projectId, firmware), (name) => `Saved ${name} to your downloads`, { errorInDialog: true });
   return (
     <>
-      <Button variant="default" leftSection={<IconDownload size={16} />} onClick={open}>Export…</Button>
       <Modal opened={opened} onClose={close} title="Export this system">
         <Stack>
           <Text size="sm">One <code>.undm</code> file with the system's settings, its devices, the names of its logins, its
@@ -30,7 +38,7 @@ export function ExportSystemButton({ projectId }: { projectId: string }) {
             checked={firmware} onChange={(e) => setFirmware(e.currentTarget.checked)} />
           <DialogError error={run.error} />
           <Group justify="flex-end">
-            <Button variant="default" onClick={close}>Back</Button>
+            <Button variant="default" onClick={close} data-autofocus>Cancel</Button>
             <Button leftSection={<IconDownload size={16} />} loading={run.isPending}
               onClick={() => run.mutate(undefined, { onSuccess: close })}>Export</Button>
           </Group>
@@ -43,20 +51,30 @@ export function ExportSystemButton({ projectId }: { projectId: string }) {
 /** Every backup UNDM took of the system's devices, as text files in one zip (D-097). */
 export function DownloadBackupsButton({ projectId, onDownloaded }: { projectId: string; onDownloaded?: () => void }) {
   const [opened, { open, close }] = useDisclosure();
-  const run = useAction(() => api.downloadBackups(projectId), (name) => `Saved ${name} to your downloads`, { errorInDialog: true });
   return (
     <>
       <Button variant="default" leftSection={<IconDownload size={16} />} onClick={open}>Backups…</Button>
+      <DownloadBackupsDialog projectId={projectId} opened={opened} onClose={close} onDownloaded={onDownloaded} />
+    </>
+  );
+}
+
+export function DownloadBackupsDialog({ projectId, opened, onClose: close, onDownloaded }: {
+  projectId: string; opened: boolean; onClose: () => void; onDownloaded?: () => void;
+}) {
+  const run = useAction(() => api.downloadBackups(projectId), (name) => `Saved ${name} to your downloads`, { errorInDialog: true });
+  return (
+    <>
       <Modal opened={opened} onClose={close} title="Download this system's backups">
         <Stack>
           <Text size="sm">One zip with a folder per device. Each file is the device's configuration as UNDM read it, just before a
-            plan changed it or right after. A single backup can also be downloaded on its device's Configurations tab.</Text>
+            plan changed it or right after. A single backup can also be downloaded on its device's Files tab.</Text>
           <Notice kind="caution" compact title="Keep the file confidential">
             Device configurations can hold password hashes, community strings and site addressing.
           </Notice>
           <DialogError error={run.error} />
           <Group justify="flex-end">
-            <Button variant="default" onClick={close}>Back</Button>
+            <Button variant="default" onClick={close} data-autofocus>Cancel</Button>
             <Button leftSection={<IconDownload size={16} />} loading={run.isPending}
               onClick={() => run.mutate(undefined, { onSuccess: () => { close(); onDownloaded?.(); } })}>Download</Button>
           </Group>
@@ -103,7 +121,7 @@ export function ImportSystemButton() {
               wrong, nothing is created. Firmware images arrive unapproved.</Text>
             <DialogError error={run.error} />
             <Group justify="flex-end">
-              <Button variant="default" onClick={reset}>Back</Button>
+              <Button variant="default" onClick={reset} data-autofocus>Cancel</Button>
               <Button leftSection={<IconFileImport size={16} />} disabled={!file} loading={run.isPending}
                 onClick={() => run.mutate(undefined, { onSuccess: setDone })}>Import</Button>
             </Group>

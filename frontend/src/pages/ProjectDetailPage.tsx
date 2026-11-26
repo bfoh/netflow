@@ -1,6 +1,6 @@
-import { ActionIcon, Anchor, Button, Card, Grid, Group, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Textarea, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Anchor, Button, Card, Grid, Group, Menu, SegmentedControl, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Textarea, Title, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconDownload, IconFileText, IconListCheck, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 
@@ -11,10 +11,10 @@ import { fmtDate, planKind } from '../services/format';
 import { AddDeviceModal } from '../features/devices/AddDeviceModal';
 import { CredentialsPanel } from '../features/devices/CredentialsPanel';
 import { DeviceTable } from '../features/devices/DeviceTable';
-import { BenchLogButton } from '../features/systems/BenchLogButton';
+import { BenchLogDialog } from '../features/systems/BenchLogButton';
 import { SystemTree } from '../features/systems/SystemTree';
 import { StagedBadge } from '../features/systems/StagedBadge';
-import { DownloadBackupsButton, ExportSystemButton } from '../features/systems/SystemPackage';
+import { DownloadBackupsDialog, ExportSystemDialog } from '../features/systems/SystemPackage';
 import { useConfirm } from '../hooks/useConfirm';
 import { useAction, useDeployments, useProject, useProjectDevices, useReachability, useSharedCertificate } from '../hooks/queries';
 import { CertificateForm } from '../features/settings/CertificateForm';
@@ -92,9 +92,14 @@ export function ProjectDetailPage() {
   const devices = useProjectDevices(projectId);
   const deployments = useDeployments(projectId);
   const [opened, { open, close }] = useDisclosure();
+  const [benchOpen, bench] = useDisclosure();
+  const [backupsOpen, backups] = useDisclosure();
+  const [exportOpen, exportIt] = useDisclosure();
+  const dialogs = { bench: { opened: benchOpen, ...bench }, backups: { opened: backupsOpen, ...backups }, export: { opened: exportOpen, ...exportIt } };
   const [askToDelete, deleteDialog, canDelete] = usePlanDelete();
   const [selected, setSelected] = useState<string[]>([]);
   const [watch, setWatch] = useWatch(projectId);
+  const [view, setView] = useView();
   const reach = useReachability(projectId, watch);
   const reachMap = new Map((reach.data ?? []).map((r) => [r.device_id, r.state]));
   const [params, setParams] = useSearchParams();
@@ -106,15 +111,19 @@ export function ProjectDetailPage() {
   const p = project.data;
   return (
     <>
-      <PageHeader title={p.name} breadcrumbs={[{ label: 'Systems', to: paths.systems }]} description={[p.site, p.purpose].filter(Boolean).join(' · ') || 'No site or purpose recorded'}
-        actions={<>
-          <StagedBadge project={p} />
-          <BenchLogButton projectId={projectId} />
-          <DownloadBackupsButton projectId={projectId} />
-          <ExportSystemButton projectId={projectId} />
-          <Button variant="default" component={Link} to={paths.stage(projectId)}>Stage this system</Button>
-          <Button leftSection={<IconPlus size={16} />} onClick={open}>Add device</Button>
+      <PageHeader title={p.name} breadcrumbs={[{ label: 'Systems', to: paths.systems }]}
+        description={[p.site, p.purpose].filter(Boolean).join(' · ') || undefined}
+        badges={<StagedBadge project={p} />}
+        primary={<Button component={Link} to={paths.stage(projectId)} leftSection={<IconListCheck size={16} />}>Stage this system</Button>}
+        secondary={<Button variant="default" leftSection={<IconPlus size={16} />} onClick={open}>Add device</Button>}
+        menu={<>
+          <Menu.Item leftSection={<IconFileText size={14} />} onClick={dialogs.bench.open}>Bench log…</Menu.Item>
+          <Menu.Item leftSection={<IconDownload size={14} />} onClick={dialogs.backups.open}>Download backups…</Menu.Item>
+          <Menu.Item leftSection={<IconDownload size={14} />} onClick={dialogs.export.open}>Export the system…</Menu.Item>
         </>} />
+      <BenchLogDialog projectId={projectId} opened={dialogs.bench.opened} onClose={dialogs.bench.close} />
+      <DownloadBackupsDialog projectId={projectId} opened={dialogs.backups.opened} onClose={dialogs.backups.close} />
+      <ExportSystemDialog projectId={projectId} opened={dialogs.export.opened} onClose={dialogs.export.close} />
       <Tabs value={tab} onChange={(v) => setParams(v && v !== 'devices' ? { tab: v } : {}, { replace: true })} keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="devices">Devices ({devices.data?.length ?? 0})</Tabs.Tab>
@@ -124,20 +133,25 @@ export function ProjectDetailPage() {
         </Tabs.List>
         <Tabs.Panel value="devices">
           <QueryState isLoading={devices.isLoading} error={devices.error} />
-          <Group justify="flex-end" mb="xs">
+          <Group justify="space-between" mb="xs" wrap="wrap">
+            <SegmentedControl size="xs" aria-label="Show the devices as" value={view} onChange={(v) => setView(v === 'tree' ? 'tree' : 'table')}
+              data={[{ value: 'table', label: 'Table' }, { value: 'tree', label: 'Table and tree' }]} />
             <Switch size="sm" label="Watch devices (checks every 15 s whether each answers)" checked={watch}
               onChange={(e) => setWatch(e.currentTarget.checked)} />
           </Group>
-          <Grid>
-            <Grid.Col span={{ base: 12, md: 3 }}>
-              <SystemTree name={p.name} devices={devices.data ?? []} selected={selected} onSelectedChange={setSelected}
-                reach={watch ? reachMap : undefined} />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, md: 9 }}>
-              <DeviceTable devices={devices.data ?? []} selected={selected} onSelectedChange={setSelected}
-                reach={watch ? reachMap : undefined} />
-            </Grid.Col>
-          </Grid>
+          {view === 'tree' ? (
+            <Grid>
+              <Grid.Col span={{ base: 12, lg: 3 }}>
+                <SystemTree name={p.name} devices={devices.data ?? []} selected={selected} onSelectedChange={setSelected}
+                  reach={watch ? reachMap : undefined} />
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, lg: 9 }}>
+                <DeviceTable devices={devices.data ?? []} selected={selected} onSelectedChange={setSelected}
+                  reach={watch ? reachMap : undefined} />
+              </Grid.Col>
+            </Grid>
+          ) : <DeviceTable devices={devices.data ?? []} selected={selected} onSelectedChange={setSelected}
+            reach={watch ? reachMap : undefined} />}
         </Tabs.Panel>
         <Tabs.Panel value="plans">
           {deleteDialog}
@@ -174,6 +188,19 @@ export function ProjectDetailPage() {
       <AddDeviceModal projectId={projectId} opened={opened} onClose={close} />
     </>
   );
+}
+
+/** Table or tree, remembered in this browser for every system (D-122). */
+function useView(): ['table' | 'tree', (v: 'table' | 'tree') => void] {
+  const KEY = 'undm.system.view';
+  const [view, setState] = useState<'table' | 'tree'>(() => {
+    try { return window.localStorage.getItem(KEY) === 'tree' ? 'tree' : 'table'; } catch { return 'table'; }
+  });
+  const set = (v: 'table' | 'tree') => {
+    setState(v);
+    try { window.localStorage.setItem(KEY, v); } catch { /* not remembered: still works */ }
+  };
+  return [view, set];
 }
 
 /** The "Watch devices" switch, remembered per system in this browser (D-099). */
