@@ -153,7 +153,7 @@ function ImportTemplate({ role, label, onClose }: { role: TemplateRole; label: s
   );
 }
 
-/** Settings → For all systems: the team's files as templates, one per role (D-111). */
+/** Settings → Templates: the team's files as templates, one per role (D-111). */
 export function TemplatesCard() {
   const templates = useTemplates();
   const [importing, setImporting] = useState<TemplateRole | null>(null);
@@ -172,7 +172,7 @@ export function TemplatesCard() {
   return (
     <Card withBorder>
       {confirmDialog}
-      <Title order={2} size="h5" mb={4}>Configuration templates</Title>
+      <Title order={2} mb={4}>Configuration templates</Title>
       <Hint>
         The team&apos;s files, kept on this PC (never in UNDM&apos;s code). From them UNDM makes every system&apos;s files for its zone:
         the zone tag (z041), 10.(127+zone).x, 10.zone.x, 10.0.zone.x and 130.zone.x change; everything else is copied as it is.

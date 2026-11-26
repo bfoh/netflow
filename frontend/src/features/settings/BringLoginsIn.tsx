@@ -69,7 +69,7 @@ export function BringLoginsIn() {
   const systems = new Set(list.flatMap((g) => g.members.map((m) => m.system))).size;
   return (
     <Card withBorder>
-      <Title order={2} size="h5" mb={4}>Logins made in the systems</Title>
+      <Title order={2} mb={4}>Logins made in the systems</Title>
       <Text size="sm" mb="sm">
         {plural(systems, 'system')} still {systems === 1 ? 'has' : 'have'} {plural(logins, 'login')} of {systems === 1 ? 'its' : 'their'} own.
         Bring them here so every system can use them.

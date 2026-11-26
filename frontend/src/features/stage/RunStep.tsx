@@ -17,6 +17,7 @@ import { StagingControls } from './StagingControls';
 import { stagingStatus } from './staging';
 import { EmptyState } from '../../components/EmptyState';
 import { Notice } from '../../components/Notice';
+import { paths } from '../../paths';
 
 
 /** The step kinds a plan will have, in words, with the console setup in front for the Aruba. */
@@ -52,7 +53,7 @@ function LivePlan({ stagingId }: { stagingId: string }) {
     <Stack gap="xs">
       {steps.map((step) => (
         <Group key={step.id} justify="space-between" wrap="nowrap">
-          <Anchor component={Link} to={`/deployments/${step.id}`} size="sm">
+          <Anchor component={Link} to={paths.plan(step.id)} size="sm">
             {step.staging_step}. {stepName(step.kind, step.apply_mode)}
           </Anchor>
           <StateBadge state={step.state} />
@@ -62,7 +63,7 @@ function LivePlan({ stagingId }: { stagingId: string }) {
       {s.ended && <Text size="xs" c="red">A step did not succeed; the later steps did not run. Open it for the reason.</Text>}
       <Group justify="space-between">
         <StagingControls stagingId={stagingId} steps={steps} size="xs" onStarted={() => setStarted(true)} />
-        <Anchor component={Link} to={`/staging/${stagingId}`} size="xs">All events</Anchor>
+        <Anchor component={Link} to={paths.staging(stagingId)} size="xs">All events</Anchor>
       </Group>
     </Stack>
   );
@@ -115,7 +116,7 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
           <PlannedSteps role={role} choice={choice} device={device} />
           {takenNotice}
           {consoleTodo && (
-            <Notice kind="caution" compact action={<Button size="xs" variant="light" component={Link} to={`/provisioning?device=${device.id}`}
+            <Notice kind="caution" compact action={<Button size="xs" variant="light" component={Link} to={paths.console(device.id)}
               leftSection={<IconTerminal2 size={14} />}>Open console setup</Button>}>
               {role.consoleCable
                 ? <>Do its first access first: UNDM starts it once without its factory configuration and sets the admin password. You switch it off and on when asked. It saves the console port this plan uses.</>

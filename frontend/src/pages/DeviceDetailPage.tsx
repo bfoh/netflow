@@ -10,19 +10,21 @@ import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { Hint } from '../components/Hint';
 import { Notice } from '../components/Notice';
 import { PageHeader, QueryState } from '../components/Page';
+import { useSystemCrumbs } from '../features/systems/crumbs';
 import { SafetyHint } from '../components/SafetyHint';
 import { fmtDate } from '../services/format';
 import { ConfigWorkbench } from '../features/configurations/ConfigWorkbench';
 import { DiagnosticsButton } from '../features/devices/DiagnosticsButton';
 import { EditDeviceModal } from '../features/devices/EditDeviceModal';
 import { IntentEditor } from '../features/devices/IntentEditor';
-import { useAction, useCredentialRefs, useDevice, useDeviceLog, useDrivers, useProject } from '../hooks/queries';
+import { useAction, useCredentialRefs, useDevice, useDeviceLog, useDrivers } from '../hooks/queries';
 import { showSuccess } from '../services/notify';
 import { DeviceMenu } from '../features/devices/DeviceMenu';
 import { api } from '../services/api';
 import type { Device } from '../types/api';
 import { portOff } from '../features/stage/roles';
 import { auditActionLabel, capabilityLabel, driverLabel, factLabel, humanize, MAIN_FACTS, stateLabel } from '../services/labels';
+import { paths } from '../paths';
 
 function Row({ k, v }: { k: string; v: ReactNode }) {
   return <Table.Tr><Table.Td c="dimmed" w={190}>{k}</Table.Td><Table.Td>{v || '—'}</Table.Td></Table.Tr>;
@@ -180,7 +182,7 @@ function DeviceLog({ deviceId }: { deviceId: string }) {
               <Table.Tr key={`${r.time}-${i}`}>
                 <Table.Td><Text size="xs" style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.time)}</Text></Table.Td>
                 <Table.Td><Text size="sm">{r.source === 'audit' ? auditActionLabel(r.kind) : humanize(r.kind.replace('.', ' · '))}</Text>
-                  {r.plan_id && <Anchor component={Link} to={`/deployments/${r.plan_id}`} size="xs">plan</Anchor>}</Table.Td>
+                  {r.plan_id && <Anchor component={Link} to={paths.plan(r.plan_id)} size="xs">plan</Anchor>}</Table.Td>
                 <Table.Td>{r.status ? <StateBadge state={r.status} /> : '—'}</Table.Td>
                 <Table.Td><Text size="xs" lineClamp={3}>{r.message || (r.actor ? `by ${r.actor}` : '')}</Text></Table.Td>
               </Table.Tr>
@@ -199,7 +201,7 @@ function ConsoleBootstrapLink({ d }: { d: Device }) {
   const drivers = useDrivers();
   const platform = drivers.data?.find((x) => x.driver_id === d.driver_id)?.platform;
   if (platform !== 'aos_switch') return null;
-  return <Button variant="default" component={Link} to={`/provisioning?device=${d.id}`} leftSection={<IconTerminal2 size={16} />}>Console bootstrap</Button>;
+  return <Button variant="default" component={Link} to={paths.console(d.id)} leftSection={<IconTerminal2 size={16} />}>Console bootstrap</Button>;
 }
 
 /** For a real device: what may happen to it now, in one or two quiet lines (D-089). */
@@ -224,19 +226,22 @@ function RealDeviceNotice({ d }: { d: Device }) {
 export function DeviceDetailPage() {
   const { deviceId = '' } = useParams();
   const device = useDevice(deviceId);
-  const system = useProject(device.data?.project_id ?? '');
+  const crumbs = useSystemCrumbs(device.data?.project_id);
   const [editing, { open: openEdit, close: closeEdit }] = useDisclosure();
   const [ask, confirmDialog] = useConfirm();
   const navigate = useNavigate();
   const del = useAction(() => api.deleteDevice(deviceId), 'Device deleted', { errorInDialog: true });
   const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') ?? 'overview';
+  // `configs` was the Files tab's name before D-120: old links still open it.
+  const raw = params.get('tab') ?? 'overview';
+  const tab = raw === 'configs' ? 'files' : raw;
   if (!device.data) return <QueryState isLoading={device.isLoading} error={device.error} />;
   const d = device.data;
   return (
     <>
       <PageHeader title={d.name}
-        description={<Group gap="xs" component="span"><EnvironmentBadge env={d.environment} /><span>{d.manufacturer} {d.model} · <Anchor component={Link} to={`/projects/${d.project_id}`} size="sm">{system.data?.name ?? 'system'}</Anchor></span></Group>}
+        breadcrumbs={crumbs}
+        description={<Group gap="xs" component="span"><EnvironmentBadge env={d.environment} /><span>{d.manufacturer} {d.model}</span></Group>}
         actions={<>
           <DeviceMenu device={d} />
           <ConsoleBootstrapLink d={d} />
@@ -245,7 +250,7 @@ export function DeviceDetailPage() {
             onClick={() => ask({
               title: `Delete ${d.name}?`, confirmLabel: 'Delete device', typed: d.name,
               message: 'The device, its files, backups and history are removed from UNDM. The device itself is not touched. Its login stays on the system page.',
-              onConfirm: async () => { await del.mutateAsync(); void navigate(`/projects/${d.project_id}`); },
+              onConfirm: async () => { await del.mutateAsync(); void navigate(paths.system(d.project_id)); },
             })}>Delete</Button>
         </>} />
       {confirmDialog}
@@ -254,20 +259,20 @@ export function DeviceDetailPage() {
       {portOff(d) && <PortOff device={d} />}
       {d.locked_by_deployment_id && (
         <Notice kind="status" mb="md" title="A plan is running on this device"
-          action={<Anchor component={Link} to={`/deployments/${d.locked_by_deployment_id}`} size="sm">Follow the plan</Anchor>}>
+          action={<Anchor component={Link} to={paths.plan(d.locked_by_deployment_id)} size="sm">Follow the plan</Anchor>}>
           It cannot be edited or deleted until the plan ends.
         </Notice>
       )}
       <Tabs value={tab} onChange={(v) => setParams(v && v !== 'overview' ? { tab: v } : {})} keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="overview">Overview</Tabs.Tab>
-          <Tabs.Tab value="intent">Intent</Tabs.Tab>
-          <Tabs.Tab value="configs">Configurations</Tabs.Tab>
+          <Tabs.Tab value="files">Files</Tabs.Tab>
           <Tabs.Tab value="log">Log</Tabs.Tab>
+          <Tabs.Tab value="intent">Intended settings</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="overview"><Overview d={d} /></Tabs.Panel>
         <Tabs.Panel value="intent"><IntentEditor key={d.updated_at} device={d} /></Tabs.Panel>
-        <Tabs.Panel value="configs"><ConfigWorkbench device={d} /></Tabs.Panel>
+        <Tabs.Panel value="files"><ConfigWorkbench device={d} initialVersion={params.get('version')} /></Tabs.Panel>
         <Tabs.Panel value="log"><DeviceLog deviceId={d.id} /></Tabs.Panel>
       </Tabs>
     </>

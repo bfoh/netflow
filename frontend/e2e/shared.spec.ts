@@ -7,7 +7,7 @@ test('a login for all systems and its default reach a new system', async ({ page
   const login = await (await request.post('/api/credential-refs', { data: { name: `approved ${id}` } })).json();
   try {
     await page.goto('/settings');
-    await expect(page.getByRole('tab', { name: 'For all systems' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'Logins' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('cell', { name: `approved ${id}`, exact: true })).toBeVisible();
     const label = page.getByText('Its login', { exact: true }).last();  // Aruba 2930F
     await page.locator(`#${await label.getAttribute('for')}`).click();
@@ -16,7 +16,7 @@ test('a login for all systems and its default reach a new system', async ({ page
     await expect(page.getByText('Default logins saved')).toBeVisible();
 
     const p = await (await request.post('/api/projects', { data: { name: `Shared ${id}`, purpose: 'Staging' } })).json();
-    await page.goto(`/projects/${p.id}`);
+    await page.goto(`/systems/${p.id}`);
     await page.getByRole('tab', { name: 'Logins' }).click();
     await expect(page.getByRole('row', { name: new RegExp(`approved ${id}.*all systems`) })).toBeVisible();
 

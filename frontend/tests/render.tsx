@@ -21,9 +21,12 @@ export function mockApi(responses: Record<string, unknown>) {
 /** Renders the app at a path with the real theme and providers (D-119). */
 export function renderAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
-  return render(
+  const view = render(
     <AppProviders queryClient={makeQueryClient(false)}>
       <RouterProvider router={router} />
     </AppProviders>,
   );
+  /** Where the app is now, e.g. after a redirect: path and query. */
+  const here = () => router.state.location.pathname + router.state.location.search;
+  return Object.assign(view, { router, here });
 }

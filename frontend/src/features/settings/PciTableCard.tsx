@@ -10,7 +10,7 @@ import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import { normalSystem } from '../stage/zone';
 
-/** Settings → For all systems: the team's PCI table (D-114), imported once. */
+/** Settings → Templates: the team's PCI table (D-114), imported once. */
 export function PciTableCard() {
   const table = useQuery({ queryKey: ['pci-mapping'], queryFn: api.pciMapping });
   const load = useAction((file: File) => api.importPciMapping(file), (t) => `PCI table imported: ${t.systems} systems`,
@@ -23,7 +23,7 @@ export function PciTableCard() {
   return (
     <Card withBorder>
       <Group justify="space-between" mb={4}>
-        <Title order={2} size="h5">PCI table (Flexi BBU cells)</Title>
+        <Title order={2}>PCI table (Flexi BBU cells)</Title>
         {t ? <Badge color="teal" variant="light" tt="none">{t.systems} systems</Badge> : <Badge color="gray" variant="light" tt="none">not imported</Badge>}
       </Group>
       <Hint>

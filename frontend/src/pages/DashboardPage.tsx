@@ -11,6 +11,7 @@ import { fmtDate } from '../services/format';
 import { planKind } from '../services/labels';
 import { useAllDeployments, useAllDevices, useProjects } from '../hooks/queries';
 import type { DeploymentSummary } from '../types/api';
+import { paths } from '../paths';
 
 function Stat({ label, value, hint, to }: { label: string; value: number | string; hint?: string; to: string }) {
   return (
@@ -46,13 +47,13 @@ function GettingStarted({ hasSystems, hasDevices }: { hasSystems: boolean; hasDe
   return (
     <Card withBorder mb="lg">
       <Title order={2} size="h3" mb="xs">Getting started</Title>
-      <Text size="sm" c="dimmed" mb="sm">The quickest way: <Anchor component={Link} to="/stage">Stage a system</Anchor> walks you through it. By hand,
+      <Text size="sm" c="dimmed" mb="sm">The quickest way: <Anchor component={Link} to={paths.stage()}>Stage a system</Anchor> walks you through it. By hand,
         it takes four steps. UNDM checks every change and asks for approval before it touches a device.</Text>
       <List spacing="xs" size="sm" center>
-        <Step done={hasSystems}><Anchor component={Link} to="/projects">Create a system</Anchor>: the set of devices you stage together.</Step>
+        <Step done={hasSystems}><Anchor component={Link} to={paths.systems}>Create a system</Anchor>: the set of devices you stage together.</Step>
         <Step done={hasDevices}>Add its devices on the system page (model, address, login).</Step>
-        <Step done={false}>Add the files from your team (<Anchor component={Link} to="/configurations">Files</Anchor>) and approved images (<Anchor component={Link} to="/firmware">Firmware</Anchor>).</Step>
-        <Step done={false}>Make a plan (<Anchor component={Link} to="/deployments">Plans</Anchor>), approve it and run it.</Step>
+        <Step done={false}>Add the files from your team (<Anchor component={Link} to={paths.devices}>Files</Anchor>) and approved images (<Anchor component={Link} to={paths.firmware()}>Firmware</Anchor>).</Step>
+        <Step done={false}>Make a plan (<Anchor component={Link} to={paths.plans}>Plans</Anchor>), approve it and run it.</Step>
       </List>
     </Card>
   );
@@ -74,16 +75,16 @@ export function DashboardPage() {
     <>
       <PageHeader title="Home" description="Your systems, the plans waiting for you and what ran last."
         actions={<>
-          <Button component={Link} to="/projects" leftSection={<IconPlus size={16} />} variant="light">New system</Button>
-          <Button component={Link} to="/stage" leftSection={<IconListCheck size={16} />}>Stage a system</Button>
+          <Button component={Link} to={paths.systems} leftSection={<IconPlus size={16} />} variant="light">New system</Button>
+          <Button component={Link} to={paths.stage()} leftSection={<IconListCheck size={16} />}>Stage a system</Button>
         </>} />
       <QueryState isLoading={devices.isLoading} error={devices.error ?? projects.error ?? deployments.error} />
       {loaded && (systems.length === 0 || d.length === 0) && <GettingStarted hasSystems={systems.length > 0} hasDevices={d.length > 0} />}
       <SimpleGrid cols={{ base: 2, md: 4 }} mb="lg">
-        <Stat label="Systems" value={systems.length} to="/projects" />
-        <Stat label="Devices" value={d.length} hint={`${d.filter((x) => x.last_connection_at).length} reached at least once`} to="/devices" />
-        <Stat label="Waiting for you" value={waiting.length} hint="to approve, run or check" to="/deployments" />
-        <Stat label="Needs attention" value={attention.length} hint="a device may be half-changed" to="/deployments" />
+        <Stat label="Systems" value={systems.length} to={paths.systems} />
+        <Stat label="Devices" value={d.length} hint={`${d.filter((x) => x.last_connection_at).length} reached at least once`} to={paths.devices} />
+        <Stat label="Waiting for you" value={waiting.length} hint="to approve, run or check" to={paths.plans} />
+        <Stat label="Needs attention" value={attention.length} hint="a device may be half-changed" to={paths.plans} />
       </SimpleGrid>
       {waiting.length > 0 && (
         <Card withBorder mb="lg">
@@ -93,7 +94,7 @@ export function DashboardPage() {
               <Group key={x.id} justify="space-between" wrap="nowrap">
                 <Group gap="xs" wrap="nowrap">
                   {x.state === 'recovery_required' && <IconAlertTriangle size={16} color="var(--mantine-color-red-6)" aria-label="Needs attention" />}
-                  <Anchor component={Link} to={`/deployments/${x.id}`} size="sm">{planKind(x)}</Anchor>
+                  <Anchor component={Link} to={paths.plan(x.id)} size="sm">{planKind(x)}</Anchor>
                   <Text size="sm" c="dimmed">{projectName.get(x.project_id) ?? ''}</Text>
                 </Group>
                 <Group gap="xs" wrap="nowrap">
@@ -115,7 +116,7 @@ export function DashboardPage() {
                 <Table.Tbody>
                   {deps.slice(0, 8).map((x) => (
                     <Table.Tr key={x.id}>
-                      <Table.Td><Anchor component={Link} to={`/deployments/${x.id}`} size="sm">{fmtDate(x.created_at)}</Anchor></Table.Td>
+                      <Table.Td><Anchor component={Link} to={paths.plan(x.id)} size="sm">{fmtDate(x.created_at)}</Anchor></Table.Td>
                       <Table.Td>{projectName.get(x.project_id) ?? '—'}</Table.Td>
                       <Table.Td>{planKind(x)}</Table.Td>
                       <Table.Td><PlanStatus d={x} /></Table.Td>
@@ -128,14 +129,14 @@ export function DashboardPage() {
         </Card>
         <Card withBorder>
           <Title order={2} size="h3" mb="xs">Systems</Title>
-          {systems.length === 0 ? <Text c="dimmed" size="sm">No systems yet. <Anchor component={Link} to="/projects">Create one</Anchor>.</Text> : (
+          {systems.length === 0 ? <Text c="dimmed" size="sm">No systems yet. <Anchor component={Link} to={paths.systems}>Create one</Anchor>.</Text> : (
             <Stack gap={6}>
               {systems.map((p) => {
                 const mine = d.filter((x) => x.project_id === p.id);
                 const done = mine.filter((x) => x.deployment_status === 'in_sync').length;
                 return (
                   <Group key={p.id} justify="space-between" wrap="nowrap">
-                    <Anchor component={Link} to={`/projects/${p.id}`}>{p.name}</Anchor>
+                    <Anchor component={Link} to={paths.system(p.id)}>{p.name}</Anchor>
                     <Group gap="xs" wrap="nowrap">
                       <Text size="sm" c="dimmed">{mine.length} {mine.length === 1 ? 'device' : 'devices'}</Text>
                       {p.staged_at ? <StagedBadge project={p} />

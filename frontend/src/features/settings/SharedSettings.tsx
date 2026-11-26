@@ -36,7 +36,7 @@ function DefaultLoginsForm({ initial }: { initial: LoginDefaults }) {
   );
   return (
     <Card withBorder>
-      <Title order={2} size="h5" mb={4}>Default logins per device</Title>
+      <Title order={2} mb={4}>Default logins per device</Title>
       <Text size="sm" c="dimmed" mb="sm">
         Stage a system starts each device with these; every choice can still be changed for one device.
       </Text>
@@ -77,7 +77,7 @@ function SharedCertificate() {
     (r) => (r.subject ? 'Certificate answers saved for all systems' : 'Certificate answers removed'));
   return (
     <Card withBorder>
-      <Title order={2} size="h5" mb={4}>HTTPS certificate (Aruba 2930F)</Title>
+      <Title order={2} mb={4}>HTTPS certificate (Aruba 2930F)</Title>
       <Text size="sm" c="dimmed" mb="sm">
         Before loading a 2930F file that makes the web interface HTTPS-only, UNDM creates the self-signed certificate with
         your team's commands and answers the switch's questions with these values, for every system. A system can still use
@@ -89,20 +89,34 @@ function SharedCertificate() {
   );
 }
 
-/** Settings → For all systems (D-105): logins, default logins per device, certificate. */
-export function SharedSettings() {
+/** Settings → Logins (D-105, D-120): the logins every system uses, bringing in a system's own
+ *  logins, and which login each kind of device starts with. */
+export function LoginSettings() {
   return (
     <Stack>
-      <Hint>Every system of this project uses the same logins, templates and certificate answers: set them once here.</Hint>
+      <Hint>Every system uses these logins: set them once here. A system can still have its own login for a device that differs.</Hint>
       <Card withBorder>
-        <Title order={2} size="h5" mb="sm">Logins for all systems</Title>
+        <Title order={2} mb="sm">Logins for all systems</Title>
         <CredentialsPanel />
       </Card>
       <BringLoginsIn />
       <DefaultLogins />
-      <TemplatesCard />
-      <PciTableCard />
-      <SharedCertificate />
     </Stack>
   );
+}
+
+/** Settings → Templates: the team's files by zone and the PCI table. */
+export function TemplateSettings() {
+  return (
+    <Stack>
+      <Hint>Stage a system generates each device's file from these templates for the system's zone.</Hint>
+      <TemplatesCard />
+      <PciTableCard />
+    </Stack>
+  );
+}
+
+/** Settings → Certificate: the 2930F HTTPS certificate answers for every system. */
+export function CertificateSettings() {
+  return <SharedCertificate />;
 }

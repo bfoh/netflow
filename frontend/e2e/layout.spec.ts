@@ -7,9 +7,10 @@ import { seedSystem } from './helpers/seed';
 test('no page scrolls sideways', async ({ page, request }) => {
   test.setTimeout(180_000);
   const ids = await seedSystem(request);
-  const urls = ['/', '/stage?choose=1', ...[0, 1, 2, 3, 4].map((s) => `/stage/${ids.projectId}?step=${s}`), '/projects',
-    `/projects/${ids.projectId}`, '/devices', `/devices/${ids.deviceId}`, '/firmware', '/provisioning', '/deployments',
-    `/deployments/${ids.planId}`, '/topology', '/audit', '/settings'];
+  const urls = ['/', '/stage?choose=1', ...[0, 1, 2, 3, 4].map((s) => `/stage/${ids.projectId}?step=${s}`), '/systems',
+    `/systems/${ids.projectId}`, '/devices', `/devices/${ids.deviceId}`, `/devices/${ids.deviceId}?tab=files`, '/firmware',
+    '/console', '/plans', `/plans/new?system=${ids.projectId}`, `/plans/${ids.planId}`, '/topology', '/audit',
+    ...['logins', 'templates', 'certificate', 'safety', 'identity', 'about'].map((t) => `/settings?tab=${t}`)];
   const wide: string[] = [];
   for (const url of urls) {
     await page.goto(url);

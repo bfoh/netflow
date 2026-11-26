@@ -16,6 +16,7 @@ import { useAction, useDeviceModels, useFirmwareImages, useProjectDevices, usePr
 import { api } from '../services/api';
 import type { Compatibility, FirmwareImage } from '../types/api';
 import { driverLabel, platformLabel, stateLabel } from '../services/labels';
+import { paths } from '../paths';
 
 const PLATFORMS = [
   { value: 'aos_switch', label: 'ArubaOS-Switch (e.g. 2930F)' }, { value: 'aoscx', label: 'Aruba AOS-CX' },
@@ -243,7 +244,7 @@ function Planner({ images }: { images: FirmwareImage[] }) {
               description="After the device runs it from primary (it keeps booting from primary). Devices already on the version get only their secondary written."
               checked={alsoSecondary} onChange={(e) => setAlsoSecondary(e.currentTarget.checked)} />
             <Button disabled={!allOk} loading={create.isPending}
-              onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(`/deployments/${d.id}`) })}>Create upgrade plan</Button>
+              onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(paths.plan(d.id)) })}>Create upgrade plan</Button>
           </Group>
           {!dryRun && <Box mt="xs"><SafetyHint firmware real={(devices.data ?? []).some((d) => sel.includes(d.id) && d.environment !== 'simulated')} /></Box>}
           {!allOk && <Text size="xs" c="dimmed" mt="xs">{!imageId ? 'Choose an approved image.' : sel.length === 0 ? 'Tick the devices to upgrade.'

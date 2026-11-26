@@ -1,11 +1,11 @@
-import { Anchor, Badge, Button, Card, Group, SegmentedControl, Select, SimpleGrid, Stack, Stepper, Text, TextInput, Title } from '@mantine/core';
+import { Anchor, Badge, Button, Card, Group, Menu, SegmentedControl, Select, SimpleGrid, Stack, Stepper, Text, TextInput, Title } from '@mantine/core';
 import { IconCheck, IconPlus } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge } from '../components/Badges';
 import { DialogError } from '../components/ConfirmDialog';
-import { PageHeader, QueryState } from '../components/Page';
+import { LoadingLines, PageHeader, QueryState } from '../components/Page';
 import { BenchStep } from '../features/stage/BenchStep';
 import { type Choice, type Choices, EMPTY_CHOICE, loadChoices, planSteps, saveChoices } from '../features/stage/choices';
 import { FilesStep } from '../features/stage/FilesStep';
@@ -13,6 +13,7 @@ import { ZoneField } from '../features/stage/GeneratePanel';
 import { ReportStep } from '../features/stage/ReportStep';
 import { assignRoles, roleDefaults, ROLES, type Role, type RoleKey } from '../features/stage/roles';
 import { RunStep } from '../features/stage/RunStep';
+import { lastSystem, placeOf, rememberPlace, type WizardMode } from '../features/stage/wizardMemory';
 import {
   useAction, useCredentialRefs, useDeviceModels, useLoginDefaults, useProject, useProjectDevices, useProjects, useProjectStagings,
 } from '../hooks/queries';
@@ -20,6 +21,7 @@ import { api } from '../services/api';
 import { fmtDate } from '../services/format';
 import type { Device } from '../types/api';
 import { Hint } from '../components/Hint';
+import { paths } from '../paths';
 
 const STEPS = ['System and devices', 'Files and firmware', 'Bench check', 'Run', 'Report'];
 
@@ -37,14 +39,14 @@ function ChooseSystem() {
           <TextInput label="System name" placeholder="e.g. site 12 staging" value={name} onChange={(e) => setName(e.currentTarget.value)} />
           <DialogError error={create.error} />
           <Group><Button leftSection={<IconPlus size={16} />} disabled={!name.trim()} loading={create.isPending}
-            onClick={() => create.mutate(undefined, { onSuccess: (p) => void navigate(`/stage/${p.id}`) })}>Create and continue</Button></Group>
+            onClick={() => create.mutate(undefined, { onSuccess: (p) => void navigate(paths.stage(p.id)) })}>Create and continue</Button></Group>
         </Stack>
       </Card>
       <Card withBorder>
         <Title order={2} size="h5" mb="xs">A system you have</Title>
         <Select label="System" placeholder={projects.data?.length ? 'Choose a system' : 'No systems yet'} searchable
           data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
-          onChange={(v) => { if (v) void navigate(`/stage/${v}`); }} />
+          onChange={(v) => { if (v) void navigate(paths.stage(v)); }} />
       </Card>
     </SimpleGrid>
   );
@@ -76,7 +78,7 @@ function RoleCard({ role, device, projectId, systemName, simulated }: {
     driver_id: simulated ? role.simulatedDriver : role.realDriver, environment: simulated ? 'simulated' : 'lab',
     ...(role.address ? { management_address: role.address, management_protocol: role.protocol ?? 'ssh' as const,
       ...(role.port ? { management_port: role.port } : {}) } : {}), role: role.title,
-    // Its login from Settings → For all systems (D-105); simulated devices need none.
+    // Its login from Settings → Logins (D-105); simulated devices need none.
     ...(real && roleDefaults(role, defaults.data).login ? { credential_ref_id: roleDefaults(role, defaults.data).login } : {}),
   }), `${role.title} added`, { errorInDialog: true });
   const setLogin = useAction((ref: string | null) => api.updateDevice(device!.id, { credential_ref_id: ref }), 'Login chosen');
@@ -89,7 +91,7 @@ function RoleCard({ role, device, projectId, systemName, simulated }: {
       <Text size="xs" c="dimmed" mb="xs">{role.hint}</Text>
       {device ? (
         <Stack gap={6}>
-          <Group gap="xs"><Anchor component={Link} to={`/devices/${device.id}`} fw={600} size="sm">{device.name}</Anchor>
+          <Group gap="xs"><Anchor component={Link} to={paths.device(device.id)} fw={600} size="sm">{device.name}</Anchor>
             <Text size="sm" ff="monospace" c="dimmed">{device.management_address || (role.consoleCable ? `console cable${device.console_port ? ` · ${device.console_port}` : ' only'}` : '')}</Text></Group>
           {role.guided ? <Text size="xs" c="dimmed">{LOGIN_HINT[role.key]}</Text> : <Select size="xs" label="Its login" clearable w="100%" maw={320}
             description={LOGIN_HINT[role.key]}
@@ -109,7 +111,7 @@ function RoleCard({ role, device, projectId, systemName, simulated }: {
   );
 }
 
-/** Gives the devices without a login their default login (Settings → For all systems). */
+/** Gives the devices without a login their default login (Settings → Logins). */
 function DefaultLoginsBar({ roles }: { roles: { role: Role; device: Device }[] }) {
   const defaults = useLoginDefaults();
   const todo = roles.filter(({ role, device }) => device.environment !== 'simulated' && !device.credential_ref_id
@@ -122,7 +124,7 @@ function DefaultLoginsBar({ roles }: { roles: { role: Role; device: Device }[] }
   const anyDefault = !!defaults.data?.firewall && Object.values(defaults.data).some((k) => Object.values(k).some(Boolean));
   if (!anyDefault) {
     return (
-      <Hint>Logins are set once for all systems in <Anchor component={Link} to="/settings?tab=shared" size="xs">Settings → For all systems</Anchor>,
+      <Hint>Logins are set once for all systems in <Anchor component={Link} to={paths.settings('logins')} size="xs">Settings → Logins</Anchor>,
         with a default login per device; new devices then start with theirs.</Hint>
     );
   }
@@ -130,7 +132,7 @@ function DefaultLoginsBar({ roles }: { roles: { role: Role; device: Device }[] }
     <Group gap="sm">
       {todo.length > 0 && <Button size="xs" variant="light" loading={apply.isPending} onClick={() => apply.mutate(undefined)}>
         Use the default logins ({todo.length} {todo.length === 1 ? 'device' : 'devices'})</Button>}
-      <Text size="xs" c="dimmed">Default logins come from <Anchor component={Link} to="/settings?tab=shared" size="xs">Settings → For all systems</Anchor>;
+      <Text size="xs" c="dimmed">Default logins come from <Anchor component={Link} to={paths.settings('logins')} size="xs">Settings → Logins</Anchor>;
         a device that differs can have another one here.</Text>
     </Group>
   );
@@ -138,8 +140,28 @@ function DefaultLoginsBar({ roles }: { roles: { role: Role; device: Device }[] }
 
 export function StageSystemPage() {
   const { projectId = '' } = useParams();
+  if (!projectId) return <ResumeOrChoose />;
   // A new system starts with its own choices: the page is made afresh per system.
   return <StageSystem key={projectId} projectId={projectId} />;
+}
+
+/** "Stage a system" goes back to the system last worked on, at its step, while it is not
+ *  finished (D-120); `?choose=1` always shows the chooser. */
+function ResumeOrChoose() {
+  const [params] = useSearchParams();
+  const projects = useProjects();
+  const last = params.get('choose') === '1' ? null : lastSystem();
+  if (last) {
+    if (projects.isLoading) return <LoadingLines lines={3} />;
+    const p = projects.data?.find((x) => x.id === last);
+    if (p && !p.staged_at) return <Navigate replace to={paths.stage(last, placeOf(last)?.step ?? 0)} />;
+  }
+  return (
+    <>
+      <PageHeader title="Stage a system" description="Take the devices of one system from factory default to their approved firmware and files, step by step." />
+      <ChooseSystem />
+    </>
+  );
 }
 
 function StageSystem({ projectId }: { projectId: string }) {
@@ -149,7 +171,9 @@ function StageSystem({ projectId }: { projectId: string }) {
   const project = useProject(projectId);
   const devices = useProjectDevices(projectId);
   const stagings = useProjectStagings(projectId, active === 3 || active === 4);
-  const [simulated, setSimulated] = useState('real');
+  const [simulated, setSimulated] = useState<WizardMode>(() => placeOf(projectId)?.mode ?? 'real');
+  // Remember the step and the kind of devices, so Stage a system comes back here (D-120).
+  useEffect(() => { rememberPlace(projectId, { step: active, mode: simulated }); }, [projectId, active, simulated]);
   const [choices, setChoices] = useState<Choices>(() => (projectId ? loadChoices(projectId) : {}));
   const assigned = useMemo(() => assignRoles(devices.data ?? []), [devices.data]);
   const roles = ROLES.flatMap((role) => (assigned[role.key] ? [{ role, device: assigned[role.key]! }] : []));
@@ -160,20 +184,13 @@ function StageSystem({ projectId }: { projectId: string }) {
   };
   const filesReady = roles.length > 0 && roles.every(({ role, device }) => planSteps(role, choices[role.key as RoleKey] ?? EMPTY_CHOICE, device).missing.length === 0);
 
-  if (!projectId) {
-    return (
-      <>
-        <PageHeader title="Stage a system" description="Take the devices of one system from factory default to their approved firmware and files, step by step." />
-        <ChooseSystem />
-      </>
-    );
-  }
   if (!project.data) return <QueryState isLoading={project.isLoading} error={project.error} />;
   return (
     <>
       <PageHeader title={`Stage a system · ${project.data.name}`}
         description="Step by step: the devices, their files and firmware, the bench, then one plan per device. Nothing changes a device until you approve and run its plan."
-        actions={<Button variant="default" component={Link} to={`/projects/${projectId}`}>System page</Button>} />
+        secondary={<Button variant="default" component={Link} to={paths.system(projectId)}>System page</Button>}
+        menu={<Menu.Item component={Link} to={paths.stageChooser}>Stage another system</Menu.Item>} />
       {/* A finished system shows every step done (D-108); the content still follows `active`. */}
       <Stepper active={project.data.staged_at ? STEPS.length : active} onStepClick={setActive} size="sm" mb="lg" allowNextStepsSelect>
         {STEPS.map((label, i) => (
@@ -187,7 +204,7 @@ function StageSystem({ projectId }: { projectId: string }) {
         <Stack>
           <Group justify="space-between" wrap="wrap">
             <Text size="sm" c="dimmed">Devices are found by model; add the missing ones with the bench defaults (you can edit them later).</Text>
-            <SegmentedControl size="xs" aria-label="Devices to add" value={simulated} onChange={setSimulated}
+            <SegmentedControl size="xs" aria-label="Devices to add" value={simulated} onChange={(v) => setSimulated(v === 'simulated' ? 'simulated' : 'real')}
               data={[{ value: 'real', label: 'Real devices on the bench' }, { value: 'simulated', label: 'Practice (simulated)' }]} />
           </Group>
           <ZoneField key={`${project.data.id}-${project.data.zone ?? ''}`} project={project.data} />

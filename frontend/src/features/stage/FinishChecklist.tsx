@@ -12,6 +12,7 @@ import type { Device, Project } from '../../types/api';
 import { DownloadBackupsButton } from '../systems/SystemPackage';
 import type { Ticks } from './finishTicks';
 import { portOff, type Role } from './roles';
+import { paths } from '../../paths';
 
 function Item({ done, title, children, manual, onTick }: {
   done: boolean; title: string; children?: ReactNode; manual?: boolean; onTick?: (v: boolean) => void;
@@ -106,7 +107,7 @@ export function FinishChecklist({ project, rows, allStaged, licenseLoaded, ticks
               Delete those lines once and restart the backend: Settings → Safety then controls them.</>
             : <Group gap="xs" mt={2}><span>Real-device or firmware changes are still on.</span>
               <Button size="compact-xs" variant="light" loading={safety.isPending} onClick={() => safety.mutate(undefined)}>Turn them off</Button>
-              <Anchor component={Link} to="/settings?tab=safety" size="xs">Settings → Safety</Anchor></Group>}
+              <Anchor component={Link} to={paths.settings('safety')} size="xs">Settings → Safety</Anchor></Group>}
         </Item>
         <Item manual done={!!ticks.powered} onTick={(v) => tick({ powered: v })} title="Devices powered off and labelled" />
         <DialogError error={finish.error} />

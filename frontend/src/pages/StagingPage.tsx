@@ -6,12 +6,14 @@ import { StateBadge } from '../components/Badges';
 import { Hint } from '../components/Hint';
 import { Notice } from '../components/Notice';
 import { PageHeader, QueryState } from '../components/Page';
+import { useSystemCrumbs } from '../features/systems/crumbs';
 import { useDevice, useStaging } from '../hooks/queries';
 import { StagingControls } from '../features/stage/StagingControls';
 import { stagingStatus, stepTitle } from '../features/stage/staging';
 import { fmtDate } from '../services/format';
 import type { Deployment } from '../types/api';
 import { stageLabel } from '../services/labels';
+import { paths } from '../paths';
 
 function StepCard({ step }: { step: Deployment }) {
   const events = step.events.slice(-6);
@@ -28,7 +30,7 @@ function StepCard({ step }: { step: Deployment }) {
           </Text>
         ))}
       </Stack>
-      <Anchor component={Link} to={`/deployments/${step.id}`} size="sm" mt="xs">Open this step (all events, configuration after loading)</Anchor>
+      <Anchor component={Link} to={paths.plan(step.id)} size="sm" mt="xs">Open this step (all events, configuration after loading)</Anchor>
     </Card>
   );
 }
@@ -40,10 +42,11 @@ export function StagingPage() {
   const steps = plan.data?.steps ?? [];
   const device = useDevice(steps[0]?.targets[0]?.device_id ?? '');
   const { running, done, ended } = stagingStatus(steps);
+  const crumbs = useSystemCrumbs(steps[0]?.project_id, 'plans');
 
   return (
     <>
-      <PageHeader title={`Staging plan${device.data ? ` · ${device.data.name}` : ''}`}
+      <PageHeader title={`Staging plan${device.data ? ` · ${device.data.name}` : ''}`} breadcrumbs={crumbs}
         description={steps[0] ? `${steps.length} steps · made by ${steps[0].created_by} · ${fmtDate(steps[0].created_at)}${steps[0].approved_by ? ` · approved by ${steps[0].approved_by}` : ''}` : ''}
         actions={<StagingControls stagingId={stagingId} steps={steps} onStarted={() => setStarted(true)} />} />
       <QueryState isLoading={plan.isLoading} error={plan.error} />

@@ -10,6 +10,7 @@ import { useAction, useCredentialRefs, useSharedLogins } from '../../hooks/queri
 import { api } from '../../services/api';
 import type { CredentialRef } from '../../types/api';
 import { Hint } from '../../components/Hint';
+import { paths } from '../../paths';
 
 /** Username/password entry. The password goes straight to the backend, which writes it to
  *  the OS credential store; it is never shown again or stored in the UNDM database. */
@@ -29,7 +30,7 @@ function SecretForm({ onSubmit, busy, submitLabel }:
 }
 
 /** Logins of one system (with the logins for all systems listed read-only), or, without a
- *  system, the logins for all systems (Settings → For all systems, D-105). */
+ *  system, the logins for all systems (Settings → Logins, D-105). */
 export function CredentialsPanel({ projectId }: { projectId?: string }) {
   const own = useCredentialRefs(projectId ?? '');
   const all = useSharedLogins();
@@ -58,7 +59,7 @@ export function CredentialsPanel({ projectId }: { projectId?: string }) {
         A login is a user name and password for a device. Passwords are kept in your Windows Credential Manager, not in UNDM,
         and cannot be viewed again here.{' '}
         {projectId
-          ? <>Logins used by every system belong in <Anchor component={Link} to="/settings?tab=shared" size="xs">Settings → For all systems</Anchor>; add one here only for a device of this system that differs.</>
+          ? <>Logins used by every system belong in <Anchor component={Link} to={paths.settings('logins')} size="xs">Settings → Logins</Anchor>; add one here only for a device of this system that differs.</>
           : <>Every system can use these logins, the tunnel key included: store them once here.</>}
       </Hint>
       <Group><Button leftSection={<IconPlus size={16} />} onClick={() => { setName(''); open(); }}>Add login</Button></Group>
@@ -74,7 +75,7 @@ export function CredentialsPanel({ projectId }: { projectId?: string }) {
                   <Table.Td>{r.has_secret === null ? <Badge color="yellow" variant="light">store unavailable</Badge>
                     : r.has_secret ? <Badge color="teal" variant="light">yes</Badge> : <Badge color="gray" variant="light">no</Badge>}</Table.Td>
                   <Table.Td>
-                    {projectId && r.shared ? <Anchor component={Link} to="/settings?tab=shared" size="xs">In Settings</Anchor> : <Group gap={4}>
+                    {projectId && r.shared ? <Anchor component={Link} to={paths.settings('logins')} size="xs">In Settings</Anchor> : <Group gap={4}>
                       {r.provider === 'keyring' && <Tooltip label="Set username/password"><ActionIcon variant="subtle" aria-label={`Set password for ${r.name}`} onClick={() => setEditing(r)}><IconKey size={16} /></ActionIcon></Tooltip>}
                       <Tooltip label="Delete"><ActionIcon variant="subtle" color="red" aria-label={`Delete ${r.name}`}
                         onClick={() => ask({ title: `Delete login "${r.name}"?`, confirmLabel: 'Delete login',

@@ -13,6 +13,7 @@ import { useAction, useCredentialRefs, usePolicy, useSerialPorts } from '../../h
 import { api } from '../../services/api';
 import { downloadText } from '../../services/format';
 import type { BootstrapResult, Device } from '../../types/api';
+import { paths } from '../../paths';
 
 const BAUD = ['9600', '19200', '38400', '57600', '115200'];
 /** What the run is doing, in words (stages of sros_sar.first_access). */
@@ -79,7 +80,7 @@ export function ModemFirstAccess({ device, simulated }: { device: Device; simula
         <Title order={2} size="h5" mb="xs">1 · Its login after the first access</Title>
         <Select label="Approved login (user name admin)" w="100%" maw={380} clearable
           description="Its password becomes the modem's admin password. The modem refuses a password it finds too simple."
-          placeholder={refs.data?.length ? 'Choose the approved login' : "Add it on the system's Logins tab, or in Settings → For all systems"}
+          placeholder={refs.data?.length ? 'Choose the approved login' : "Add it on the system's Logins tab, or in Settings → Logins"}
           data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
           value={device.credential_ref_id} onChange={(v) => chooseLogin.mutate(v)} />
         {before && <Notice kind="error" compact mt="sm">{before.replace('Before you run: ', '')}</Notice>}
@@ -149,7 +150,7 @@ export function ModemFirstAccess({ device, simulated }: { device: Device; simula
             <CopyButton value={result.sanitized_transcript}>{({ copied, copy }) => <Button size="xs" variant="default" onClick={copy}>{copied ? 'Copied' : 'Copy sanitized transcript'}</Button>}</CopyButton>
             <Button size="xs" variant="default" leftSection={<IconDownload size={14} />}
               onClick={() => downloadText('undm-modem-first-access-sanitized.txt', result.sanitized_transcript)}>Download sanitized transcript</Button>
-            {done && <Button size="xs" component={Link} to={`/stage/${device.project_id}?step=3`}>Back to Stage a system</Button>}
+            {done && <Button size="xs" component={Link} to={paths.stage(device.project_id, 3)}>Back to Stage a system</Button>}
           </Group>
         </Card>
       )}

@@ -15,6 +15,7 @@ import { fmtDate } from '../../services/format';
 import { factLabel, MAIN_FACTS } from '../../services/labels';
 import { showError, showSuccess } from '../../services/notify';
 import type { Device } from '../../types/api';
+import { paths } from '../../paths';
 
 const can = (d: Device, c: string) => d.capabilities.includes(c);
 
@@ -88,14 +89,14 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
           <Menu.Item leftSection={<IconPlugConnected size={14} />} onClick={() => run.mutate({ op: 'check_reachability' })}>Test connection</Menu.Item>
           {!consoleOnly && <Menu.Item leftSection={<IconActivity size={14} />} onClick={waitUntilAnswers}>Wait until it answers</Menu.Item>}
           <Menu.Item leftSection={<IconFileText size={14} />} onClick={() => run.mutate({ op: 'backup_configuration' })}>Back up now</Menu.Item>
-          <Menu.Item component={Link} to={`/devices/${device.id}?tab=configs`} leftSection={<IconFileText size={14} />}>Configurations and compare</Menu.Item>
-          <Menu.Item component={Link} to={`/devices/${device.id}?tab=log`} leftSection={<IconActivity size={14} />}>Device log</Menu.Item>
+          <Menu.Item component={Link} to={paths.device(device.id, 'files')} leftSection={<IconFileText size={14} />}>Files and compare</Menu.Item>
+          <Menu.Item component={Link} to={paths.device(device.id, 'log')} leftSection={<IconActivity size={14} />}>Device log</Menu.Item>
           <Menu.Label>Changes the device (approved plan)</Menu.Label>
           {can(device, 'supports_restart') && <Menu.Item leftSection={<IconPower size={14} />} onClick={restart.open}>Restart…</Menu.Item>}
           {can(device, 'supports_license_file') && <Menu.Item leftSection={<IconCertificate size={14} />} onClick={license.open}>Load license…</Menu.Item>}
-          {(device.driver_id.includes('aos_switch') || consoleOnly) && <Menu.Item component={Link} to={`/provisioning?device=${device.id}`}
+          {(device.driver_id.includes('aos_switch') || consoleOnly) && <Menu.Item component={Link} to={paths.console(device.id)}
             leftSection={<IconTerminal2 size={14} />}>Console setup</Menu.Item>}
-          <Menu.Item leftSection={<IconRocket size={14} />} onClick={() => void navigate(`/deployments?project=${device.project_id}&devices=${device.id}`)}>Make a plan…</Menu.Item>
+          <Menu.Item leftSection={<IconRocket size={14} />} onClick={() => void navigate(paths.planNew({ system: device.project_id, devices: device.id }))}>Make a plan…</Menu.Item>
           {onDelete && <><Menu.Divider />
             <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!!device.locked_by_deployment_id} onClick={onDelete}>Delete…</Menu.Item></>}
         </Menu.Dropdown>
@@ -117,7 +118,7 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
           <Group justify="flex-end">
             <Button variant="default" onClick={license.close}>Back</Button>
             <Button disabled={!licenseFile} loading={makeLicense.isPending} leftSection={<IconCertificate size={16} />}
-              onClick={() => makeLicense.mutate(undefined, { onSuccess: (p) => { license.close(); setLicenseFile(null); void navigate(`/deployments/${p.id}`); } })}>
+              onClick={() => makeLicense.mutate(undefined, { onSuccess: (p) => { license.close(); setLicenseFile(null); void navigate(paths.plan(p.id)); } })}>
               Make the license plan</Button>
           </Group>
         </Stack>
@@ -133,7 +134,7 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
           <Group justify="flex-end">
             <Button variant="default" onClick={restart.close}>Back</Button>
             <Button color="orange" loading={makeRestart.isPending} leftSection={<IconPower size={16} />}
-              onClick={() => makeRestart.mutate(undefined, { onSuccess: (p) => { restart.close(); void navigate(`/deployments/${p.id}`); } })}>
+              onClick={() => makeRestart.mutate(undefined, { onSuccess: (p) => { restart.close(); void navigate(paths.plan(p.id)); } })}>
               Make the restart plan</Button>
           </Group>
         </Stack>
@@ -162,16 +163,3 @@ export function DeviceInfo({ device }: { device: Device }) {
     </Stack>
   );
 }
-
-/** Right-click on a row: open the menu of the "⋯" button in that row. */
-export function openDeviceMenu(e: React.MouseEvent<HTMLElement>) {
-  const button = e.currentTarget.querySelector<HTMLButtonElement>('[data-device-menu]');
-  if (!button) return;
-  e.preventDefault();
-  // The menu closes on a press outside it: open it once the right button is released
-  // (on Windows the right-click event comes after the release, elsewhere before it).
-  const open = () => window.setTimeout(() => button.click(), 0);
-  if (e.buttons & 2) window.addEventListener('mouseup', open, { once: true });
-  else open();
-}
-

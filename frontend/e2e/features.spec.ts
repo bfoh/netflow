@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto';
 
 import { expect, type Page, test } from '@playwright/test';
 
+import { openFromNav } from './helpers/nav';
+
 /** Configuration import, topology links and a simulated firmware upgrade, through the UI. */
-const nav = (page: Page, label: string) =>
-  page.getByRole('navigation', { name: 'Main navigation' }).getByText(label, { exact: true }).click();
+const nav = (page: Page, label: string) => openFromNav(page, label);
 
 async function setActor(page: Page, name: string) {
   await nav(page, 'Settings');
@@ -41,7 +42,7 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
 
   // Configuration import
   await page.getByRole('link', { name: `sw-${id}` }).click();
-  await page.getByRole('tab', { name: 'Configurations' }).click();
+  await page.getByRole('tab', { name: 'Files' }).click();
   await page.locator('input[type=file]').setInputFiles({
     name: 'switch-backup.cfg', mimeType: 'text/plain',
     buffer: Buffer.from(`hostname sw-${id}\r\nvlan 42\r\n    name imported\r\n`),
@@ -50,7 +51,6 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   await expect(page.getByText('vlan 42')).toBeVisible();
 
   // Topology: connect the two devices
-  await nav(page, 'Advanced');
   await nav(page, 'Topology');
   await page.getByRole('combobox', { name: 'System' }).click();
   await page.getByRole('option', { name: project }).click();

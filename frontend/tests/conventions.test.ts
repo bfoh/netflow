@@ -13,11 +13,11 @@ const count = (re: RegExp, skip: string[] = []) => files
 /** What is left to clean, per rule. Lower these as pages are reworked; never raise them. */
 const BUDGET = {
   colouredText: 18,
-  badgeColor: 55,
-  titleSize: 49,
-  tableWithoutLabel: 30,
-  routeStrings: 74,
-  synonyms: 18,
+  badgeColor: 52,
+  titleSize: 42,
+  tableWithoutLabel: 27,
+  routeStrings: 0,
+  synonyms: 17,
   dismissBack: 13,
 } as const;
 
@@ -30,7 +30,7 @@ const RULES: Record<keyof typeof BUDGET, () => number> = {
   titleSize: () => count(/<Title\b[^>]*\bsize=/g),
   // Every table is named for screen readers (DataTable does it).
   tableWithoutLabel: () => count(/<Table(?=[\s>])(?![^>]*aria-label)/g, ['components/DataTable.tsx']),
-  // Routes are built in src/paths.ts.
+  // Routes are built in src/paths.ts (D-120); none is written out anywhere else.
   routeStrings: () => count(/(to|href)=\{?[`'"]\/(?!api)/g, ['paths.ts', 'components/nav.ts', 'routes.tsx'])
     + count(/navigate\(\s*[`'"]\//g),
   // One word for each thing (services/labels.ts).

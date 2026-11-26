@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { openFromNav } from './helpers/nav';
+
 /**
  * Directive section 28: first-prototype acceptance flow, through the UI.
  * Uses a unique project name so it can run repeatedly against the same database.
@@ -14,7 +16,7 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
 
   // 3. create project
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Systems').click();
+  await openFromNav(page, 'Systems');
   await page.getByRole('button', { name: 'New system' }).click();
   await page.getByLabel('System name').fill(project);
   await page.getByLabel('Site or location').fill('Synthetic Site');
@@ -37,14 +39,14 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
   await addDevice(/FortiGate-60F/, `fw-${suffix}`, 'edge-firewall', `10.200.${octet}.1`);
 
   // 6. both visible in the inventory
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Devices', { exact: true }).click();
+  await openFromNav(page, 'Devices (all systems)');
   await page.getByLabel('Search devices').fill(suffix);
   await expect(page.getByRole('link', { name: `sw-${suffix}` })).toBeVisible();
   await expect(page.getByRole('link', { name: `fw-${suffix}` })).toBeVisible();
 
   // 8-10. define VLAN + management intent, generate and preview the switch configuration
   await page.getByRole('link', { name: `sw-${suffix}` }).click();
-  await page.getByRole('tab', { name: 'Intent' }).click();
+  await page.getByRole('tab', { name: 'Intended settings' }).click();
   await page.getByRole('button', { name: 'Add VLAN' }).click();
   await page.getByLabel('VLAN ID').fill('99');
   await page.getByLabel('VLAN name').fill('mgmt');
@@ -53,27 +55,27 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
   await page.getByLabel('Address', { exact: true }).fill(`10.200.${octet}.11/24`);
   await page.getByRole('button', { name: 'Save intent' }).click();
   await expect(page.getByText('Intent saved').last()).toBeVisible();
-  await page.getByRole('tab', { name: 'Configurations' }).click();
+  await page.getByRole('tab', { name: 'Files' }).click();
   await page.getByRole('button', { name: 'Generate configuration' }).click();
   await expect(page.getByText('Validation passed')).toBeVisible();
   await expect(page.getByText('interface vlan 99')).toBeVisible();
 
   // firewall: management interface intent, generated through the same path
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Devices', { exact: true }).click();
+  await openFromNav(page, 'Devices (all systems)');
   await page.getByLabel('Search devices').fill(suffix);
   await page.getByRole('link', { name: `fw-${suffix}` }).click();
-  await page.getByRole('tab', { name: 'Intent' }).click();
+  await page.getByRole('tab', { name: 'Intended settings' }).click();
   await page.getByRole('button', { name: 'Add interface' }).click();
   await page.getByLabel('Interface', { exact: true }).fill('internal1');
   await page.getByLabel('Address', { exact: true }).fill(`10.200.${octet}.1/24`);
   await page.getByRole('button', { name: 'Save intent' }).click();
   await expect(page.getByText('Intent saved').last()).toBeVisible();
-  await page.getByRole('tab', { name: 'Configurations' }).click();
+  await page.getByRole('tab', { name: 'Files' }).click();
   await page.getByRole('button', { name: 'Generate configuration' }).click();
   await expect(page.getByText(`set hostname "fw-${suffix}"`)).toBeVisible();
 
   // 11. simulated deployment plan with both devices
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Plans').click();
+  await openFromNav(page, 'Plans');
   await page.getByRole('combobox', { name: 'System for a new plan' }).click();
   await page.getByRole('option', { name: project }).click();
   await page.getByLabel(`Include sw-${suffix}`).check();
@@ -89,7 +91,6 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
   await expect(page.getByText('Verified', { exact: true })).toHaveCount(2);
 
   // 14. audit record
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Advanced').click();
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByText('Audit log').click();
+  await openFromNav(page, 'Audit log');
   await expect(page.getByText('deployment.execute', { exact: true }).first()).toBeVisible();
 });

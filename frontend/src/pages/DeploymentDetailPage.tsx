@@ -8,6 +8,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
 import { DiffView } from '../components/DiffView';
 import { PageHeader, QueryState } from '../components/Page';
+import { useSystemCrumbs } from '../features/systems/crumbs';
 import { Hint } from '../components/Hint';
 import { Notice, type NoticeKind } from '../components/Notice';
 import { SafetyHint } from '../components/SafetyHint';
@@ -19,6 +20,7 @@ import { applyModeLabel, PLAN_STAGES, planKind, stageLabel, stateLabel } from '.
 import { DialogError } from '../components/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { usePlanDelete } from '../hooks/usePlanDelete';
+import { paths } from '../paths';
 
 const STEPS: readonly string[] = PLAN_STAGES;
 const STEP_OF: Record<string, number> = {
@@ -99,7 +101,7 @@ function Actions({ dep, onRunning }: { dep: Deployment; onRunning: (running: boo
       {confirmDialog}
       {deleteDialog}
       {!active && canDelete(dep) && <Button variant="subtle" color="red" leftSection={<IconTrash size={16} />}
-        onClick={() => askToDelete(dep, () => void navigate('/deployments'))}>Delete</Button>}
+        onClick={() => askToDelete(dep, () => void navigate(paths.plans))}>Delete</Button>}
       {active && <Button color="red" variant="light" onClick={openStop} loading={stop.isPending}
         disabled={stop.isSuccess}>{stop.isSuccess ? 'Stopping…' : 'Stop'}</Button>}
       <Modal opened={stopOpen} onClose={closeStop} title="Stop this plan?">
@@ -238,7 +240,7 @@ function AttentionPanel({ d }: { d: Deployment }) {
   if (cleared?.startsWith('superseded:')) {
     return (
       <Notice kind="settled" mb="md" title="Needs attention · a later plan succeeded">
-        <Anchor component={Link} to={`/deployments/${cleared.slice('superseded:'.length)}`} size="sm">That plan</Anchor> changed
+        <Anchor component={Link} to={paths.plan(cleared.slice('superseded:'.length))} size="sm">That plan</Anchor> changed
         and verified the same device(s) afterwards, so this one no longer waits for a check.
       </Notice>
     );
@@ -271,6 +273,7 @@ export function DeploymentDetailPage() {
   const [running, setRunning] = useState(false);
   const dep = useDeployment(deploymentId, running);
   const devices = useProjectDevices(dep.data?.project_id ?? '');
+  const crumbs = useSystemCrumbs(dep.data?.project_id, 'plans');
   if (!dep.data) return <QueryState isLoading={dep.isLoading} error={dep.error} />;
   const d = dep.data;
   const byId = new Map((devices.data ?? []).map((x) => [x.id, x]));
@@ -298,12 +301,12 @@ export function DeploymentDetailPage() {
 
   return (
     <>
-      <PageHeader title={`${planKind(d)} · ${fmtDate(d.created_at)}`}
+      <PageHeader title={`${planKind(d)} · ${fmtDate(d.created_at)}`} breadcrumbs={crumbs}
         description={`Created by ${d.created_by}${d.approved_by ? ` · approved by ${d.approved_by} at ${fmtDate(d.approved_at)}` : ''}${d.kind === 'firmware'
           ? (d.window_start ? ` · window ${fmtDate(d.window_start)} – ${fmtDate(d.window_end)}` : '') : d.kind === 'first_login' ? '' : ` · ${d.apply_mode} mode`}`}
         actions={<>{d.allow_downgrade && <Badge color="orange" variant="light">Downgrade to the approved version allowed</Badge>}{d.also_secondary && <Badge color="blue" variant="light">Secondary flash too</Badge>}<StateBadge state={d.state} /><Actions dep={d} onRunning={setRunning} /></>} />
       {d.staging_id && (
-        <Hint mb="md">Step {d.staging_step} of a <Anchor component={Link} to={`/staging/${d.staging_id}`} size="xs">staging plan</Anchor>
+        <Hint mb="md">Step {d.staging_step} of a <Anchor component={Link} to={paths.staging(d.staging_id)} size="xs">staging plan</Anchor>
           {d.staging_step === 1 ? ': the next step runs only after this one has succeeded.'
             : `: it runs only after steps 1–${(d.staging_step ?? 2) - 1} have succeeded.`}</Hint>
       )}
@@ -343,10 +346,10 @@ export function DeploymentDetailPage() {
                     <Text size="xs" c="dimmed">{Object.keys(t.secret_refs).length} secret setting(s) filled from the credential store when sent (values are never shown).</Text>
                   )}
                   <Text size="sm">
-                    <Anchor component={Link} to={`/devices/${t.device_id}`}>Device</Anchor>
-                    {t.config_version_id && <>{' · '}<Anchor component={Link} to={`/configurations?device=${t.device_id}&version=${t.config_version_id}`}>configuration sent</Anchor> <code>{t.config_version_id.slice(0, 8)}</code></>}
-                    {t.backup_version_id && <>{' · '}<Anchor component={Link} to={`/configurations?device=${t.device_id}&version=${t.backup_version_id}`}>backup before</Anchor> <code>{t.backup_version_id.slice(0, 8)}</code></>}
-                    {t.after_version_id && <>{' · '}<Anchor component={Link} to={`/configurations?device=${t.device_id}&version=${t.after_version_id}`}>afterwards</Anchor> <code>{t.after_version_id.slice(0, 8)}</code></>}
+                    <Anchor component={Link} to={paths.device(t.device_id)}>Device</Anchor>
+                    {t.config_version_id && <>{' · '}<Anchor component={Link} to={paths.device(t.device_id, 'files', t.config_version_id)}>configuration sent</Anchor> <code>{t.config_version_id.slice(0, 8)}</code></>}
+                    {t.backup_version_id && <>{' · '}<Anchor component={Link} to={paths.device(t.device_id, 'files', t.backup_version_id)}>backup before</Anchor> <code>{t.backup_version_id.slice(0, 8)}</code></>}
+                    {t.after_version_id && <>{' · '}<Anchor component={Link} to={paths.device(t.device_id, 'files', t.after_version_id)}>afterwards</Anchor> <code>{t.after_version_id.slice(0, 8)}</code></>}
                   </Text>
                   {t.after_version_id && <AfterConfig afterId={t.after_version_id} sentId={t.config_version_id} />}
                   {d.kind === 'configuration' && <><Text size="sm" fw={600}>Proposed change</Text><DiffView diff={t.diff} /></>}

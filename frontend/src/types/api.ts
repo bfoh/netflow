@@ -130,7 +130,7 @@ export interface CredentialRef {
   has_secret: boolean | null;
   /** A login without a password (factory logins); the value itself is never sent. */
   empty_password?: boolean | null;
-  /** A login for all systems (Settings → For all systems), D-105. */
+  /** A login for all systems (Settings → Logins), D-105. */
   shared?: boolean;
 }
 

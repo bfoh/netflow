@@ -8,6 +8,7 @@ import { DialogError } from '../../components/ConfirmDialog';
 import { useAction } from '../../hooks/queries';
 import { api, type SystemImport } from '../../services/api';
 import { Notice } from '../../components/Notice';
+import { paths } from '../../paths';
 
 /** Export a system to one .undm file (D-087): no passwords, files as written. */
 export function ExportSystemButton({ projectId }: { projectId: string }) {
@@ -90,7 +91,7 @@ export function ImportSystemButton() {
             )}
             <Group justify="flex-end">
               <Button variant="default" onClick={reset}>Close</Button>
-              <Button onClick={() => { const id = done.project.id; reset(); void navigate(`/projects/${id}`); }}>Open the system</Button>
+              <Button onClick={() => { const id = done.project.id; reset(); void navigate(paths.system(id)); }}>Open the system</Button>
             </Group>
           </Stack>
         ) : (

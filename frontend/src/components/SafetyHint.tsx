@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconLock } from '@tabler/icons-react';
 import { Link } from 'react-router';
 
 import { usePolicy } from '../hooks/queries';
+import { paths } from '../paths';
 
 /**
  * The safety switches, shown only where they matter: next to an action on a real device
@@ -15,7 +16,7 @@ export function SafetyHint({ real, firmware = false }: { real: boolean; firmware
   const fw = policy.data.enable_real_device_firmware;
   const allowed = writes && (!firmware || fw);
   const what = firmware ? 'Firmware changes' : 'Real-device changes';
-  const settings = <Anchor component={Link} to="/settings?tab=safety" size="xs">Settings → Safety</Anchor>;
+  const settings = <Anchor component={Link} to={paths.settings('safety')} size="xs">Settings → Safety</Anchor>;
   return (
     <Group gap={6} wrap="nowrap" align="center">
       {allowed

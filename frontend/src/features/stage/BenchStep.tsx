@@ -11,6 +11,7 @@ import { api } from '../../services/api';
 import type { Device, OperationResult } from '../../types/api';
 import { addressTakenBy, canMoveAside, CONSOLE_DONE, type Role } from './roles';
 import { Notice } from '../../components/Notice';
+import { paths } from '../../paths';
 
 
 /** Step 3: cabling, safety switches, and whether each device answers. */
@@ -73,7 +74,7 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
       {real && <><SafetyHint real /><SafetyHint real firmware /></>}
       {real && policy.data?.firmware_require_separate_approver !== false && (
         <Hint>Staging alone? Firmware plans need a second person to approve them, unless you turn that off in{' '}
-          <Anchor component={Link} to="/settings?tab=safety" size="xs">Settings → Safety</Anchor>.</Hint>
+          <Anchor component={Link} to={paths.settings('safety')} size="xs">Settings → Safety</Anchor>.</Hint>
       )}
       <Card withBorder padding={0}>
         <Table.ScrollContainer minWidth={640}>
@@ -90,7 +91,7 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
                 return (
                   <Table.Tr key={role.key}>
                     <Table.Td>
-                      <Anchor component={Link} to={`/devices/${device.id}`} fw={600} size="sm">{device.name}</Anchor>
+                      <Anchor component={Link} to={paths.device(device.id)} fw={600} size="sm">{device.name}</Anchor>
                       <Group gap={6} mt={2}><Text size="xs" c="dimmed">{role.title}</Text><EnvironmentBadge env={device.environment} /></Group>
                     </Table.Td>
                     <Table.Td><Text size="sm" ff="monospace">{device.management_address
@@ -99,7 +100,7 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
                       {needsConsole ? (
                         CONSOLE_DONE.has(device.provisioning_status)
                           ? <StateBadge state={device.provisioning_status} />
-                          : <Button size="xs" variant="light" component={Link} to={`/provisioning?device=${device.id}`}
+                          : <Button size="xs" variant="light" component={Link} to={paths.console(device.id)}
                             leftSection={<IconTerminal2 size={14} />}>Open console setup</Button>
                       ) : <Text size="sm" c="dimmed">Not needed</Text>}
                     </Table.Td>

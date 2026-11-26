@@ -12,6 +12,7 @@ import { useAction, useConfig, useConfigDiff, useConfigs } from '../../hooks/que
 import { api } from '../../services/api';
 import type { ConfigInspection, ConfigVersion, Device, Issue } from '../../types/api';
 import { humanize } from '../../services/labels';
+import { paths } from '../../paths';
 
 const label = (v: ConfigVersion) =>
   `${v.kind}${v.kind === 'imported' && v.reference ? ` (${v.reference})` : ''} · ${fmtDate(v.created_at)} · ${v.sha256.slice(0, 8)}`;
@@ -105,7 +106,7 @@ export function ConfigWorkbench({ device, initialVersion = null }: { device: Dev
                   return (
                     <Group gap="xs" mb="xs" wrap="nowrap" align="flex-start">
                       <Button size="xs" leftSection={<IconRocket size={14} />} disabled={blocked}
-                        onClick={() => void navigate(`/deployments?project=${device.project_id}&devices=${device.id}&version=${shown.data!.id}`)}>
+                        onClick={() => void navigate(paths.planNew({ system: device.project_id, devices: device.id, version: shown.data!.id }))}>
                         Make a plan with this version…
                       </Button>
                       <Text size="xs" c="dimmed">{blocked

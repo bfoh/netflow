@@ -1819,3 +1819,68 @@ its LMP port, checked on port 443.
   - The firmware repository serves a stored package (`GET /api/firmware/images/{id}/file`),
     so the person loads exactly the approved file.
   - The guided step serves the SCF (`GET /api/devices/{id}/guided-file/{version}`).
+
+### D-119 One design system, checked for WCAG 2.2 AA (2026-11-26)
+
+**Request (product owner):** every page and workflow refined to industry standards; "make it
+always simple to use … keep pages and interfaces very clean and professional". A neutral
+enterprise look, light mode with an optional dark mode, accessible to WCAG 2.2 AA.
+
+**Decision.**
+- **Theme** (`frontend/src/theme.ts`, `AppProviders.tsx`): Mantine with the Windows system font
+  (no font package), headings by level (h1 26 px … h4 15 px), primary blue at shade 8, and
+  colour tokens for light and dark chosen so that text reaches 4.5:1 and controls 3:1. The
+  colour scheme is remembered in this browser (`undm.color-scheme`); light by default.
+- **Building blocks**: `Notice` announces errors as alerts, running status politely, cautions
+  in place (WCAG 4.1.3); confirmations start on Cancel and give focus back to the button that
+  opened them; every page names the browser tab (2.4.2) and moves focus to its title after
+  navigation (2.4.3); a skip link and scroll padding keep focus visible (2.4.11); `DataTable`
+  shows loading, error, empty and rows in that order, named for screen readers; `ReasonButton`
+  says why a button is disabled; `Tag` colours mean something (info, success, warning,
+  danger, neutral, simulated).
+- **One word for each thing** (`services/labels.ts`): plan stages Check and preview → Approve →
+  Device check → Back up → Change → Verify → Done; step names; "Make room".
+- **Checks that keep it so**:
+  - `tests/theme.test.ts` computes the contrast of every token in light and dark;
+  - `tests/conventions.test.ts` counts what is left to clean (coloured text, hand-picked badge
+    colours, heading sizes, unnamed tables, written-out routes, synonyms, "Back" in dialogs);
+    each budget may only go down, and the number of "experimental" labels may not;
+  - `e2e/a11y.spec.ts` runs axe (WCAG 2.0–2.2 A and AA) on every page in light and dark, and
+    `e2e/layout.spec.ts` checks that no page scrolls sideways at 1366 and 390 px.
+- `@axe-core/playwright` is a dev dependency for those tests only.
+
+### D-120 Navigation in three groups, one place for every address (2026-11-26)
+
+**Found:** a flat sidebar of eight entries plus Advanced; four addresses that differed from
+their labels (`/projects` for Systems, `/deployments` for Plans, `/provisioning` for Console
+setup, `/configurations` for Files); a staging plan lit up "Stage a system"; no page for an
+unknown address; Files and Console setup were top-level entries although each is a tool for
+one device.
+
+**Decision.**
+- **Sidebar** (`components/nav.ts`): **Work** (Home, Stage a system, Systems), **Setup**
+  (Firmware, Settings) and **Advanced** (Devices of all systems, Plans, Console tool,
+  Topology, Audit log). Advanced is a real button (`aria-expanded`), folded until opened or
+  while one of its pages is shown. An entry is active on its page and the pages below it,
+  never on a page that only starts with the same letters; a device page belongs to Systems.
+- **Addresses** (`src/paths.ts`): `/systems[/:id]`, `/plans`, `/plans/new`, `/plans/:id`,
+  `/plans/staging/:id`, `/console`. Every link is built there; the conventions test allows
+  none written out elsewhere. The old addresses redirect with their query string
+  (`/projects`, `/deployments[?project=…]` → `/plans/new?system=…`, `/staging/:id`,
+  `/provisioning`, `/configurations?device=&version=` → the device's Files tab), so bookmarks
+  and links in old bench logs still work. An unknown address shows **Page not found**.
+- **Files** is the device page's tab (`?tab=files`, the old `configs` still opens it); the
+  separate Files page is removed. The Intent tab is called **Intended settings**.
+- **System page tabs** follow the address (`?tab=devices|plans|logins|settings`).
+- **Breadcrumbs** on the device, plan and staging plan pages: Systems › the system.
+- **Settings tabs**: Logins (logins for all systems, bringing in the systems' own logins,
+  default logins per device), Templates (templates and the PCI table), Certificate, Safety,
+  Your name and appearance, About (version; for engineers: device models, drivers, API
+  documentation). The old tab names open the tab that now holds their content.
+- **Header**: "Acting as <name>" links to Your name; the database-upgrade notice says what to
+  do in plain words, with the exact command and a Copy button under More.
+- **Stage a system remembers** where the person was (`undm.wizard.last`,
+  `undm.wizard.<system>`: step and Real/Practice). `/stage` goes back to the last unfinished
+  system at its step; `/stage?choose=1` (and "Stage another system") shows the chooser. The
+  prefix is not `undm.stage.`, which holds the wizard's file and login choices.
+

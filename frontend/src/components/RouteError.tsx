@@ -2,6 +2,7 @@ import { Button, Code, Group, Stack, Text, Title } from '@mantine/core';
 import { isRouteErrorResponse, Link, useRouteError } from 'react-router';
 
 import { Notice } from './Notice';
+import { paths } from '../paths';
 
 /** Shown instead of a page that crashed, inside the normal layout so navigation keeps working. */
 export function RouteError() {
@@ -16,7 +17,7 @@ export function RouteError() {
       <Code block>{message}</Code>
       <Text size="sm" c="dimmed">Please report what you clicked just before this happened, together with the message above.</Text>
       <Group>
-        <Button component={Link} to="/">Go to Home</Button>
+        <Button component={Link} to={paths.home}>Go to Home</Button>
         <Button variant="default" onClick={() => window.location.reload()}>Reload page</Button>
       </Group>
     </Stack>

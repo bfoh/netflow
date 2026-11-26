@@ -5,8 +5,10 @@ import { useNavigate } from 'react-router';
 
 import type { Reachability } from '../../services/api';
 import type { Device } from '../../types/api';
-import { DeviceMenu, openDeviceMenu } from '../devices/DeviceMenu';
+import { DeviceMenu } from '../devices/DeviceMenu';
+import { openDeviceMenu } from '../devices/openDeviceMenu';
 import { ReachDot } from '../devices/ReachDot';
+import { paths } from '../../paths';
 
 /** Groups of a system's devices by kind, in the order people look for them. */
 const GROUPS: { key: string; title: string; icon: ReactNode; match: (d: Device) => boolean }[] = [
@@ -55,7 +57,7 @@ export function SystemTree({ name, devices, selected, onSelectedChange, reach }:
                     onChange={(e) => toggle([d.id], e.currentTarget.checked)} />
                   {g.icon}
                   {reach && <ReachDot state={reach.get(d.id)} />}
-                  <UnstyledButton onClick={() => void navigate(`/devices/${d.id}`)} style={{ flex: 1, minWidth: 0 }}>
+                  <UnstyledButton onClick={() => void navigate(paths.device(d.id))} style={{ flex: 1, minWidth: 0 }}>
                     <Text size="sm" truncate>{d.name}</Text>
                   </UnstyledButton>
                   <DeviceMenu device={d} />

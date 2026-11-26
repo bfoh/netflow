@@ -7,10 +7,12 @@ import { EnvironmentBadge, StateBadge } from '../../components/Badges';
 import { useAction } from '../../hooks/queries';
 import { useConfirm } from '../../hooks/useConfirm';
 import { api, type Reachability } from '../../services/api';
-import { DeviceMenu, openDeviceMenu } from './DeviceMenu';
+import { DeviceMenu } from './DeviceMenu';
+import { openDeviceMenu } from './openDeviceMenu';
 import { ReachDot } from './ReachDot';
 import type { Device, OperationResult } from '../../types/api';
 import { humanize } from '../../services/labels';
+import { paths } from '../../paths';
 
 /**
  * Inventory table with multi-select and bulk actions.
@@ -85,7 +87,7 @@ export function DeviceTable({ devices, showProject, projectNames, selected: oute
     if (action === 'deploy') {
       const projects = new Set(devices.filter((d) => sel.includes(d.id)).map((d) => d.project_id));
       if (projects.size !== 1) return;
-      void navigate(`/deployments?project=${[...projects][0]}&devices=${sel.join(',')}`);
+      void navigate(paths.planNew({ system: [...projects][0], devices: sel.join(',') }));
       return;
     }
     bulk.mutate({ op: action, targets: sel });
@@ -132,11 +134,11 @@ export function DeviceTable({ devices, showProject, projectNames, selected: oute
                   <Group gap={4} wrap="nowrap">
                     {reach && <ReachDot state={reach.get(d.id)} />}
                     <DeviceMenu device={d} onDelete={() => askDelete([d])} />
-                    <Anchor component={Link} to={`/devices/${d.id}`} fw={600} size="sm">{d.name}</Anchor>
+                    <Anchor component={Link} to={paths.device(d.id)} fw={600} size="sm">{d.name}</Anchor>
                     {d.locked_by_deployment_id && <Tooltip label="A plan is running on this device"><IconLock size={14} /></Tooltip>}
                   </Group>
                 </Table.Td>
-                {showProject && <Table.Td><Anchor component={Link} to={`/projects/${d.project_id}`} size="sm">{projectNames?.get(d.project_id) ?? '—'}</Anchor></Table.Td>}
+                {showProject && <Table.Td><Anchor component={Link} to={paths.system(d.project_id)} size="sm">{projectNames?.get(d.project_id) ?? '—'}</Anchor></Table.Td>}
                 <Table.Td><Text size="sm">{d.manufacturer} {d.model}</Text></Table.Td>
                 <Table.Td><Text size="sm">{humanize(d.category)}</Text></Table.Td>
                 <Table.Td><Text size="sm">{d.role || '—'}</Text></Table.Td>

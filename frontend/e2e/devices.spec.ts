@@ -9,7 +9,7 @@ test('device menu: check information, test, and the device log', async ({ page, 
     name: `menu-sw-${id}`, manufacturer: 'Aruba', model: '2930F', category: 'switch', os_family: 'ArubaOS-Switch',
     driver_id: 'mock.aruba.aos_switch', environment: 'simulated', management_address: '192.0.2.20' } });
 
-  await page.goto(`/projects/${p.id}`);
+  await page.goto(`/systems/${p.id}`);
   const row = page.getByRole('row', { name: new RegExp(`menu-sw-${id}`) });
   await row.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Check information' }).click();

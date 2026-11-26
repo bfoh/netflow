@@ -2,7 +2,7 @@ import { ActionIcon, Anchor, Button, Card, Grid, Group, SimpleGrid, Stack, Switc
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { PageHeader, QueryState } from '../components/Page';
 import { PlanStatus } from '../features/plans/AttentionBadge';
@@ -20,6 +20,7 @@ import { useAction, useDeployments, useProject, useProjectDevices, useReachabili
 import { CertificateForm } from '../features/settings/CertificateForm';
 import { api } from '../services/api';
 import type { CertificateSubject, Project } from '../types/api';
+import { paths } from '../paths';
 
 function ProjectSettings({ project }: { project: Project }) {
   const [form, setForm] = useState(project);
@@ -40,7 +41,7 @@ function ProjectSettings({ project }: { project: Project }) {
             onClick={() => ask({
               title: `Delete system "${project.name}"?`, confirmLabel: 'Delete system', typed: project.name,
               message: 'Its devices, files, logins (with their passwords in Credential Manager), plans and their history are removed from UNDM. The devices themselves are not touched.',
-              onConfirm: async () => { await del.mutateAsync(); void navigate('/projects'); } })}>
+              onConfirm: async () => { await del.mutateAsync(); void navigate(paths.systems); } })}>
             Delete system
           </Button>
           <Button loading={save.isPending} onClick={() => save.mutate({ name: form.name, site: form.site, purpose: form.purpose, description: form.description })}>Save</Button>
@@ -64,7 +65,7 @@ function CertificateSettings({ project }: { project: Project }) {
         <Text size="sm" c="dimmed">
           Before loading a 2930F file that makes the web interface HTTPS-only, UNDM creates the self-signed certificate with
           your team's commands and answers the switch's questions. The answers are set once in{' '}
-          <Anchor component={Link} to="/settings?tab=shared" size="sm">Settings → For all systems</Anchor>.
+          <Anchor component={Link} to={paths.settings('certificate')} size="sm">Settings → Certificate</Anchor>.
         </Text>
         {own ? (
           <Text size="sm">This system uses its own answers (common name <b>{project.certificate_subject!.common_name}</b>).</Text>
@@ -96,25 +97,29 @@ export function ProjectDetailPage() {
   const [watch, setWatch] = useWatch(projectId);
   const reach = useReachability(projectId, watch);
   const reachMap = new Map((reach.data ?? []).map((r) => [r.device_id, r.state]));
+  const [params, setParams] = useSearchParams();
+  // Tab names before D-120 still open the right tab.
+  const raw = params.get('tab') ?? 'devices';
+  const tab = ({ deployments: 'plans', credentials: 'logins' } as Record<string, string>)[raw] ?? raw;
 
   if (!project.data) return <QueryState isLoading={project.isLoading} error={project.error} />;
   const p = project.data;
   return (
     <>
-      <PageHeader title={p.name} description={[p.site, p.purpose].filter(Boolean).join(' · ') || 'No site or purpose recorded'}
+      <PageHeader title={p.name} breadcrumbs={[{ label: 'Systems', to: paths.systems }]} description={[p.site, p.purpose].filter(Boolean).join(' · ') || 'No site or purpose recorded'}
         actions={<>
           <StagedBadge project={p} />
           <BenchLogButton projectId={projectId} />
           <DownloadBackupsButton projectId={projectId} />
           <ExportSystemButton projectId={projectId} />
-          <Button variant="default" component={Link} to={`/stage/${projectId}`}>Stage this system</Button>
+          <Button variant="default" component={Link} to={paths.stage(projectId)}>Stage this system</Button>
           <Button leftSection={<IconPlus size={16} />} onClick={open}>Add device</Button>
         </>} />
-      <Tabs defaultValue="devices" keepMounted={false}>
+      <Tabs value={tab} onChange={(v) => setParams(v && v !== 'devices' ? { tab: v } : {}, { replace: true })} keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="devices">Devices ({devices.data?.length ?? 0})</Tabs.Tab>
-          <Tabs.Tab value="deployments">Plans ({deployments.data?.length ?? 0})</Tabs.Tab>
-          <Tabs.Tab value="credentials">Logins</Tabs.Tab>
+          <Tabs.Tab value="plans">Plans ({deployments.data?.length ?? 0})</Tabs.Tab>
+          <Tabs.Tab value="logins">Logins</Tabs.Tab>
           <Tabs.Tab value="settings">System settings</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="devices">
@@ -134,7 +139,7 @@ export function ProjectDetailPage() {
             </Grid.Col>
           </Grid>
         </Tabs.Panel>
-        <Tabs.Panel value="deployments">
+        <Tabs.Panel value="plans">
           {deleteDialog}
           <Card withBorder padding={0}>
             <Table.ScrollContainer minWidth={560}>
@@ -143,7 +148,7 @@ export function ProjectDetailPage() {
                 <Table.Tbody>
                   {(deployments.data ?? []).map((d) => (
                     <Table.Tr key={d.id}>
-                      <Table.Td><Anchor component={Link} to={`/deployments/${d.id}`}>{fmtDate(d.created_at)}</Anchor></Table.Td>
+                      <Table.Td><Anchor component={Link} to={paths.plan(d.id)}>{fmtDate(d.created_at)}</Anchor></Table.Td>
                       <Table.Td>{planKind(d)}</Table.Td>
                       <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
                       <Table.Td><PlanStatus d={d} /></Table.Td>
@@ -151,13 +156,13 @@ export function ProjectDetailPage() {
                       onClick={() => askToDelete(d)}><IconTrash size={16} /></ActionIcon></Tooltip>}</Table.Td>
                     </Table.Tr>
                   ))}
-                  {deployments.data?.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text c="dimmed" ta="center" p="md">No plans yet. Make one on the Plans page.</Text></Table.Td></Table.Tr>}
+                  {deployments.data?.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text c="dimmed" ta="center" p="md">No plans yet. Stage this system to make them.</Text></Table.Td></Table.Tr>}
                 </Table.Tbody>
               </Table>
             </Table.ScrollContainer>
           </Card>
         </Tabs.Panel>
-        <Tabs.Panel value="credentials"><CredentialsPanel projectId={projectId} /></Tabs.Panel>
+        <Tabs.Panel value="logins"><CredentialsPanel projectId={projectId} /></Tabs.Panel>
         <Tabs.Panel value="settings">
           <SimpleGrid cols={1}>
             <ProjectSettings key={p.updated_at} project={p} />

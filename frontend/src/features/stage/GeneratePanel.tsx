@@ -13,6 +13,7 @@ import type { ComparedFile, Device, Project, TemplateRole } from '../../types/ap
 import { type Choice, type Choices, EMPTY_CHOICE } from './choices';
 import type { Role, RoleKey } from './roles';
 import { normalSystem, systemInName, TEMPLATE_ROLES, zoneInName, zoneWords } from './zone';
+import { paths } from '../../paths';
 
 /** Step 1: the system's zone (D-111) and system (D-114), prefilled from its name (B007z045 → B007, 45). */
 export function ZoneField({ project }: { project: Project }) {
@@ -41,10 +42,10 @@ export function ZoneField({ project }: { project: Project }) {
       {system && (
         <Text size="xs" c="dimmed" mt={4}>
           {system} · MRBTS-{Number(system.slice(1))} · {pcis.data ? `cell PCIs ${pcis.data.pcis.filter((p) => p !== null).join(', ')} (PCI table)`
-            : pcis.isError ? 'not in the PCI table (Settings → For all systems)' : '…'}
+            : pcis.isError ? 'not in the PCI table (Settings → Templates)' : '…'}
         </Text>
       )}
-      <Text size="xs" c="dimmed" mt={4}>The devices&apos; files are generated for this zone (and the modem&apos;s and BBU&apos;s for this system) in step 2, from the templates in Settings → For all systems.</Text>
+      <Text size="xs" c="dimmed" mt={4}>The devices&apos; files are generated for this zone (and the modem&apos;s and BBU&apos;s for this system) in step 2, from the templates in Settings → Templates.</Text>
     </Card>
   );
 }
@@ -93,7 +94,7 @@ export function GeneratePanel({ project, roles, choices, onReplace }: {
       ) : needsSystem ? (
         <Text size="sm">Set the system (e.g. B007) in step 1 first: the modem&apos;s and the BBU&apos;s files depend on it.</Text>
       ) : ready.length === 0 && !bbu ? (
-        <Text size="sm">No templates yet: import the team&apos;s files once in <Anchor component={Link} to="/settings?tab=shared" size="sm">Settings → For all systems</Anchor>. Files can still be imported by hand below.</Text>
+        <Text size="sm">No templates yet: import the team&apos;s files once in <Anchor component={Link} to={paths.settings('templates')} size="sm">Settings → Templates</Anchor>. Files can still be imported by hand below.</Text>
       ) : (
         <Stack gap="xs">
           <Text size="sm">Makes {ready.length} {ready.length === 1 ? 'file' : 'files'} for zone {project.zone} and chooses them below.

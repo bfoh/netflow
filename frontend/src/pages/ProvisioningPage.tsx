@@ -19,6 +19,7 @@ import { driverLabel, stateLabel } from '../services/labels';
 import { ModemFirstAccess } from '../features/provisioning/ModemFirstAccess';
 import { roleOf } from '../features/stage/roles';
 import type { BootstrapPreview, BootstrapProfile, BootstrapResult, Device } from '../types/api';
+import { paths } from '../paths';
 
 const CONSOLE_PLATFORMS = new Set(['aos_switch', 'sros_sar']);
 const MODEM_PLATFORM = 'sros_sar';
@@ -165,7 +166,7 @@ function Bootstrap({ device, simulated }: { device: Device; simulated: boolean }
             <Button size="xs" variant="default" leftSection={<IconDownload size={14} />}
               onClick={() => downloadText('undm-console-bootstrap-sanitized.txt', result.sanitized_transcript)}>Download sanitized transcript</Button>
             {(result.status === 'bootstrapped' || result.status === 'already_configured') && (
-              <Button size="xs" component={Link} to={`/devices/${device.id}`} leftSection={<IconPlugConnected size={14} />}>Continue on the device page</Button>
+              <Button size="xs" component={Link} to={paths.device(device.id)} leftSection={<IconPlugConnected size={14} />}>Continue on the device page</Button>
             )}
           </Group>
         </Card>

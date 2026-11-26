@@ -25,7 +25,7 @@ describe('device menu, tree and watch (D-099)', () => {
   it('the system tree groups devices by kind and shares its tick boxes with the table', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     mockApi({ '/projects/p1': project, '/projects/p1/devices': [fw, sw, sim] });
-    renderAt('/projects/p1');
+    renderAt('/systems/p1');
     const tree = await screen.findByLabelText('Devices of Lab A');
     expect(within(tree).getByText('Firewalls')).toBeInTheDocument();
     expect(within(tree).getByText('Switches')).toBeInTheDocument();
@@ -35,7 +35,7 @@ describe('device menu, tree and watch (D-099)', () => {
 
   it('right-click opens the menu with what applies to that device', async () => {
     mockApi({ '/projects/p1': project, '/projects/p1/devices': [fw, sw, sim] });
-    renderAt('/projects/p1');
+    renderAt('/systems/p1');
     const row = (await screen.findAllByRole('link', { name: 'lab-fw' })).at(-1)!.closest('tr')!;
     fireEvent.contextMenu(row);
     const menu = await screen.findByRole('menu');
@@ -48,7 +48,7 @@ describe('device menu, tree and watch (D-099)', () => {
   it('a simulated device offers no SSH window', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     mockApi({ '/projects/p1': project, '/projects/p1/devices': [sim] });
-    renderAt('/projects/p1');
+    renderAt('/systems/p1');
     const table = await screen.findByRole('table');
     await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-bb' }));
     expect(await screen.findByText('Check information')).toBeInTheDocument();  // the menu is open
@@ -61,7 +61,7 @@ describe('device menu, tree and watch (D-099)', () => {
       management_address: '', console_port: 'COM7', capabilities: ['supports_serial_console', 'supports_configuration_apply'] });
     const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [modem],
       '/devices/m1/open-console': { program: 'putty', console_port: 'COM7', command: 'putty -serial COM7' } });
-    renderAt('/projects/p1');
+    renderAt('/systems/p1');
     const table = await screen.findByRole('table');
     await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-modem' }));
     expect(await screen.findByText('Open console window')).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('device menu, tree and watch (D-099)', () => {
   it('a 2930F offers restart and console setup', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     mockApi({ '/projects/p1': project, '/projects/p1/devices': [sw] });
-    renderAt('/projects/p1');
+    renderAt('/systems/p1');
     const table = await screen.findByRole('table');
     await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-sw-a' }));
     expect(await screen.findByText('Restart…')).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('device menu, tree and watch (D-099)', () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [sw],
       '/devices/sw/restart-plan': { id: 'dep9', kind: 'restart', state: 'awaiting_approval', events: [], targets: [] } });
-    renderAt('/projects/p1');
+    renderAt('/systems/p1');
     const table = await screen.findByRole('table');
     await userEvent.click(within(table).getByRole('button', { name: 'Actions for lab-sw-a' }));
     await userEvent.click(await screen.findByText('Restart…'));
@@ -101,7 +101,7 @@ describe('device menu, tree and watch (D-099)', () => {
       '/projects/p1/reachability': [{ device_id: 'sw', address: '192.0.2.10', state: 'no_answer' },
         { device_id: 'sim', address: '192.0.2.1', state: 'simulated' }] });
     window.localStorage.removeItem('undm.watch.p1');
-    renderAt('/projects/p1');
+    renderAt('/systems/p1');
     await userEvent.click(await screen.findByRole('switch', { name: /Watch devices/ }));
     expect((await screen.findAllByRole('img', { name: 'No answer on its management port' })).length).toBe(2);  // tree and table
     expect(calls.some((c) => c.url === '/api/projects/p1/reachability')).toBe(true);
@@ -129,7 +129,7 @@ describe('device menu, tree and watch (D-099)', () => {
     const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [fortigate],
       '/devices/fw/license': { id: 'lic1', filename: 'lab-fw.lic', sha256: 'x' },
       '/devices/fw/license-plan': { id: 'dep7', kind: 'license', state: 'awaiting_approval', events: [], targets: [] } });
-    renderAt('/projects/p1');
+    renderAt('/systems/p1');
     const table = await screen.findByRole('table');
     await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-fw' }));
     await userEvent.click(await screen.findByText('Load license…'));

@@ -57,7 +57,7 @@ export function SafetyPanel() {
             <Group justify="space-between" wrap="nowrap" align="flex-start">
               <Stack gap={4}>
                 <Group gap="xs">
-                  <Title order={2} size="h5">{info.label}</Title>
+                  <Title order={2}>{info.label}</Title>
                   <Badge radius="sm" variant={on === info.riskyValue ? 'filled' : 'light'} color={on === info.riskyValue ? 'red' : 'gray'}>
                     {on ? 'ON' : 'off'}
                   </Badge>

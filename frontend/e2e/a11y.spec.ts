@@ -8,9 +8,7 @@ const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 /** Rules a page may still break, while it is being reworked ('*' for every page). Must end
  *  empty. */
-const KNOWN: Record<string, string[]> = {
-  '*': ['aria-allowed-attr'], // the Advanced navigation group (reworked in S2)
-};
+const KNOWN: Record<string, string[]> = {};
 
 test('every page meets WCAG 2.2 AA (axe)', async ({ page, request }) => {
   test.setTimeout(240_000);
@@ -19,17 +17,19 @@ test('every page meets WCAG 2.2 AA (axe)', async ({ page, request }) => {
     ['home', '/'],
     ['stage chooser', '/stage?choose=1'],
     ...[0, 1, 2, 3, 4].map((s) => [`stage step ${s + 1}`, `/stage/${ids.projectId}?step=${s}`] as [string, string]),
-    ['systems', '/projects'],
-    ['system', `/projects/${ids.projectId}`],
+    ['systems', '/systems'],
+    ['system', `/systems/${ids.projectId}`],
     ['devices', '/devices'],
     ['device', `/devices/${ids.deviceId}`],
     ['firmware', '/firmware'],
-    ['console setup', '/provisioning'],
-    ['plans', '/deployments'],
-    ['plan', `/deployments/${ids.planId}`],
+    ['console tool', '/console'],
+    ['plans', '/plans'],
+    ['new plan', `/plans/new?system=${ids.projectId}`],
+    ['plan', `/plans/${ids.planId}`],
+    ['not found', '/no-such-page'],
     ['topology', '/topology'],
     ['audit', '/audit'],
-    ['settings', '/settings'],
+    ...['logins', 'templates', 'certificate', 'safety', 'identity', 'about'].map((t) => [`settings ${t}`, `/settings?tab=${t}`] as [string, string]),
   ];
   const problems: string[] = [];
   for (const scheme of ['light', 'dark'] as const) {

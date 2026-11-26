@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 test('export a system and import it under another name', async ({ page }) => {
   const id = String(Date.now()).slice(-6);
   const name = `Package ${id}`;
-  await page.goto('/projects');
+  await page.goto('/systems');
   await page.getByRole('button', { name: 'New system' }).click();
   await page.getByLabel('System name').fill(name);
   await page.getByRole('button', { name: 'Create system' }).click();
@@ -17,7 +17,7 @@ test('export a system and import it under another name', async ({ page }) => {
   expect(download.suggestedFilename()).toBe(`Package_${id}.undm`);
   const file = await download.path();
 
-  await page.goto('/projects');
+  await page.goto('/systems');
   await page.getByRole('button', { name: 'Import…' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.locator('input[type=file]').setInputFiles(file);

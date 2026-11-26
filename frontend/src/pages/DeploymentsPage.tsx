@@ -32,6 +32,7 @@ function ConfigChoice({ deviceId, value, onChange }: { deviceId: string; value: 
 }
 import { api } from '../services/api';
 import { applyModeLabel, stateLabel } from '../services/labels';
+import { paths } from '../paths';
 
 /**
  * What the chosen file needs: the apply mode its kind requires, and a credential for each
@@ -171,7 +172,7 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
         </Hint>
       )}
       <Button disabled={sel.length === 0 || required.length > 1} loading={create.isPending}
-        onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(`/deployments/${d.id}`) })}>
+        onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(paths.plan(d.id)) })}>
         Validate and preview
       </Button>
     </Card>
@@ -228,7 +229,7 @@ function NewStagingPlan({ projectId }: { projectId: string }) {
         </>}
         <Group>
           <Button disabled={!deviceId || !base || !site || base === site} loading={create.isPending}
-            onClick={() => create.mutate(undefined, { onSuccess: (p) => void navigate(`/staging/${p.staging_id}`) })}>
+            onClick={() => create.mutate(undefined, { onSuccess: (p) => void navigate(paths.staging(p.staging_id)) })}>
             Create staging plan
           </Button>
         </Group>
@@ -257,7 +258,7 @@ function NewFirstLogin({ projectId }: { projectId: string }) {
           data={(devices.data ?? []).map((d) => ({ value: d.id, label: `${d.name} (${d.model})` }))}
           value={deviceId} onChange={setDeviceId} />
         <Button disabled={!deviceId} loading={create.isPending}
-          onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(`/deployments/${d.id}`) })}>
+          onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(paths.plan(d.id)) })}>
           Check and plan the first login
         </Button>
       </Group>
@@ -270,7 +271,8 @@ export function DeploymentsPage() {
   const [params, setParams] = useSearchParams();
   const projects = useProjects();
   const all = useAllDeployments();
-  const projectId = params.get('project');
+  // `project` is the parameter's name before D-120.
+  const projectId = params.get('system') ?? params.get('project');
   const preselected = (params.get('devices') ?? '').split(',').filter(Boolean);
   const version = params.get('version');
   const names = new Map((projects.data ?? []).map((p) => [p.id, p.name]));
@@ -282,7 +284,7 @@ export function DeploymentsPage() {
         <Card withBorder>
           <Select label="System for a new plan" placeholder="Choose a system" maw={420}
             data={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
-            value={projectId} onChange={(v) => setParams(v ? { project: v } : {})} />
+            value={projectId} onChange={(v) => setParams(v ? { system: v } : {})} />
         </Card>
         {projectId && <NewPlan key={projectId + preselected.join() + (version ?? '')} projectId={projectId}
           preselected={preselected} version={version} />}
@@ -298,10 +300,10 @@ export function DeploymentsPage() {
               <Table.Tbody>
                 {(all.data ?? []).map((d) => (
                   <Table.Tr key={d.id}>
-                    <Table.Td><Anchor component={Link} to={`/deployments/${d.id}`} size="sm">{fmtDate(d.created_at)}</Anchor></Table.Td>
+                    <Table.Td><Anchor component={Link} to={paths.plan(d.id)} size="sm">{fmtDate(d.created_at)}</Anchor></Table.Td>
                     <Table.Td>{names.get(d.project_id) ?? '—'}</Table.Td>
                     <Table.Td>{planKind(d)}
-                      {d.staging_id && <> · <Anchor component={Link} to={`/staging/${d.staging_id}`} size="sm">staging step {d.staging_step}</Anchor></>}</Table.Td>
+                      {d.staging_id && <> · <Anchor component={Link} to={paths.staging(d.staging_id)} size="sm">staging step {d.staging_step}</Anchor></>}</Table.Td>
                     <Table.Td>{d.created_by}</Table.Td><Table.Td>{d.approved_by ?? '—'}</Table.Td>
                     <Table.Td><PlanStatus d={d} /></Table.Td>
                     <Table.Td>{canDelete(d) && <Tooltip label="Delete plan"><ActionIcon variant="subtle" color="red" aria-label={`Delete plan of ${fmtDate(d.created_at)}`}

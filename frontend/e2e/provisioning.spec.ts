@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 test('console bootstrap on the simulated console: run, verify, re-run is a no-op', async ({ page }) => {
   const id = String(Date.now()).slice(-6);
   const name = `dmz-sw-${id}`;
-  await page.goto('/projects');
+  await page.goto('/systems');
   await page.getByRole('button', { name: 'New system' }).click();
   await page.getByLabel('System name').fill(`Bootstrap ${id}`);
   await page.getByRole('button', { name: 'Create system' }).click();

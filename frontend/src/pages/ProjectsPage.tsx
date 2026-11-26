@@ -12,6 +12,7 @@ import { ImportSystemButton } from '../features/systems/SystemPackage';
 import { useConfirm } from '../hooks/useConfirm';
 import { useAction, useAllDevices, useProjects } from '../hooks/queries';
 import { api } from '../services/api';
+import { paths } from '../paths';
 
 export function ProjectsPage() {
   const projects = useProjects();
@@ -25,7 +26,7 @@ export function ProjectsPage() {
 
   const submit = () =>
     create.mutate(form, {
-      onSuccess: (p) => { close(); setForm({ name: '', description: '', site: '', purpose: '' }); void navigate(`/projects/${p.id}`); },
+      onSuccess: (p) => { close(); setForm({ name: '', description: '', site: '', purpose: '' }); void navigate(paths.system(p.id)); },
     });
 
   return (
@@ -44,7 +45,7 @@ export function ProjectsPage() {
             <Table.Tbody>
               {(projects.data ?? []).map((p) => (
                 <Table.Tr key={p.id}>
-                  <Table.Td><Anchor component={Link} to={`/projects/${p.id}`} fw={600}>{p.name}</Anchor> <StagedBadge project={p} /></Table.Td>
+                  <Table.Td><Anchor component={Link} to={paths.system(p.id)} fw={600}>{p.name}</Anchor> <StagedBadge project={p} /></Table.Td>
                   <Table.Td>{p.site || '—'}</Table.Td>
                   <Table.Td>{p.purpose || '—'}</Table.Td>
                   <Table.Td>{(devices.data ?? []).filter((d) => d.project_id === p.id).length}</Table.Td>
