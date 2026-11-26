@@ -59,16 +59,21 @@ The USB console cable goes from the PC to a 2930F's console port for its console
 cable is enough, moved from A to B. Plug a 2930F's port into the small switch only after its
 console setup: a preconfigured unit may still use an address another device has.
 
-**Both 2930F end at 192.168.1.1.** Once B's file loads, A and B would share the address. Since
-v68 (D-096, experimental) B's plan has a step "Make room": UNDM moves A aside in its running
-configuration only, nothing saved, so A returns to 192.168.1.1 at its next power-on. Since v78
-(D-106) the spare address is **192.0.2.3**, in the PC's other bench network: on 2026-11-26 the
-2930F refused 192.168.1.3 next to 192.168.1.1 (same network). Whether it takes an address of
-another network next to its own is not yet seen on hardware; if it refuses, the step stops
-with "Nothing was changed". Stage A first, then run B's plan; no cable to
-unplug. If the step stops, nothing was saved on A: restart A, unplug it from the small switch
-as before, and make a new plan for B. A device UNDM cannot move (or a step that is absent)
-still means: unplug A before B's plan; the v61 check stops B's file step otherwise.
+**Both 2930F end at 192.168.1.1.** Once B's file loads, A and B would share the address. B's
+plan has a step "Make room". Since v79 (D-107, experimental) it switches off A's management
+port (port 2) in A's running configuration only, nothing saved, and checks that 192.168.1.1
+goes quiet. A answers again after its next power-on. **Switch A off and on before it
+leaves the bench.** Stage A first, then run B's plan; no cable to unplug.
+
+The spare addresses of v68–v78 could not work (2026-11-26):
+- the 2930F refuses a second address in its own network;
+- its team file accepts management only from 192.168.1.0/24 (`ip authorized-managers`).
+
+If the step stops, it says whether A was left as it was. Otherwise switch A off and on.
+Either way, unplug A from the small switch as before and make a new plan for B: the step
+finds nothing at 192.168.1.1 and moves nothing. A device UNDM cannot take off its address
+(or a step that is absent) still means: unplug A before B's plan; the v61 check stops B's
+file step otherwise.
 
 ## Order of the run (wizard step 4)
 

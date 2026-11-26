@@ -15,7 +15,6 @@ import { fmtDate } from '../../services/format';
 import { factLabel, MAIN_FACTS } from '../../services/labels';
 import { showError, showSuccess } from '../../services/notify';
 import type { Device } from '../../types/api';
-import { temporaryAddress } from '../stage/roles';
 
 const can = (d: Device, c: string) => d.capabilities.includes(c);
 
@@ -27,7 +26,7 @@ const can = (d: Device, c: string) => d.capabilities.includes(c);
 export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: () => void }) {
   const navigate = useNavigate();
   const real = device.environment !== 'simulated';
-  const address = temporaryAddress(device) || device.management_address;
+  const address = device.management_address;
   const [info, setInfo] = useState<Device | null>(null);
   const [restartOpen, restart] = useDisclosure();
   const [licenseOpen, license] = useDisclosure();
@@ -124,7 +123,7 @@ export function DeviceMenu({ device, onDelete }: { device: Device; onDelete?: ()
           <Text size="sm">UNDM makes a plan that restarts the device. You see what it will send, approve it, then run it; UNDM waits
             until the device answers again (same serial number) and records it all.</Text>
           <Notice kind="caution" compact>Changes that were not saved on the device are lost: it starts with its saved configuration.
-            {temporaryAddress(device) ? ` It returns to ${device.management_address}.` : ''}</Notice>
+</Notice>
           <DialogError error={makeRestart.error} />
           <Group justify="flex-end">
             <Button variant="default" onClick={restart.close}>Back</Button>

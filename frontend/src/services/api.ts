@@ -153,7 +153,7 @@ export const api = {
   licensePlan: (id: string, versionId: string) => request<Deployment>('POST', `/devices/${id}/license-plan`, { version_id: versionId }),
   reachability: (pid: string) => request<Reachability[]>('GET', `/projects/${pid}/reachability`),
   deviceLog: (id: string, masked = false) => request<DeviceLogEntry[]>('GET', `/devices/${id}/log${masked ? '?masked=true' : ''}`),
-  clearTemporaryAddress: (id: string) => request<Device>('POST', `/devices/${id}/temporary-address/clear`),
+  clearPortOff: (id: string) => request<Device>('POST', `/devices/${id}/port-off/clear`),
   deleteDevice: (id: string) => request<void>('DELETE', `/devices/${id}`),
   setIntent: (id: string, intent: DeviceIntent) =>
     request<Device>('PUT', `/devices/${id}/intent`, intent),

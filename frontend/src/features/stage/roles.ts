@@ -111,29 +111,24 @@ export function assignRoles(devices: Device[]): Partial<Record<RoleKey, Device>>
 
 /**
  * The device already at the address this device's file moves it to (D-091). Both 2930F end at
- * the same address: the one still on its temporary address must wait until the other is
+ * the same address: the one still on its first address must wait until the other is
  * unplugged from the bench switch.
  */
 export function addressTakenBy(role: Role, device: Device, all: { device: Device }[]): Device | undefined {
   if (device.management_address === role.addressAfter) return undefined;
   return all.map((x) => x.device).find((d) => d.id !== device.id && d.management_address === role.addressAfter
-    && !temporaryAddress(d));
+    && !portOff(d));
 }
 
-/** Where a device runs until its next power-on, if UNDM moved it aside (D-096). */
-export function temporaryAddress(d: Device): string | undefined {
-  const extra = (d.observed_facts as { extra?: { temporary_address?: string } } | null)?.extra;
-  return extra?.temporary_address || undefined;
+/** The management port UNDM switched off, unsaved, until the device's next power-on (D-107). */
+export function portOff(d: Device): string | undefined {
+  const extra = (d.observed_facts as { extra?: { management_port_off?: { port?: string } } } | null)?.extra;
+  return extra?.management_port_off?.port || undefined;
 }
 
-/** Spare bench address a device is moved to while another takes its address (D-096). */
-/** Where the first 2930F waits, unsaved, while the second takes its address (D-096). In the
- * bench's other network, which the PC already has: the 2930F refuses a second address in
- * the network it already has (bench, 2026-11-26, D-106). */
-export const SPARE_ADDRESS = '192.0.2.3';
-
-/** Whether UNDM can move this device aside itself (real 2930F); else it must be unplugged. */
-export const canMoveAside = (d: Device) => d.capabilities.includes('supports_temporary_address');
+/** Whether UNDM can take this device off its address itself (real 2930F, D-107); else it
+ *  must be unplugged. */
+export const canMoveAside = (d: Device) => d.capabilities.includes('supports_management_port_off');
 
 /** The defaults for all systems of a role's kind (both 2930F share one), D-105. */
 export function roleDefaults(role: Role, d: LoginDefaults | undefined): {

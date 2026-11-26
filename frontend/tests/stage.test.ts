@@ -49,22 +49,22 @@ describe('stage a system: steps per device', () => {
   });
 });
 
-describe('making room for the second switch (D-096)', () => {
+describe('making room for the second switch (D-107)', () => {
   const sw = (id: string, address: string, capabilities: string[], extra?: object) => ({ id, name: `sw-${id}`, model: '2930F',
     environment: 'lab', management_address: address, capabilities, observed_facts: extra ? { extra } : null } as unknown as Device);
   const b = sw('b', '192.168.1.2', []);
 
   it('the plan of the switch that moves gets a step that moves the other one aside first', () => {
-    const a = sw('a', '192.168.1.1', ['supports_temporary_address']);
+    const a = sw('a', '192.168.1.1', ['supports_management_port_off']);
     const { steps } = planSteps(role('aruba_b'), { ...EMPTY_CHOICE, imageId: 'i', fileId: 'f' }, b, a);
     expect(steps.map((s) => s.kind)).toEqual(['firmware', 'free_address', 'configuration']);
-    expect(steps[1]).toEqual({ kind: 'free_address', other_device_id: 'a', address: '192.0.2.3' });
+    expect(steps[1]).toEqual({ kind: 'free_address', other_device_id: 'a' });
   });
 
   it('not when the other device cannot be moved by UNDM, or already was', () => {
     const plain = sw('a', '192.168.1.1', []);
     expect(planSteps(role('aruba_b'), { ...EMPTY_CHOICE, fileId: 'f' }, b, plain).steps.map((s) => s.kind)).toEqual(['configuration']);
-    const moved = sw('a', '192.168.1.1', ['supports_temporary_address'], { temporary_address: '192.0.2.3' });
+    const moved = sw('a', '192.168.1.1', ['supports_management_port_off'], { management_port_off: { port: '2', since: '' } });
     expect(addressTakenBy(role('aruba_b'), b, [{ device: moved }, { device: b }])).toBeUndefined();
   });
 });

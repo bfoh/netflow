@@ -257,16 +257,16 @@ def device_log(device_id: str, session: SessionDep,
     return rows
 
 
-@router.post("/api/devices/{device_id}/temporary-address/clear", response_model=DeviceOut)
-def clear_temporary_address(device_id: str, session: SessionDep, actor: ActorDep) -> Device:
-    """The device was restarted: it runs at its own (saved) address again (D-096). Changes
+@router.post("/api/devices/{device_id}/port-off/clear", response_model=DeviceOut)
+def clear_port_off(device_id: str, session: SessionDep, actor: ActorDep) -> Device:
+    """The device was switched off and on: its management port is on again (D-107). Changes
     only UNDM's record; no device is contacted."""
     d = get_device(session, device_id)
-    was = svc.temporary_address(d)
+    was = svc.port_off(d)
     if was:
-        svc.set_temporary_address(d, None)
-        audit.record(session, actor, "device.temporary_address_cleared", "device", d.id,
-                     details={"address": was, "own_address": d.management_address})
+        svc.set_port_off(d, None)
+        audit.record(session, actor, "device.management_port_on", "device", d.id,
+                     details={"port": was.get("port"), "by": "person"})
     return d
 
 

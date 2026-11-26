@@ -1,5 +1,5 @@
 import type { Device, StagingStepInput } from '../../types/api';
-import { canMoveAside, SPARE_ADDRESS } from './roles';
+import { canMoveAside } from './roles';
 import type { Role, RoleKey } from './roles';
 
 /** What the person chose for one device in the wizard. */
@@ -73,10 +73,10 @@ export function planSteps(role: Role, c: Choice, device?: Device, inTheWay?: Dev
     }
     if (kind === 'file') {
       if (c.fileId) {
-        // Its file gives it an address another device of the system holds: that one is moved
-        // to a spare address first, unsaved (D-096).
+        // Its file gives it an address another device of the system holds: that one switches
+        // off its management port first, unsaved (D-107).
         if (inTheWay && canMoveAside(inTheWay)) {
-          steps.push({ kind: 'free_address', other_device_id: inTheWay.id, address: SPARE_ADDRESS });
+          steps.push({ kind: 'free_address', other_device_id: inTheWay.id });
         }
         steps.push({ kind: 'configuration', version_id: c.fileId, ...(c.loginAfter ? { credential_after_ref_id: c.loginAfter } : {}) });
       } else missing.push('the team file');

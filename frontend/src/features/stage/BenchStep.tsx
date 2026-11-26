@@ -9,7 +9,7 @@ import { SafetyHint } from '../../components/SafetyHint';
 import { useAction, usePolicy } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { Device, OperationResult } from '../../types/api';
-import { addressTakenBy, canMoveAside, SPARE_ADDRESS, type Role } from './roles';
+import { addressTakenBy, canMoveAside, type Role } from './roles';
 import { Notice } from '../../components/Notice';
 
 const CONSOLE_DONE = new Set(['bootstrapped', 'managed']);
@@ -59,7 +59,7 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
           return other ? (
             <Notice key={role.key} kind="caution" compact mt="sm">
               {device.name} and {other.name} both end at {role.addressAfter}. Run {other.name} first. {canMoveAside(other)
-                ? `The plan of ${device.name} then moves ${other.name} to ${SPARE_ADDRESS} until its next power-on: no cable to unplug.`
+                ? `The plan of ${device.name} then switches off ${other.name}’s management port until its next power-on: no cable to unplug.`
                 : `When it shows Staged, unplug it from the small switch, then run ${device.name}.`}
             </Notice>
           ) : null;

@@ -1,20 +1,18 @@
-"""Free an address: move a device to a spare address until its next restart (D-096).
+"""Free an address: take a device off its management address until its next restart
+(D-107; D-096's spare address could not work, D-106).
 
 Two devices of a system can end at the same management address (both 2930F of the staging
-use case). Before the second one loads its file, the first is moved aside in its running
-configuration only; nothing is saved, so it returns to its own address at its next
+use case). Before the second one loads its file, the first switches off its management port
+in its running configuration only; nothing is saved, so it answers again at its next
 power-on. Through the deployment lifecycle:
 
 * preview (read-only): the exact commands, or "no device answers there: nothing to move";
-* after approval: back up, send the commands, reach the device at the spare address,
-  check its serial number, and check that its own address has gone quiet.
+* after approval: back up, send the commands, and check that its address has gone quiet.
 
 EXPERIMENTAL: a driver's procedure is unverified until run on a named lab model.
 """
 
 from __future__ import annotations
-
-import ipaddress
 
 from undm.domain.lifecycle import DeploymentState
 from undm.drivers.base import Capability
@@ -36,13 +34,9 @@ class FreeAddressOrchestrator(DeploymentOrchestrator):
         if not dep.targets:
             problems.append(("plan has no device", None))
         for t in dep.targets:
-            if Capability.TEMPORARY_ADDRESS not in t.driver.capabilities():
-                problems.append(("this driver cannot move a device to a temporary address; "
+            if Capability.MANAGEMENT_PORT_OFF not in t.driver.capabilities():
+                problems.append(("this driver cannot take a device off its address; "
                                  "disconnect the device from the bench network instead", t))
-            try:
-                ipaddress.ip_address(t.target_version or "")
-            except ValueError:
-                problems.append((f"'{t.target_version}' is not an address", t))
         for message, target in problems:
             if target is not None:
                 target.message = message
@@ -56,7 +50,6 @@ class FreeAddressOrchestrator(DeploymentOrchestrator):
         its address (nothing to move); False: failed (recorded)."""
         failed = (TargetState.PREVIEW_FAILED if stage == "preview"
                   else TargetState.PREFLIGHT_FAILED)
-        spare = str(t.target_version)
         r = t.driver.connect()
         if not r.ok:
             if r.diagnostics.get("no_answer"):
@@ -65,7 +58,7 @@ class FreeAddressOrchestrator(DeploymentOrchestrator):
                 return None
             self._fail_target(dep, t, stage, failed, r.message)
             return False
-        plan = t.driver.temporary_address_commands(spare)
+        plan = t.driver.free_address_commands()
         if not plan.ok:
             self._fail_target(dep, t, stage, failed, plan.message)
             return False
@@ -123,30 +116,32 @@ class FreeAddressOrchestrator(DeploymentOrchestrator):
             self._move(dep, S.DEPLOYING)
             for t in present:
                 t.touched = True
-                r = t.driver.set_temporary_address(str(t.target_version))
+                r = t.driver.free_address()
                 if not r.ok and r.diagnostics.get("unchanged"):
                     # Refused before anything changed: the device is as it was.
                     self._fail_target(dep, t, "deploy", TargetState.APPLY_FAILED, r.message)
-                    self._move(dep, S.FAILED, "the device refused the move; nothing was "
-                               "changed on it")
+                    self._move(dep, S.FAILED, "the device was left as it was; nothing "
+                               "was changed on it")
                     return dep.state
                 if not r.ok:
                     self._fail_target(dep, t, "deploy", TargetState.MANUAL_RECOVERY_REQUIRED,
                                       r.message)
                     self._move(dep, S.RECOVERY_REQUIRED,
-                               "the move did not complete; nothing was saved on the device: "
-                               "restarting it returns it to its saved configuration")
+                               "the step did not complete; nothing was saved on the device: "
+                               "switching it off and on returns it to its saved configuration")
                     return dep.state
                 self._emit_notes(dep, t, "deploy", r)
+                if r.data and r.data.get("port"):
+                    t.target_version = f"port {r.data['port']} off"
                 t.state = TargetState.APPLIED
                 self._emit(dep, "deploy", "ok", r.message, t)
             self._move(dep, S.VERIFYING)
             for t in present:
-                # The driver's own evidence: reached at the spare address with the same
-                # serial number, read back, and its own address no longer answers.
+                # The driver's own evidence: the address stopped answering after the
+                # command (independent of the device's own words, D-031).
                 t.state = TargetState.VERIFIED
-                self._emit(dep, "verify", "ok", "same device at the temporary address; its "
-                           "own address no longer answers", t)
+                self._emit(dep, "verify", "ok", "its address no longer answers; it is free "
+                           "until this device's next power-on", t)
             self._move(dep, S.SUCCEEDED)
             return dep.state
         except StopRequested:

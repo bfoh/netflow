@@ -40,8 +40,9 @@ class Capability(StrEnum):
     REBOOT = "supports_reboot"
     # Answers a new unit's demanded password change at its first login (D-073).
     FIRST_LOGIN_SETUP = "supports_first_login_setup"
-    # Can run at another address until its next restart, with nothing saved (D-096).
-    TEMPORARY_ADDRESS = "supports_temporary_address"
+    # Can switch off its management port until its next restart, with nothing saved, so
+    # its address is free for another device (D-107, replaces D-096's spare address).
+    MANAGEMENT_PORT_OFF = "supports_management_port_off"
     # Restarts on request, outside a firmware step (D-099). REBOOT alone means only "restarts
     # as part of a firmware upgrade" on some drivers.
     RESTART = "supports_restart"
@@ -282,19 +283,20 @@ class DeviceDriver:
         return OperationResult.unsupported(
             DeviceOperation.APPLY_CONFIGURATION, "This driver cannot load a license file")
 
-    def temporary_address_commands(self, spare: str) -> OperationResult:
-        """Read-only: the exact commands ``set_temporary_address`` would send (data:
-        ``{"commands": [...], "vlan": id, "previous": address}``)."""
+    def free_address_commands(self) -> OperationResult:
+        """Read-only: the exact commands ``free_address`` would send (data:
+        ``{"commands": [...], "port": port}``)."""
         return OperationResult.unsupported(
             DeviceOperation.APPLY_CONFIGURATION,
-            "This driver cannot move a device to a temporary address")
+            "This driver cannot take a device off its management address")
 
-    def set_temporary_address(self, spare: str) -> OperationResult:
-        """Move the device to ``spare`` in its running configuration only (never saved), so
-        its own address is free until its next restart (D-096)."""
+    def free_address(self) -> OperationResult:
+        """Take the device off its management address until its next restart, nothing
+        saved, so another device can use the address (D-107). ``diagnostics["unchanged"]``
+        on a failure means the device was left as it was."""
         return OperationResult.unsupported(
             DeviceOperation.APPLY_CONFIGURATION,
-            "This driver cannot move a device to a temporary address")
+            "This driver cannot take a device off its management address")
 
     def check_before_apply(self, config: str, mode: ApplyMode) -> OperationResult | None:
         """A check before anything is sent that changes nothing on any device (None = no

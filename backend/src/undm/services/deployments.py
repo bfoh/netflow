@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import ipaddress
+import re
 import uuid
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -62,9 +62,9 @@ from undm.services.devices import (
     inspect_config,
     latest_config,
     login_after_loading_needed,
+    port_off,
     set_login_after_loading_needed,
-    set_temporary_address,
-    temporary_address,
+    set_port_off,
 )
 from undm.services.errors import ConflictError, ForbiddenError, NotFoundError
 from undm.services.firmware import FirmwareRepository, device_compatibility
@@ -90,9 +90,9 @@ class StagingStep:
     """One step of a device's staging plan (D-085)."""
 
     kind: str  # first_login | firmware | configuration | free_address
-    # free_address: the device of the system to move aside, and the spare address (D-096)
+    # free_address: the device of the system to take off its address (D-107)
     other_device_id: str | None = None
-    address: str | None = None
+    address: str | None = None  # ignored since D-107 (no spare address)
     image_id: str | None = None
     allow_downgrade: bool = False
     also_secondary: bool = False
@@ -225,6 +225,8 @@ class DeploymentService:
             if dep.firmware is not None:
                 tr.from_version = t.from_version or t.current_version or tr.from_version
                 tr.to_version = t.target_version or dep.firmware.version
+            elif rec.kind == "free_address" and t.target_version:
+                tr.to_version = t.target_version  # e.g. "port 2 off" once done
 
     def get(self, deployment_id: str) -> DeploymentRecord:
         rec = self.s.get(DeploymentRecord, deployment_id)
@@ -361,13 +363,13 @@ class DeploymentService:
                          if staging else {})})
         return rec
 
-    # -- move a device to a spare address until its next restart (D-096) ----------------
-    def create_free_address(self, project_id: str, device_id: str, address: str, actor: str,
+    # -- take a device off its address until its next restart (D-107) -------------------
+    def create_free_address(self, project_id: str, device_id: str, actor: str,
                             *, staging: tuple[str, int] | None = None) -> DeploymentRecord:
         device = self.s.get(Device, device_id)
         if device is None or device.project_id != project_id:
             raise NotFoundError(f"Device {device_id} not found in project")
-        self._check_free_address(device, address)
+        self._check_free_address(device)
         problem = self._policy_problem(device, False)
         if problem:
             raise ForbiddenError(problem)
@@ -376,34 +378,26 @@ class DeploymentService:
             apply_mode=ApplyMode.MERGE.value, created_by=actor,
             staging_id=staging[0] if staging else None,
             staging_step=staging[1] if staging else None)
-        # The two addresses are kept in the target's from/to fields (no schema change).
+        # Its address and what it becomes are kept in the target's from/to fields.
         rec.targets.append(DeploymentTargetRecord(
             device_id=device_id, position=0, state=TargetState.PENDING.value,
-            from_version=device.management_address, to_version=address))
+            from_version=device.management_address, to_version="management port off"))
         self.s.add(rec)
         self.s.flush()
         dep = self._to_domain(rec)
         self._orchestrator(rec).prepare(dep)
         self._sync(rec, dep)
         audit.record(self.s, actor, "deployment.create", "deployment", rec.id, rec.state,
-                     {"devices": [device_id], "kind": "free_address", "address": address,
+                     {"devices": [device_id], "kind": "free_address",
                       **({"staging_id": staging[0], "staging_step": staging[1]}
                          if staging else {})})
         return rec
 
-    def _check_free_address(self, device: Device, address: str | None) -> None:
-        try:
-            ipaddress.ip_address(address or "")
-        except ValueError:
-            raise ConflictError(f"'{address}' is not an address") from None
-        if device.driver_id not in self.registry or Capability.TEMPORARY_ADDRESS not in \
+    def _check_free_address(self, device: Device) -> None:
+        if device.driver_id not in self.registry or Capability.MANAGEMENT_PORT_OFF not in \
                 self.registry.get(device.driver_id).info.capabilities:
-            raise ConflictError(f"{device.name} cannot be moved to a temporary address by "
-                                "UNDM: disconnect it from the bench network instead")
-        if temporary_address(device):
-            raise ConflictError(f"{device.name} already runs at a temporary address")
-        if address == device.management_address:
-            raise ConflictError("The spare address is the device's own address")
+            raise ConflictError(f"UNDM cannot take {device.name} off its address: unplug it "
+                                "from the bench network instead")
 
     # -- restart a device on request (D-099) --------------------------------------------
     def create_restart(self, project_id: str, device_id: str, actor: str) -> DeploymentRecord:
@@ -423,7 +417,7 @@ class DeploymentService:
         # Where it is reached now, and its own address it answers at after the restart.
         rec.targets.append(DeploymentTargetRecord(
             device_id=device_id, position=0, state=TargetState.PENDING.value,
-            from_version=temporary_address(device) or device.management_address,
+            from_version=device.management_address,
             to_version=device.management_address))
         self.s.add(rec)
         self.s.flush()
@@ -557,8 +551,7 @@ class DeploymentService:
                 rec = self.create_first_login(project_id, device_id, actor,
                                               staging=(staging_id, n))
             elif step.kind == "free_address":
-                rec = self.create_free_address(project_id, str(step.other_device_id),
-                                               str(step.address), actor,
+                rec = self.create_free_address(project_id, str(step.other_device_id), actor,
                                                staging=(staging_id, n))
             elif step.kind == "firmware":
                 assert step.image_id is not None
@@ -631,7 +624,7 @@ class DeploymentService:
             other = self.s.get(Device, step.other_device_id) if step.other_device_id else None
             if other is None or other.project_id != device.project_id or other.id == device.id:
                 raise ConflictError(f"{where}: choose another device of this system")
-            self._check_free_address(other, step.address)
+            self._check_free_address(other)
             problem = self._policy_problem(other, False)
         else:
             raise ConflictError(f"Step {n}: unknown kind '{step.kind}'")
@@ -1104,21 +1097,22 @@ class DeploymentService:
             reached = t.driver.target.management_address
             if rec.kind == "free_address":
                 if t.state is TargetState.VERIFIED:
-                    # Running there until its next restart; its own address stays on record.
-                    set_temporary_address(device, reached)
-                    audit.record(self.s, actor, "device.temporary_address", "device",
-                                 device.id, details={"address": reached, "deployment": rec.id,
-                                                     "own_address": device.management_address})
+                    # Off the network until its next power-on; nothing was saved on it.
+                    m = re.fullmatch(r"port (\S+) off", str(t.target_version or ""))
+                    port = m.group(1) if m else ""
+                    set_port_off(device, port or "?")
+                    audit.record(self.s, actor, "device.management_port_off", "device",
+                                 device.id, details={"port": port, "deployment": rec.id,
+                                                     "address": device.management_address})
                 if t.backup is not None:
                     device.last_backup_at = now
                 continue
-            moved = temporary_address(device)
-            if moved and reached != moved and t.state is TargetState.VERIFIED:
-                # It restarted (e.g. its file was loaded) and answers at its own address again.
-                set_temporary_address(device, None)
-                audit.record(self.s, actor, "device.temporary_address_cleared", "device",
-                             device.id, details={"address": moved, "deployment": rec.id})
-            if (reached != device.management_address and not temporary_address(device)
+            if port_off(device) and t.state is TargetState.VERIFIED:
+                # It answers again (it was switched off and on).
+                set_port_off(device, None)
+                audit.record(self.s, actor, "device.management_port_on", "device",
+                             device.id, details={"deployment": rec.id})
+            if (reached != device.management_address
                     and t.state in (TargetState.VERIFIED, TargetState.VERIFY_FAILED)):
                 # The loaded file moved the device to another address, and it was reached
                 # there after its restart (identity checked): keep UNDM pointing at it.

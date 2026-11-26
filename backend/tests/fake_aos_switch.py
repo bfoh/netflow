@@ -66,6 +66,10 @@ class FakeArubaSwitch:
     # As on the bench (2026-11-25/26, WC.16.10/16.11): an address in a network the switch
     # already has on an interface is refused with this wording, and nothing changes.
     refuse_overlap: bool = False
+    # 'interface N disable' (D-107): by default the session ends with the port and the
+    # switch stops answering; "ignore": accepted, nothing changes; "reject": refused.
+    port_off_mode: str = "drop"
+    ports_off: set[str] = field(default_factory=set)
     _config: bool = False
     _subject_left: list[str] = field(default_factory=list)
     # Observations.
@@ -101,6 +105,15 @@ class FakeArubaSwitch:
             self.commands.append(ln)
             if ln in self.reject:
                 raise ConfigInvalidException(f"Invalid input: {ln}")
+            if m := re.match(r"^interface (\S+) disable$", ln):
+                if self.port_off_mode == "reject":
+                    return f"Module not present for port or invalid port: {m.group(1)}\n"
+                if self.port_off_mode == "ignore":
+                    continue
+                self.ports_off.add(m.group(1))
+                if self.addresses is not None:
+                    self.addresses.clear()
+                raise OSError("Socket is closed")  # the session went with the port
             if m := re.match(r"^vlan (\d+)$", ln):
                 vid = m.group(1)
                 continue

@@ -10,7 +10,7 @@ import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import type { Device, StagingIndex } from '../../types/api';
 import { type Choice, EMPTY_CHOICE, planSteps, wantsFirstLogin } from './choices';
-import { addressTakenBy, canMoveAside, SPARE_ADDRESS, temporaryAddress, type Role, STEP_TIME, STEP_WORDS, type StepKind } from './roles';
+import { addressTakenBy, canMoveAside, portOff, type Role, STEP_TIME, STEP_WORDS, type StepKind } from './roles';
 import { StagingControls } from './StagingControls';
 import { stagingStatus } from './staging';
 import { EmptyState } from '../../components/EmptyState';
@@ -74,7 +74,7 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
   // Its file moves it to an address another device of the system already has (both 2930F).
   const taken = choice.fileId ? addressTakenBy(role, device, all) : undefined;
   const { steps, missing } = planSteps(role, choice, device, taken);
-  const parked = temporaryAddress(device);
+  const parked = portOff(device);
   const consoleTodo = role.steps.includes('console') && !CONSOLE_DONE.has(device.provisioning_status);
   const make = useAction(() => api.createDeviceStaging(projectId, { device_id: device.id, steps }),
     (p) => `Plan made for ${device.name}: ${p.steps.length} steps waiting for approval`, { errorInDialog: true });
@@ -83,7 +83,7 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
   const takenNotice = taken && !(finished && !fresh) && (canMoveAside(taken) ? (
     <Notice kind="status" compact>
       Its file moves it to {role.addressAfter}, where {taken.name} answers. Stage {taken.name} first. This plan then
-      moves {taken.name} to {SPARE_ADDRESS} until its next power-on (nothing is saved on it): no cable to unplug.
+      switches off {taken.name}’s management port until its next power-on (nothing is saved on it): no cable to unplug.
     </Notice>
   ) : (
     <Notice kind="caution" compact>
@@ -100,8 +100,8 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
         </div>
         {finished && !fresh && <Badge color="teal" variant="filled" tt="none">Staged</Badge>}
       </Group>
-      {parked && <Notice kind="settled" compact mb="xs">Running at {parked} until its next power-on, to leave {device.management_address} free.
-        Its saved configuration is unchanged.</Notice>}
+      {parked && <Notice kind="settled" compact mb="xs">Port {parked} off until its next power-on, to leave {device.management_address} free.
+        Its saved configuration is unchanged: switch it off and on before it leaves the bench.</Notice>}
       {usable ? (
         <Stack gap="xs">
           {takenNotice}

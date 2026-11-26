@@ -21,7 +21,7 @@ import { showSuccess } from '../services/notify';
 import { DeviceMenu } from '../features/devices/DeviceMenu';
 import { api } from '../services/api';
 import type { Device } from '../types/api';
-import { temporaryAddress } from '../features/stage/roles';
+import { portOff } from '../features/stage/roles';
 import { auditActionLabel, capabilityLabel, driverLabel, factLabel, humanize, MAIN_FACTS, stateLabel } from '../services/labels';
 
 function Row({ k, v }: { k: string; v: ReactNode }) {
@@ -251,7 +251,7 @@ export function DeviceDetailPage() {
       {confirmDialog}
       <RealDeviceNotice d={d} />
       {editing && <EditDeviceModal device={d} opened={editing} onClose={closeEdit} />}
-      {temporaryAddress(d) && <TemporaryAddress device={d} />}
+      {portOff(d) && <PortOff device={d} />}
       {d.locked_by_deployment_id && (
         <Notice kind="status" mb="md" title="A plan is running on this device"
           action={<Anchor component={Link} to={`/deployments/${d.locked_by_deployment_id}`} size="sm">Follow the plan</Anchor>}>
@@ -274,14 +274,14 @@ export function DeviceDetailPage() {
   );
 }
 
-/** A device UNDM moved to a spare address until its next power-on (D-096). */
-function TemporaryAddress({ device }: { device: Device }) {
-  const clear = useAction(() => api.clearTemporaryAddress(device.id), 'UNDM uses its own address again');
+/** A device whose management port UNDM switched off until its next power-on (D-107). */
+function PortOff({ device }: { device: Device }) {
+  const clear = useAction(() => api.clearPortOff(device.id), 'UNDM expects it at its address again');
   return (
-    <Notice kind="settled" mb="md" title={`Running at ${temporaryAddress(device)} until its next power-on`}
-      action={<Button size="xs" variant="default" loading={clear.isPending} onClick={() => clear.mutate(undefined)}>It was restarted</Button>}>
-      UNDM moved it aside so another device could take {device.management_address}. Nothing was saved on it: after a restart
-      it answers at {device.management_address} again. Press “It was restarted” then, so UNDM looks for it there.
+    <Notice kind="settled" mb="md" title={`Port ${portOff(device)} off until its next power-on`}
+      action={<Button size="xs" variant="default" loading={clear.isPending} onClick={() => clear.mutate(undefined)}>It was switched off and on</Button>}>
+      UNDM switched off its management port so another device could take {device.management_address}. Nothing was saved on
+      it: after it is switched off and on it answers at {device.management_address} again (UNDM notices on the next test).
     </Notice>
   );
 }

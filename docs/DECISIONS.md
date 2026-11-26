@@ -1304,3 +1304,28 @@ recorded no device output, so the refusal is inferred, not seen; A was left at 1
   an address of another network next to its own; a refusal stops the step with nothing
   changed. Q-45 updated.
 
+### D-107 "Make room" switches off the first switch's management port, unsaved (2026-11-26)
+Bench (bench log, 08:08): with the spare address 192.0.2.3 (D-106), switch A accepted the
+address, but SSH to it from the PC (source 192.0.2.50) went unanswered. A's team file allows
+management only from 192.168.1.0/24 (`ip authorized-managers`,
+`vendor-support/aruba-2930f-staging.md`), and the switch refuses a second address in that
+network. So no spare address can work on a staged 2930F. D-096 and D-106's spare address
+is withdrawn.
+- **Product owner's choice:** UNDM switches off A's management port, unsaved, with
+  `interface <port> disable` at configuration level. This is the vendor's ArubaOS-Switch
+  CLI as quoted from the Management and Configuration Guide; it has not been run on this
+  bench yet, so the step stays experimental. Never `write memory`.
+- **Which port:** the one untagged port of the VLAN holding A's address, from A's running
+  configuration. Several ports are refused; UNDM cannot tell which one the PC uses.
+- **Evidence:** the session ends with the port (expected), then A's address must stop
+  answering within 30 s (D-031). If it keeps answering, or the switch rejects the command
+  ("invalid port" now recognised, as seen on the console on 2026-11-25), the step ends
+  Failed with "nothing was changed on it".
+- **After:** the device note `management_port_off` (port, since) replaces
+  `temporary_address`. The run board and the device page say "Port 2 off until its next
+  power-on". The note clears itself when A answers again, or by hand.
+- **Recovery:** switch A off and on. Nothing was saved on it, and its file and password
+  stay.
+- The timed variant asked for on 2026-11-25 (port back after ~30 minutes) still has no
+  verified command; A stays off the network until it is switched off and on.
+

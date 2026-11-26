@@ -5,8 +5,8 @@
 * after approval: back up its running configuration, send the restart, wait until it
   answers at its own address with the same serial number, read its facts.
 
-A device moved to a temporary address (D-096) answers at its own address again after a
-restart: UNDM waits for it there.
+A device always answers at its own address after a restart (D-096's temporary address
+is gone, D-107): UNDM waits for it there.
 """
 
 from __future__ import annotations

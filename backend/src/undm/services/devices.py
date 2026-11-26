@@ -35,20 +35,22 @@ READ_ONLY_OPERATIONS = frozenset(
 )
 
 
-def temporary_address(device: Device) -> str | None:
-    """The address the device runs at until its next restart, if UNDM moved it aside (D-096)."""
+def port_off(device: Device) -> dict[str, str] | None:
+    """UNDM switched off the device's management port, unsaved, so another device could
+    take its address (D-107): it answers again after its next power-on."""
     extra = (device.observed_facts or {}).get("extra") or {}
-    value = extra.get("temporary_address") if isinstance(extra, dict) else None
-    return str(value) if value else None
+    value = extra.get("management_port_off") if isinstance(extra, dict) else None
+    return dict(value) if isinstance(value, dict) else None
 
 
-def set_temporary_address(device: Device, address: str | None) -> None:
+def set_port_off(device: Device, port: str | None) -> None:
     facts = dict(device.observed_facts or {})
     extra = dict(facts.get("extra") or {})
-    if address:
-        extra["temporary_address"] = address
+    extra.pop("temporary_address", None)  # D-096's note, no longer used
+    if port:
+        extra["management_port_off"] = {"port": port, "since": datetime.now(UTC).isoformat()}
     else:
-        extra.pop("temporary_address", None)
+        extra.pop("management_port_off", None)
     facts["extra"] = extra
     device.observed_facts = facts
 
@@ -89,7 +91,7 @@ def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
             f"{device.name} has no login chosen. Choose one on its device page (Edit), or in "
             "Stage a system, step 1 ('Its login'). Logins are added on the system page's "
             "Logins tab.")
-    target = DeviceTarget(device.id, temporary_address(device) or device.management_address,
+    target = DeviceTarget(device.id, device.management_address,
                           device.management_port)
     return registry.create(device.driver_id, target, credentials)
 
@@ -210,6 +212,9 @@ def run_read_only_operation(
                 out["login_refused"] = True
             return out
         device.last_connection_at = now
+        if port_off(device):  # it answers again: switched off and on since (D-107)
+            set_port_off(device, None)
+            audit.record(session, actor, "device.management_port_on", "device", device.id)
         if op is DeviceOperation.CHECK_REACHABILITY:
             result = conn
             payload: Any = None
@@ -217,11 +222,8 @@ def run_read_only_operation(
             result = driver.get_device_facts()
             payload = asdict(result.data) if result.ok else None
             if result.ok:
-                moved = temporary_address(device)
                 pending = login_after_loading_needed(device)
                 device.observed_facts = payload
-                if moved:  # where it runs until its next restart is not a fact it reports
-                    set_temporary_address(device, moved)
                 if pending:
                     set_login_after_loading_needed(device, True)
                 device.facts_retrieved_at = now
@@ -301,7 +303,7 @@ def ssh_command(device: Device, registry: DriverRegistry) -> list[str]:
     the person types it in the window."""
     if device.driver_id in registry and registry.get(device.driver_id).info.simulated:
         raise ConflictError("A simulated device has no SSH server to open")
-    address = temporary_address(device) or device.management_address
+    address = device.management_address
     if not address or not _ADDRESS.match(address):
         raise ConflictError(f"{device.name} has no usable management address")
     user = "admin"
@@ -357,7 +359,7 @@ def reachability(session: Session, project_id: str,
 
     def check(d: Device) -> dict[str, str]:
         simulated = d.driver_id in registry and registry.get(d.driver_id).info.simulated
-        address = temporary_address(d) or d.management_address
+        address = d.management_address
         if simulated:
             state = "simulated"
         elif not address:
