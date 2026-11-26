@@ -15,6 +15,10 @@ export interface Choice {
   loginAfter: string | null;
   /** Secret setting of the site file -> login holding its value. */
   secrets: Record<string, string>;
+  /** FortiGate: the license file stored for it, if it was there at staging time (optional,
+   *  D-109); without one the license is loaded later from the device's menu. */
+  licenseId?: string | null;
+  licenseName?: string;
   /** Choices already filled from the defaults for all systems (D-105): a default fills a
    *  choice once, so clearing it afterwards sticks. */
   filled?: string[];
@@ -70,6 +74,10 @@ export function planSteps(role: Role, c: Choice, device?: Device, inTheWay?: Dev
       if (c.siteId) {
         steps.push({ kind: 'configuration', version_id: c.siteId, ...(Object.keys(c.secrets).length ? { secrets: c.secrets } : {}) });
       } else missing.push('the site file');
+      // Optional, last: the license, when its file is already here (D-109).
+      if (c.licenseId && (!device || device.capabilities.includes('supports_license_file'))) {
+        steps.push({ kind: 'license', version_id: c.licenseId });
+      }
     }
     if (kind === 'file') {
       if (c.fileId) {

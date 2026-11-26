@@ -1355,4 +1355,40 @@ the end.
   says when and by whom; the Systems list, the system page and Home show **Staged <date>**.
 - **Reopen** by hand (`system.reopened`), or automatically when a new staging plan is made
   on the system, so a finished system never hides newer work.
+- **Amended, bench 2026-11-26 (v81):**
+  - A switch whose port Make room switched off is not tested: switched on again it answers
+    at the address the other switch now has, so a test could reach the wrong switch. The
+    person states it was switched off and on (**It was switched off and on**, audited
+    `device.management_port_on`); a later plan or read that reaches it also clears it.
+  - Safety switches fixed in `backend\.env` are named with their exact lines, in the
+    checklist and in Settings → Safety: deleting them once hands the switches to Settings.
+
+### D-109 The FortiGate license is an optional last step of its staging plan (2026-11-26)
+Product owner: the license could not be found in the app (it was only in the FortiGate's menu,
+⋯ → Load license…, D-100), and loading it must be optional because the file is often not
+there when the firewall is staged.
+- **Wizard step 2:** the FortiGate card has **License file (optional)**. Choosing a file
+  stores it for the device (never shown, as D-100) and adds a `license` step as the last step
+  of its staging plan, previewed at its run like the other later steps. Without a file the
+  plan has no such step, and nothing is missing.
+- **Later, also after staging:** the device menu's **Load license…** (an approved plan of its
+  own), unchanged.
+- **Finish checklist:** ticked by UNDM when the plan's license step succeeded; otherwise
+  "loaded, or later", ticked by the person, with where to load it later.
+- Still experimental: the license load has not run on a FortiGate yet (Q-46).
+
+### D-110 Black Box LIG1014A: both image banks get the approved version (2026-11-26)
+Product owner: as on the 2930F, both image banks of the LIG1014A must hold the approved
+release. Bench (web page "Software Image Selection", 2026-11-26): after UNDM's upgrade the
+active image is v00.01.01 and the alternate keeps v00.01.00. So `firmware upgrade` writes the
+bank that is not running and starts from it (as also seen on 2026-11-24).
+- **"Also write it into the backup slot":** for the LIG1014A this runs the same `firmware
+  upgrade` a second time. It fills the other bank, and the switch restarts from it. UNDM
+  waits for it, then requires both banks (`show version`: Active and Alternate Image) to
+  show the version, or the step fails.
+- No `firmware swap` or `reload` is used.
+- Experimental until run on hardware. A switch already at the version (this bench's unit)
+  gets only the second upgrade.
+- The wizard ticks the option by default when an image is chosen for a switch that has a
+  second bank (2930F, LIG1014A); it can be unticked.
 

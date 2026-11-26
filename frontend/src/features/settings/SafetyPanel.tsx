@@ -66,7 +66,7 @@ export function SafetyPanel() {
                 {info.needs && <Text size="xs" c="dimmed">Works only together with Real-device changes.</Text>}
                 {blockedBy && <Text size="xs" c="orange">Real-device changes are off, so this has no effect yet.</Text>}
                 {locked && (
-                  <Group gap={4}><IconLock size={14} /><Text size="xs">Fixed by the start-up settings file (.env). Change it there, or remove the line to change it here.</Text></Group>
+                  <Group gap={4}><IconLock size={14} /><Text size="xs">Fixed in backend\.env (<code>UNDM_{info.key.toUpperCase()}</code>). Delete that line once and restart the backend: this switch is then changed here.</Text></Group>
                 )}
               </Stack>
               <Switch size="lg" checked={on} disabled={locked || change.isPending} aria-label={info.label}

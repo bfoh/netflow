@@ -65,6 +65,11 @@ class LicenseOrchestrator(DeploymentOrchestrator):
         return True
 
     def _preview(self, dep: Deployment) -> bool:
+        if dep.defer_preview:  # a later step of a staging plan (D-109)
+            for t in dep.targets:
+                t.state = TargetState.PREVIEWED
+                self._emit(dep, "preview", "ok", f"preview deferred: {dep.defer_preview}", t)
+            return True
         ok = True
         for t in dep.targets:
             try:

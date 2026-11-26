@@ -82,7 +82,8 @@ _SETTING_LABELS = {"certificate_subject": "Settings → For all systems → HTTP
 
 MAX_STAGING_STEPS = 8
 _STEP_WORDS = {"first_login": "first login", "firmware": "firmware",
-               "configuration": "load a file", "free_address": "move the other device aside"}
+               "configuration": "load a file", "free_address": "move the other device aside",
+               "license": "load the license"}
 
 
 @dataclass(frozen=True)
@@ -453,7 +454,8 @@ class DeploymentService:
         return v
 
     def create_license(self, project_id: str, device_id: str, version_id: str,
-                       actor: str) -> DeploymentRecord:
+                       actor: str, *, staging: tuple[str, int] | None = None,
+                       defer_preview: str | None = None) -> DeploymentRecord:
         device = self.s.get(Device, device_id)
         if device is None or device.project_id != project_id:
             raise NotFoundError(f"Device {device_id} not found in project")
@@ -465,17 +467,22 @@ class DeploymentService:
             raise ForbiddenError(problem)
         rec = DeploymentRecord(
             project_id=project_id, kind="license", state=S.DRAFT.value, dry_run=False,
-            apply_mode=ApplyMode.MERGE.value, created_by=actor)
+            apply_mode=ApplyMode.MERGE.value, created_by=actor,
+            staging_id=staging[0] if staging else None,
+            staging_step=staging[1] if staging else None)
         rec.targets.append(DeploymentTargetRecord(
             device_id=device_id, position=0, state=TargetState.PENDING.value,
             config_version_id=cfg.id))
         self.s.add(rec)
         self.s.flush()
         dep = self._to_domain(rec)
+        dep.defer_preview = defer_preview
         self._orchestrator(rec).prepare(dep)
         self._sync(rec, dep)
         audit.record(self.s, actor, "deployment.create", "deployment", rec.id, rec.state,
-                     {"devices": [device_id], "kind": "license", "file": cfg.reference})
+                     {"devices": [device_id], "kind": "license", "file": cfg.reference,
+                      **({"staging_id": staging[0], "staging_step": staging[1]}
+                         if staging else {})})
         return rec
 
     # -- staging plans (D-071) ----------------------------------------------------------
@@ -555,6 +562,9 @@ class DeploymentService:
             elif step.kind == "free_address":
                 rec = self.create_free_address(project_id, str(step.other_device_id), actor,
                                                staging=(staging_id, n))
+            elif step.kind == "license":
+                rec = self.create_license(project_id, device_id, str(step.version_id), actor,
+                                          staging=(staging_id, n), defer_preview=later)
             elif step.kind == "firmware":
                 assert step.image_id is not None
                 rec = self.create_firmware(
@@ -621,6 +631,15 @@ class DeploymentService:
                 self._check_secrets(device, cfg, step.secrets)
             if step.credential_after_ref_id:
                 self._credentials_for(device, step.credential_after_ref_id)
+            problem = self._policy_problem(device, False)
+        elif step.kind == "license":
+            # Optional in a staging plan; also loadable later from the device's menu (D-109).
+            lic = self.s.get(ConfigVersion, step.version_id) if step.version_id else None
+            if lic is None or lic.device_id != device.id or lic.kind != "license":
+                raise ConflictError(f"{where}: choose a license file stored for this device")
+            if device.driver_id not in self.registry or Capability.LICENSE_FILE not in \
+                    self.registry.get(device.driver_id).info.capabilities:
+                raise ConflictError(f"{where}: UNDM cannot load a license on {device.name}")
             problem = self._policy_problem(device, False)
         elif step.kind == "free_address":
             other = self.s.get(Device, step.other_device_id) if step.other_device_id else None

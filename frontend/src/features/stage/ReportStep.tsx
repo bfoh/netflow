@@ -20,7 +20,7 @@ const minutes = (a: string, b: string) => {
 };
 
 function stepName(kind: string, mode: string) {
-  return kind === 'first_login' ? 'First login' : kind === 'free_address' ? 'Make room (other switch moved aside)' : kind === 'firmware' ? 'Firmware' : mode === 'replace' ? 'Complete file' : 'Script';
+  return kind === 'first_login' ? 'First login' : kind === 'free_address' ? 'Make room (other switch moved aside)' : kind === 'license' ? 'License' : kind === 'firmware' ? 'Firmware' : mode === 'replace' ? 'Complete file' : 'Script';
 }
 
 /** Step 5: what was done to each device, to print or keep. */
@@ -63,7 +63,9 @@ export function ReportStep({ project, roles, stagings }: {
               Still to do in step 4 (Run): {open.map(({ device }) => device.name).join(', ')}.
             </Notice>
           )}
-          <FinishChecklist project={project} rows={roles} allStaged={open.length === 0} ticks={ticks} onTicks={onTicks} />
+          <FinishChecklist project={project} rows={roles} allStaged={open.length === 0} ticks={ticks} onTicks={onTicks}
+            licenseLoaded={rows.some(({ role, plan }) => role.key === 'firewall'
+              && !!plan?.steps.some((s) => s.kind === 'license' && s.state === 'succeeded'))} />
         </Stack>;
       })()}
       <div id="staging-report">

@@ -312,3 +312,53 @@ def test_a_refused_image_is_reported(fw):
     r = d.stage_firmware(img)
     assert not r.ok and "refused it" in r.message and sw.restarts == 0
 
+
+
+# -- both image banks (D-110): the same upgrade a second time fills the alternate bank -------
+def _bank_plan(d, img):
+    from datetime import UTC, datetime, timedelta
+
+    from undm.orchestration.deployment import Deployment, DeploymentTarget
+    now = datetime.now(UTC)
+    return Deployment("f-bb", [DeploymentTarget("bb1", "lab-bb", d, "")], created_by="alice",
+                      firmware=img, also_secondary=True,
+                      window_start=now - timedelta(minutes=1), window_end=now + timedelta(hours=1))
+
+
+def _run_banks(dep):
+    from undm.orchestration.firmware import FirmwareOrchestrator
+    o = FirmwareOrchestrator(reboot_wait_attempts=4, reboot_wait_delay_s=0)
+    assert o.prepare(dep), [e.message for e in dep.events]
+    o.approve(dep, "bob")
+    return o.execute(dep)
+
+
+def test_both_banks_get_the_version_by_a_second_upgrade(fw):
+    from undm.domain.lifecycle import DeploymentState as S
+    d, sw, img = fw
+    dep = _bank_plan(d, img)
+    state = _run_banks(dep)
+    messages = [e.message for e in dep.events]
+    assert state is S.SUCCEEDED, messages
+    assert sw.fetched == [img.filename, img.filename]  # once per bank
+    assert d.connect().ok or d.connect().ok  # the plan ends disconnected
+    info = d.get_firmware_information().data
+    assert info["running"] == info["alternate"] == "v00.01.01"
+    assert any("both banks now hold v00.01.01" in m for m in messages)
+    assert any("secondary v00.01.00 -> v00.01.01" in m for m in messages)  # preview said so
+    assert not any(c.startswith(("firmware swap", "reload")) for c in sw.commands)
+
+
+def test_a_switch_already_running_the_version_gets_only_its_alternate_bank(fw):
+    from undm.domain.lifecycle import DeploymentState as S
+    d, sw, img = fw
+    assert d.stage_firmware(img).ok  # as on the bench: active v00.01.01, alternate v00.01.00
+    d.connect()
+    d.connect()
+    assert d.get_firmware_information().data["alternate"] == "v00.01.00"
+    dep = _bank_plan(d, img)
+    assert _run_banks(dep) is S.SUCCEEDED, [e.message for e in dep.events]
+    assert len(sw.fetched) == 2
+    assert d.connect().ok or d.connect().ok  # the plan ends disconnected
+    info = d.get_firmware_information().data
+    assert info["running"] == info["alternate"] == "v00.01.01"

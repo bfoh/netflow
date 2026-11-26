@@ -243,7 +243,7 @@ export interface StagingPlan {
 
 /** One step of a device's staging plan, as sent to UNDM (D-085). */
 export interface StagingStepInput {
-  kind: 'first_login' | 'firmware' | 'configuration' | 'free_address';
+  kind: 'first_login' | 'firmware' | 'configuration' | 'free_address' | 'license';
   /** free_address: the other device of the system to take off its address (D-107). */
   other_device_id?: string;
   image_id?: string;

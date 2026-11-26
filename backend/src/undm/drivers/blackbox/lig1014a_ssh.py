@@ -103,7 +103,7 @@ class BlackBoxLig1014aSsh(SshCliDriver):
                                 Capability.CONFIGURATION_APPLY,
                                 Capability.CONFIGURATION_REPLACE,
                                 Capability.FIRMWARE_UPGRADE, Capability.REBOOT,
-                                Capability.RESTART}),
+                                Capability.RESTART, Capability.FIRMWARE_SECONDARY_IMAGE}),
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
         notes=(
@@ -122,6 +122,11 @@ class BlackBoxLig1014aSsh(SshCliDriver):
             "itself; the active image's version is checked afterwards. UNDM never swaps images "
             "or restarts the switch for an upgrade. Passed once on hardware (v00.01.00 -> "
             "v00.01.01, 2026-11-24): the switch restarted by itself after the write.",
+            "Both image banks (D-110, EXPERIMENTAL): the upgrade writes the bank that is not "
+            "running and starts from it, so the old version stays in the alternate bank (seen "
+            "on the bench, 2026-11-24/26). 'Also the backup slot' runs the same upgrade a "
+            "second time, which fills the other bank; UNDM then checks that both banks show "
+            "the version. Not yet run on hardware.",
         ),
     )
 
@@ -228,9 +233,21 @@ class BlackBoxLig1014aSsh(SshCliDriver):
         active = _image_version("Active Image", text) or _field("Software Version", text)
         if not active:
             return OperationResult.failed(op, "Could not read the active image's version")
+        alternate = _image_version("Alternate Image", text)
         return OperationResult.success(op, {
-            "running": active, "alternate": _image_version("Alternate Image", text),
+            "running": active, "alternate": alternate, "secondary": alternate or None,
             "raw": {"show version": text[:2000]}})
+
+    def stage_firmware_secondary(self, image: FirmwareImageRef) -> OperationResult:
+        """The alternate bank (D-110): the same 'firmware upgrade' again. The switch writes
+        the bank that is not running and restarts from it, so afterwards both banks hold the
+        version. The caller waits for the restart (``data["restarting"]``) and checks both."""
+        r = self.stage_firmware(image)
+        if not r.ok:
+            return OperationResult.failed(Op.STAGE_FIRMWARE_SECONDARY, r.message, r.diagnostics)
+        return OperationResult.success(
+            Op.STAGE_FIRMWARE_SECONDARY, {**(r.data or {}), "restarting": True},
+            f"second upgrade for the alternate bank: {r.message}")
 
     def stage_firmware(self, image: FirmwareImageRef) -> OperationResult:
         """'firmware upgrade tftp://<pc>/<file>' (syntax from the switch's help). Nothing is

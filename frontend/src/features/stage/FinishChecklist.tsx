@@ -31,23 +31,24 @@ function Item({ done, title, children, manual, onTick }: {
 }
 
 /** The end of staging a system (D-108): a checklist, then Finish staging, recorded by UNDM. */
-export function FinishChecklist({ project, rows, allStaged, ticks, onTicks }: {
-  project: Project; rows: { role: Role; device: Device }[]; allStaged: boolean; ticks: Ticks; onTicks: (t: Ticks) => void;
+export function FinishChecklist({ project, rows, allStaged, licenseLoaded, ticks, onTicks }: {
+  project: Project; rows: { role: Role; device: Device }[]; allStaged: boolean; licenseLoaded: boolean;
+  ticks: Ticks; onTicks: (t: Ticks) => void;
 }) {
   const policy = usePolicy();
   const off = rows.filter(({ device }) => portOff(device));
   const hasFirewall = rows.some(({ role }) => role.key === 'firewall');
   const safetyOff = !!policy.data && !policy.data.enable_real_device_writes && !policy.data.enable_real_device_firmware;
   const lockedOn = !!policy.data && policy.data.locked.some((k) => k === 'enable_real_device_writes' || k === 'enable_real_device_firmware');
-  const test = useAction((id: string) => api.runOperation(id, 'check_reachability'),
-    (r) => (r.status === 'success' ? 'It answers again' : `Not yet: ${r.message}`));
+  // Not a Test: switched on again it answers at the address the other switch now has (D-107).
+  const clear = useAction((id: string) => api.clearPortOff(id), 'Noted: its port is on again');
   const safety = useAction(() => api.changePolicy({ enable_real_device_writes: false, enable_real_device_firmware: false }),
     'Safety switches turned off');
   const finish = useAction(() => api.finishStaging(project.id, rows.map(({ device }) => device.id)),
     'Staging of this system is finished', { errorInDialog: true });
   const reopen = useAction(() => api.reopenStaging(project.id), 'Staging reopened');
   const tick = (part: Ticks) => onTicks({ ...ticks, ...part });
-  const ready = allStaged && off.length === 0 && (!hasFirewall || !!ticks.license) && !!ticks.report
+  const ready = allStaged && off.length === 0 && (!hasFirewall || licenseLoaded || !!ticks.license) && !!ticks.report
     && !!ticks.backups && safetyOff && !!ticks.powered;
 
   if (project.staged_at) {
@@ -69,18 +70,28 @@ export function FinishChecklist({ project, rows, allStaged, ticks, onTicks }: {
           {allStaged ? 'The latest staging plan of each device succeeded.' : 'Still to do in step 4 (Run).'}
         </Item>
         <Item done={off.length === 0} title="Every switch answers at its own address">
-          {off.length === 0 ? 'No device is left with its port off.' : off.map(({ device }) => (
-            <Group key={device.id} gap="xs" mt={2}>
-              <span>Switch <b>{device.name}</b> off and on (port {portOff(device)} is off until then), then</span>
-              <Button size="compact-xs" variant="light" loading={test.isPending && test.variables === device.id}
-                onClick={() => test.mutate(device.id)}>Test</Button>
-            </Group>
-          ))}
+          {off.length === 0 ? 'No device is left with its port off.' : off.map(({ device }) => {
+            const now = rows.find(({ device: d }) => d.id !== device.id && d.management_address === device.management_address);
+            return (
+              <Group key={device.id} gap="xs" mt={2}>
+                <span>Switch <b>{device.name}</b> off and on, unplugged from the bench switch
+                  {now ? <> ({now.device.name} now uses {device.management_address})</> : null}: port {portOff(device)} is on again
+                  after that. Then press</span>
+                <Button size="compact-xs" variant="light" loading={clear.isPending && clear.variables === device.id}
+                  onClick={() => clear.mutate(device.id)}>It was switched off and on</Button>
+              </Group>
+            );
+          })}
         </Item>
         {hasFirewall && (
-          <Item manual done={!!ticks.license} onTick={(v) => tick({ license: v })} title="FortiGate license loaded, or not needed">
-            Load it from the FortiGate's menu (⋯ → Load license…) if the project lead sent one.
-          </Item>
+          licenseLoaded ? (
+            <Item done title="FortiGate license loaded">Loaded by the last step of its staging plan.</Item>
+          ) : (
+            <Item manual done={!!ticks.license} onTick={(v) => tick({ license: v })} title="FortiGate license: loaded, or later">
+              Not loaded by the staging plan. When the file arrives, load it from the FortiGate's menu (⋯ → Load license…), also
+              after staging is finished. Tick this if it is loaded, not needed, or will be loaded later.
+            </Item>
+          )
         )}
         <Item manual done={!!ticks.report} onTick={(v) => tick({ report: v })} title="Report saved">
           Print or Save as HTML (above) ticks this.
@@ -91,7 +102,8 @@ export function FinishChecklist({ project, rows, allStaged, ticks, onTicks }: {
         </Item>
         <Item done={safetyOff} title="Safety switches off">
           {safetyOff ? 'Real-device and firmware changes are off.' : lockedOn
-            ? <>Fixed on by the start-up settings file: change it there.</>
+            ? <>Fixed on in backend\.env (<code>UNDM_ENABLE_REAL_DEVICE_WRITES</code>, <code>UNDM_ENABLE_REAL_DEVICE_FIRMWARE</code>).
+              Delete those lines once and restart the backend: Settings → Safety then controls them.</>
             : <Group gap="xs" mt={2}><span>Real-device or firmware changes are still on.</span>
               <Button size="compact-xs" variant="light" loading={safety.isPending} onClick={() => safety.mutate(undefined)}>Turn them off</Button>
               <Anchor component={Link} to="/settings?tab=safety" size="xs">Settings → Safety</Anchor></Group>}

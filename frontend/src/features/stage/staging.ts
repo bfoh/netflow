@@ -20,6 +20,8 @@ export function stepTitle(step: Deployment): string {
     ? 'First login: sets the device\'s password when the new unit asks for one'
     : step.kind === 'free_address'
       ? 'Make room: the other switch switches off its management port until its next power-on (nothing is saved on it)'
+    : step.kind === 'license'
+      ? 'License: the FortiGate fetches its license file from this PC and restarts with it'
     : step.kind === 'firmware'
       ? 'Firmware: the device fetches the approved image from this PC and restarts into it'
       : step.apply_mode === 'replace'

@@ -406,7 +406,7 @@ class StagingStepIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["first_login", "firmware", "configuration", "free_address"]
+    kind: Literal["first_login", "firmware", "configuration", "free_address", "license"]
     # free_address: another device of the system, taken off its address (D-107);
     # 'address' is ignored since D-107 (no spare address)
     other_device_id: str | None = None

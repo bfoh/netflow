@@ -470,7 +470,8 @@ describe('Settings → Safety', () => {
     mockApi({ '/policy': { ...policy, enable_real_device_writes: true, locked: ['enable_real_device_writes'] } });
     renderAt('/settings?tab=safety');
     expect(await screen.findByRole('switch', { name: 'Real-device changes' })).toBeDisabled();
-    expect(screen.getByText(/Fixed by the start-up settings file/)).toBeInTheDocument();
+    expect(screen.getByText(/Fixed in backend\\\.env/)).toBeInTheDocument();
+    expect(screen.getByText('UNDM_ENABLE_REAL_DEVICE_WRITES')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Firmware changes' })).toBeEnabled();
   });
 });
@@ -895,7 +896,7 @@ describe('finishing a system (D-108)', () => {
   });
 
   it('a switch with its port off must be switched off and on first', async () => {
-    mockApi({
+    const calls = mockApi({
       '/projects/p1': project(), '/policy': { ...policyOn, enable_real_device_writes: false, enable_real_device_firmware: false },
       '/projects/p1/devices': [device({ id: 'sa', name: 'lab-a-sw-a', model: '2930F', role: 'Aruba 2930F (OOBM port 2)',
         driver_id: 'mock.aruba.aos_switch', management_address: '192.168.1.1',
@@ -903,8 +904,23 @@ describe('finishing a system (D-108)', () => {
       '/projects/p1/staging-plans': [],
     });
     renderAt('/stage/p1?step=4');
-    expect(await screen.findByText(/port 2 is off until then/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Test' })).toBeInTheDocument();
+    expect(await screen.findByText(/port 2 is on again/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Test' })).not.toBeInTheDocument();
+    const { default: userEvent } = await import('@testing-library/user-event');
+    await userEvent.click(screen.getByRole('button', { name: 'It was switched off and on' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/devices/sa/port-off/clear')).toBe(true));
+  });
+
+  it('safety switches fixed in backend\\.env say which lines to delete', async () => {
+    mockApi({
+      '/projects/p1': project(), '/projects/p1/devices': [bb()], '/staging-plans/sp1': plan,
+      '/policy': { ...policyOn, locked: ['enable_real_device_writes', 'enable_real_device_firmware'] },
+      '/projects/p1/staging-plans': [{ staging_id: 'sp1', device_id: 'bb', created_at: '', kinds: ['configuration'], states: ['succeeded'] }],
+    });
+    renderAt('/stage/p1?step=4');
+    expect(await screen.findByText(/Fixed on in backend\\\.env/)).toBeInTheDocument();
+    expect(screen.getByText('UNDM_ENABLE_REAL_DEVICE_WRITES')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Turn them off' })).not.toBeInTheDocument();
   });
 
   it('a finished system says so, with Reopen, and its stepper is complete', async () => {

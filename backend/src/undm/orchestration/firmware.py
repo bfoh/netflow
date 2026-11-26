@@ -272,6 +272,26 @@ class FirmwareOrchestrator(DeploymentOrchestrator):
             t.secondary_failed = True
             return ("secondary", result)
         self._emit(dep, "deploy", "ok", f"secondary: {result.message or 'written'}", t)
+        if result.data and result.data.get("restarting"):
+            # A device that fills its other bank by a second upgrade restarts from it (D-110):
+            # wait, then both banks must show the version.
+            back = self._wait_until_available(dep, t)
+            if not back.ok:
+                t.secondary_failed = True
+                return ("wait", back)
+            info = self._read_version(t)
+            both = (info.ok and compare(str(t.current_version), dep.firmware.version) == 0
+                    and t.current_secondary is not None
+                    and compare(t.current_secondary, dep.firmware.version) == 0)
+            if not both:
+                t.secondary_failed = True
+                shown = (f"running {t.current_version}, alternate {t.current_secondary or '?'}"
+                         if info.ok else info.message)
+                return ("secondary", OperationResult.failed(
+                    DeviceOperation.STAGE_FIRMWARE_SECONDARY,
+                    f"after the second upgrade the banks show {shown}, not "
+                    f"{dep.firmware.version} in both"))
+            self._emit(dep, "deploy", "ok", f"both banks now hold {dep.firmware.version}", t)
         return None
 
     def _apply_all(self, dep: Deployment) -> bool:

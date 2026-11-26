@@ -38,7 +38,8 @@ printed, with addresses, serials, names and logins masked (D-090).
 7. **Wizard step 2** (files and firmware):
    - **FortiGate**: tick "New unit", choose 7.6.5, the base file, the site file and the
      tunnel key, and as login after loading **FortiGate base**.
-   - **Black Box**: v00.01.01, the team file, and as login after loading **approved**.
+   - **Black Box**: v00.01.01 (with "also the backup slot": both banks, since v81), the team file, and as login after loading **approved**.
+   - **FortiGate license** (optional, since v81): choose the file if the project lead sent it; otherwise load it later from the FortiGate's menu (⋯ → Load license…).
    - **2930F**: WC.16.10.0025 (and "also the backup slot" if wanted), the team file, and as
      login after loading **approved**.
 8. **Wizard step 3** (Bench check): cable as in the table below; give the PC
@@ -117,8 +118,10 @@ plan (its file moves B to A's address). The Black Box and the FortiGate can run 
 ## End of the run (wizard step 5, since v80, D-108)
 The Report step has a checklist. UNDM ticks what it can see: every device staged, every
 switch back at its own address, and the safety switches off (**Turn them off**). Switch
-A, whose port Make room switched off, must be switched off and on, then press its
-**Test**. You tick the rest: license loaded or not needed, report saved, backups
+A, whose port Make room switched off: switch it off and on, unplugged from the bench switch
+(B now uses 192.168.1.1), then press **It was switched off and on**. If the safety item says
+"Fixed on in backend\.env", delete the lines `UNDM_ENABLE_REAL_DEVICE_WRITES` and
+`UNDM_ENABLE_REAL_DEVICE_FIRMWARE` from `backend\.env` once and restart the backend. You tick the rest: license loaded or not needed, report saved, backups
 downloaded, devices powered off and labelled. Then press **Finish staging**: the system
 shows **Staged <date>** everywhere. A new plan on one of its devices reopens it.
 

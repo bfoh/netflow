@@ -125,3 +125,18 @@ describe('device address check', () => {
     for (const bad of ['192.0.2.300', '192.0.2.1/24', '192.0.2.1:22', 'two words']) expect(addressProblem(bad)).not.toBeNull();
   });
 });
+
+describe('FortiGate license in the staging plan (D-109)', () => {
+  const fg = { id: 'fw', model: 'FortiGate-101F', environment: 'lab',
+    capabilities: ['supports_license_file', 'supports_first_login_setup'] } as unknown as Device;
+  const c = { ...EMPTY_CHOICE, firstLogin: false, baseId: 'b', siteId: 's', loginAfter: 'l' };
+
+  it('is the last step when the file is there, and absent otherwise (loaded later)', () => {
+    expect(planSteps(role('firewall'), { ...c, licenseId: 'lic' }, fg).steps.map((s) => s.kind))
+      .toEqual(['configuration', 'configuration', 'license']);
+    expect(planSteps(role('firewall'), { ...c, licenseId: 'lic' }, fg).steps[2]).toEqual({ kind: 'license', version_id: 'lic' });
+    const without = planSteps(role('firewall'), c, fg);
+    expect(without.steps.map((s) => s.kind)).toEqual(['configuration', 'configuration']);
+    expect(without.missing).toEqual([]);  // never required
+  });
+});

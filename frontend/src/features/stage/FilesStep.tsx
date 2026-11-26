@@ -57,6 +57,34 @@ function FilePick({ device, label, description, value, onChange, secrets, onSecr
   );
 }
 
+/** FortiGate license (optional, D-109): loaded as the plan's last step when the file is here;
+ *  otherwise later from the device's menu (⋯ → Load license…). */
+function LicensePick({ device, choice, onChange }: {
+  device: Device; choice: Choice; onChange: (id: string | null, name?: string) => void;
+}) {
+  const upload = useAction((f: File) => api.uploadLicense(device.id, f), 'License file kept for this FortiGate', { errorInDialog: true });
+  return (
+    <Stack gap={4}>
+      <Text size="sm" fw={500}>License file (optional)</Text>
+      {choice.licenseId ? (
+        <Group gap="xs">
+          <Badge color="teal" variant="light" tt="none">{choice.licenseName || 'license file'}</Badge>
+          <Text size="xs" c="dimmed">loaded as the last step of the plan</Text>
+          <Button size="compact-xs" variant="subtle" color="red" onClick={() => onChange(null)}>Remove</Button>
+        </Group>
+      ) : (
+        <Group gap="xs" align="center">
+          <FileButton onChange={(f) => { if (f) upload.mutate(f, { onSuccess: (v) => onChange(v.id, v.filename) }); }}>
+            {(props) => <Button {...props} size="xs" variant="light" leftSection={<IconUpload size={14} />} loading={upload.isPending}>Choose the license file…</Button>}
+          </FileButton>
+          <Text size="xs" c="dimmed">Not here yet? Leave it: load it later from the FortiGate's menu (⋯ → Load license…).</Text>
+        </Group>
+      )}
+      {upload.error && <Text size="xs" c="red">{upload.error.message}</Text>}
+    </Stack>
+  );
+}
+
 function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: Device; choice: Choice; onChange: (c: Choice) => void }) {
   const images = useFirmwareImages();
   const refs = useCredentialRefs(device.project_id);
@@ -67,6 +95,8 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
   const { missing } = planSteps(role, choice, device);
   const hasFile = role.steps.includes('base') || role.steps.includes('file');
   const needsLoginAfter = (!!role.loginAfter && device.environment !== 'simulated') || keptPreviousLogin(device);
+  // Both image slots hold the approved version (team practice; 2930F and Black Box, D-110).
+  const bothBanks = device.capabilities.includes('supports_firmware_secondary_image');
   // Defaults for all systems (D-105), each filled once for a real device; a cleared choice stays cleared.
   const defaults = useLoginDefaults();
   const real = device.environment !== 'simulated';
@@ -97,13 +127,14 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
           <Select label="Firmware" description={fitting.length ? 'An approved image for this model, or leave it as it is.' : 'No approved image for this model yet (Firmware page).'}
             placeholder="Keep the firmware it has" clearable w="100%" maw={420}
             data={fitting.map((i) => ({ value: i.id, label: `${i.version} · ${i.filename}` }))}
-            value={choice.imageId} onChange={(v) => set({ imageId: v })} />
+            value={choice.imageId} onChange={(v) => set({ imageId: v, alsoSecondary: !!v && bothBanks })} />
           {choice.imageId && (
             <Group gap="md">
               <Checkbox size="xs" label="Allowed to install an older approved version" checked={choice.allowDowngrade}
                 onChange={(e) => set({ allowDowngrade: e.currentTarget.checked })} />
-              {device.capabilities.includes('supports_firmware_secondary_image') && (
-                <Checkbox size="xs" label="Also write it into the backup slot" checked={choice.alsoSecondary}
+              {bothBanks && (
+                <Checkbox size="xs" label="Also write it into the backup slot (both images the same)" checked={choice.alsoSecondary}
+                  description={role.key === 'blackbox' ? 'A second upgrade fills the alternate image (a few minutes more, one more restart).' : undefined}
                   onChange={(e) => set({ alsoSecondary: e.currentTarget.checked })} />
               )}
             </Group>
@@ -122,6 +153,9 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
         {role.steps.includes('file') && (
           <FilePick device={device} label="Team file" description="The complete file this switch gets." logins={logins}
             value={choice.fileId} onChange={(v) => set({ fileId: v })} />
+        )}
+        {device.capabilities.includes('supports_license_file') && (
+          <LicensePick device={device} choice={choice} onChange={(id, name) => set({ licenseId: id, licenseName: name })} />
         )}
         {hasFile && (needsLoginAfter ? (
           <Select label="Login after loading" clearable w="100%" maw={420} data={logins} value={choice.loginAfter}

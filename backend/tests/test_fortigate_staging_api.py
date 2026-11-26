@@ -314,3 +314,31 @@ def test_an_empty_license_file_or_another_device_s_file_is_refused(bench):
     assert r.status_code == 409 and "empty" in r.json()["error"]
     r = b.c.post(f"/api/devices/{b.did}/license-plan", json={"version_id": "nope"})
     assert r.status_code == 409
+
+
+def test_license_is_an_optional_last_step_of_the_staging_plan(bench):
+    """D-109: when the file is there at staging time it is one more step of the plan; when it
+    is not, the plan has no such step and the license is loaded later from the menu."""
+    b = bench
+    stored = b.c.post(f"/api/devices/{b.did}/license",
+                      files={"file": ("lab-fw.lic", LICENSE, "application/octet-stream")}).json()
+    base = imported(b, "base-example.conf", BACKUP)
+    site = imported(b, "site-example.cfg", SCRIPT)
+    made = b.c.post(f"/api/projects/{b.pid}/device-staging", json={"device_id": b.did, "steps": [
+        {"kind": "configuration", "version_id": base["id"]},
+        {"kind": "configuration", "version_id": site["id"], "secrets": {SLOT: b.psk}},
+        {"kind": "license", "version_id": stored["id"]}]})
+    assert made.status_code == 201, made.text
+    steps = made.json()["steps"]
+    assert [s["kind"] for s in steps] == ["configuration", "configuration", "license"]
+    assert "preview deferred" in messages(steps[2])
+    sid = made.json()["staging_id"]
+    b.c.post(f"/api/staging-plans/{sid}/approve", json=window())
+    out = b.c.post(f"/api/staging-plans/{sid}/execute?background=false").json()["steps"]
+    assert [s["state"] for s in out] == ["succeeded"] * 3, [messages(s) for s in out]
+    assert b.fg.license == LICENSE
+    # Another device's file, or a configuration file, is refused before anything is made.
+    bad = b.c.post(f"/api/projects/{b.pid}/device-staging", json={"device_id": b.did, "steps": [
+        {"kind": "license", "version_id": site["id"]}]})
+    assert bad.status_code == 409 and "license file stored for this device" in bad.json()["error"]
+

@@ -51,7 +51,7 @@ function LivePlan({ stagingId }: { stagingId: string }) {
       {steps.map((step) => (
         <Group key={step.id} justify="space-between" wrap="nowrap">
           <Anchor component={Link} to={`/deployments/${step.id}`} size="sm">
-            {step.staging_step}. {step.kind === 'first_login' ? 'First login' : step.kind === 'free_address' ? 'Make room (move the other switch aside)' : step.kind === 'firmware' ? 'Firmware'
+            {step.staging_step}. {step.kind === 'first_login' ? 'First login' : step.kind === 'free_address' ? 'Make room (move the other switch aside)' : step.kind === 'license' ? 'License' : step.kind === 'firmware' ? 'Firmware'
               : step.apply_mode === 'replace' ? 'Complete file' : 'Script'}
           </Anchor>
           <StateBadge state={step.state} />
