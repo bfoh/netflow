@@ -1884,3 +1884,44 @@ one device.
   system at its step; `/stage?choose=1` (and "Stage another system") shows the chooser. The
   prefix is not `undm.stage.`, which holds the wizard's file and login choices.
 
+
+### D-121 Stage a system: fewer clicks, nothing left half-saved (2026-11-26)
+
+**Found:** the zone and system looked filled in but were saved only with a button; each device
+was added with its own button; the only approved image was never chosen; the 2930F's test
+failed before its console setup; the console setup left the wizard with no way back; a switch
+that was off could only be turned on in Settings; logins were chosen in eight places with
+five different directions to where logins live.
+
+**Decision (steps 1 to 3).**
+- **Step 1.** The zone and system save by themselves a moment after typing ("Saving…",
+  "Saved"), and whatever is still pending is saved when the person leaves step 1.
+  **Add all missing devices** adds every role without a device, with exactly what each card's
+  "Add it" adds (`deviceInputFor`: catalog model, bench address, the role, the default login
+  of a real device). Real or Practice is remembered per system (D-120).
+- **One login picker** (`features/logins/LoginSelect`): logins for all systems first, then the
+  system's own; a login without a stored password says so; with no logins at all it links to
+  Settings → Logins. Used in step 1, step 2 (login after loading) and the console forms.
+- **Step 2.** The only approved image that fits a real device is chosen once, like the default
+  logins: a choice the person cleared stays cleared. "No approved image" links to the Firmware
+  page.
+- **Step 3.** **Test all** tests every device that can be tested now, one after the other in
+  the order of the roles. A real device whose console work is not done (the 2930F's console
+  setup, the modem's first access) says it waits for it instead of offering a test that can
+  only fail.
+- **Console setup inside the wizard** (`?step=n&console=<device>`): the 2930F's console setup
+  and the modem's first access open below the stepper, with **Back to <step>** above the form
+  and after a successful run; the browser's Back works too. The forms are the console tool's
+  (`ConsoleSetup`, `ArubaBootstrap`, `ModemFirstAccess`), so the typed device name, preview,
+  factory check, read-back and audit (D-025) are unchanged.
+- **Safety switches in place.** Next to an action on a real device, the safety line offers
+  **Turn real-device changes on…** (then firmware changes) with the same dialog, tick box and
+  audited change as Settings → Safety (`useSafetySwitch`). A switch fixed in the start-up file
+  is still changed only there. The default stays off.
+
+### D-124 The modem has a default login (2026-11-26)
+
+The 7705 SAR-Hmc's first access sets the approved login (D-112), but Settings had no default
+login for it, so every new system's modem started without one. `LoginDefaults` gains
+`modem: {login}` (`services/app_settings.DEFAULT_FIELDS`); defaults stored before read back
+with it empty. No migration: the defaults are one JSON value.

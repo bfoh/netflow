@@ -1,11 +1,15 @@
-import { Badge, Button, Card, Checkbox, FileButton, Group, Select, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { Anchor, Badge, Button, Card, Checkbox, FileButton, Group, Select, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { IconAlertTriangle, IconCheck, IconUpload } from '@tabler/icons-react';
 import { useEffect } from 'react';
+import { Link } from 'react-router';
+
+import { paths } from '../../paths';
 
 import { useAction, useConfig, useConfigs, useCredentialRefs, useFirmwareImages, useLoginDefaults } from '../../hooks/queries';
 import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import type { Device, Project } from '../../types/api';
+import { LoginSelect } from '../logins/LoginSelect';
 import { keptPreviousLogin, type Choice, type Choices, EMPTY_CHOICE, planSteps } from './choices';
 import { GeneratePanel } from './GeneratePanel';
 import { roleDefaults, type Role } from './roles';
@@ -103,12 +107,21 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
   const real = device.environment !== 'simulated';
   const preset = roleDefaults(role, defaults.data);
   const filled = choice.filled ?? [];
+  // The only approved image that fits is chosen once (D-121), like the defaults: a cleared
+  // choice stays cleared.
+  const onlyImage = role.steps.includes('firmware') && images.data && fitting.length === 1 ? fitting[0].id : null;
   useEffect(() => {
+    const fill: Partial<Choice> = {};
+    const now = [...filled];
     if (real && hasFile && preset.loginAfter && !choice.loginAfter && !filled.includes('loginAfter')) {
-      onChange({ ...choice, loginAfter: preset.loginAfter, filled: [...filled, 'loginAfter'] });
+      fill.loginAfter = preset.loginAfter; now.push('loginAfter');
     }
+    if (real && onlyImage && !choice.imageId && !filled.includes('imageId')) {
+      fill.imageId = onlyImage; fill.alsoSecondary = bothBanks; now.push('imageId');
+    }
+    if (now.length > filled.length) onChange({ ...choice, ...fill, filled: now });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset.loginAfter]);
+  }, [preset.loginAfter, onlyImage]);
   return (
     <Card withBorder>
       <Group justify="space-between" mb={4} wrap="nowrap" align="flex-start">
@@ -127,8 +140,10 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
         {role.steps.includes('firmware') && <Stack gap={4}>
           <Select label={role.guided ? 'Software package' : 'Firmware'}
             description={role.guided
-              ? (fitting.length ? 'The approved package UNDM hands out for its portal (with its SHA-256).' : 'No approved package for this model yet: upload it on the Firmware page with its SHA-256 and approve it.')
-              : (fitting.length ? 'An approved image for this model, or leave it as it is.' : 'No approved image for this model yet (Firmware page).')}
+              ? (fitting.length ? 'The approved package UNDM hands out for its portal (with its SHA-256).'
+                : <>No approved package for this model yet: <Anchor component={Link} to={paths.firmware(device.model)} size="xs">upload it on the Firmware page</Anchor> with its SHA-256 and approve it.</>)
+              : (fitting.length ? 'An approved image for this model, or leave it as it is.'
+                : <>No approved image for this model yet: <Anchor component={Link} to={paths.firmware(device.model)} size="xs">upload and approve it on the Firmware page</Anchor>.</>)}
             placeholder={role.guided ? 'Choose the package' : 'Keep the firmware it has'} clearable w="100%" maw={420}
             data={fitting.map((i) => ({ value: i.id, label: `${i.version} · ${i.filename}` }))}
             value={choice.imageId} onChange={(v) => set({ imageId: v, alsoSecondary: !!v && bothBanks })} />
@@ -163,12 +178,12 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
           <LicensePick device={device} choice={choice} onChange={(id, name) => set({ licenseId: id, licenseName: name })} />
         )}
         {hasFile && !role.fileKeepsLogin && (needsLoginAfter ? (
-          <Select label="Login after loading" clearable w="100%" maw={420} data={logins} value={choice.loginAfter}
+          <LoginSelect projectId={device.project_id} label="Login after loading" maw={420} value={choice.loginAfter}
             placeholder="Choose the login" description={`Needed: ${role.loginAfter ?? 'the switch kept its previous password; its file sets the approved one: choose the approved login'}.`}
             error={choice.loginAfter ? undefined : 'Not chosen yet'}
             onChange={(v) => set({ loginAfter: v })} />
         ) : (
-          <Select label="Login after loading (optional)" clearable w="100%" maw={420} data={logins} value={choice.loginAfter}
+          <LoginSelect projectId={device.project_id} label="Login after loading (optional)" maw={420} value={choice.loginAfter}
             placeholder="Same login as now"
             description="Leave empty when the device already uses the login its file sets (2930F after their console setup); otherwise choose that login."
             onChange={(v) => set({ loginAfter: v })} />

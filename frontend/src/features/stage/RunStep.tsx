@@ -116,7 +116,7 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
           <PlannedSteps role={role} choice={choice} device={device} />
           {takenNotice}
           {consoleTodo && (
-            <Notice kind="caution" compact action={<Button size="xs" variant="light" component={Link} to={paths.console(device.id)}
+            <Notice kind="caution" compact action={<Button size="xs" variant="light" component={Link} to={paths.stage(device.project_id, 3, { console: device.id })}
               leftSection={<IconTerminal2 size={14} />}>Open console setup</Button>}>
               {role.consoleCable
                 ? <>Do its first access first: UNDM starts it once without its factory configuration and sets the admin password. You switch it off and on when asked. It saves the console port this plan uses.</>

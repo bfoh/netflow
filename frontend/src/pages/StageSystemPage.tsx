@@ -1,26 +1,28 @@
 import { Anchor, Badge, Button, Card, Group, Menu, SegmentedControl, Select, SimpleGrid, Stack, Stepper, Text, TextInput, Title } from '@mantine/core';
-import { IconCheck, IconPlus } from '@tabler/icons-react';
+import { IconArrowLeft, IconCheck, IconPlus } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 
-import { EnvironmentBadge } from '../components/Badges';
 import { DialogError } from '../components/ConfirmDialog';
 import { LoadingLines, PageHeader, QueryState } from '../components/Page';
+import { ConsoleSetup } from '../features/provisioning/ConsoleSetup';
 import { BenchStep } from '../features/stage/BenchStep';
 import { type Choice, type Choices, EMPTY_CHOICE, loadChoices, planSteps, saveChoices } from '../features/stage/choices';
 import { FilesStep } from '../features/stage/FilesStep';
 import { ZoneField } from '../features/stage/GeneratePanel';
 import { ReportStep } from '../features/stage/ReportStep';
-import { assignRoles, roleDefaults, ROLES, type Role, type RoleKey } from '../features/stage/roles';
+import { RoleCard } from '../features/stage/RoleCard';
+import { assignRoles, deviceInputFor, roleDefaults, ROLES, type Role, type RoleKey } from '../features/stage/roles';
 import { RunStep } from '../features/stage/RunStep';
 import { lastSystem, placeOf, rememberPlace, type WizardMode } from '../features/stage/wizardMemory';
 import {
-  useAction, useCredentialRefs, useDeviceModels, useLoginDefaults, useProject, useProjectDevices, useProjects, useProjectStagings,
+  useAction, useDeviceModels, useLoginDefaults, useProject, useProjectDevices, useProjects, useProjectStagings,
 } from '../hooks/queries';
 import { api } from '../services/api';
 import { fmtDate } from '../services/format';
 import type { Device } from '../types/api';
 import { Hint } from '../components/Hint';
+import { Notice } from '../components/Notice';
 import { paths } from '../paths';
 
 const STEPS = ['System and devices', 'Files and firmware', 'Bench check', 'Run', 'Report'];
@@ -52,62 +54,41 @@ function ChooseSystem() {
   );
 }
 
-/** Which login a device of each role uses at the start of its plan. */
-const LOGIN_HINT: Record<RoleKey, string> = {
-  firewall: 'The approved login. On a new unit, the first login step sets it.',
-  blackbox: 'New unit: admin with no password. In step 2 choose the approved login as "Login after loading".',
-  aruba_a: 'The approved login. Preconfigured switch: the console setup erases it first with its current login (add that login too).',
-  aruba_b: 'The approved login. Preconfigured switch: the console setup erases it first with its current login (add that login too).',
-  modem: 'The approved login, user name admin: its first access gives the modem this password. The modem refuses a password it finds too simple.',
-  bbu: 'No login in UNDM: UNDM never logs in to the BBU. Its portal login is typed by the person in the browser.',
-};
+/** A device's console work inside the wizard, with the way back above and below it. */
+function WizardConsole({ device, loading, back }: { device?: Device; loading: boolean; back: { label: string; onClick: () => void } }) {
+  if (!device) return loading ? <LoadingLines lines={4} /> : <Notice kind="error" title="This device is not in the system">It may have been deleted.</Notice>;
+  return (
+    <Stack>
+      <Group justify="space-between" wrap="wrap">
+        <Title order={2}>{device.name}: console</Title>
+        <Button variant="default" leftSection={<IconArrowLeft size={16} />} onClick={back.onClick}>{back.label}</Button>
+      </Group>
+      <ConsoleSetup device={device} back={back} />
+    </Stack>
+  );
+}
 
-/** One role: its device, or a button that adds it with the bench defaults. */
-function RoleCard({ role, device, projectId, systemName, simulated }: {
-  role: Role; device?: Device; projectId: string; systemName: string; simulated: boolean;
+/** Adds every role that has no device yet, with the same defaults as each card's "Add it". */
+function AddAllMissing({ projectId, systemName, simulated, missing }: {
+  projectId: string; systemName: string; simulated: boolean; missing: Role[];
 }) {
   const models = useDeviceModels();
-  const refs = useCredentialRefs(projectId);
   const defaults = useLoginDefaults();
-  const real = !simulated;
-  const model = models.data?.find((m) => m.model_id === role.modelId);
-  const slug = systemName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'system';
-  const add = useAction(() => api.createDevice(projectId, {
-    name: `${slug}-${role.nameSuffix}`, manufacturer: model?.manufacturer ?? '', product_family: model?.product_family ?? '',
-    model: role.model, category: model?.category ?? 'switch', os_family: model?.os_family ?? '',
-    driver_id: simulated ? role.simulatedDriver : role.realDriver, environment: simulated ? 'simulated' : 'lab',
-    ...(role.address ? { management_address: role.address, management_protocol: role.protocol ?? 'ssh' as const,
-      ...(role.port ? { management_port: role.port } : {}) } : {}), role: role.title,
-    // Its login from Settings → Logins (D-105); simulated devices need none.
-    ...(real && roleDefaults(role, defaults.data).login ? { credential_ref_id: roleDefaults(role, defaults.data).login } : {}),
-  }), `${role.title} added`, { errorInDialog: true });
-  const setLogin = useAction((ref: string | null) => api.updateDevice(device!.id, { credential_ref_id: ref }), 'Login chosen');
+  const addable = missing.filter((role) => models.data?.some((m) => m.model_id === role.modelId));
+  const add = useAction(async () => {
+    for (const role of addable) {
+      const model = models.data?.find((m) => m.model_id === role.modelId);
+      await api.createDevice(projectId, deviceInputFor(role, { systemName, model, simulated, defaults: defaults.data }));
+    }
+  }, `${addable.length} ${addable.length === 1 ? 'device' : 'devices'} added`, { errorInDialog: true });
+  if (addable.length === 0) return null;
   return (
-    <Card withBorder>
-      <Group justify="space-between" wrap="nowrap" mb={4}>
-        <Title order={2} size="h5">{role.title}</Title>
-        {device && <EnvironmentBadge env={device.environment} />}
-      </Group>
-      <Text size="xs" c="dimmed" mb="xs">{role.hint}</Text>
-      {device ? (
-        <Stack gap={6}>
-          <Group gap="xs"><Anchor component={Link} to={paths.device(device.id)} fw={600} size="sm">{device.name}</Anchor>
-            <Text size="sm" ff="monospace" c="dimmed">{device.management_address || (role.consoleCable ? `console cable${device.console_port ? ` · ${device.console_port}` : ' only'}` : '')}</Text></Group>
-          {role.guided ? <Text size="xs" c="dimmed">{LOGIN_HINT[role.key]}</Text> : <Select size="xs" label="Its login" clearable w="100%" maw={320}
-            description={LOGIN_HINT[role.key]}
-            placeholder={refs.data?.length ? 'Choose a login' : 'Add logins on the system page first'}
-            data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
-            value={device.credential_ref_id} onChange={(v) => setLogin.mutate(v)} />}
-        </Stack>
-      ) : (
-        <Stack gap={6}>
-          <Text size="sm">Not in this system yet.</Text>
-          <DialogError error={add.error} />
-          <Group><Button size="xs" leftSection={<IconPlus size={14} />} loading={add.isPending} disabled={!model}
-            onClick={() => add.mutate(undefined)}>Add it ({role.address || 'console cable only'})</Button></Group>
-        </Stack>
-      )}
-    </Card>
+    <Stack gap={4} align="flex-end">
+      <Button leftSection={<IconPlus size={16} />} loading={add.isPending} onClick={() => add.mutate(undefined)}>
+        Add all missing devices ({addable.length})
+      </Button>
+      <DialogError error={add.error} />
+    </Stack>
   );
 }
 
@@ -168,6 +149,9 @@ function StageSystem({ projectId }: { projectId: string }) {
   const [params, setParams] = useSearchParams();
   const active = Math.min(Number(params.get('step') ?? 0) || 0, STEPS.length - 1);
   const setActive = (n: number) => setParams({ step: String(n) });
+  // Console setup inside the wizard (D-121): the stepper stays, "Back to <step>" and the
+  // browser's Back both return to the step it was opened from.
+  const consoleId = params.get('console');
   const project = useProject(projectId);
   const devices = useProjectDevices(projectId);
   const stagings = useProjectStagings(projectId, active === 3 || active === 4);
@@ -200,14 +184,23 @@ function StageSystem({ projectId }: { projectId: string }) {
               : i === STEPS.length - 1 && project.data!.staged_at ? `finished ${fmtDate(project.data!.staged_at)}` : undefined} />
         ))}
       </Stepper>
-      {active === 0 && (
+      {consoleId && (
+        <WizardConsole device={(devices.data ?? []).find((d) => d.id === consoleId)} loading={devices.isLoading}
+          back={{ label: `Back to ${STEPS[active]}`, onClick: () => setActive(active) }} />
+      )}
+      {!consoleId && active === 0 && (
         <Stack>
-          <Group justify="space-between" wrap="wrap">
-            <Text size="sm" c="dimmed">Devices are found by model; add the missing ones with the bench defaults (you can edit them later).</Text>
-            <SegmentedControl size="xs" aria-label="Devices to add" value={simulated} onChange={(v) => setSimulated(v === 'simulated' ? 'simulated' : 'real')}
-              data={[{ value: 'real', label: 'Real devices on the bench' }, { value: 'simulated', label: 'Practice (simulated)' }]} />
+          <Group justify="space-between" wrap="wrap" align="flex-end">
+            <Stack gap={4}>
+              <Text size="sm" c="dimmed">Devices are found by model; add the missing ones with the bench defaults (you can edit them later).</Text>
+              <SegmentedControl size="xs" aria-label="Devices to add" value={simulated} w="fit-content"
+                onChange={(v) => setSimulated(v === 'simulated' ? 'simulated' : 'real')}
+                data={[{ value: 'real', label: 'Real devices on the bench' }, { value: 'simulated', label: 'Practice (simulated)' }]} />
+            </Stack>
+            <AddAllMissing projectId={projectId} systemName={project.data.name} simulated={simulated === 'simulated'}
+              missing={ROLES.filter((role) => !assigned[role.key])} />
           </Group>
-          <ZoneField key={`${project.data.id}-${project.data.zone ?? ''}`} project={project.data} />
+          <ZoneField key={project.data.id} project={project.data} />
           {(devices.data ?? []).length > roles.length && (
             <Hint>This system also has devices that play no staging role; they are left out here.</Hint>
           )}
@@ -220,15 +213,15 @@ function StageSystem({ projectId }: { projectId: string }) {
           <DefaultLoginsBar roles={roles} />
         </Stack>
       )}
-      {active === 1 && <FilesStep project={project.data} roles={roles} choices={choices} onChange={setChoice}
+      {!consoleId && active === 1 && <FilesStep project={project.data} roles={roles} choices={choices} onChange={setChoice}
         onReplace={(next) => { setChoices(next); saveChoices(projectId, next); }} />}
-      {active === 2 && <BenchStep roles={roles} />}
-      {active === 3 && <RunStep projectId={projectId} roles={roles} choices={choices} stagings={stagings.data ?? []} />}
-      {active === 4 && <ReportStep project={project.data} roles={roles} stagings={stagings.data ?? []} />}
-      <Group justify="space-between" mt="lg" className="no-print">
+      {!consoleId && active === 2 && <BenchStep roles={roles} />}
+      {!consoleId && active === 3 && <RunStep projectId={projectId} roles={roles} choices={choices} stagings={stagings.data ?? []} />}
+      {!consoleId && active === 4 && <ReportStep project={project.data} roles={roles} stagings={stagings.data ?? []} />}
+      {!consoleId && <Group justify="space-between" mt="lg" className="no-print">
         <Button variant="default" disabled={active === 0} onClick={() => setActive(active - 1)}>Back</Button>
         {active < STEPS.length - 1 && <Button onClick={() => setActive(active + 1)}>Next: {STEPS[active + 1]}</Button>}
-      </Group>
+      </Group>}
       {active === 0 && roles.length === 0 && <Badge mt="xs" color="gray" variant="light" tt="none">Add at least one device to continue usefully</Badge>}
     </>
   );

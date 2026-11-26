@@ -9,7 +9,8 @@ test('a login for all systems and its default reach a new system', async ({ page
     await page.goto('/settings');
     await expect(page.getByRole('tab', { name: 'Logins' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('cell', { name: `approved ${id}`, exact: true })).toBeVisible();
-    const label = page.getByText('Its login', { exact: true }).last();  // Aruba 2930F
+    // FortiGate, Black Box, Aruba 2930F, modem (D-124): the third "Its login" is the 2930F's.
+    const label = page.getByText('Its login', { exact: true }).nth(2);
     await page.locator(`#${await label.getAttribute('for')}`).click();
     await page.getByRole('option', { name: `approved ${id}` }).click();
     await page.getByRole('button', { name: 'Save default logins' }).click();

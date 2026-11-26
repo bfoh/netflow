@@ -25,6 +25,8 @@ DEFAULT_FIELDS: dict[str, tuple[str, ...]] = {
     "firewall": ("login", "login_after", "tunnel_key"),
     "blackbox": ("login", "login_after"),
     "aruba": ("login", "current"),
+    # Added in v94 (D-124); values stored before read back with it empty.
+    "modem": ("login",),
 }
 
 

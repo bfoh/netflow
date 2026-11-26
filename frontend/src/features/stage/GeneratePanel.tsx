@@ -1,10 +1,11 @@
 import { Anchor, Badge, Button, Card, Group, NumberInput, Stack, Table, Text, TextInput, Title } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconDownload, IconFileCode, IconScale } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 
 import { DialogError } from '../../components/ConfirmDialog';
+import { InlineStatus } from '../../components/InlineStatus';
 import { Notice } from '../../components/Notice';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useAction, useTemplates } from '../../hooks/queries';
@@ -21,23 +22,46 @@ export function ZoneField({ project }: { project: Project }) {
   const sysGuess = systemInName(project.name);
   const [value, setValue] = useState<number | string>(project.zone ?? guess ?? '');
   const [sysText, setSysText] = useState(project.system_id ?? sysGuess ?? '');
+  const qc = useQueryClient();
+  // Saved by themselves (D-121): what is shown is what the system has, never only typed.
   const save = useAction((body: { zone: number | null; system_id: string | null }) => api.updateProject(project.id, body),
-    'Zone and system saved');
+    undefined, { errorInDialog: true });
   const zone = typeof value === 'number' ? value : undefined;
   const system = sysText.trim() ? normalSystem(sysText) : null;
+  const zoneOk = zone === undefined || (zone >= 1 && zone <= 128);
   const changed = (zone ?? null) !== (project.zone ?? null) || (system ?? null) !== (project.system_id ?? null);
+  const ready = changed && zoneOk && system !== undefined;
+  const body = { zone: zone ?? null, system_id: system ?? null };
+  const unsaved = useRef<typeof body | null>(null);
+  unsaved.current = ready ? body : null;
+  useEffect(() => {
+    if (!ready) return;
+    const t = window.setTimeout(() => save.mutate(body), 600);
+    return () => window.clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, body.zone, body.system_id]);
+  // Leaving step 1 before the pause ends still saves what was typed.
+  useEffect(() => () => {
+    if (unsaved.current) void api.updateProject(project.id, unsaved.current).then(() => qc.invalidateQueries());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const pcis = useQuery({ queryKey: ['pci-row', system], queryFn: () => api.pciRow(system!), enabled: !!system, retry: false });
   return (
-    <Card withBorder>
+    <Card>
       <Group align="flex-end" gap="sm" wrap="wrap">
         <NumberInput label="Zone" w={120} min={1} max={128} value={value} onChange={setValue}
+          error={zoneOk ? undefined : '1 to 128'}
           description={!project.zone && guess ? `From the name: ${guess}` : undefined} />
         <TextInput label="System" w={140} value={sysText} onChange={(e) => setSysText(e.currentTarget.value)}
           placeholder="e.g. B007" error={sysText.trim() && !system ? 'A B system, e.g. B007' : undefined}
           description={!project.system_id && sysGuess ? `From the name: ${sysGuess}` : undefined} />
-        <Button variant={changed ? 'filled' : 'default'} disabled={!changed || (zone !== undefined && (zone < 1 || zone > 128)) || system === undefined}
-          loading={save.isPending} onClick={() => save.mutate({ zone: zone ?? null, system_id: system ?? null })}>Save</Button>
-        {zone && zone >= 1 && zone <= 128 && <Text size="sm" c="dimmed" pb={6}>{zoneWords(zone)}</Text>}
+        <div style={{ paddingBottom: 8 }} role="status">
+          {save.isPending || ready
+            ? <InlineStatus tone="neutral">Saving…</InlineStatus>
+            : save.error ? <InlineStatus tone="danger">Not saved: {save.error.message}</InlineStatus>
+              : (project.zone || project.system_id) && <InlineStatus tone="success">Saved</InlineStatus>}
+        </div>
+        {zone && zoneOk && <Text size="sm" c="dimmed" pb={6}>{zoneWords(zone)}</Text>}
       </Group>
       {system && (
         <Text size="xs" c="dimmed" mt={4}>

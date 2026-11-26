@@ -139,9 +139,16 @@ class LoginDefaults(BaseModel):
         login: str | None = None
         current: str | None = None
 
+    class Modem(BaseModel):
+        """The Nokia 7705 SAR-Hmc: the approved login its first access sets (D-124)."""
+
+        model_config = ConfigDict(extra="forbid")
+        login: str | None = None
+
     firewall: Firewall = Field(default_factory=Firewall)
     blackbox: BlackBox = Field(default_factory=BlackBox)
     aruba: Aruba = Field(default_factory=Aruba)
+    modem: Modem = Field(default_factory=Modem)
 
 
 class CertificateSetting(BaseModel):

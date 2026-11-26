@@ -2,7 +2,7 @@
  * The devices of a system, by role (staging use case, docs/requirements). Addresses are
  * the bench defaults of docs/requirements/staging-run-design.md; they can be changed per device.
  */
-import type { Device, LoginDefaults } from '../../types/api';
+import type { Device, DeviceInput, DeviceModel, LoginDefaults } from '../../types/api';
 
 export type RoleKey = 'firewall' | 'blackbox' | 'aruba_a' | 'aruba_b' | 'modem' | 'bbu';
 export type StepKind = 'console' | 'first_login' | 'firmware' | 'base' | 'site' | 'file';
@@ -175,7 +175,33 @@ export function roleDefaults(role: Role, d: LoginDefaults | undefined): {
   if (!d?.firewall || !d.blackbox || !d.aruba) return none;
   if (role.key === 'firewall') return { ...none, login: d.firewall.login, loginAfter: d.firewall.login_after, tunnelKey: d.firewall.tunnel_key };
   if (role.key === 'blackbox') return { ...none, login: d.blackbox.login, loginAfter: d.blackbox.login_after };
-  if (role.key === 'modem') return none; // no default login for the modem yet
+  if (role.key === 'modem') return { ...none, login: d.modem?.login ?? null }; // D-124
   if (role.guided) return none; // UNDM never logs in to it (D-117)
   return { ...none, login: d.aruba.login, current: d.aruba.current };
+}
+
+/** A short, safe name part from the system's name ("Site 12 staging" → "site-12-staging"). */
+export function systemSlug(systemName: string): string {
+  return systemName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'system';
+}
+
+/**
+ * The device a role adds in Stage a system: the catalog model, the bench address, the role's
+ * name and, for a real device, its default login (Settings → Logins, D-105). Simulated devices
+ * need no login. Pure, so "Add it" and "Add all missing devices" add exactly the same.
+ */
+export function deviceInputFor(role: Role, { systemName, model, simulated, defaults }: {
+  systemName: string; model?: DeviceModel; simulated: boolean; defaults?: LoginDefaults;
+}): DeviceInput {
+  const login = simulated ? null : roleDefaults(role, defaults).login;
+  return {
+    name: `${systemSlug(systemName)}-${role.nameSuffix}`,
+    manufacturer: model?.manufacturer ?? '', product_family: model?.product_family ?? '',
+    model: role.model, category: model?.category ?? 'switch', os_family: model?.os_family ?? '',
+    driver_id: simulated ? role.simulatedDriver : role.realDriver, environment: simulated ? 'simulated' : 'lab',
+    ...(role.address ? { management_address: role.address, management_protocol: role.protocol ?? 'ssh' as const,
+      ...(role.port ? { management_port: role.port } : {}) } : {}),
+    role: role.title,
+    ...(login ? { credential_ref_id: login } : {}),
+  };
 }

@@ -17,8 +17,8 @@ test('generate a device file from a template for the system zone', async ({ page
 
   await page.goto(`/stage/${p.id}?step=0`);
   await expect(page.getByLabel('Zone')).toHaveValue('7');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('Zone and system saved')).toBeVisible();
+  // D-121: saved by itself.
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible();
   await page.goto(`/stage/${p.id}?step=1`);
   await page.getByRole('button', { name: 'Generate the files for zone 7' }).click();
   await expect(page.getByText(/files? made for zone 7/)).toBeVisible();

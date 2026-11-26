@@ -53,7 +53,11 @@ const STATUS: Record<BootstrapResult['status'], { kind: NoticeKind; title: strin
 };
 
 /** First access to a factory Nokia 7705 SAR-Hmc over its console cable (D-112). */
-export function ModemFirstAccess({ device, simulated }: { device: Device; simulated: boolean }) {
+export function ModemFirstAccess({ device, simulated, back }: {
+  device: Device; simulated: boolean;
+  /** Inside Stage a system: the way back to its step, offered once the first access is done. */
+  back?: { label: string; onClick: () => void };
+}) {
   const ports = useSerialPorts();
   const policy = usePolicy();
   const refs = useCredentialRefs(device.project_id);
@@ -150,7 +154,9 @@ export function ModemFirstAccess({ device, simulated }: { device: Device; simula
             <CopyButton value={result.sanitized_transcript}>{({ copied, copy }) => <Button size="xs" variant="default" onClick={copy}>{copied ? 'Copied' : 'Copy sanitized transcript'}</Button>}</CopyButton>
             <Button size="xs" variant="default" leftSection={<IconDownload size={14} />}
               onClick={() => downloadText('undm-modem-first-access-sanitized.txt', result.sanitized_transcript)}>Download sanitized transcript</Button>
-            {done && <Button size="xs" component={Link} to={paths.stage(device.project_id, 3)}>Back to Stage a system</Button>}
+            {done && (back
+              ? <Button size="xs" onClick={back.onClick}>{back.label}</Button>
+              : <Button size="xs" component={Link} to={paths.stage(device.project_id, 3)}>Back to Stage a system</Button>)}
           </Group>
         </Card>
       )}

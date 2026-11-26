@@ -29,7 +29,8 @@ test('first access of a simulated modem from the wizard, then its file by a plan
   // The modem echoes the command line; the password is masked wherever it is shown.
   await expect(page.locator('body')).toContainText('password ********');
   await expect(page.locator('body')).not.toContainText(process.env.UNDM_CRED_E2E_MODEM_PASSWORD ?? 'Example-Only-Pass-77');
-  await page.getByRole('link', { name: 'Back to Stage a system' }).click();
+  // D-121: the first access ran inside the wizard; back to the Run step.
+  await page.getByRole('button', { name: 'Back to Run' }).first().click();
   await expect(page.getByText('Done', { exact: true })).toBeVisible();
 
   // Its configuration file, chosen in step 2 and loaded by a plan in step 4.

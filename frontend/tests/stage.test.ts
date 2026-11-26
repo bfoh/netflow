@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { EMPTY_CHOICE, planSteps } from '../src/features/stage/choices';
-import { addressTakenBy, assignRoles, ROLES } from '../src/features/stage/roles';
-import type { Device } from '../src/types/api';
+import { addressTakenBy, assignRoles, deviceInputFor, ROLES } from '../src/features/stage/roles';
+import type { Device, DeviceModel, LoginDefaults } from '../src/types/api';
 
 const role = (key: string) => ROLES.find((r) => r.key === key)!;
 
@@ -138,5 +138,26 @@ describe('FortiGate license in the staging plan (D-109)', () => {
     const without = planSteps(role('firewall'), c, fg);
     expect(without.steps.map((s) => s.kind)).toEqual(['configuration', 'configuration']);
     expect(without.missing).toEqual([]);  // never required
+  });
+});
+
+describe('stage a system: the device a role adds (D-121)', () => {
+  const defaults: LoginDefaults = {
+    firewall: { login: 'approved', login_after: 'base', tunnel_key: 'psk' }, blackbox: { login: 'factory', login_after: 'approved' },
+    aruba: { login: 'approved', current: 'factory' }, modem: { login: 'modem-approved' },
+  };
+  const model = { model_id: 'fortinet-fg-101f', manufacturer: 'Fortinet', product_family: 'FortiGate', model: 'FortiGate-101F',
+    category: 'firewall', os_family: 'FortiOS', drivers: [], support: '', notes: '' } as DeviceModel;
+
+  it('a real device gets the bench address, its role and its default login', () => {
+    expect(deviceInputFor(role('firewall'), { systemName: 'Practice B007z041', model, simulated: false, defaults })).toMatchObject({
+      name: 'practice-b007z041-fw', manufacturer: 'Fortinet', model: 'FortiGate-101F', environment: 'lab',
+      driver_id: role('firewall').realDriver, management_address: '192.168.1.99', role: 'FortiGate 101F', credential_ref_id: 'approved' });
+  });
+
+  it('a simulated device needs no login; the modem has its own default', () => {
+    expect(deviceInputFor(role('firewall'), { systemName: 'x', model, simulated: true, defaults })).not.toHaveProperty('credential_ref_id');
+    expect(deviceInputFor(role('modem'), { systemName: 'x', simulated: false, defaults })).toMatchObject({ credential_ref_id: 'modem-approved' });
+    expect(deviceInputFor(role('modem'), { systemName: 'x', simulated: false, defaults })).not.toHaveProperty('management_address');
   });
 });

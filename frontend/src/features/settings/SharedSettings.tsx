@@ -15,12 +15,15 @@ const EMPTY: LoginDefaults = {
   firewall: { login: null, login_after: null, tunnel_key: null },
   blackbox: { login: null, login_after: null },
   aruba: { login: null, current: null },
+  modem: { login: null },
 };
 
 /** Which login each kind of device starts with in Stage a system and the console setup. */
 function DefaultLogins() {
   const stored = useLoginDefaults();
-  return <DefaultLoginsForm key={JSON.stringify(stored.data ?? null)} initial={stored.data?.firewall ? stored.data : EMPTY} />;
+  // Stored defaults from before v94 have no modem row: it starts empty (D-124).
+  const initial = stored.data?.firewall ? { ...EMPTY, ...stored.data, modem: { ...EMPTY.modem, ...stored.data.modem } } : EMPTY;
+  return <DefaultLoginsForm key={JSON.stringify(stored.data ?? null)} initial={initial} />;
 }
 
 function DefaultLoginsForm({ initial }: { initial: LoginDefaults }) {
@@ -42,7 +45,7 @@ function DefaultLoginsForm({ initial }: { initial: LoginDefaults }) {
       </Text>
       <Stack gap="md">
         <div>
-          <Text fw={600} size="sm" mb={4}>FortiGate 101F</Text>
+          <Title order={3} mb={4}>FortiGate 101F</Title>
           <SimpleGrid cols={{ base: 1, sm: 3 }}>
             {pick('firewall', 'login', 'Its login', 'The approved login; its first login sets it on a new unit')}
             {pick('firewall', 'login_after', 'Login after loading', 'The login with the password its base file sets')}
@@ -50,17 +53,23 @@ function DefaultLoginsForm({ initial }: { initial: LoginDefaults }) {
           </SimpleGrid>
         </div>
         <div>
-          <Text fw={600} size="sm" mb={4}>Black Box LIG1014A</Text>
+          <Title order={3} mb={4}>Black Box LIG1014A</Title>
           <SimpleGrid cols={{ base: 1, sm: 3 }}>
             {pick('blackbox', 'login', 'Its login', 'A new unit: admin with no password')}
             {pick('blackbox', 'login_after', 'Login after loading', 'Its team file sets the approved password')}
           </SimpleGrid>
         </div>
         <div>
-          <Text fw={600} size="sm" mb={4}>Aruba 2930F (both switches)</Text>
+          <Title order={3} mb={4}>Aruba 2930F (both switches)</Title>
           <SimpleGrid cols={{ base: 1, sm: 3 }}>
             {pick('aruba', 'login', 'Its login', 'The approved login the console setup gives it')}
             {pick('aruba', 'current', 'Login it has now (console setup)', 'Factory or preconfigured login')}
+          </SimpleGrid>
+        </div>
+        <div>
+          <Title order={3} mb={4}>Nokia 7705 SAR-Hmc (modem)</Title>
+          <SimpleGrid cols={{ base: 1, sm: 3 }}>
+            {pick('modem', 'login', 'Its login', 'The approved login, user name admin; its first access sets it')}
           </SimpleGrid>
         </div>
         <Group justify="flex-end">

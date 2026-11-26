@@ -83,7 +83,8 @@ def test_defaults_name_shared_logins_only(client):
     empty = client.get("/api/settings/defaults").json()
     assert empty == {"firewall": {"login": None, "login_after": None, "tunnel_key": None},
                      "blackbox": {"login": None, "login_after": None},
-                     "aruba": {"login": None, "current": None}}
+                     "aruba": {"login": None, "current": None},
+                     "modem": {"login": None}}
     approved, factory, key = shared(client), shared(client, "factory", ""), shared(client, "psk")
     body = {"firewall": {"login": approved, "tunnel_key": key},
             "blackbox": {"login": factory, "login_after": approved},
@@ -104,6 +105,38 @@ def test_defaults_name_shared_logins_only(client):
     # A deleted login is no longer a default.
     client.delete(f"/api/credential-refs/{key}")
     assert client.get("/api/settings/defaults").json()["firewall"]["tunnel_key"] is None
+
+
+def test_the_modem_has_a_default_login(client):
+    approved = shared(client)
+    r = client.put("/api/settings/defaults", json={"modem": {"login": approved}})
+    assert r.status_code == 200, r.text
+    assert client.get("/api/settings/defaults").json()["modem"] == {"login": approved}
+    wrong = client.put("/api/settings/defaults", json={"modem": {"current": approved}})
+    assert wrong.status_code == 422
+    audit = [a for a in client.get("/api/audit").json() if a["action"] == "settings.defaults"]
+    assert audit[0]["details"]["modem"] == {"login": "approved"}
+    # Deleting the login clears the modem's default too.
+    client.delete(f"/api/credential-refs/{approved}")
+    assert client.get("/api/settings/defaults").json()["modem"] == {"login": None}
+
+
+def test_defaults_stored_before_the_modem_row_read_back_with_it_empty():
+    from undm.services import app_settings
+
+    client, factory = make_client()
+    with client:
+        approved = shared(client)
+        with factory() as session:
+            # As v78..v93 stored them: no modem entry.
+            app_settings.put(session, app_settings.DEFAULTS, {
+                "firewall": {"login": approved, "login_after": None, "tunnel_key": None},
+                "blackbox": {"login": None, "login_after": None},
+                "aruba": {"login": None, "current": None}})
+            session.commit()
+        out = client.get("/api/settings/defaults").json()
+        assert out["firewall"]["login"] == approved
+        assert out["modem"] == {"login": None}
 
 
 def test_export_names_shared_logins_and_import_uses_the_shared_one_of_that_name(tmp_path):

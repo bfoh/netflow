@@ -31,7 +31,7 @@ describe('application shell', () => {
     await userEvent.click(advanced);
     expect(advanced).toHaveAttribute('aria-expanded', 'true');
     for (const label of ['Devices (all systems)', 'Plans', 'Console tool', 'Topology', 'Audit log']) {
-      expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
+      expect(await within(nav).findByRole('link', { name: label })).toBeInTheDocument();
     }
     expect(within(nav).getByRole('link', { name: 'Plans' })).toHaveAttribute('href', '/plans');
     // D-089: the safety switches are shown where they matter, not in the header.
@@ -225,7 +225,12 @@ describe('application shell', () => {
     mockApi({ '/policy': pol, '/deployments/dep1': dep, '/projects/p1/devices': [device({ environment: 'lab', driver_id: 'ssh.aruba.aoscx' })] });
     const view = renderAt('/plans/dep1');
     expect(await screen.findByText(/Real-device changes are off: real devices can only be read/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Settings → Safety' })).toHaveAttribute('href', '/settings?tab=safety');
+    // D-121: it can be turned on right here, with the same confirmation as in Settings.
+    const { default: userEvent } = await import('@testing-library/user-event');
+    await userEvent.click(screen.getByRole('button', { name: 'Turn real-device changes on…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Real-device changes: turn on?' });
+    expect(within(dialog).getByRole('button', { name: 'Turn on' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     view.unmount();
     mockApi({ '/policy': pol, '/deployments/dep1': dep, '/projects/p1/devices': [device({})] });  // simulated
     renderAt('/plans/dep1');
@@ -1044,13 +1049,12 @@ describe('files from the team templates (D-111)', () => {
   const tpl = (role: string) => ({ id: `t-${role}`, role, version: 'v03', filename: '${zone_tag}-x-v03.pcc', reference_zone: 41,
     counts: {}, verified_zone: 42, line_ending: 'crlf', final_newline: false, created_by: 't', created_at: '', older: 0 });
 
-  it('the zone starts from the system name and is saved on the system', async () => {
-    const { default: userEvent } = await import('@testing-library/user-event');
+  it('the zone starts from the system name and is saved on the system by itself (D-121)', async () => {
     const calls = mockApi({ '/projects/p1': project(), '/projects/p1/devices': [], '/projects/p1/staging-plans': [] });
     renderAt('/stage/p1?step=0');
     expect(await screen.findByDisplayValue('45')).toBeInTheDocument();
     expect(screen.getByText('z045 · 10.172.x · 10.45.x · 10.0.45.x · 130.45.x')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1' && c.init?.method === 'PATCH')).toBe(true));
     const sent = calls.find((c) => c.url === '/api/projects/p1' && c.init?.method === 'PATCH');
     expect(JSON.parse(String(sent?.init?.body))).toEqual({ zone: 45, system_id: null });
@@ -1171,7 +1175,7 @@ describe('Nokia modem: first access over the console (D-112)', () => {
       ? new Promise(() => {}) : answered(url, init))));
     renderAt('/console?device=m1');
     await userEvent.click(await screen.findByRole('button', { name: 'Run first access…' }));
-    expect(screen.getByText(/About 2½ minutes later it asks for a key for 3 seconds/)).toBeInTheDocument();
+    expect(await screen.findByText(/About 2½ minutes later it asks for a key for 3 seconds/)).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/Type the device name to confirm/), 'lab-modem');
     await userEvent.click(screen.getByRole('button', { name: 'Run first access' }));
     expect(await screen.findByText(/its start-up text is arriving/)).toBeInTheDocument();
@@ -1199,7 +1203,8 @@ describe('Nokia modem: first access over the console (D-112)', () => {
     const first = renderAt('/stage/p1?step=3');
     expect(await screen.findByText('1. First access (console)')).toBeInTheDocument();
     expect(screen.getByText('2. Its configuration file (console)')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open console setup' })).toHaveAttribute('href', '/console?device=m1');
+    // D-121: its first access opens inside the wizard, and returns to this step.
+    expect(screen.getByRole('link', { name: 'Open console setup' })).toHaveAttribute('href', '/stage/p1?step=3&console=m1');
     expect(screen.getByText(/Do its first access first/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Make the plan' })).toBeDisabled();
     first.unmount();
@@ -1286,13 +1291,11 @@ describe('the modem and the BBU: files by zone and system (D-114)', () => {
     created_by: 't', created_at: '', older: 0, ...over });
 
   it('the system starts from the system name, is saved with the zone and shows its PCIs', async () => {
-    const { default: userEvent } = await import('@testing-library/user-event');
     const calls = mockApi({ '/projects/p1': project(), '/projects/p1/devices': [], '/projects/p1/staging-plans': [],
       '/settings/pci-mapping/B007': { system: 'B007', pcis: [12, 13] } });
     renderAt('/stage/p1?step=0');
     expect(await screen.findByDisplayValue('B007')).toBeInTheDocument();
     expect(await screen.findByText(/MRBTS-7 · cell PCIs 12, 13 \(PCI table\)/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1' && c.init?.method === 'PATCH')).toBe(true));
     const sent = calls.find((c) => c.url === '/api/projects/p1' && c.init?.method === 'PATCH');
     expect(JSON.parse(String(sent?.init?.body))).toEqual({ zone: 45, system_id: 'B007' });
@@ -1424,5 +1427,98 @@ describe('the modem and the BBU: files by zone and system (D-114)', () => {
     const input = document.querySelector('input[type="file"][accept=".xlsx,.csv,text/csv"]') as HTMLInputElement;
     await userEvent.upload(input, new File(['x'], 'pci.xlsx'));
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/settings/pci-mapping' && c.init?.method === 'POST')).toBe(true));
+  });
+});
+
+describe('Stage a system, steps 1 to 3 (D-121)', () => {
+  const project = { id: 'p1', name: 'Lab A', description: '', site: '', purpose: '', created_at: '', updated_at: '',
+    certificate_subject: null, staged_at: null, staged_by: '', zone: 41, system_id: null };
+  const model = (model_id: string, manufacturer: string, name: string, category = 'switch') =>
+    ({ model_id, manufacturer, product_family: '', model: name, category, os_family: '', drivers: [], support: '', notes: '' });
+
+  it('adds every missing device at once, with the same defaults as each card', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [], '/projects/p1/staging-plans': [],
+      '/device-models': [model('fortinet-fg-101f', 'Fortinet', 'FortiGate-101F', 'firewall'), model('blackbox-lig1014a', 'Black Box', 'LIG1014A')] });
+    renderAt('/stage/p1?step=0');
+    await userEvent.click(await screen.findByRole('radio', { name: 'Practice (simulated)' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Add all missing devices (2)' }));
+    await vi.waitFor(() => expect(calls.filter((c) => c.url === '/api/projects/p1/devices' && c.init?.method === 'POST')).toHaveLength(2));
+    const bodies = calls.filter((c) => c.url === '/api/projects/p1/devices' && c.init?.method === 'POST').map((c) => JSON.parse(String(c.init?.body)));
+    expect(bodies.map((b) => [b.name, b.environment, b.role])).toEqual([
+      ['lab-a-fw', 'simulated', 'FortiGate 101F'], ['lab-a-bb', 'simulated', 'Black Box LIG1014A']]);
+    // Real or practice is remembered for this system.
+    expect(JSON.parse(window.localStorage.getItem('undm.wizard.p1') ?? '{}').mode).toBe('simulated');
+  });
+
+  it('Test all checks every device that can be tested; a real 2930F waits for its console setup', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/staging-plans': [], '/projects/p1/devices': [
+      device({ id: 'bb', name: 'lab-a-bb', manufacturer: 'Black Box', model: 'LIG1014A', driver_id: 'mock.blackbox.switch', management_address: '192.0.2.1' }),
+      device({ id: 'fw', name: 'lab-a-fw', manufacturer: 'Fortinet', model: 'FortiGate-101F', driver_id: 'mock.fortinet.fortios', management_address: '192.168.1.99' }),
+      device({ id: 'sa', name: 'lab-a-sw-a', manufacturer: 'Aruba', model: '2930F', driver_id: 'ssh.aruba.aos_switch', environment: 'lab',
+        management_address: '192.168.1.1', provisioning_status: 'planned', credential_ref_id: 'c1' }),
+    ], '/devices/bb/operations/check_reachability': { status: 'success', message: 'ok' },
+    '/devices/fw/operations/check_reachability': { status: 'success', message: 'ok' } });
+    renderAt('/stage/p1?step=2');
+    expect(await screen.findByText('After its console setup (it then answers at its address)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Test all (2)' }));
+    await vi.waitFor(() => expect(screen.getAllByText('Connected')).toHaveLength(2));
+    const tested = calls.filter((c) => c.url.endsWith('/operations/check_reachability')).map((c) => c.url);
+    // In the order of the roles, one after the other.
+    expect(tested).toEqual(['/api/devices/fw/operations/check_reachability', '/api/devices/bb/operations/check_reachability']);
+    // Its console setup opens inside the wizard, and comes back to this step.
+    expect(screen.getByRole('link', { name: 'Open console setup' })).toHaveAttribute('href', '/stage/p1?step=2&console=sa');
+  });
+
+  it('console setup inside the wizard keeps the steps and returns to the step it came from', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const sw = device({ id: 'sa', name: 'lab-a-sw-a', manufacturer: 'Aruba', model: '2930F', driver_id: 'mock.aruba.aos_switch', management_address: '192.168.1.1' });
+    mockApi({ '/projects/p1': project, '/projects/p1/staging-plans': [], '/projects/p1/devices': [sw],
+      '/drivers': [{ driver_id: 'mock.aruba.aos_switch', platform: 'aos_switch', simulated: true, capabilities: [], description: '', vendor: 'Aruba', os_family: '', maturity: 'simulated' }],
+      '/provisioning/serial-ports': [{ port: 'SIMULATED', description: 'Simulated switch console', hardware_id: '' }] });
+    const view = renderAt('/stage/p1?step=2&console=sa');
+    expect(await screen.findByRole('heading', { name: 'lab-a-sw-a: console' })).toBeInTheDocument();
+    expect(screen.getByText('Bench check')).toBeInTheDocument();  // the stepper stays
+    expect(await screen.findByRole('button', { name: 'Preview commands' })).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole('button', { name: 'Back to Bench check' })[0]);
+    await vi.waitFor(() => expect(view.here()).toBe('/stage/p1?step=2'));
+  });
+
+  it('the only approved image that fits a real device is chosen once; clearing it keeps it cleared', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    window.localStorage.removeItem('undm.stage.p1');
+    const image = { id: 'img1', vendor: 'Black Box', platform: 'blackbox', version: 'v00.01.01', filename: 'lig.bin', size_bytes: 10,
+      sha256: 'ab'.repeat(32), vendor_sha256: null, status: 'approved', compatible_models: ['LIG1014A'] };
+    mockApi({ '/projects/p1': project, '/projects/p1/staging-plans': [], '/firmware/images': [image], '/projects/p1/devices': [
+      device({ id: 'bb', name: 'lab-a-bb', manufacturer: 'Black Box', model: 'LIG1014A', driver_id: 'ssh.blackbox.lig1014a', environment: 'lab',
+        management_address: '192.0.2.1', credential_ref_id: 'c1' })] });
+    const view = renderAt('/stage/p1?step=1');
+    expect(await screen.findByDisplayValue('v00.01.01 · lig.bin')).toBeInTheDocument();
+    await vi.waitFor(() => expect(JSON.parse(window.localStorage.getItem('undm.stage.p1') ?? '{}').blackbox?.imageId).toBe('img1'));
+    const field = screen.getByDisplayValue('v00.01.01 · lig.bin');
+    await userEvent.click(field.parentElement!.querySelector('button')!);  // the clear button
+    await vi.waitFor(() => expect(JSON.parse(window.localStorage.getItem('undm.stage.p1') ?? '{}').blackbox?.imageId).toBeNull());
+    view.unmount();
+    renderAt('/stage/p1?step=1');
+    expect(await screen.findByText('lab-a-bb', { exact: false })).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('v00.01.01 · lig.bin')).not.toBeInTheDocument();
+    window.localStorage.removeItem('undm.stage.p1');
+  });
+
+  it('Settings has a default login for the modem', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/credential-refs': [{ id: 'ok', name: 'approved', provider: 'keyring', locator: 'credential/ok', has_secret: true, shared: true }],
+      '/settings/defaults': { firewall: { login: null, login_after: null, tunnel_key: null }, blackbox: { login: null, login_after: null },
+        aruba: { login: null, current: null } } });  // as stored before v94: no modem row
+    renderAt('/settings?tab=logins');
+    expect(await screen.findByRole('heading', { name: 'Nokia 7705 SAR-Hmc (modem)' })).toBeInTheDocument();
+    // The form starts again once the stored defaults have arrived: wait for that.
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/settings/defaults')).toBe(true));
+    await new Promise((r) => setTimeout(r, 50));
+    await userEvent.click(await screen.findByRole('button', { name: 'Save default logins' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/settings/defaults' && c.init?.method === 'PUT')).toBe(true));
+    const put = calls.find((c) => c.url === '/api/settings/defaults' && c.init?.method === 'PUT');
+    expect(JSON.parse(String(put?.init?.body)).modem).toEqual({ login: null });
   });
 });

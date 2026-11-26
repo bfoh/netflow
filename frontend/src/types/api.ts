@@ -139,6 +139,8 @@ export interface LoginDefaults {
   firewall: { login: string | null; login_after: string | null; tunnel_key: string | null };
   blackbox: { login: string | null; login_after: string | null };
   aruba: { login: string | null; current: string | null };
+  /** The 7705 SAR-Hmc's approved login (D-124); missing in answers from before v94. */
+  modem: { login: string | null };
 }
 
 export interface Policy {
