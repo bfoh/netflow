@@ -688,10 +688,13 @@ class DeploymentService:
                          details={"reason": reason})
 
     def _console_only(self, device: Device) -> bool:
+        """Staged by its console setup alone: a console-only device whose driver loads no
+        file. (The modem loads its file by a plan since D-116.)"""
         if device.driver_id not in self.registry:
             return False
         caps = self.registry.get(device.driver_id).info.capabilities
-        return Capability.SERIAL_CONSOLE in caps and Capability.SSH not in caps
+        return (Capability.SERIAL_CONSOLE in caps and Capability.SSH not in caps
+                and Capability.CONFIGURATION_APPLY not in caps)
 
     def finish_system(self, project_id: str, device_ids: list[str], actor: str) -> Project:
         """Record that staging of a system is finished: every named device's latest staging
@@ -711,8 +714,8 @@ class DeploymentService:
             names.append(device.name)
             mine = latest.get(did)
             if not mine and self._console_only(device):
-                # Staged over its console only, with no plan (the modem, D-112): its console
-                # setup is its staging until its configuration load is built.
+                # Staged over its console only, with no plan: its console setup is its
+                # staging.
                 if device.provisioning_status not in (ProvisioningStatus.BOOTSTRAPPED.value,
                                                       ProvisioningStatus.MANAGED.value):
                     problems.append(f"{device.name} has not had its console setup")

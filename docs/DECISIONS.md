@@ -1681,3 +1681,58 @@ in one step (audited, `credential_ref.share_all`):
 - Names are unique among the logins for all systems (case ignored).
 - Refused while a plan is running, so no run loses its login in the middle.
 - A system can still add a login of its own for a device that differs (D-105).
+
+### D-116 The modem's configuration file is loaded over its console by a plan (2026-11-26)
+**Request (product owner):** after the first access (D-112), load the modem's file, generated
+from its template (D-114), instead of pasting it on the console by hand.
+
+**Decision.** The load is an ordinary plan (preview, approval, the real-device switch,
+audit): the lifecycle rule is kept, and no new exception is made. The wizard's modem gets a
+second step, "Its configuration file (console)", after its first access. Driver
+`console.nokia.sar` (experimental):
+- **Its port.** Devices gain a declared `console_port` (the PC's serial port, migration
+  6532b887f06e):
+  - the first access saves the port it used; Edit on the device page changes it;
+  - Console setup and plans share one lock per port, so a port is used by one session at a
+    time.
+- **The session.**
+  - Enter wakes the console. If someone is still logged in, UNDM logs out first.
+  - UNDM logs in with the device's login, then sends `environment no more`; at the end,
+    `logout`.
+  - Making the plan logs in and reads the configuration; nothing is changed.
+- **Reads.**
+  - `show system information` (bench) gives the facts.
+  - `admin display-config` gives the running configuration, before and after. Nokia's 7705
+    SAR Basic System Configuration Guide documents `admin display-config [detail | index]`
+    (read through a web search result on 2026-11-26: documentation.nokia.com cannot be
+    reached from the development environment). The team's file is this command's output.
+- **The load.**
+  - UNDM sends the file's configuration lines as written, one at a time, and waits for the
+    prompt after each.
+  - A line answered with `MINOR:`, `MAJOR:`, `CRITICAL:` or `Error:` stops the load. The
+    message names the file line, quotes the modem's words, and says nothing was saved.
+  - Comment lines, blank lines, `echo` lines (they only print a heading) and `admin save`
+    are not sent. That is UNDM's choice; they configure nothing.
+- **The password.**
+  - The template's password slot is filled from the modem's login when the line is sent.
+  - A file that writes a password of its own is loaded only if it is the login's password.
+  - The password is masked in the transcript in both directions.
+- **Saving.** Once every line is accepted, `admin save` must answer "Completed."
+- **Verification (D-031).**
+  - UNDM logs out and logs in again with the modem's login.
+  - `show system information` must then show the file's system name and "Changes Since Last
+    Save: No".
+- **Recovery.** A load that stops before `admin save` leaves the saved configuration
+  untouched. The plan says so ("switched off and on, the modem starts with its saved
+  configuration"), through a new driver hook `manual_recovery`.
+- **Finish staging.** It now needs the modem's file plan to have succeeded, not only its
+  first access.
+
+**Proof (local, not committed).** The team's two real modem files were made into templates
+(the password as the slot) and loaded on the simulated console:
+- 149 lines were sent from each file: 32 comment lines, 12 blank lines, 13 echo lines and
+  one `admin save` were left out;
+- the system name was verified;
+- all 90 checkable lines were present afterwards.
+
+The simulated unit accepts any line (SYNTHETIC); how a real modem takes each line is Q-58.

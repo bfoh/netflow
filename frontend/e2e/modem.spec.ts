@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
 
-/** Nokia 7705 SAR-Hmc: first access on the simulated console (D-112). Nothing is contacted.
+/** Nokia 7705 SAR-Hmc: first access on the simulated console (D-112), then its configuration file
+ *  by a plan (D-116; the file is SYNTHETIC). Nothing is contacted.
  *  The login comes from the backend's environment (UNDM_CRED_E2E_MODEM_USERNAME=admin and
  *  UNDM_CRED_E2E_MODEM_PASSWORD, any made-up value of 8+ characters); without them the test
  *  is skipped, because a simulated first access still needs a login to set. */
-test('first access of a simulated modem from the wizard', async ({ page, request }) => {
+test('first access of a simulated modem from the wizard, then its file by a plan', async ({ page, request }) => {
   const id = String(Date.now()).slice(-5);
   const p = await (await request.post('/api/projects', { data: { name: `E2E modem ${id}`, purpose: 'Staging' } })).json();
   const ref = await (await request.post(`/api/projects/${p.id}/credential-refs`,
@@ -29,5 +30,20 @@ test('first access of a simulated modem from the wizard', async ({ page, request
   await expect(page.locator('body')).toContainText('password ********');
   await expect(page.locator('body')).not.toContainText(process.env.UNDM_CRED_E2E_MODEM_PASSWORD ?? 'Example-Only-Pass-77');
   await page.getByRole('link', { name: 'Back to Stage a system' }).click();
-  await expect(page.getByText('First access done', { exact: true })).toBeVisible();
+  await expect(page.getByText('Done', { exact: true })).toBeVisible();
+
+  // Its configuration file, chosen in step 2 and loaded by a plan in step 4.
+  await page.goto(`/stage/${p.id}?step=1`);
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: `LTEModem-${id}.txt`, mimeType: 'text/plain',
+    buffer: Buffer.from(`exit all\nconfigure\n    system\n        name "e2e-modem-${id}"\n    exit\nexit all\n`),
+  });
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+  await page.goto(`/stage/${p.id}?step=3`);
+  await expect(page.getByText('2. Its configuration file (console)')).toBeVisible();
+  const card = page.locator('.mantine-Card-root', { hasText: name });
+  await card.getByRole('button', { name: 'Make the plan' }).click();
+  await card.getByRole('button', { name: 'Approve all steps' }).click();
+  await card.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(card.getByText('Staged')).toBeVisible({ timeout: 30_000 });
 });

@@ -54,8 +54,8 @@ _ENTRY = re.compile(r"^(files|firmware)/[A-Za-z0-9._-]{1,200}$")
 DEVICE_FIELDS = (
     "name", "manufacturer", "product_family", "model", "hardware_revision", "category", "role",
     "os_family", "firmware_version", "management_address", "management_protocol",
-    "management_port", "management_vrf", "site", "rack_location", "driver_id", "environment",
-    "notes", "tags", "intent", "bootstrap_profile",
+    "management_port", "console_port", "management_vrf", "site", "rack_location", "driver_id",
+    "environment", "notes", "tags", "intent", "bootstrap_profile",
 )
 
 

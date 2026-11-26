@@ -9,7 +9,7 @@ import { SafetyHint } from '../../components/SafetyHint';
 import { useAction, usePolicy } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { Device, OperationResult } from '../../types/api';
-import { addressTakenBy, canMoveAside, CONSOLE_DONE, consoleOnly, type Role } from './roles';
+import { addressTakenBy, canMoveAside, CONSOLE_DONE, type Role } from './roles';
 import { Notice } from '../../components/Notice';
 
 
@@ -36,7 +36,7 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
           <List.Item>Connect the PC and every device to one small switch that is connected to nothing else, with one cable per device (two would make a loop).</List.Item>
           <List.Item>Give the PC's wired adapter two addresses, one per factory network, for example <Code>192.168.1.50/24</Code> and <Code>192.0.2.50/24</Code> (Windows: adapter settings → IPv4 → Advanced). UNDM does not change your PC's network settings.</List.Item>
           <List.Item>Aruba switches: the USB console cable goes to the PC first, for the console setup. One cable is enough: move it from one switch to the other.</List.Item>
-          {roles.some(({ role }) => consoleOnly(role)) && (
+          {roles.some(({ role }) => role.consoleCable) && (
             <List.Item>Nokia modem: its console cable only, at speed 115200. It is not plugged into the small switch.</List.Item>
           )}
           <List.Item>Allow incoming TFTP on this PC (UDP port 69): devices fetch firmware and files from UNDM. A blocked transfer is reported as such.</List.Item>
@@ -90,7 +90,8 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
                       <Anchor component={Link} to={`/devices/${device.id}`} fw={600} size="sm">{device.name}</Anchor>
                       <Group gap={6} mt={2}><Text size="xs" c="dimmed">{role.title}</Text><EnvironmentBadge env={device.environment} /></Group>
                     </Table.Td>
-                    <Table.Td><Text size="sm" ff="monospace">{device.management_address || '—'}</Text></Table.Td>
+                    <Table.Td><Text size="sm" ff="monospace">{device.management_address
+                      || (role.consoleCable ? `console ${device.console_port || '—'}` : '—')}</Text></Table.Td>
                     <Table.Td>
                       {needsConsole ? (
                         CONSOLE_DONE.has(device.provisioning_status)
@@ -100,8 +101,8 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
                       ) : <Text size="sm" c="dimmed">Not needed</Text>}
                     </Table.Td>
                     <Table.Td>
-                      {consoleOnly(role) ? (
-                        <Text size="sm" c="dimmed">Console cable only: no network test</Text>
+                      {role.consoleCable && device.environment !== 'simulated' && !CONSOLE_DONE.has(device.provisioning_status) ? (
+                        <Text size="sm" c="dimmed">After its first access (it saves the console port)</Text>
                       ) : device.environment !== 'simulated' && !device.credential_ref_id ? (
                         <Text size="sm">Choose its login first:{' '}
                           <Anchor component={Link} to="?step=0" size="sm">step 1, “Its login”</Anchor></Text>

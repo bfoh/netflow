@@ -126,6 +126,9 @@ class Device(TimestampMixin, Base):
     management_address: Mapped[str] = mapped_column(String(255), default="")
     management_protocol: Mapped[str] = mapped_column(String(20), default="ssh")
     management_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Declared: the serial port of the PC that this device's console cable is on (COM3),
+    # for devices reached over their console only (D-116).
+    console_port: Mapped[str | None] = mapped_column(String(64), nullable=True)
     management_vrf: Mapped[str] = mapped_column(String(80), default="")
     site: Mapped[str] = mapped_column(String(200), default="")
     rack_location: Mapped[str] = mapped_column(String(200), default="")

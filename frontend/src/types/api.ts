@@ -68,6 +68,8 @@ export interface Device {
   management_address: string;
   management_protocol: string;
   management_port: number | null;
+  /** The PC's serial port for a device reached over its console only (D-116). */
+  console_port?: string | null;
   management_vrf: string;
   site: string;
   rack_location: string;

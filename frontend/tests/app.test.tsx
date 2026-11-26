@@ -1130,26 +1130,38 @@ describe('Nokia modem: first access over the console (D-112)', () => {
     expect(screen.getByRole('button', { name: 'Run first access…' })).toBeDisabled();
   });
 
-  it('the wizard stages the modem over its console only: no plan, no network test', async () => {
+  it('the wizard stages the modem: its first access, then its file over the console by a plan (D-116)', async () => {
     const project = { id: 'p1', name: 'Lab z045', description: '', site: '', purpose: '', created_at: '', updated_at: '',
       certificate_subject: null, staged_at: null, staged_by: '', zone: 45 };
-    mockApi({ '/projects/p1': project, '/projects/p1/devices': [modem({ provisioning_status: 'planned' })], '/projects/p1/staging-plans': [],
-      '/policy': { enable_real_device_writes: false, enable_real_device_firmware: false, firmware_require_separate_approver: false, locked: [] } });
+    const policy = { enable_real_device_writes: false, enable_real_device_firmware: false, firmware_require_separate_approver: false, locked: [] };
+    const real = (over: Partial<Device>) => modem({ driver_id: 'console.nokia.sar', environment: 'lab', ...over });
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': [real({ provisioning_status: 'planned' })], '/projects/p1/staging-plans': [], '/policy': policy });
     const first = renderAt('/stage/p1?step=3');
     expect(await screen.findByText('1. First access (console)')).toBeInTheDocument();
+    expect(screen.getByText('2. Its configuration file (console)')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open console setup' })).toHaveAttribute('href', '/provisioning?device=m1');
-    expect(screen.queryByRole('button', { name: 'Make the plan' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Do its first access first/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Make the plan' })).toBeDisabled();
     first.unmount();
     const bench = renderAt('/stage/p1?step=2');
-    expect(await screen.findByText('Console cable only: no network test')).toBeInTheDocument();
+    expect(await screen.findByText('After its first access (it saves the console port)')).toBeInTheDocument();
     expect(screen.getByText(/Nokia modem: its console cable only, at speed 115200/)).toBeInTheDocument();
     bench.unmount();
-    // After its first access it counts as staged in the report.
-    mockApi({ '/projects/p1': project, '/projects/p1/devices': [modem({ provisioning_status: 'bootstrapped' })], '/projects/p1/staging-plans': [],
-      '/policy': { enable_real_device_writes: false, enable_real_device_firmware: false, firmware_require_separate_approver: false, locked: [] } });
+    // After its first access: the console port it saved, and its file to choose; not staged yet.
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': [real({ provisioning_status: 'bootstrapped', console_port: 'COM7' })],
+      '/projects/p1/staging-plans': [], '/policy': policy });
+    const run = renderAt('/stage/p1?step=3');
+    expect(await screen.findByText(/console COM7/)).toBeInTheDocument();
+    expect(screen.getByText(/Still needed: the team file/)).toBeInTheDocument();
+    expect(screen.getByText(/the load stops, unsaved, at the first line the modem refuses/)).toBeInTheDocument();
+    run.unmount();
+    const files = renderAt('/stage/p1?step=1');
+    expect(await screen.findByText('Configuration file')).toBeInTheDocument();
+    expect(screen.queryByText(/Login after loading/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Firmware' })).not.toBeInTheDocument();
+    files.unmount();
     renderAt('/stage/p1?step=4');
-    expect(await screen.findByText(/First access \(console\):/)).toBeInTheDocument();
-    expect(screen.queryByText(/Still to do in step 4/)).not.toBeInTheDocument();
+    expect((await screen.findAllByText(/Still to do in step 4 \(Run\): lab-modem/)).length).toBeGreaterThan(0);
   });
 });
 

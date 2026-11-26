@@ -730,8 +730,9 @@ class DeploymentOrchestrator:
                 all_ok = False
                 cause = f"{t.message}. " if t.message else ""  # keep why it failed
                 t.state = TargetState.MANUAL_RECOVERY_REQUIRED
-                t.message = (f"{cause}Automatic rollback unsupported; restore backup "
-                             f"{t.backup.reference} manually")
+                t.message = cause + (t.driver.manual_recovery() or (
+                    f"Automatic rollback unsupported; restore backup {t.backup.reference} "
+                    "manually"))
                 self._emit(dep, "recover", "error", t.message, t)
             else:
                 all_ok = False

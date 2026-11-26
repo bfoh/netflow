@@ -31,11 +31,14 @@ export function EditDeviceModal({ device, opened, onClose }: { device: Device; o
     setF({ ...f, driver_id: d.driver_id, environment });
   };
 
+  // Reached over its console only (the modem): its plans use this PC's console port (D-116).
+  const overConsole = !!driver && driver.capabilities.includes('supports_serial_console') && !driver.capabilities.includes('supports_ssh');
   const submit = () => {
     const body: DeviceInput = {
       name: f.name, role: f.role, model: f.model, hardware_revision: f.hardware_revision, os_family: f.os_family,
       firmware_version: f.firmware_version, management_address: f.management_address,
       management_protocol: f.management_protocol, management_port: f.management_port ?? null,
+      ...(overConsole ? { console_port: f.console_port?.trim() || null } : {}),
       management_vrf: f.management_vrf, site: f.site, rack_location: f.rack_location, driver_id: f.driver_id,
       environment: f.environment, credential_ref_id: f.credential_ref_id ?? null, notes: f.notes, tags: f.tags,
     };
@@ -66,6 +69,10 @@ export function EditDeviceModal({ device, opened, onClose }: { device: Device; o
           <NumberInput label="Port" placeholder="default (22 for SSH)" min={1} max={65535} value={f.management_port ?? ''}
             onChange={(v) => setF({ ...f, management_port: v === '' ? null : Number(v) })} />
           <TextInput label="Management VRF" value={f.management_vrf ?? ''} onChange={set('management_vrf')} />
+          {overConsole && !driver?.simulated && (
+            <TextInput label="Console port" placeholder="e.g. COM3" value={f.console_port ?? ''} onChange={set('console_port')}
+              description="The PC's serial port its console cable is on: its plans run over it. Its first access saves it." />
+          )}
           <Select label="Login" placeholder={refs.data?.length ? 'Choose a login' : 'Add one on the system\'s Logins tab'} clearable
             data={(refs.data ?? []).map((r) => ({ value: r.id, label: r.name }))} value={f.credential_ref_id ?? null}
             onChange={(v) => setF({ ...f, credential_ref_id: v })} />

@@ -31,6 +31,14 @@ export interface Role {
   consolePort?: string;
   /** What this role's console step is called, when it is not the 2930F's console setup. */
   consoleWords?: string;
+  /** Reached over its console cable only (the modem): no network address; its plan runs over
+   * the console port saved on the device (D-116). */
+  consoleCable?: boolean;
+  /** What its file is, when it is not a switch's team file. */
+  fileWords?: string;
+  /** Its file sets the password of its own login (the modem's comes from the login): no
+   * "login after loading". */
+  fileKeepsLogin?: boolean;
 }
 
 export const ROLES: Role[] = [
@@ -58,17 +66,17 @@ export const ROLES: Role[] = [
     hint: 'Temporary address so both switches fit on the bench; its file sets the final one.',
     cable: 'USB console cable first; after its console setup, port 3 → small switch', addressAfter: '192.168.1.1',
     consolePort: '3' },
-  // Console cable only: no bench address. Its configuration load is not built yet (D-112).
+  // Console cable only: no bench address. Its first access (D-112), then its file over the same
+  // console port by a plan (D-116).
   { key: 'modem', title: 'Nokia 7705 SAR-Hmc (modem)', model: '7705 SAR-Hmc', modelId: 'nokia-7705-sar-hmc',
     realDriver: 'console.nokia.sar', simulatedDriver: 'mock.nokia.sar', nameSuffix: 'modem',
-    address: '', steps: ['console'],
+    address: '', steps: ['console', 'file'], consoleCable: true, fileKeepsLogin: true,
+    fileWords: "The modem's configuration file (Generate above makes it from its template), loaded over its console line by line.",
     hint: 'Console cable only. Its first access starts it once without its factory configuration and sets the admin password.',
     cable: 'USB console cable only (speed 115200); no network cable on the bench', addressAfter: '',
     consoleWords: 'First access (console)' },
 ];
 
-/** A role staged over its console only, with no plan (yet): the modem, until its file load is built. */
-export const consoleOnly = (role: Role) => role.steps.every((k) => k === 'console');
 
 /** Console steps done: the device has been set up over its console. */
 export const CONSOLE_DONE = new Set(['bootstrapped', 'managed']);

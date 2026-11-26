@@ -88,6 +88,21 @@ class SimulatedSarConsole:
         self.bof_writes = 0
         self.keys: list[str] = []  # keys pressed at the 3-second question
         self.closed = False
+        # The configuration loaded line by line (D-116). SYNTHETIC: the simulated unit
+        # accepts any line inside 'configure' (except those in fail_on) and keeps it as
+        # written; it does not model the unit's configuration tree.
+        self.in_config = False
+        self.config_lines: list[str] = []
+
+    @classmethod
+    def ready(cls, password: str, **kw: object) -> SimulatedSarConsole:
+        """A unit after its first access: boots with its configuration file, waits at its
+        login prompt with the admin password set."""
+        sim = cls(factory=False, **kw)  # type: ignore[arg-type]
+        sim.memory = {k: list(v) for k, v in sim.bof.items()}
+        sim.file_password = sim.running_password = password
+        sim._state = "login"
+        return sim
 
     # -- transport -----------------------------------------------------------------
     def read(self, size: int = 1) -> bytes:
@@ -179,7 +194,8 @@ class SimulatedSarConsole:
         return "".join(f"    {k:<16} {v}\r\n" for k, values in bof.items() for v in values)
 
     def _prompt(self) -> str:
-        return f"{'*' if self.unsaved else ''}A:{self.system_name}# "
+        context = ">config" if self.in_config else ""
+        return f"{'*' if self.unsaved else ''}A:{self.system_name}{context}# "
 
     def _key(self) -> None:
         if self.key_ignored:
@@ -266,6 +282,9 @@ class SimulatedSarConsole:
                 self._emit("Successfully saved the new settings in cf3:/bof.cfg\r\n")
             self._boot(self._session)
         elif st == "login":
+            if not line:  # Enter alone: asks again (SYNTHETIC)
+                self._emit("\r\nLogin: ")
+                return
             self._user = line
             self._emit(f"{line}\r\nPassword: ")
             self._state = "password"
@@ -349,7 +368,33 @@ class SimulatedSarConsole:
                 return ""
             return "\r\n".join(lines)
         if cmd == "logout":
-            self._state = "login"
+            self._state, self.in_config = "login", False
             self._emit("\r\nLogin: ")
+            return ""
+        return self._config(cmd)
+
+    def _config(self, cmd: str) -> str:
+        """Configuration lines (D-116). SYNTHETIC, see ``config_lines``."""
+        if cmd == "admin display-config":
+            return ("# TiMOS-B-20.5.R1 both/sar Nokia 7705 SAR Copyright (c) 2000-2020 Nokia."
+                    "\r\n# SIMULATED CONSOLE (UNDM)\r\n\r\nexit all\r\nconfigure\r\n"
+                    + "".join(f"    {ln}\r\n" for ln in self.config_lines)
+                    + "exit all\r\n\r\n# Finished (SIMULATED)")
+        if cmd == "configure":
+            self.in_config = True
+            return ""
+        if cmd == "exit all":
+            self.in_config = False
+            return ""
+        if cmd.startswith("echo "):
+            return cmd[5:].strip('"')
+        if self.in_config or cmd.startswith("config "):
+            if cmd != "exit":
+                self.config_lines.append(cmd)
+            if cmd.startswith('name "') and self.in_config:
+                self.system_name = cmd[6:].rstrip('"')
+            if cmd.startswith('password "') and self.in_config:
+                self.running_password = cmd.split('"')[1]
+            self.unsaved = True
             return ""
         return "Error: Bad command."

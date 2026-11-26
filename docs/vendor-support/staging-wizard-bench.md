@@ -93,6 +93,23 @@ If it stops:
   next run (press Run first).
 - "refused the new admin password": choose a login with a longer, less simple password;
   switch the modem off and on, then run again.
+
+## Nokia modem: its configuration file (since v90, D-116, experimental)
+After the first access, with the console cable still on the same COM port:
+1. Step 1: set the zone and system (B007) of the system; step 2: **Generate the files**
+   gives the modem its configuration file (its password comes from the modem's login).
+2. Step 4, the modem's card: **Make the plan** (it logs in over the console and reads the
+   configuration; nothing changes), **Approve all steps**, **Run**. The lines go one at a
+   time; about 1–2 minutes.
+3. Success: "N line(s) accepted", "saved ('admin save': Completed.)", then "logged in again
+   with its login; system name …; nothing unsaved". The card shows **Staged**.
+4. If it stops: the event names the file line and the modem's words; nothing was saved.
+   Switch the modem off and on (it starts with its saved configuration), then send the
+   plan's events (Bench log) and make a new plan once the line is understood.
+- "No login prompt from the modem on COMx": the cable is on another port (Edit on the device
+  page), or the modem is still starting (about 3 minutes after power-on).
+- "COMx is in use by another console session": close Console setup or wait for the other
+  plan, then try again.
 - A modem that already had its first access is left alone ("already done" or "refused").
 
 ## The modem's file and the BBU's SCF (since v88, D-114)

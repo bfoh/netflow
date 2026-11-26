@@ -1,8 +1,9 @@
 # Nokia 7705 SAR-Hmc (the system's LTE modem): staging over the console
 
 Status: **experimental**. UNDM's first access (D-112) is built from the product owner's
-console recording and Nokia's public guides. It has run only on UNDM's simulated console,
-never on a modem. Loading the modem's configuration is not built yet.
+console recording and Nokia's public guides; it passed on a factory unit on 2026-11-26 (third
+bench run). Loading the modem's configuration file over its console as a plan (D-116) is
+built and has run only on UNDM's simulated console so far (Q-58).
 
 ## What is known, and from where
 
@@ -172,12 +173,22 @@ The team's file for each system is generated from a template:
   downloaded from Stage a system;
 - checked on two systems in two zones: byte for byte.
 
+## Loading its configuration file (D-116)
+A plan in Stage a system, step 4, after the first access, over the console port the first
+access saved (Edit on the device page changes it):
+- making the plan logs in and reads `admin display-config`; nothing is changed;
+- the run sends the file's configuration lines one at a time, each after the previous one's
+  prompt, and stops at the first line answered with `MINOR:`, `MAJOR:`, `CRITICAL:` or
+  `Error:`; comments, blank lines, `echo` lines and `admin save` are not sent;
+- the admin password comes from the modem's login (masked in the transcript);
+- `admin save` must answer "Completed."; then UNDM logs in again and checks the system name
+  and "Changes Since Last Save: No";
+- a load that stopped is not saved: switched off and on, the modem starts with its saved
+  configuration.
+
 ## Not built yet
-- Loading the modem's configuration (today: pasted on the console by hand, then
-  `admin save`); the file itself is generated (D-114). Planned as a normal plan (preview, approve, run) that types the file over
-  the console and stops at the first refused line; needs the team's files for two zones.
-- The modem's file by zone (D-111), once two zones' files prove the rules.
-- Reading facts, backups and firmware for this model.
+- Firmware for this model.
+- The bench run of the configuration load (Q-58).
 
 ## Open questions
-See `docs/REFERENCE_ANALYSIS.md`, Q-49 to Q-53.
+See `docs/REFERENCE_ANALYSIS.md`, Q-49 to Q-53, Q-55, Q-56 and Q-58.

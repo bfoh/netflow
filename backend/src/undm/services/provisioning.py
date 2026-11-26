@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 import socket
-import threading
 import time
 from ipaddress import IPv4Interface
 from typing import Any
@@ -29,6 +28,7 @@ from undm.provisioning.console import (
     Transport,
     list_serial_ports,
     open_serial,
+    port_lock,
 )
 from undm.provisioning.results import BootstrapStatus
 from undm.provisioning.simulated import SimulatedArubaConsole
@@ -49,8 +49,6 @@ CONSOLE_BOOTSTRAP_PLATFORMS = frozenset({"aos_switch", "sros_sar"})
 # VLAN: no bootstrap settings, and the unit is switched off and on by the person.
 SAR_PLATFORM = "sros_sar"
 
-_port_locks: dict[str, threading.Lock] = {}
-_registry_lock = threading.Lock()
 # One simulated console per simulated device, so repeated runs see earlier changes.
 _simulated_consoles: dict[str, SimulatedArubaConsole] = {}
 _simulated_sar: dict[str, SimulatedSarConsole] = {}
@@ -226,9 +224,7 @@ def identify_console(
             current = creds.resolve(ref.provider, ref.locator)
         except creds.CredentialResolutionError as e:
             raise ServiceError(f"Credential '{ref.name}': {e}") from e
-    with _registry_lock:
-        lock = _port_locks.setdefault(serial_port if not simulated else f"sim:{device.id}",
-                                      threading.Lock())
+    lock = port_lock(serial_port if not simulated else f"sim:{device.id}")
     if not lock.acquire(blocking=False):
         raise ConflictError(f"{serial_port} is already in use by another console session")
     transport: Transport | None = None
@@ -344,9 +340,7 @@ def run_console_bootstrap(
             raise ServiceError(f"Credential '{current_ref.name}': {e}") from e
         erase = aos_switch.EraseRequest(current, (confirm_hostname or "").strip())
 
-    with _registry_lock:
-        lock = _port_locks.setdefault(serial_port if not simulated else f"sim:{device.id}",
-                                      threading.Lock())
+    lock = port_lock(serial_port if not simulated else f"sim:{device.id}")
     if not lock.acquire(blocking=False):
         raise ConflictError(f"{serial_port} is already in use by another bootstrap")
     transport: Transport | None = None
@@ -453,9 +447,7 @@ def _run_sar_first_access(
     if problem:
         raise ConflictError(f"{problem} Nothing was sent to the modem.")
 
-    with _registry_lock:
-        lock = _port_locks.setdefault(serial_port if not simulated else f"sim:{device.id}",
-                                      threading.Lock())
+    lock = port_lock(serial_port if not simulated else f"sim:{device.id}")
     if not lock.acquire(blocking=False):
         raise ConflictError(f"{serial_port} is already in use by another console session")
     transport: Transport | None = None
@@ -489,6 +481,8 @@ def _run_sar_first_access(
     ok = result.status in (BootstrapStatus.BOOTSTRAPPED, BootstrapStatus.ALREADY_CONFIGURED)
     if ok:
         device.provisioning_status = ProvisioningStatus.BOOTSTRAPPED.value
+        if not simulated:  # its file is loaded over the same port later (D-116)
+            device.console_port = serial_port
     known = [("hostname", device.name)]
     if result.facts.get("name"):
         known.append(("hostname", result.facts["name"]))
@@ -511,9 +505,8 @@ def _run_sar_first_access(
                      "facts": result.facts, "diagnostics": diagnostics,
                      "credential": device.credential_ref.name if device.credential_ref
                      else None, **({"transcript_tail": tail} if tail else {})})
-    hint = ("Next: its configuration. For now that is pasted on the console by hand (then "
-            "'admin save'); UNDM's own load of the modem's file is being built."
-            if ok else "")
+    hint = ("Next: its configuration file, loaded over this console port by a plan (Stage "
+            "a system, step 4)." if ok else "")
     return {
         "status": result.status.value, "message": result.message,
         "commands_sent": result.commands_sent, "findings": result.findings,

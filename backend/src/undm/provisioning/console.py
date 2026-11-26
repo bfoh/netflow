@@ -8,6 +8,7 @@ tests and demos.
 from __future__ import annotations
 
 import re
+import threading
 import time
 from collections import Counter
 from dataclasses import dataclass, field
@@ -219,6 +220,17 @@ class ConsoleSession:
     @property
     def transcript_text(self) -> str:
         return "".join(self.transcript)
+
+
+_port_locks: dict[str, threading.Lock] = {}
+_registry_lock = threading.Lock()
+
+
+def port_lock(name: str) -> threading.Lock:
+    """One lock per serial port, shared by Console setup and plans over the console: a
+    port is used by one session at a time."""
+    with _registry_lock:
+        return _port_locks.setdefault(name, threading.Lock())
 
 
 def open_serial(port: str, baudrate: int = 9600, read_chunk_timeout: float = 0.2) -> Transport:

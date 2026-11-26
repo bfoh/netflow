@@ -11,7 +11,7 @@ import { type Choice, type Choices, EMPTY_CHOICE, loadChoices, planSteps, saveCh
 import { FilesStep } from '../features/stage/FilesStep';
 import { ZoneField } from '../features/stage/GeneratePanel';
 import { ReportStep } from '../features/stage/ReportStep';
-import { assignRoles, consoleOnly, roleDefaults, ROLES, type Role, type RoleKey } from '../features/stage/roles';
+import { assignRoles, roleDefaults, ROLES, type Role, type RoleKey } from '../features/stage/roles';
 import { RunStep } from '../features/stage/RunStep';
 import {
   useAction, useCredentialRefs, useDeviceModels, useLoginDefaults, useProject, useProjectDevices, useProjects, useProjectStagings,
@@ -88,7 +88,7 @@ function RoleCard({ role, device, projectId, systemName, simulated }: {
       {device ? (
         <Stack gap={6}>
           <Group gap="xs"><Anchor component={Link} to={`/devices/${device.id}`} fw={600} size="sm">{device.name}</Anchor>
-            <Text size="sm" ff="monospace" c="dimmed">{device.management_address || (consoleOnly(role) ? 'console cable only' : '')}</Text></Group>
+            <Text size="sm" ff="monospace" c="dimmed">{device.management_address || (role.consoleCable ? `console cable${device.console_port ? ` · ${device.console_port}` : ' only'}` : '')}</Text></Group>
           <Select size="xs" label="Its login" clearable w="100%" maw={320}
             description={LOGIN_HINT[role.key]}
             placeholder={refs.data?.length ? 'Choose a login' : 'Add logins on the system page first'}

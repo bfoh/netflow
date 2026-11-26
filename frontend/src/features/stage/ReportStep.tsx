@@ -7,7 +7,7 @@ import { StateBadge } from '../../components/Badges';
 import { api } from '../../services/api';
 import { downloadText, fmtDate } from '../../services/format';
 import type { Device, Project, StagingIndex, StagingPlan } from '../../types/api';
-import { CONSOLE_DONE, consoleOnly, type Role } from './roles';
+import { type Role } from './roles';
 import { EmptyState } from '../../components/EmptyState';
 import { BenchLogButton } from '../systems/BenchLogButton';
 import { Notice } from '../../components/Notice';
@@ -56,9 +56,7 @@ export function ReportStep({ project, roles, stagings }: {
       {roles.length === 0 && <EmptyState>No devices yet: add them in step 1.</EmptyState>}
       {roles.length > 0 && (() => {
         // The end of the run, said plainly (bench 2026-11-25: "how does it complete?").
-        // A device staged over its console only (the modem) is done after its console step.
-        const open = rows.filter(({ role, device, plan }) => (consoleOnly(role) ? !CONSOLE_DONE.has(device.provisioning_status)
-          : !plan || plan.steps.length === 0 || plan.steps.some((s) => s.state !== 'succeeded')));
+        const open = rows.filter(({ plan }) => !plan || plan.steps.length === 0 || plan.steps.some((s) => s.state !== 'succeeded'));
         return <Stack className="no-print">
           {open.length > 0 && !project.staged_at && (
             <Notice kind="status" title={`${rows.length - open.length} of ${rows.length} devices are staged`}>
@@ -88,10 +86,7 @@ export function ReportStep({ project, roles, stagings }: {
                 <Text size="sm" mb="xs">Firmware now: <b>{String(facts.os_version ?? '—')}</b> · serial / MAC: <b>{String(facts.serial_number ?? '—')}</b>
                   {facts.hostname ? <> · hostname: <b>{String(facts.hostname)}</b></> : null}
                   {device.facts_retrieved_at ? ` (read ${fmtDate(device.facts_retrieved_at)})` : ' (not read yet: use Retrieve information on the device page)'}</Text>
-                {consoleOnly(role) ? (
-                  <Text size="sm">{role.consoleWords ?? 'Console setup'}: <b>{CONSOLE_DONE.has(device.provisioning_status) ? 'done' : 'not done yet'}</b>.
-                    Its configuration is loaded on the console by hand for now.</Text>
-                ) : steps.length === 0 ? <Text size="sm" c="dimmed">No staging plan yet.</Text> : (
+                {steps.length === 0 ? <Text size="sm" c="dimmed">No staging plan yet.</Text> : (
                   <Table.ScrollContainer minWidth={520}>
                     <Table verticalSpacing={4}>
                       <Table.Thead><Table.Tr><Table.Th>Step</Table.Th><Table.Th>Result</Table.Th><Table.Th>Started</Table.Th><Table.Th>Took</Table.Th><Table.Th>Approved by</Table.Th></Table.Tr></Table.Thead>

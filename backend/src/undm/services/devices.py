@@ -83,13 +83,20 @@ def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
     if device.driver_id not in registry:
         raise ServiceError(f"Unknown driver {device.driver_id!r}")
     driver_cls = registry.get(device.driver_id)
+    caps = driver_cls.info.capabilities
+    console_only = Capability.SERIAL_CONSOLE in caps and Capability.SSH not in caps
     if not device.management_address:
-        caps = driver_cls.info.capabilities
-        if Capability.SERIAL_CONSOLE in caps and Capability.SSH not in caps:
+        if not console_only:
+            raise ServiceError(f"Device {device.name} has no management address")
+        if Capability.CONFIGURATION_APPLY not in caps:
             raise ServiceError(
                 f"{device.name} is reached over its console cable only: use Console setup. "
                 "It has no network address for UNDM to test or read.")
-        raise ServiceError(f"Device {device.name} has no management address")
+        if not driver_cls.info.simulated and not device.console_port:
+            raise ServiceError(
+                f"{device.name} is reached over its console cable: say which serial port of "
+                "this PC it is on. Its first access in Console setup saves it, or set it with "
+                "Edit on its device page.")
     credentials: Credentials | None = None
     if device.credential_ref is not None:
         try:
@@ -103,7 +110,7 @@ def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
             "Stage a system, step 1 ('Its login'). Logins are added on the system page's "
             "Logins tab.")
     target = DeviceTarget(device.id, device.management_address,
-                          device.management_port)
+                          device.management_port, console_port=device.console_port)
     return registry.create(device.driver_id, target, credentials)
 
 

@@ -8,7 +8,7 @@ import { fmtDate } from '../../services/format';
 import type { Device, Project } from '../../types/api';
 import { keptPreviousLogin, type Choice, type Choices, EMPTY_CHOICE, planSteps } from './choices';
 import { GeneratePanel } from './GeneratePanel';
-import { consoleOnly, roleDefaults, type Role } from './roles';
+import { roleDefaults, type Role } from './roles';
 import { EmptyState } from '../../components/EmptyState';
 
 /** Choose one of the device's imported files, or import one; shows what UNDM found in it. */
@@ -124,7 +124,7 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
             label="New unit (factory default): set its approved password at the first login"
             description="Leave this off for a unit that already has the approved password." />
         )}
-        <Stack gap={4}>
+        {role.steps.includes('firmware') && <Stack gap={4}>
           <Select label="Firmware" description={fitting.length ? 'An approved image for this model, or leave it as it is.' : 'No approved image for this model yet (Firmware page).'}
             placeholder="Keep the firmware it has" clearable w="100%" maw={420}
             data={fitting.map((i) => ({ value: i.id, label: `${i.version} · ${i.filename}` }))}
@@ -140,7 +140,7 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
               )}
             </Group>
           )}
-        </Stack>
+        </Stack>}
         {role.steps.includes('base') && (
           <FilePick device={device} label="Base file" description="The full backup restored first (complete file)." logins={logins}
             value={choice.baseId} onChange={(v) => set({ baseId: v })} />
@@ -152,13 +152,14 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
             onSecrets={(s, byDefault) => set({ secrets: s, ...(byDefault ? { filled: [...filled, 'secrets'] } : {}) })} />
         )}
         {role.steps.includes('file') && (
-          <FilePick device={device} label="Team file" description="The complete file this switch gets." logins={logins}
+          <FilePick device={device} label={role.fileWords ? 'Configuration file' : 'Team file'}
+            description={role.fileWords ?? 'The complete file this switch gets.'} logins={logins}
             value={choice.fileId} onChange={(v) => set({ fileId: v })} />
         )}
         {device.capabilities.includes('supports_license_file') && (
           <LicensePick device={device} choice={choice} onChange={(id, name) => set({ licenseId: id, licenseName: name })} />
         )}
-        {hasFile && (needsLoginAfter ? (
+        {hasFile && !role.fileKeepsLogin && (needsLoginAfter ? (
           <Select label="Login after loading" clearable w="100%" maw={420} data={logins} value={choice.loginAfter}
             placeholder="Choose the login" description={`Needed: ${role.loginAfter ?? 'the switch kept its previous password; its file sets the approved one: choose the approved login'}.`}
             error={choice.loginAfter ? undefined : 'Not chosen yet'}
@@ -187,16 +188,10 @@ export function FilesStep({ project, roles, choices, onChange, onReplace }: {
     <Stack>
       {project && onReplace && <GeneratePanel project={project} roles={roles} choices={choices} onReplace={onReplace} />}
       <SimpleGrid cols={{ base: 1, lg: 2 }}>
-        {roles.map(({ role, device }) => (consoleOnly(role) ? (
-          <Card withBorder key={role.key}>
-            <Title order={3} size="h5" mb={4}>{role.title} · {device.name}</Title>
-            <Text size="sm" c="dimmed">Nothing to choose yet. After its first access (step 4), its configuration is pasted on the
-              console by hand; UNDM&apos;s own load of the modem&apos;s file is being built.</Text>
-          </Card>
-        ) : (
+        {roles.map(({ role, device }) => (
           <DeviceFiles key={role.key} role={role} device={device} choice={choices[role.key] ?? EMPTY_CHOICE}
             onChange={(c) => onChange(role.key, c)} />
-        )))}
+        ))}
       </SimpleGrid>
     </Stack>
   );

@@ -130,6 +130,8 @@ class DeviceTarget:
     device_id: str
     management_address: str
     port: int | None = None
+    # The PC's serial port for a device reached over its console only (D-116).
+    console_port: str | None = None
 
 
 @dataclass(frozen=True)
@@ -310,6 +312,11 @@ class DeviceDriver:
 
         ``settings`` are the project's device settings (e.g. ``certificate_subject``).
         A failed result stops the job before the file is sent."""
+        return None
+
+    def manual_recovery(self) -> str | None:
+        """What a person does to return the device to its state before a failed load, where
+        the driver knows better than "restore the backup" (e.g. nothing was saved)."""
         return None
 
     def verify_configuration(self, intended: str, mode: ApplyMode) -> OperationResult | None:

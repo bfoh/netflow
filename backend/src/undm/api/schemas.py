@@ -232,6 +232,7 @@ class DeviceBase(BaseModel):
     management_address: str | None = None
     management_protocol: ManagementProtocol | None = None
     management_port: int | None = Field(default=None, ge=1, le=65535)
+    console_port: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_./:\\-]{1,64}$")
     management_vrf: str | None = None
     site: str | None = None
     rack_location: str | None = None
@@ -270,6 +271,7 @@ class DeviceOut(ORM):
     management_address: str
     management_protocol: str
     management_port: int | None
+    console_port: str | None = None
     management_vrf: str
     site: str
     rack_location: str

@@ -201,9 +201,9 @@ def test_api_preview_run_rerun_and_audit(client):
     assert entry["action"] == "provisioning.console_bootstrap"
     assert entry["details"]["procedure"] == "sros_sar_first_access"
     assert "transcript" not in entry["details"] and PASSWORD not in str(entry)
-    # The modem has no network address: tests say so instead of failing oddly.
+    # The simulated modem answers a test like the others: its file is loaded by a plan (D-116).
     test = client.post(f"/api/devices/{did}/operations/check_reachability")
-    assert "console cable only" in test.text
+    assert test.json()["status"] == "success"
     ident = client.post(f"/api/devices/{did}/provisioning/console-identify",
                         json={"serial_port": "SIMULATED"})
     assert ident.status_code == 400
@@ -254,12 +254,22 @@ def test_api_real_modem_runs_at_115200_with_the_switch_on(monkeypatch):
         keyring.set_keyring(previous)
 
 
-def test_finish_staging_counts_a_console_only_device_after_its_first_access(client):
+def test_finish_staging_needs_the_modems_file_plan_after_its_first_access(client):
     did = add(client, SIM_MODEM)
     pid = client.get(f"/api/devices/{did}").json()["project_id"]
-    r = client.post(f"/api/projects/{pid}/finish", json={"device_ids": [did]})
-    assert r.status_code == 409 and "has not had its console setup" in r.json()["error"]
     assert go(client, did).json()["status"] == "bootstrapped"
+    r = client.post(f"/api/projects/{pid}/finish", json={"device_ids": [did]})
+    assert r.status_code == 409 and "has no staging plan" in r.json()["error"]  # D-116
+    version = client.post(f"/api/devices/{did}/configs/import", json={
+        "filename": "LTEModemz41.txt",
+        "text": 'exit all\nconfigure\n    system\n        name "lab-modem-1"\n'
+                '    exit\nexit all\n'}).json()
+    made = client.post(f"/api/projects/{pid}/device-staging", json={
+        "device_id": did, "steps": [{"kind": "configuration", "version_id": version["id"]}]})
+    sid = made.json()["staging_id"]
+    assert client.post(f"/api/staging-plans/{sid}/approve").status_code == 200
+    out = client.post(f"/api/staging-plans/{sid}/execute?background=false").json()
+    assert out["steps"][0]["state"] == "succeeded"
     r = client.post(f"/api/projects/{pid}/finish", json={"device_ids": [did]})
     assert r.status_code == 200 and r.json()["staged_at"]
 

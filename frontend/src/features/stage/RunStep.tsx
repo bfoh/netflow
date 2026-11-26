@@ -10,7 +10,7 @@ import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import type { Device, StagingIndex } from '../../types/api';
 import { type Choice, EMPTY_CHOICE, planSteps, wantsFirstLogin } from './choices';
-import { addressTakenBy, canMoveAside, CONSOLE_DONE, consoleOnly, portOff, type Role, STEP_TIME, STEP_WORDS, type StepKind } from './roles';
+import { addressTakenBy, canMoveAside, CONSOLE_DONE, portOff, type Role, STEP_TIME, STEP_WORDS, type StepKind } from './roles';
 import { StagingControls } from './StagingControls';
 import { stagingStatus } from './staging';
 import { EmptyState } from '../../components/EmptyState';
@@ -27,7 +27,8 @@ function PlannedSteps({ role, choice, device }: { role: Role; choice: Choice; de
     <Stack gap={4}>
       {stepKinds(role, choice, device).map((k, i) => (
         <Group key={k} justify="space-between" wrap="nowrap">
-          <Text size="sm">{i + 1}. {k === 'console' && role.consoleWords ? role.consoleWords : STEP_WORDS[k]}</Text>
+          <Text size="sm">{i + 1}. {k === 'console' && role.consoleWords ? role.consoleWords
+            : k === 'file' && role.consoleCable ? 'Its configuration file (console)' : STEP_WORDS[k]}</Text>
           {k === 'console'
             ? (CONSOLE_DONE.has(device.provisioning_status)
               ? <Badge color="teal" variant="light" tt="none">Done</Badge>
@@ -66,37 +67,6 @@ function LivePlan({ stagingId }: { stagingId: string }) {
   );
 }
 
-/** A device staged over its console only (the modem): no plan, its console step is the work. */
-function ConsoleOnlyRun({ role, device }: { role: Role; device: Device }) {
-  const done = CONSOLE_DONE.has(device.provisioning_status);
-  return (
-    <Card withBorder>
-      <Group justify="space-between" mb="xs" wrap="nowrap">
-        <div>
-          <Title order={3} size="h5">{device.name}</Title>
-          <Text size="xs" c="dimmed">{role.title} · console cable only</Text>
-        </div>
-        {done && <Badge color="teal" variant="filled" tt="none">First access done</Badge>}
-      </Group>
-      <Stack gap="xs">
-        <PlannedSteps role={role} choice={EMPTY_CHOICE} device={device} />
-        {done ? (
-          <Notice kind="settled" compact>
-            Its configuration is still pasted on the console by hand (then <code>admin save</code>): UNDM&apos;s own load of the
-            modem&apos;s file is being built.
-          </Notice>
-        ) : (
-          <Notice kind="caution" compact action={<Button size="xs" variant="light" component={Link} to={`/provisioning?device=${device.id}`}
-            leftSection={<IconTerminal2 size={14} />}>Open console setup</Button>}>
-            A modem from the factory: UNDM starts it once without its configuration and sets the admin password. You switch it
-            off and on when asked.
-          </Notice>
-        )}
-      </Stack>
-    </Card>
-  );
-}
-
 function DeviceRun({ projectId, role, device, choice, latest, all }: {
   projectId: string; role: Role; device: Device; choice: Choice; latest?: StagingIndex; all: { device: Device }[];
 }) {
@@ -126,7 +96,8 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
       <Group justify="space-between" mb="xs" wrap="nowrap">
         <div>
           <Title order={3} size="h5">{device.name}</Title>
-          <Text size="xs" c="dimmed">{role.title} · {device.management_address}</Text>
+          <Text size="xs" c="dimmed">{role.title} · {role.consoleCable
+            ? `console ${device.console_port || '(port saved by its first access)'}` : device.management_address}</Text>
         </div>
         {finished && !fresh && <Badge color="teal" variant="filled" tt="none">Staged</Badge>}
       </Group>
@@ -145,7 +116,9 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
           {consoleTodo && (
             <Notice kind="caution" compact action={<Button size="xs" variant="light" component={Link} to={`/provisioning?device=${device.id}`}
               leftSection={<IconTerminal2 size={14} />}>Open console setup</Button>}>
-              Do its console setup first (new switch, or a preconfigured one: tick “erase first” there), so it answers at {device.management_address}.
+              {role.consoleCable
+                ? <>Do its first access first: UNDM starts it once without its factory configuration and sets the admin password. You switch it off and on when asked. It saves the console port this plan uses.</>
+                : <>Do its console setup first (new switch, or a preconfigured one: tick “erase first” there), so it answers at {device.management_address}.</>}
             </Notice>
           )}
           {missing.length > 0 && <Text size="xs" c="orange"><IconAlertTriangle size={12} /> Still needed: {missing.join(', ')} (step 2).</Text>}
@@ -155,7 +128,9 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
               onClick={() => make.mutate(undefined, { onSuccess: () => setFresh(false) })}>Make the plan</Button>
             {fresh && latest && <Button size="xs" variant="subtle" onClick={() => setFresh(false)}>Back to the last plan</Button>}
           </Group>
-          <Text size="xs" c="dimmed">Making the plan checks the files and the image and changes nothing. Then approve it and run it.</Text>
+          <Text size="xs" c="dimmed">{role.consoleCable
+            ? 'Making the plan logs in over its console and reads its configuration; it changes nothing. Then approve it and run it: the lines go one at a time, and the load stops, unsaved, at the first line the modem refuses.'
+            : 'Making the plan checks the files and the image and changes nothing. Then approve it and run it.'}</Text>
         </Stack>
       )}
     </Card>
@@ -173,13 +148,11 @@ export function RunStep({ projectId, roles, choices, stagings }: {
         leave this page. Order inside each device: as listed. Two devices that end at the same address (the two 2930F) run one
         after the other: the card says which to unplug first.</Text>
       <SimpleGrid cols={{ base: 1, md: 2, xl: 4 }}>
-        {roles.map(({ role, device }) => (consoleOnly(role) ? (
-          <ConsoleOnlyRun key={role.key} role={role} device={device} />
-        ) : (
+        {roles.map(({ role, device }) => (
           <DeviceRun key={role.key} projectId={projectId} role={role} device={device}
             choice={choices[role.key] ?? EMPTY_CHOICE}
             latest={stagings.find((x) => x.device_id === device.id)} all={roles} />
-        )))}
+        ))}
       </SimpleGrid>
     </Stack>
   );
