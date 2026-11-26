@@ -19,7 +19,7 @@ from undm.provisioning.simulated_sar import SimulatedSarConsole
 from undm.services import provisioning as prov
 
 PASSWORD = "Example-Only-Pass-77"  # noqa: S105 - a made-up test value
-FAST = sar.Timing(power_on=1, menu=1, boot=1, command=1)
+FAST = sar.Timing(power_on=1, menu=1, boot=1, command=1, key_gap=0, echo=1)
 
 
 def run(sim, password=PASSWORD, user="admin"):
@@ -36,8 +36,8 @@ def test_first_access_follows_the_recording_and_never_shows_the_password():
     # The boot menu: the recorded answers, in the recorded order; the boot options file is
     # written once, by 'bof save', never from the boot menu.
     assert r.commands_sent[:9] == [
-        "Enter (at its 3-second question)", "sros (within 25 seconds)", "Enter (begin)",
-        "Enter (keep the software image)",
+        "Enter (at its 3-second question)", "sros (it counts down from 30 seconds)",
+        "Enter (begin)", "Enter (keep the software image)",
         "none (start without its file)", "Enter (keep the fips setting)",
         "no (auto-discovery off)", "no (the boot options file is not written here)",
         "Login: admin (the factory login)"]
@@ -183,7 +183,8 @@ def test_api_preview_run_rerun_and_audit(client):
     did = add(client, SIM_MODEM)
     pre = client.post(f"/api/devices/{did}/provisioning/console-bootstrap/preview", json={}).json()
     assert pre["supported"] and pre["procedure"] == "first_access"
-    assert "sros (within 25 seconds)" in pre["commands"] and "bof save" in pre["commands"]
+    assert "sros (it counts down from 30 seconds)" in pre["commands"]
+    assert "bof save" in pre["commands"]
     assert not any(PASSWORD in line for line in pre["commands"] + pre["notes"])
     assert go(client, did, name="other").status_code == 409
     r = go(client, did)
@@ -383,3 +384,59 @@ def test_shared_text_masks_uuids():
     from undm.security.sanitize import sanitize
     text = "UUID 01234567-89AB-4DEC-A75A-0123456789AB, again 01234567-89ab-4dec-a75a-0123456789ab"
     assert sanitize(text) == "UUID <uuid-1>, again <uuid-1>"
+
+
+
+# -- the second bench run (2026-11-26, v85): the sros field is redrawn on every key -------
+# The raw characters the modem sent, from the run's technical details (Nokia's own texts and
+# default boot options only).
+BENCH_SROS = ("\r\rHit a key within 3 seconds to change boot parameters...   \b\b\b\r\r\n"
+              '\rType "sros" and hit ENTER within 30 seconds to begin changing parameters:'
+              "      \b\b\b\b\b"
+              '\rType "sros" and hit ENTER within 30 seconds to begin changing parameters: s'
+              "     \b\b\b\b\b")
+
+
+def test_the_bench_field_redraw_is_one_question_and_shows_the_typed_answer():
+    from undm.provisioning.console import clean
+    text = clean(BENCH_SROS)
+    assert len(sar.TYPE_SROS.findall(text)) == 2 and "\n" not in text.split("parameters:", 1)[1]
+    step = sar.BOOT_MENU[0]
+    assert not step.echo().search(text)  # only "s" so far: Enter must wait
+    assert step.echo().search(text + '\rType "sros" and hit ENTER within 29 seconds to begin '
+                                      "changing parameters: sros     ")
+    plain = sar.BOOT_MENU[3]  # the configuration file: a plain echo
+    assert plain.echo().search(" none") and not plain.echo().search(" non")
+
+
+def run_real(sim, **timing):
+    """The first access with UNDM's real session settings and typing speed."""
+    sim.power_cycle()
+    t = {"power_on": 5, "menu": 3, "boot": 3, "command": 3, "echo": 2, **timing}
+    return sar.first_access(ConsoleSession(sim), Credentials("admin", PASSWORD),
+                            sar.Timing(**t))
+
+
+def test_the_redrawn_field_is_typed_into_and_enter_waits_for_the_answer():
+    sim = SimulatedSarConsole(key_window=3.0, sros_tick=0.05)  # a fast countdown: many redraws
+    r = run_real(sim)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED, r.message
+    assert sim.keys == ["\r"] and sim.bof_writes == 1 and "auto-discover" not in sim.bof
+    assert "<<< sros" in r.transcript and "at_sros" in r.diagnostics
+    assert "at_overwrite" in r.diagnostics
+
+
+def test_asked_again_on_a_new_line_stops_without_answering_twice():
+    sim = SimulatedSarConsole(key_window=3.0, reask=True)
+    r = run_real(sim)
+    assert r.status is BootstrapStatus.FAILED and "asked again to type" in r.message
+    assert r.transcript.count("<<< sros") == 1 and sim.bof_writes == 0
+    assert "switch the modem off and on" in r.message
+
+
+def test_no_echo_means_no_enter():
+    sim = SimulatedSarConsole(key_window=3.0, no_echo=True)
+    r = run_real(sim)
+    assert r.status is BootstrapStatus.FAILED and "did not show it" in r.message
+    assert "did not press Enter" in r.message and sim.bof_writes == 0
+    assert "primary-config" in sim.bof  # nothing was written

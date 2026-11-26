@@ -108,6 +108,18 @@ class ConsoleSession:
         self._typed(shown)
         self.transport.write(key.encode("ascii", "replace"))
 
+    def type_slowly(self, text: str, gap: float = 0.15) -> None:
+        """Type one character at a time, ``gap`` seconds apart, as a person does, without
+        Enter. For line editors that redraw their whole line on every key (the 7705 SAR's
+        boot menu, bench 2026-11-26). Output arriving meanwhile is read, not lost."""
+        self._typed(self.mask(text))
+        for i, ch in enumerate(text):
+            if i and gap:
+                end = time.monotonic() + gap
+                while time.monotonic() < end:
+                    self._fill()
+            self.transport.write(ch.encode("ascii", "replace"))
+
     def write_secret(self, secret: str) -> None:
         """A password at a prompt that does not echo it: never in the transcript."""
         self._typed("(password sent)")

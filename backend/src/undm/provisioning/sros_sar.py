@@ -27,6 +27,7 @@ output to end with it, never answered (D-112).
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -76,23 +77,31 @@ CONFIG_FILE = "cf3:\\config.cfg"
 
 @dataclass(frozen=True)
 class _Answer:
+    key: str  # a short name, for diagnostics
     question: re.Pattern[str]
     answer: str
     asked: str  # the question in words, for messages
     shown: str  # the answer in words, for the preview
     needs: str = ""  # text the unit must have shown with the question
 
+    def echo(self) -> re.Pattern[str]:
+        """The typed answer shown back by the unit: right after the question (a plain
+        echo) or in its redrawn line (``…parameters: sros``, bench 2026-11-26)."""
+        return re.compile(r"(?:\A[ \t]*|" + self.question.pattern + r"[ \t]*)"
+                          + re.escape(self.answer) + r"(?!\S)")
+
 
 # The boot menu, in the order of the recording.
 BOOT_MENU: tuple[_Answer, ...] = (
-    _Answer(TYPE_SROS, "sros", 'to type "sros"', 'sros (within 25 seconds)'),
-    _Answer(PRESS_ENTER, "", "to press ENTER to begin", "Enter (begin)"),
-    _Answer(IMAGE_URL, "", "for the software image", "Enter (keep the software image)"),
-    _Answer(CONFIG_URL, "none", "for the configuration file", "none (start without its file)",
-            needs="the word 'none' for no Config URL"),
-    _Answer(FIPS, "", "about fips-140-2", "Enter (keep the fips setting)"),
-    _Answer(AUTO_DISCOVERY, "no", "about auto-discovery", "no (auto-discovery off)"),
-    _Answer(OVERWRITE_BOF, "no", "to overwrite the boot options file",
+    _Answer("sros", TYPE_SROS, "sros", 'to type "sros"', "sros (it counts down from 30 seconds)"),
+    _Answer("begin", PRESS_ENTER, "", "to press ENTER to begin", "Enter (begin)"),
+    _Answer("image", IMAGE_URL, "", "for the software image", "Enter (keep the software image)"),
+    _Answer("config", CONFIG_URL, "none", "for the configuration file",
+            "none (start without its file)", needs="the word 'none' for no Config URL"),
+    _Answer("fips", FIPS, "", "about fips-140-2", "Enter (keep the fips setting)"),
+    _Answer("auto_discovery", AUTO_DISCOVERY, "no", "about auto-discovery",
+            "no (auto-discovery off)"),
+    _Answer("overwrite", OVERWRITE_BOF, "no", "to overwrite the boot options file",
             "no (the boot options file is not written here)"),
 )
 
@@ -128,7 +137,11 @@ class Timing:
     # From Run to the 3-second question: the person switches the unit off and on, and the
     # unit takes about 2.5 minutes to reach the question (bench 2026-11-26).
     power_on: float = 600.0
-    menu: float = 20.0  # each boot-menu question
+    # Each boot-menu question; longer than the sros question's 30-second countdown, whose
+    # line is redrawn every second while UNDM waits.
+    menu: float = 40.0
+    key_gap: float = 0.15  # between typed characters in the boot menu, as a person types
+    echo: float = 5.0  # for the unit to show a typed answer before UNDM presses Enter
     boot: float = 420.0  # from the last answer to "Login:"
     command: float = 40.0
 
@@ -317,30 +330,10 @@ def first_access(session: ConsoleSession, new: Credentials | None,
         session.write_key(KEY, "(Enter)")
         console.sent.append("Enter (at its 3-second question)")
         console.stage("question_answered")
-        questions = [a.question for a in BOOT_MENU]
+        answered: list[_Answer] = []
         for step in BOOT_MENU:
-            try:
-                idx, text = session.wait_for([*questions, LOGIN_SEEN], t.menu)
-            except ConsoleTimeoutError:
-                last = _last_line(session.transcript[-1] if session.transcript else "")
-                hint = ("it is probably starting normally (the key came too late)"
-                        if step is BOOT_MENU[0] else
-                        "it showed something UNDM has no answer for")
-                raise _Stop(BootstrapStatus.FAILED,
-                            f"The modem did not ask {step.asked}: {hint}. Its last words: "
-                            f"'{last}'. The boot options file was not written; switch the "
-                            "modem off and on to start again.") from None
-            if idx >= len(questions):
-                raise _Stop(BootstrapStatus.FAILED,
-                            f"The modem started normally instead of asking {step.asked} "
-                            "(it is at its login). The boot options file was not written; "
-                            "nothing was changed. Switch it off and on and run again.")
-            if questions[idx] is not step.question:
-                raise _Stop(BootstrapStatus.FAILED,
-                            f"The modem asked '{_last_line(text)}' where UNDM expected it to "
-                            f"ask {step.asked}. UNDM answered nothing more; the boot options "
-                            "file was not written. Switch the modem off and on to start "
-                            "again.")
+            text = _next_question(console, step, answered)
+            diagnostics[f"at_{step.key}"] = session.raw_tail(200)
             if step.needs and step.needs not in text:
                 raise _Stop(BootstrapStatus.FAILED,
                             f"The modem's question {step.asked} did not offer '{step.needs}'. "
@@ -351,7 +344,8 @@ def first_access(session: ConsoleSession, new: Credentials | None,
                 if "primary-config" in planned or "auto-discover" in planned:
                     findings.append("The boot menu's new settings still list: " + ", ".join(
                         k for k in ("primary-config", "auto-discover") if k in planned))
-            session.write_line(step.answer)
+            _answer(console, step)
+            answered.append(step)
             console.sent.append(step.shown)
             console.stage("boot_menu")
 
@@ -452,6 +446,72 @@ def first_access(session: ConsoleSession, new: Credentials | None,
                          "on, then run again."))
     except ConsoleError as e:
         return result(BootstrapStatus.FAILED, session.mask(str(e)))
+
+
+_RESTART = ("The boot options file was not written; switch the modem off and on to start "
+            "again.")
+
+
+def _next_question(console: SarConsole, step: _Answer, answered: list[_Answer]) -> str:
+    """Wait for the boot menu's next question, ``step``, and return the text up to it.
+
+    The unit redraws a question's whole line on every key and each second of its countdown
+    (``\\r`` + the question + the field, bench 2026-11-26). A question already answered
+    that shows up again on the same line is such a redraw and is ignored. After a line
+    break it is the question asked again (the answer was not taken): the run stops, and
+    nothing is answered twice. Any other question out of order stops the run (D-031)."""
+    s, t = console.s, console.t
+    questions = [a.question for a in BOOT_MENU]
+    deadline = time.monotonic() + t.menu
+    seen = ""
+    redraws = 0
+    while True:
+        try:
+            idx, text = s.wait_for([*questions, LOGIN_SEEN], max(deadline - time.monotonic(), 0))
+        except ConsoleTimeoutError:
+            last = _last_line(s.transcript[-1] if s.transcript else "")
+            hint = ("it is probably starting normally (the key came too late)"
+                    if step is BOOT_MENU[0] else
+                    f"it kept redrawing its previous question ({redraws} times)" if redraws else
+                    "it showed something UNDM has no answer for")
+            raise _Stop(BootstrapStatus.FAILED,
+                        f"The modem did not ask {step.asked}: {hint}. Its last words: "
+                        f"'{last}'. {_RESTART}") from None
+        seen += text
+        if idx >= len(questions):
+            raise _Stop(BootstrapStatus.FAILED,
+                        f"The modem started normally instead of asking {step.asked} "
+                        "(it is at its login). The boot options file was not written; "
+                        "nothing was changed. Switch it off and on and run again.")
+        if questions[idx] is step.question:
+            return seen
+        before = next((a for a in answered if a.question is questions[idx]), None)
+        if before is not None and "\n" not in text:
+            redraws += 1  # its line redrawn: not a new question
+            continue
+        if before is not None:
+            raise _Stop(BootstrapStatus.FAILED,
+                        f"The modem asked again {before.asked} ('{_last_line(text)}'): it did "
+                        "not take UNDM's answer. UNDM answered nothing twice. " + _RESTART)
+        raise _Stop(BootstrapStatus.FAILED,
+                    f"The modem asked '{_last_line(text)}' where UNDM expected it to ask "
+                    f"{step.asked}. UNDM answered nothing more. " + _RESTART)
+
+
+def _answer(console: SarConsole, step: _Answer) -> None:
+    """Answer a boot-menu question: Enter alone, or the answer typed one key at a time,
+    then Enter only once the unit shows the answer (its line redrawn, or a plain echo)."""
+    s, t = console.s, console.t
+    if step.answer:
+        s.type_slowly(step.answer, t.key_gap)
+        try:
+            s.wait_for([step.echo()], t.echo)
+        except ConsoleTimeoutError:
+            raise _Stop(BootstrapStatus.FAILED,
+                        f"UNDM typed '{step.answer}' when the modem asked {step.asked}, but "
+                        "the modem did not show it, so UNDM did not press Enter. "
+                        + _RESTART) from None
+    s.write_key(KEY, "(Enter)")
 
 
 def _already_done(console: SarConsole, new: Credentials,

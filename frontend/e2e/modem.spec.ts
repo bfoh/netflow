@@ -18,7 +18,7 @@ test('first access of a simulated modem from the wizard', async ({ page, request
   await page.goto(`/stage/${p.id}?step=3`);
   await expect(page.getByText('1. First access (console)')).toBeVisible();
   await page.getByRole('link', { name: 'Open console setup' }).click();
-  await expect(page.getByText(/sros \(within 25 seconds\)/)).toBeVisible();
+  await expect(page.getByText(/sros \(it counts down from 30 seconds\)/)).toBeVisible();
   await page.getByRole('button', { name: 'Run first access…' }).click();
   await page.getByLabel(/Type the device name to confirm/).fill(name);
   await page.getByRole('button', { name: 'Run first access', exact: true }).click();

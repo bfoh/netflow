@@ -1531,6 +1531,28 @@ the team "breaks" it with a boot-menu procedure, recorded on the console and sup
     line (`GET /api/devices/{id}/provisioning/console-progress`, in memory, read-only);
   - shared text also masks UUIDs (the unit's flash volume UUID appears in its start).
 - The steps after the question (boot menu, login, commands) have still not run on a modem.
+- **Second bench run (2026-11-26, v85).** Enter at the 3-second question worked and the
+  modem opened its boot menu. UNDM then stopped at "Type "sros" and hit ENTER within 30
+  seconds…", reporting it as a second, unexpected question. Nothing was written.
+
+  The technical details showed the raw characters:
+  - the 3-second question: `\r` + sentence + three spaces + three backspaces;
+  - the sros question: a one-line field. It is `\r` + question + a space + what has been
+    typed + five spaces + five backspaces, **redrawn whole on every key** (and, by its
+    countdown text, each second). UNDM saw the redraw after its first letter as a new
+    question.
+
+  The countdown starts at 30 seconds; the recording's "25" was the count when the person
+  typed. Line endings are `\r\r\n`.
+- **Fix (v86):**
+  - a question already answered that appears again **on the same line** is a redraw and is
+    ignored. After a line break it is the question asked again: UNDM stops and answers
+    nothing twice;
+  - typed answers go one key at a time (0.15 s apart, as a person types);
+  - Enter is pressed only once the modem shows the answer, in its redrawn field or as a
+    plain echo. Otherwise UNDM stops without Enter;
+  - each boot-menu step may take 40 s (longer than the 30-second countdown);
+  - the raw characters at every boot-menu question are kept as technical details (Q-56).
 
 ### D-113 Nokia Flexi BBU (FSMF): guided by hand first (2026-11-26)
 Product owner: the BBU is an FSMF staged in the browser through WebEM on the LMP port

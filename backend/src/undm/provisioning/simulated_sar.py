@@ -6,11 +6,13 @@ recording (2026-11-26, identifiers replaced by made-up ones). Everything outside
 recording is an approximation and marked so: the password rule, the refusal wording at the
 login, and what the unit does with unexpected answers.
 
-The start follows the first bench run (2026-11-26): a long start-up text (here a short
+The start follows the bench runs (2026-11-26): a long start-up text (here a short
 SYNTHETIC stand-in), then the 3-second question printed again each second as it counts
-down. How the real unit separates the countdown sentences is not known exactly (the
-transcript is cleaned); ``question_tail`` and ``trickle`` reproduce the two forms that kept
-UNDM v84 from answering.
+down, written as on the bench: ``\r`` + the sentence + three spaces + three backspaces.
+The sros question is a one-line field, as on the bench: ``\r`` + the question + `` `` +
+what is typed + five spaces + five backspaces, redrawn on every key and each second of its
+30-second countdown; Enter gives ``\r\r\n``. The other boot-menu questions echo each key
+plainly (as the recording shows; their exact drawing is not yet known, Q-56).
 """
 
 from __future__ import annotations
@@ -28,6 +30,8 @@ SECTIONS = ("System Configuration", "System Security Configuration", "Log Config
             "Router (Network Side) Configuration", "Service Configuration",
             "Router (Service Side) Configuration")
 RULE = "=" * 79
+MENU_STATES = frozenset({"type_sros", "press_enter", "image_url", "config_url", "fips",
+                         "auto_discovery", "extra", "overwrite"})
 # A SYNTHETIC stand-in for the long start before the boot loader (U-Boot, Linux, the boot
 # ROM): on the bench it took about 2.5 minutes and several thousand lines.
 PREAMBLE = ("U-Boot (SIMULATED)\r\nAutoboot in 3 seconds\r\n"
@@ -49,10 +53,15 @@ class SimulatedSarConsole:
     min_password_length: int = 8  # SYNTHETIC rule; the real one is the unit's own
     no_paging_command: bool = True  # False: 'environment no more' is refused (SYNTHETIC)
     key_window: float = 1.0  # seconds it waits for a key (3 on the real unit)
-    # Written after each countdown sentence, e.g. "\b\b\b" (cursor moved back). SYNTHETIC.
-    question_tail: str = "   "
+    # Written after each countdown sentence; the bench shows "   \b\b\b" (2026-11-26).
+    question_tail: str = "   \b\b\b"
     # Sends a NUL on every read while it waits for the key (a busy line). SYNTHETIC.
     trickle: bool = False
+    sros_tick: float = 1.0  # seconds per step of the sros countdown (30 steps)
+    # A wrong or unaccepted sros answer asks again on a new line instead of starting
+    # normally. SYNTHETIC: what the real unit does is not known.
+    reask: bool = False
+    no_echo: bool = False  # typed keys are not shown (SYNTHETIC)
 
     def __post_init__(self) -> None:
         self._out = bytearray()
@@ -60,6 +69,9 @@ class SimulatedSarConsole:
         self._state = "off"
         self._asked_at = 0.0
         self._left = 3  # seconds left in the countdown, as last printed
+        self._field = ""  # what has been typed into a boot-menu question
+        self._sros_at = 0.0
+        self._sros_left = 30
         # The saved boot options file and configuration file.
         self.bof: dict[str, list[str]] = {
             "primary-image": [IMAGE], "primary-config": ["cf3:/config.cfg"], "wait": ["3"],
@@ -91,6 +103,14 @@ class SimulatedSarConsole:
                     self._emit("\r" + self._question(left))
                 elif self.trickle:
                     self._emit("\x00")
+        elif not self._out and self._state == "type_sros":
+            left = 30 - int((time.monotonic() - self._sros_at) / self.sros_tick)
+            if left <= 0:
+                self._emit("\r\r\n")
+                self._boot(dict(self.bof))  # SYNTHETIC: assumed to start normally
+            elif left < self._sros_left:
+                self._sros_left = left
+                self._emit(self._sros_line())  # the countdown redraws the line
         data = bytes(self._out[:size])
         del self._out[:size]
         return data
@@ -98,20 +118,33 @@ class SimulatedSarConsole:
     def write(self, data: bytes) -> int:
         if self.silent or self._state == "off":
             return len(data)
-        text = data.decode("ascii", "replace")
-        if self._state in ("hit_key", "pager") and text:
-            was, key, text = self._state, text[0], text[1:]
-            if was == "hit_key":
-                self.keys.append(key)
-                self._key()
-            else:
-                self._emit("\r\n" + self._rest + "\r\n" + self._prompt())
-                self._state = "cli"
-        self._in += text
-        while "\r" in self._in:
-            line, self._in = self._in.split("\r", 1)
-            self._handle(line.strip())
+        for ch in data.decode("ascii", "replace"):
+            self._char(ch)
         return len(data)
+
+    def _char(self, ch: str) -> None:
+        st = self._state
+        if st == "hit_key":
+            self.keys.append(ch)
+            self._key()
+        elif st == "pager":
+            self._emit("\r\n" + self._rest + "\r\n" + self._prompt())
+            self._state = "cli"
+        elif st in MENU_STATES:
+            # The boot menu reads key by key: each key is shown at once.
+            if ch == "\r":
+                line, self._field = self._field, ""
+                self._emit("\r\r\n")
+                self._handle(line.strip())
+            elif ch.isprintable():
+                self._field += ch
+                if not self.no_echo:
+                    self._emit(self._sros_line() if st == "type_sros" else ch)
+        elif ch == "\r":
+            line, self._in = self._in, ""
+            self._handle(line.strip())
+        else:
+            self._in += ch
 
     def close(self) -> None:
         self.closed = True
@@ -127,6 +160,11 @@ class SimulatedSarConsole:
                    "Contents of Boot Options File on cf3:\r\n" + self._bof_lines(self.bof)
                    + "\r\n" + self._question(3))
         self._state = "hit_key"
+
+    def _sros_line(self) -> str:
+        """The sros field as the bench shows it, redrawn whole."""
+        return (f'\rType "sros" and hit ENTER within {self._sros_left} seconds to begin '
+                f"changing parameters: {self._field}     " + "\b" * 5)
 
     def _question(self, left: int) -> str:
         unit = "second" if left == 1 else "seconds"
@@ -147,8 +185,8 @@ class SimulatedSarConsole:
         if self.key_ignored:
             self._boot(dict(self.bof))
             return
-        self._emit('\r\nType "sros" and hit ENTER within 25 seconds to begin changing '
-                   "parameters: ")
+        self._field, self._sros_at, self._sros_left = "", time.monotonic(), 30
+        self._emit("\r\r\n" + self._sros_line())
         self._state = "type_sros"
 
     def _boot(self, bof: dict[str, list[str]]) -> None:
@@ -166,8 +204,11 @@ class SimulatedSarConsole:
     def _handle(self, line: str) -> None:  # noqa: C901, PLR0912, PLR0915 - a console's states
         st = self._state
         if st == "type_sros":
-            if line != "sros":
-                self._boot(dict(self.bof))
+            if line != "sros" or self.reask:
+                if self.reask:  # asked again, on a new line
+                    self._emit(self._sros_line())
+                else:
+                    self._boot(dict(self.bof))
                 return
             self._session = {k: list(v) for k, v in self.bof.items()}
             self._emit('\r\n\r\nYou must supply some required Boot Options. At any prompt, you '
@@ -195,7 +236,7 @@ class SimulatedSarConsole:
                 self._session.pop("primary-config", None)
             elif line:
                 self._session["primary-config"] = [line]
-            self._emit(f"{line}\r\nThe existing fips-140-2 configuration is : 'no fips-140-2'"
+            self._emit("The existing fips-140-2 configuration is : 'no fips-140-2'"
                        "\r\nIf you would like to change it please enter 'fips-140-2' followed "
                        "by ENTER\r\nor press ENTER to keep existing fips configuration\r\n")
             self._state = "fips"
@@ -212,10 +253,9 @@ class SimulatedSarConsole:
             if line == "no":
                 self._session.pop("auto-discover", None)
             if self.extra_question:
-                self._emit(f"{line}\r\n\r\n{self.extra_question} ")
+                self._emit(f"\r\n{self.extra_question} ")
                 self._state = "extra"
             else:
-                self._emit(f"{line}\r\n")
                 self._ask_overwrite()
         elif st == "extra":
             self._ask_overwrite()
@@ -223,9 +263,7 @@ class SimulatedSarConsole:
             if line == "yes":
                 self.bof = {k: list(v) for k, v in self._session.items()}
                 self.bof_writes += 1
-                self._emit("yes\r\nSuccessfully saved the new settings in cf3:/bof.cfg\r\n")
-            else:
-                self._emit(f"{line}\r\n")
+                self._emit("Successfully saved the new settings in cf3:/bof.cfg\r\n")
             self._boot(self._session)
         elif st == "login":
             self._user = line

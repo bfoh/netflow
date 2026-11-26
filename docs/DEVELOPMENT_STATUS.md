@@ -59,6 +59,7 @@ manager, topology._
 | Files byte for byte (v83) | A template keeps the team file's line endings and final line break; Download the files for zone N (zip) in the wizard and per template in Settings gives the team's files byte for byte; stored device files stay normalised (D-111) |
 | Nokia modem first access (v84) | 7705 SAR-Hmc added as a system's fifth device, staged over its console only. Console setup runs its first access from the team's recording: boot menu (no configuration file, no auto-discovery), factory login, admin password from the device's login (masked), boot options and configuration saved after read-back. **Experimental: simulated console only, not yet run on a modem.** Its configuration load and the Flexi BBU (guided by hand first, D-113) are not built (D-112) |
 | Modem question answered (v85) | First bench run: the modem's 3-second question was printed but UNDM never answered (it waited for the output to end with it). Questions are now found anywhere and answered at once with Enter; control characters dropped and counted; 10-minute wait; truthful messages; live progress and technical details (D-112). **Steps after the question still not run on a modem** |
+| Modem boot menu field (v86) | Second bench run: Enter at the 3-second question worked; UNDM then took the sros field's redraw (on every key) for a new question. Redraws on the same line are now ignored, a re-ask after a line break stops the run, answers are typed key by key and Enter waits until the modem shows them (D-112). **Boot menu after the sros question, login and commands still not run on a modem** |
 | Erase dialog (v73) | Shows the login the switch gets after the erase and blocks early when it has no password or is the login being erased (D-101) |
 | FortiGate license (v72) | "Load license…" in a FortiGate's menu: the team's file is kept for the device (never shown or exported) and loaded through an approved plan with `execute restore manual-license tftp` (Fortinet-documented; **experimental, not yet run on hardware**, Q-46, D-100) |
 | Working with devices (v71) | Device menu everywhere (⋯ and right-click): Open SSH window (PC's own SSH program, password typed by the person, D-098), web page, check information, test, wait until it answers, back up, log, restart (approved plan; 2930F and LIG1014A), console setup. System tree with tick boxes, watch devices (reachability dots), device log (D-099) |
@@ -90,10 +91,10 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-26, v85)
+## Test results (2026-11-26, v86)
 | Suite | Result |
 |---|---|
-| Backend pytest | 559 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
+| Backend pytest | 563 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (92 files) |

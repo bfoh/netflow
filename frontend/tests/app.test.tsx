@@ -1021,7 +1021,7 @@ describe('Nokia modem: first access over the console (D-112)', () => {
     credential_ref_id: 'approved', ...over });
   const driver = { driver_id: 'mock.nokia.sar', platform: 'sros_sar', simulated: true, vendor: 'Nokia', os_family: 'SR OS (7705 SAR)',
     description: '', capabilities: [], maturity: 'simulation', transport: 'simulated', notes: [] };
-  const preview = { supported: true, procedure: 'first_access', commands: ['a key, within 3 seconds of its question', 'sros (within 25 seconds)', 'bof save'],
+  const preview = { supported: true, procedure: 'first_access', commands: ['Enter, within 3 seconds of its question', 'sros (it counts down from 30 seconds)', 'bof save'],
     notes: ['Console speed 115200.'] };
 
   it('Console setup shows the steps and runs the first access after the typed name', async () => {
@@ -1036,7 +1036,7 @@ describe('Nokia modem: first access over the console (D-112)', () => {
         diagnostics: { at_question: 'Hit a key within 3 seconds to change boot parameters...\\b\\b\\b', control_characters_ignored: '\\b ×3' } },
     });
     renderAt('/provisioning?device=m1');
-    expect(await screen.findByText(/sros \(within 25 seconds\)/)).toBeInTheDocument();
+    expect(await screen.findByText(/sros \(it counts down from 30 seconds\)/)).toBeInTheDocument();
     // No VLAN or address to enter: that is the 2930F's console setup.
     expect(screen.queryByLabelText(/Untagged port/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Run first access…' }));

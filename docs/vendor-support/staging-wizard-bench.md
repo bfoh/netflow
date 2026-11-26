@@ -87,6 +87,10 @@ If it stops:
   changed; run again.
 - "asked … where UNDM expected": the modem asked something UNDM has no answer for (a boot
   menu password, for example). Send the transcript.
+- "asked again …" or "did not show it, so UNDM did not press Enter": the modem did not take
+  a typed answer. Send the transcript with its technical details.
+- After any stop in the boot menu the modem waits there: switch it off and on before the
+  next run (press Run first).
 - "refused the new admin password": choose a login with a longer, less simple password;
   switch the modem off and on, then run again.
 - A modem that already had its first access is left alone ("already done" or "refused").

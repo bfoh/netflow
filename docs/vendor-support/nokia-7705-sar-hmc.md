@@ -16,6 +16,7 @@ which is its serial number from the factory, and the new password) are not recor
    `primary-config cf3:/config.cfg`, `wait 3`, `persist off`, `console-speed 115200` and two
    `auto-discover` lines (`private.nokia.nsp.primary.nms`, `…secondary.nms`).
 2. After a key: `Type "sros" and hit ENTER within 25 seconds to begin changing parameters:`
+   (a countdown from 30 seconds: the person typed with 25 left, second bench run)
    → `sros`.
 3. The boot menu, question by question:
 
@@ -59,6 +60,18 @@ the unit's MAC addresses and flash volume UUID are masked):
 Timing: by the unit's own clock lines, the boot loader started about 2.5 minutes after the
 kernel. UNDM v84 did not answer the question (D-112, fixed in v85).
 
+### The second bench run (2026-11-26, UNDM v85): raw characters
+From the run's technical details (control characters written out):
+- The 3-second question: `\rHit a key within 3 seconds to change boot parameters...   \b\b\b`.
+- After Enter: `\r\r\n`, then the sros question as a one-line input field:
+  `\rType "sros" and hit ENTER within 30 seconds to begin changing parameters:` followed by
+  six spaces and five backspaces (cursor on the empty field).
+- After the first typed letter the whole line is redrawn:
+  `\rType "sros" … parameters: s` followed by five spaces and five backspaces.
+- The countdown starts at **30 seconds** (the recording's "25" was the count when the
+  person typed).
+- UNDM v85 took the redraw for a second question and stopped (fixed in v86).
+
 ### Nokia's public documentation (read 2026-11-26 on documentation.nokia.com)
 7705 SAR Basic System Configuration Guide 26.4.R1 (generic to the 7705 SAR family) unless
 noted. Quotes are Nokia's words.
@@ -100,7 +113,11 @@ recovery for this family; the team's procedure combines documented boot-menu ste
   as soon as the sentence arrives, as the team does.
 - Questions and the login prompts are found wherever they appear in the output, whatever
   follows them (control characters are dropped and counted); command-line prompts wait for
-  the answer to end. The raw characters at the question are kept as technical details.
+  the answer to end. The raw characters at each question are kept as technical details.
+- A question's line redrawn (same line, after a key or each second of a countdown) is not
+  a new question. The same question after a line break means the answer was not taken:
+  UNDM stops.
+- Typed answers go one key at a time; Enter follows only when the modem shows the answer.
 - Before sending a key UNDM reads the boot options the modem lists:
   - no "Nokia 7705 SAR" in the start-up text: no key, nothing changed;
   - no `auto-discover` line: not a factory unit. No key is sent. If it then accepts this
