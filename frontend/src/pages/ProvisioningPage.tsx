@@ -16,10 +16,12 @@ import { useAction, useAllDevices, useCredentialRefs, useDrivers, useLoginDefaul
 import { api } from '../services/api';
 import { downloadText } from '../services/format';
 import { driverLabel, stateLabel } from '../services/labels';
+import { ModemFirstAccess } from '../features/provisioning/ModemFirstAccess';
 import { roleOf } from '../features/stage/roles';
 import type { BootstrapPreview, BootstrapProfile, BootstrapResult, Device } from '../types/api';
 
-const CONSOLE_PLATFORMS = new Set(['aos_switch']);
+const CONSOLE_PLATFORMS = new Set(['aos_switch', 'sros_sar']);
+const MODEM_PLATFORM = 'sros_sar';
 const BAUD = ['9600', '19200', '38400', '57600', '115200'];
 const STATUS: Record<BootstrapResult['status'], { kind: NoticeKind; title: string }> = {
   bootstrapped: { kind: 'success', title: 'Bootstrap complete' },
@@ -253,22 +255,24 @@ export function ProvisioningPage() {
   return (
     <>
       <PageHeader title="Console setup"
-        description="Give a new Aruba switch its first address and login through the console cable, so UNDM can reach it over the network." />
+        description="Through the console cable: give a new Aruba switch its first address and login, or a Nokia modem from the factory its first access." />
       <QueryState isLoading={devices.isLoading || drivers.isLoading} error={devices.error ?? drivers.error} />
       <Stack>
         <Card withBorder>
           <Select label="Device" w="100%" maw={520} searchable
-            placeholder={eligible.length ? 'Choose a switch' : 'No Aruba 2930F in your systems yet'}
+            placeholder={eligible.length ? 'Choose a device' : 'No Aruba 2930F or Nokia modem in your systems yet'}
             data={eligible.map((d) => ({ value: d.id, label: `${d.name} — ${d.manufacturer} ${d.model} (${names.get(d.project_id) ?? ''})` }))}
             value={device?.id ?? null} onChange={(v) => setParams(v ? { device: v } : {})} />
           {device && <Group gap="xs" mt="xs"><EnvironmentBadge env={device.environment} /><Text size="sm">{driverLabel(device.driver_id, drivers.data)} · setup: {stateLabel(device.provisioning_status).toLowerCase()}</Text></Group>}
           <Text size="xs" c="dimmed" mt="xs">
-            Only switches that need a console setup are listed: Aruba 2930F (ArubaOS-Switch), new or preconfigured (it can
-            be erased first). The other devices need none: a new FortiGate answers at its factory address, and a First login
+            Only devices that need the console are listed: Aruba 2930F (ArubaOS-Switch), new or preconfigured (it can
+            be erased first), and the Nokia 7705 SAR-Hmc modem (its first access). The other devices need none: a new FortiGate answers at its factory address, and a First login
             plan sets its approved password; a new Black Box LIG1014A answers at its factory address with no password.
           </Text>
         </Card>
-        {device && <Bootstrap key={device.id} device={device} simulated={platform.get(device.driver_id)?.simulated ?? true} />}
+        {device && (platform.get(device.driver_id)?.platform === MODEM_PLATFORM
+          ? <ModemFirstAccess key={device.id} device={device} simulated={platform.get(device.driver_id)?.simulated ?? true} />
+          : <Bootstrap key={device.id} device={device} simulated={platform.get(device.driver_id)?.simulated ?? true} />)}
       </Stack>
     </>
   );

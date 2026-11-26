@@ -21,7 +21,7 @@ from undm.db.models import CredentialRef, Device
 from undm.domain.enums import ProvisioningStatus
 from undm.drivers.base import Credentials
 from undm.drivers.registry import DriverRegistry
-from undm.provisioning import aos_switch
+from undm.provisioning import aos_switch, sros_sar
 from undm.provisioning.console import (
     ConsoleError,
     ConsoleSession,
@@ -29,7 +29,9 @@ from undm.provisioning.console import (
     list_serial_ports,
     open_serial,
 )
+from undm.provisioning.results import BootstrapStatus
 from undm.provisioning.simulated import SimulatedArubaConsole
+from undm.provisioning.simulated_sar import SimulatedSarConsole
 from undm.security import credentials as creds
 from undm.security.sanitize import sanitize
 from undm.services import app_settings, audit
@@ -41,16 +43,21 @@ log = logging.getLogger(__name__)
 
 SIMULATED_PORT = "SIMULATED"
 # Driver platforms that have a console bootstrap procedure.
-CONSOLE_BOOTSTRAP_PLATFORMS = frozenset({"aos_switch"})
+CONSOLE_BOOTSTRAP_PLATFORMS = frozenset({"aos_switch", "sros_sar"})
+# Nokia 7705 SAR-Hmc: its console procedure is the first access (D-112), not a management
+# VLAN: no bootstrap settings, and the unit is switched off and on by the person.
+SAR_PLATFORM = "sros_sar"
 
 _port_locks: dict[str, threading.Lock] = {}
 _registry_lock = threading.Lock()
 # One simulated console per simulated device, so repeated runs see earlier changes.
 _simulated_consoles: dict[str, SimulatedArubaConsole] = {}
+_simulated_sar: dict[str, SimulatedSarConsole] = {}
 
 
 def reset_simulation() -> None:
     _simulated_consoles.clear()
+    _simulated_sar.clear()
 
 
 def serial_ports() -> list[dict[str, str]]:
@@ -86,8 +93,10 @@ def preview(device: Device, registry: DriverRegistry, policy: Policy,
     if not supports_console_bootstrap(device, registry):
         return {"supported": False, "commands": [], "notes": [
             "No console bootstrap procedure exists for this device's platform yet."]}
-    params = _params(device, profile)
     info = registry.get(device.driver_id).info
+    if info.platform == SAR_PLATFORM:
+        return _sar_preview(device, info.simulated, policy)
+    params = _params(device, profile)
     login = device.credential_ref.name if device.credential_ref is not None else None
     notes = [
         "Sent over the console cable after reaching the manager prompt; the switch must be "
@@ -113,6 +122,53 @@ def preview(device: Device, registry: DriverRegistry, policy: Policy,
     return {"supported": True, "commands": params.commands(), "notes": notes}
 
 
+def _device_credentials(device: Device) -> Credentials | None:
+    if device.credential_ref is None:
+        return None
+    try:
+        return creds.resolve(device.credential_ref.provider, device.credential_ref.locator)
+    except creds.CredentialResolutionError as e:
+        raise ServiceError(str(e)) from e
+
+
+def _sar_preview(device: Device, simulated: bool, policy: Policy) -> dict[str, Any]:
+    login = device.credential_ref.name if device.credential_ref is not None else None
+    notes = [
+        "For a modem straight from the factory. Press Run first, then switch the modem off "
+        "and on: UNDM must be listening when it asks for a key (3 seconds).",
+        f"Console speed {sros_sar.CONSOLE_SPEED}. UNDM answers only the questions listed "
+        "here, in this order; any other question ends the run with the modem's own words.",
+        "The boot menu is told not to write the boot options file. The modem then starts "
+        "once without its configuration and without auto-discovery, and accepts the factory "
+        "login.",
+        (f"The admin password becomes the password of this device's login '{login}' (never "
+         "shown). The modem may refuse a password it finds too simple."
+         if login else
+         "Choose this device's login first: its password becomes the modem's admin password."),
+        "The boot options (configuration file, persist on, no auto-discovery) are read back "
+        "before 'bof save' and 'admin save'.",
+        "A modem whose boot options have no auto-discovery is not a factory unit: UNDM sends "
+        "no key and changes nothing.",
+        "Experimental: built from the team's console recording; not yet run by UNDM on a "
+        "modem.",
+    ]
+    if simulated:
+        notes.append("This is a simulated device: choose the SIMULATED console port.")
+    else:
+        problem = policy.write_problem(device.name, device.environment, simulated=False)
+        if problem:
+            notes.append("Blocked at the moment: " + problem)
+        notes.append("Close PuTTY or any other program using the COM port before running.")
+    try:
+        problem = sros_sar.password_problem(_device_credentials(device))
+    except ServiceError as e:
+        problem = str(e)
+    if problem:
+        notes.append("Before you run: " + problem)
+    return {"supported": True, "commands": sros_sar.preview_steps(), "notes": notes,
+            "procedure": "first_access"}
+
+
 def _tcp_reachable(address: str, port: int = 22, timeout: float = 3.0) -> bool:
     try:
         with socket.create_connection((address, port), timeout=timeout):
@@ -132,6 +188,9 @@ def identify_console(
     instead of typing a name they would first have to look up with a terminal program."""
     if not supports_console_bootstrap(device, registry):
         raise ServiceError("No console procedure exists for this device's platform")
+    if registry.get(device.driver_id).info.platform == SAR_PLATFORM:
+        raise ServiceError("Reading the name from the console is for the 2930F. The modem "
+                           "shows its own name at the end of its first access.")
     if device.locked_by_deployment_id:
         raise ConflictError("Device is locked by a running deployment")
     simulated = registry.get(device.driver_id).info.simulated
@@ -211,6 +270,9 @@ def run_console_bootstrap(
         raise ConflictError("Confirmation does not match the device name")
     if device.locked_by_deployment_id:
         raise ConflictError("Device is locked by a running deployment")
+    if registry.get(device.driver_id).info.platform == SAR_PLATFORM:
+        return _run_sar_first_access(session, device, registry, policy, actor,
+                                     serial_port=serial_port, baudrate=baudrate)
     params = _params(device, profile)
     simulated = registry.get(device.driver_id).info.simulated
     if simulated != (serial_port == SIMULATED_PORT):
@@ -349,4 +411,81 @@ def run_console_bootstrap(
         "no_password": result.no_password, "password_set": result.password_set,
         "sanitized_transcript": shown,
         "network_reachable": reachable, "network_hint": hint,
+    }
+
+
+def _run_sar_first_access(
+    session: Session, device: Device, registry: DriverRegistry, policy: Policy, actor: str, *,
+    serial_port: str, baudrate: int,
+) -> dict[str, Any]:
+    """First access to a factory Nokia 7705 SAR-Hmc (D-112). The caller has checked the
+    typed device name and that no plan holds the device."""
+    simulated = registry.get(device.driver_id).info.simulated
+    if simulated != (serial_port == SIMULATED_PORT):
+        raise ServiceError(
+            "Simulated devices use the SIMULATED console port" if simulated
+            else "A real device needs a real serial port, not the simulated console")
+    if not simulated:
+        problem = policy.write_problem(device.name, device.environment, simulated=False)
+        if problem:
+            raise ForbiddenError(problem)
+    credentials = _device_credentials(device)
+    problem = sros_sar.password_problem(credentials)
+    if problem:
+        raise ConflictError(f"{problem} Nothing was sent to the modem.")
+
+    with _registry_lock:
+        lock = _port_locks.setdefault(serial_port if not simulated else f"sim:{device.id}",
+                                      threading.Lock())
+    if not lock.acquire(blocking=False):
+        raise ConflictError(f"{serial_port} is already in use by another console session")
+    transport: Transport | None = None
+    try:
+        try:
+            if simulated:
+                sim = _simulated_sar.setdefault(device.id, SimulatedSarConsole())
+                sim.key_window = 0.0
+                sim.power_cycle()  # "switched off and on" as the run starts
+                transport = sim
+                console_session = ConsoleSession(sim, read_timeout=2.0, settle_time=0)
+                timing = sros_sar.Timing(power_on=2.0, menu=2.0, boot=2.0, command=2.0)
+            else:
+                transport = open_serial(serial_port, baudrate)
+                console_session = ConsoleSession(transport)
+                timing = sros_sar.Timing()
+        except ConsoleError as e:
+            raise ServiceError(str(e)) from e
+        result = sros_sar.first_access(console_session, credentials, timing)
+    finally:
+        if transport is not None and not simulated:
+            transport.close()
+        lock.release()
+
+    ok = result.status in (BootstrapStatus.BOOTSTRAPPED, BootstrapStatus.ALREADY_CONFIGURED)
+    if ok:
+        device.provisioning_status = ProvisioningStatus.BOOTSTRAPPED.value
+    known = [("hostname", device.name)]
+    if result.facts.get("name"):
+        known.append(("hostname", result.facts["name"]))
+    shown = sanitize(result.transcript, known)
+    tail = shown[-1500:] if result.status.value == "failed" else None
+    audit.record(session, actor, "provisioning.console_bootstrap", "device", device.id,
+                 result.status.value, {
+                     "procedure": "sros_sar_first_access", "serial_port": serial_port,
+                     "commands_sent": result.commands_sent, "findings": result.findings,
+                     "verified": result.verified, "saved": result.saved,
+                     "message": result.message, "admin_password_set": result.password_set,
+                     "facts": result.facts,
+                     "credential": device.credential_ref.name if device.credential_ref
+                     else None, **({"transcript_tail": tail} if tail else {})})
+    hint = ("Next: its configuration. For now that is pasted on the console by hand (then "
+            "'admin save'); UNDM's own load of the modem's file is being built."
+            if ok else "")
+    return {
+        "status": result.status.value, "message": result.message,
+        "commands_sent": result.commands_sent, "findings": result.findings,
+        "verified": result.verified, "saved": result.saved, "transcript": result.transcript,
+        "credentials_set": False, "erased": "", "no_password": False,
+        "password_set": result.password_set, "sanitized_transcript": shown,
+        "network_reachable": None, "network_hint": hint, "facts": result.facts,
     }

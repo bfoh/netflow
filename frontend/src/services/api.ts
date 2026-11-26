@@ -234,11 +234,14 @@ export const api = {
   serialPorts: () => request<SerialPort[]>('GET', '/provisioning/serial-ports'),
   bootstrapPreview: (id: string, profile: BootstrapProfile) =>
     request<BootstrapPreview>('POST', `/devices/${id}/provisioning/console-bootstrap/preview`, { profile }),
+  /** The modem's first access (D-112): no settings to send. */
+  firstAccessPreview: (id: string) =>
+    request<BootstrapPreview>('POST', `/devices/${id}/provisioning/console-bootstrap/preview`, {}),
   consoleIdentify: (id: string, body: { serial_port: string; baudrate: number; current_credential_ref_id?: string | null }) =>
     request<{ state: 'configured' | 'factory_default' | 'new' | 'unknown'; hostname: string; message: string }>(
       'POST', `/devices/${id}/provisioning/console-identify`, body),
   consoleBootstrap: (id: string, body: {
-    serial_port: string; baudrate: number; profile: BootstrapProfile; confirm_device_name: string; allow_configured: boolean;
+    serial_port: string; baudrate: number; profile?: BootstrapProfile; confirm_device_name: string; allow_configured: boolean;
     erase_existing?: boolean; current_credential_ref_id?: string | null; confirm_hostname?: string;
   }) => request<BootstrapResult>('POST', `/devices/${id}/provisioning/console-bootstrap`, body),
   topology: (pid: string) => request<Topology>('GET', `/projects/${pid}/topology`),

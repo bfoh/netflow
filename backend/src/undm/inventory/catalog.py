@@ -77,6 +77,15 @@ CATALOG: tuple[DeviceModel, ...] = (
                       "facts, base restore and site script end to end; the unit installed "
                       "7.6.5 by UNDM's firmware procedure (reported failed by an UNDM fault, "
                       "fixed, not yet re-run). First login: fake device only."),
+    DeviceModel("nokia-7705-sar-hmc", "Nokia", "7705 SAR", "7705 SAR-Hmc",
+                DeviceCategory.ROUTER, "SR OS (7705 SAR)",
+                ("mock.nokia.sar", "console.nokia.sar"), SupportLevel.SIMULATED_ONLY,
+                notes="Staging target (a system's LTE modem). Reached over its console cable "
+                      "only. First access (one start without its configuration and "
+                      "auto-discovery, then the admin password, boot options and save) "
+                      "follows the team's console recording of 2026-11-26 on TiMOS 20.5.R1 "
+                      "and Nokia's public guides (experimental; not yet run by UNDM on "
+                      "hardware). Loading its configuration is not built yet."),
     DeviceModel("cisco-c9300", "Cisco", "Catalyst 9300", "C9300-24T", DeviceCategory.SWITCH,
                 "IOS-XE", ("mock.cisco.iosxe", "ssh.cisco.iosxe"), SupportLevel.SIMULATED_ONLY),
     DeviceModel("cisco-isr4331", "Cisco", "ISR 4000", "ISR4331", DeviceCategory.ROUTER,

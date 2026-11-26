@@ -1459,3 +1459,61 @@ two zones.
     proof (all four byte for byte); the third zone's zip compared with `cmp` against the
     product owner's files for that zone: all four identical byte for byte.
 
+### D-112 Nokia 7705 SAR-Hmc: first access over the console (2026-11-26)
+Product owner: every system also has a Nokia modem (7705 SAR-Hmc) and a Nokia Flexi BBU.
+The modem is staged over its console cable only. A factory unit refuses the default login;
+the team "breaks" it with a boot-menu procedure, recorded on the console and supplied.
+- **Evidence.** The recording (TiMOS 20.5.R1) and Nokia's public guides, quoted in
+  `docs/vendor-support/nokia-7705-sar-hmc.md`. Every question UNDM answers and every command
+  it sends is in the recording, except `environment no more` and the pager text, which Nokia
+  documents. The default login `admin`/`admin` is Nokia's documented default and is what
+  the team types after the boot-menu steps (product owner).
+- **Where it runs.** Console setup. It is a console bootstrap of a factory-default device,
+  so it falls under the existing exception to the deployment lifecycle (D-025) and keeps its
+  safeguards: preview, typed device name, the real-device switch, a factory check, read-back
+  before saving, audit. No new exception was added.
+- **Procedure** (`provisioning/sros_sar.py`): the person presses Run and switches the modem
+  off and on. UNDM reads the boot options the modem lists, sends a key only to a factory
+  unit (one with `auto-discover` lines), answers the recorded boot-menu questions in the
+  recorded order (configuration file `none`, auto-discovery `no`, boot options file not
+  written), logs in with the factory login, then: `admin save config.cfg`,
+  `exec cf3:/config.cfg`, the admin password, `bof primary-config`, `bof persist on`,
+  `show bof` read back, `bof save`, `admin save`, `show system information`.
+- **Answering only what is known (D-031).** Any other question ends the run with the modem's
+  words; a line starting `MINOR:`, `MAJOR:`, `CRITICAL:` or `Error:` ends it; `bof save`,
+  `admin save` and `exec` must show their recorded confirmations.
+- **The password** is the device's login in UNDM (user name `admin`). It is typed on a
+  command line the modem echoes, so the console session masks listed secrets in both
+  directions (`ConsoleSession.secrets`); it never reaches the transcript, a message or the
+  audit. A password with spaces, quotation marks or non-ASCII characters is refused before
+  anything is sent.
+- **A unit that is not from the factory** (no `auto-discover` in its boot options) is left
+  alone: no key is sent. If it accepts the device's login the run ends "already done".
+  Resetting a staged modem is not offered; it would replace its configuration and needs
+  its own decision, as D-057 was for the 2930F.
+- **Model and drivers.** Catalog entry `nokia-7705-sar-hmc` (router); `mock.nokia.sar`
+  (simulated) and `console.nokia.sar` (experimental, console only: every operation of the
+  driver contract is unsupported for now). A device reached over its console only needs no
+  management address; network tests say so.
+- **Wizard.** A fifth role, staged over its console only: no plan yet. It counts as staged
+  after its first access, in the report and in Finish staging (`finish_system`).
+- **Not built:** loading the modem's configuration (next: a plan over the console), its
+  file by zone, facts, backup, firmware. Open questions Q-49 to Q-53.
+- **Status:** experimental. Run only on the simulated console; the first bench run decides
+  the rest.
+
+### D-113 Nokia Flexi BBU (FSMF): guided by hand first (2026-11-26)
+Product owner: the BBU is an FSMF staged in the browser through WebEM on the LMP port
+(192.168.255.129): firmware first, then the SCF. The team has no Nokia tool for scripted
+operations.
+- A web search found no public description of an interface to WebEM. A copy of Nokia's
+  WebEM User Guide says its interface is binary and not for third parties, and names a
+  "WebEM Remote Tool" for automation whose commands are not public. Everything found is
+  unverified (`docs/vendor-support/nokia-flexi-bbu.md`).
+- **Decision:** UNDM does not drive the portal. The first version keeps the firmware package
+  and SCF with the system, makes the SCF by zone if two zones' files prove the rules, checks
+  read-only that the LMP answers, opens the portal, shows the steps and records who did
+  what. Automation waits for Nokia's tool with its manual, or for a later decision on
+  browser automation after bench screenshots.
+- Not built yet; needs the answers to Q-54.
+

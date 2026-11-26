@@ -50,14 +50,36 @@ class ConsoleSession:
     read_timeout: float = 8.0
     settle_time: float = 0.15  # wait this long after a match for trailing output
     transcript: list[str] = field(default_factory=list)
+    # Values that must never reach the transcript or a message: a password typed on a
+    # command line is echoed by the device, so both directions are masked.
+    secrets: list[str] = field(default_factory=list)
     _buffer: str = ""
     _carry: str = ""  # the start of an escape sequence cut off by the previous read
 
-    def write_line(self, text: str = "") -> None:
+    def mask(self, text: str) -> str:
+        for secret in self.secrets:
+            if secret:
+                text = text.replace(secret, "********")
+        return text
+
+    def _typed(self, shown: str) -> None:
         # "<<<" marks what UNDM typed; keep it visually apart from the device's output.
         gap = "" if not self.transcript or self.transcript[-1].endswith((" ", "\n")) else " "
-        self.transcript.append(f"{gap}<<< {text or '(Enter)'}\n")
+        self.transcript.append(f"{gap}<<< {shown}\n")
+
+    def write_line(self, text: str = "") -> None:
+        self._typed(self.mask(text) or "(Enter)")
         self.transport.write((text + "\r").encode("ascii", "replace"))
+
+    def write_key(self, key: str = " ") -> None:
+        """One key without Enter (e.g. to interrupt a boot loader's countdown)."""
+        self._typed("(a key)")
+        self.transport.write(key.encode("ascii", "replace"))
+
+    def write_secret(self, secret: str) -> None:
+        """A password at a prompt that does not echo it: never in the transcript."""
+        self._typed("(password sent)")
+        self.transport.write((secret + "\r").encode("utf-8"))
 
     def _fill(self) -> bool:
         chunk = self.transport.read(256)
@@ -90,12 +112,12 @@ class ConsoleSession:
                             break
                     if grew:
                         break  # re-evaluate all patterns on the longer buffer
-                    text, self._buffer = self._buffer, ""
+                    text, self._buffer = self.mask(self._buffer), ""
                     self.transcript.append(text)
                     return idx, text
             else:
                 if time.monotonic() > deadline:
-                    text, self._buffer = self._buffer, ""
+                    text, self._buffer = self.mask(self._buffer), ""
                     self.transcript.append(text)
                     raise ConsoleTimeoutError(
                         "No expected prompt from the console within "

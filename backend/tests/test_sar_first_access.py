@@ -1,0 +1,254 @@
+"""First access to a Nokia 7705 SAR-Hmc over its console (D-112), on the simulated console.
+
+Synthetic values only: a made-up system name and password. The normal path of the simulated
+console follows the product owner's recording; these tests prove UNDM's handling of it, not
+the behaviour of a real modem."""
+
+import keyring
+import pytest
+from api_helpers import make_client
+from memory_keyring import MemoryKeyring
+
+from undm.drivers.base import Credentials
+from undm.provisioning import sros_sar as sar
+from undm.provisioning.console import ConsoleSession
+from undm.provisioning.results import BootstrapStatus
+from undm.provisioning.simulated_sar import SimulatedSarConsole
+from undm.services import provisioning as prov
+
+PASSWORD = "Example-Only-Pass-77"  # noqa: S105 - a made-up test value
+FAST = sar.Timing(power_on=1, menu=1, boot=1, command=1)
+
+
+def run(sim, password=PASSWORD, user="admin"):
+    sim.key_window = 0.0  # no waiting in tests: the session reads without pauses
+    sim.power_cycle()
+    session = ConsoleSession(sim, read_timeout=1, settle_time=0)
+    return sar.first_access(session, Credentials(user, password), FAST)
+
+
+def test_first_access_follows_the_recording_and_never_shows_the_password():
+    sim = SimulatedSarConsole()
+    r = run(sim)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED and r.saved and r.verified and r.password_set
+    # The boot menu: the recorded answers, in the recorded order; the boot options file is
+    # written once, by 'bof save', never from the boot menu.
+    assert r.commands_sent[:9] == [
+        "(a key)", "sros (within 25 seconds)", "Enter (begin)", "Enter (keep the software image)",
+        "none (start without its file)", "Enter (keep the fips setting)",
+        "no (auto-discovery off)", "no (the boot options file is not written here)",
+        "Login: admin (the factory login)"]
+    assert sim.commands_received == [
+        "environment no more", "admin save config.cfg", "exec cf3:/config.cfg",
+        f'configure system security user "admin" password {PASSWORD}',
+        "bof primary-config cf3:\\config.cfg", "show bof", "bof persist on", "show bof",
+        "bof save", "admin save", "show system information"]
+    assert sim.bof_writes == 1
+    assert sim.bof == {"primary-image": ["cf3:/TiMOS-SR-20.5.R1"], "wait": ["3"],
+                       "persist": ["on"], "console-speed": ["115200"],
+                       "primary-config": ["cf3:\\config.cfg"]}
+    assert sim.file_password == PASSWORD and not sim.unsaved
+    assert r.facts["type"] == "7705 SAR-Hmc" and r.facts["name"] == "NS00SIM0001"
+    # The modem echoes the command line: the password is masked in both directions.
+    assert PASSWORD not in r.transcript and PASSWORD not in "".join(r.commands_sent)
+    assert 'password ********' in r.transcript and PASSWORD not in r.message
+    assert "auto-discover private.nokia.nsp.primary.nms" in r.findings[0]
+
+
+def test_a_second_run_changes_nothing():
+    sim = SimulatedSarConsole()
+    run(sim)
+    again = run(sim)
+    assert again.status is BootstrapStatus.ALREADY_CONFIGURED and sim.bof_writes == 1
+    assert "(a key)" not in again.commands_sent and "Nothing was changed" in again.message
+    # Not a factory unit and another password: refused, nothing sent but the login.
+    other = run(sim, password="Another-Pass-88")
+    assert other.status is BootstrapStatus.REFUSED
+    assert "refuses this device's login" in other.message
+    assert sim.bof_writes == 1 and sim.file_password == PASSWORD
+
+
+@pytest.mark.parametrize(("kw", "words"), [
+    ({"silent": True}, "start-up text did not appear"),
+    ({"key_ignored": True}, "started normally instead of asking to type"),
+    ({"extra_question": "Enter the BOF password:"}, "Enter the BOF password:"),
+    ({"fail_on": {"admin save config.cfg"}}, "Saving the starting configuration"),
+    ({"fail_on": {"bof save"}}, "Saving the boot options"),
+])
+def test_anything_unexpected_ends_the_run_with_the_modems_words(kw, words):
+    sim = SimulatedSarConsole(**kw)
+    r = run(sim)
+    assert r.status is BootstrapStatus.FAILED and words in r.message and not r.saved
+    # The boot menu never writes the boot options file, and a refused 'bof save' wrote none.
+    assert sim.bof_writes == 0 and "auto-discover" in sim.bof
+    assert PASSWORD not in r.transcript
+
+
+def test_a_refused_password_stops_before_the_boot_options_are_saved():
+    sim = SimulatedSarConsole()
+    r = run(sim, password="short")
+    assert r.status is BootstrapStatus.FAILED and "is too simple" in r.message
+    assert "less simple password" in r.message and sim.bof_writes == 0
+    assert "bof save" not in sim.commands_received and "short" not in r.transcript
+
+
+def test_logins_that_cannot_be_typed_are_refused_before_anything_is_sent():
+    for user, password, words in [("admin", "", "Choose this device's login"),
+                                  ("operator", PASSWORD, "administrator is 'admin'"),
+                                  ("admin", 'has "quotes"', "must not contain"),
+                                  ("admin", "has space", "must not contain")]:
+        sim = SimulatedSarConsole()
+        r = run(sim, password=password, user=user)
+        assert r.status is BootstrapStatus.REFUSED and words in r.message
+        assert sim.commands_received == [] and sim._state == "hit_key"  # noqa: SLF001
+
+
+def test_a_listening_start_too_late_and_a_pager_are_handled():
+    # Started listening after the 3-second question: the modem is at its login.
+    sim = SimulatedSarConsole(key_window=0.0)
+    sim.power_cycle()
+    for _ in range(3):
+        sim.read(4096)  # the question passes unanswered; it starts normally
+    session = ConsoleSession(sim, read_timeout=1, settle_time=0)
+    late = sar.first_access(session, Credentials("admin", PASSWORD), FAST)
+    assert late.status is BootstrapStatus.FAILED and "start-up text did not appear" in late.message
+    # 'environment no more' refused: answers are paged and UNDM presses a key per page.
+    sim = SimulatedSarConsole(no_paging_command=False)
+    r = run(sim)
+    assert r.status is BootstrapStatus.BOOTSTRAPPED and r.facts["unsaved_changes"] == "No"
+    assert any("paged" in f for f in r.findings)
+
+
+def test_the_patterns_match_the_recorded_wording():
+    assert sar.HIT_KEY.search("Hit a key within 3 seconds to change boot parameters...")
+    assert sar.HIT_KEY.search("Hit a key within 3 seconds to change boot parms...")  # Nokia guide
+    assert sar.PROMPT.search("\n*A:NS00SIM0001# ") and sar.PROMPT.search("\nA:NS00SIM0001# ")
+    assert sar.PROMPT.search("\n*A:lab-modem>config>system# ")
+    assert not sar.PROMPT.search("\nLogin: ")
+    assert sar.ERROR.search("x\nMINOR: SYSTEM #1372 The user password does not meet\n")
+    assert sar.ERROR.search("Error: Bad command.") and not sar.ERROR.search("Completed.")
+    bof = sar.parse_bof("    primary-config   cf3:/config.cfg\n    persist          off\n"
+                        "    auto-discover    a.example\n    auto-discover    b.example\n")
+    assert bof == {"primary-config": ["cf3:/config.cfg"], "persist": ["off"],
+                   "auto-discover": ["a.example", "b.example"]}
+    assert sar.preview_steps()[-1] == "show system information"
+    assert not any(PASSWORD in s for s in sar.preview_steps())
+
+
+# -- through the API -------------------------------------------------------------------
+SIM_MODEM = {"name": "lab-modem", "manufacturer": "Nokia", "category": "router",
+             "model": "7705 SAR-Hmc", "os_family": "SR OS (7705 SAR)",
+             "driver_id": "mock.nokia.sar"}
+
+
+@pytest.fixture
+def client():
+    previous = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    prov.reset_simulation()
+    c, _ = make_client()
+    with c:
+        yield c
+    keyring.set_keyring(previous)
+    prov.reset_simulation()
+
+
+def add(client, body, user="admin", password=PASSWORD):
+    pid = client.post("/api/projects", json={"name": "Staging " + body["name"]}).json()["id"]
+    if password is not None:
+        ref = client.post(f"/api/projects/{pid}/credential-refs", json={"name": "approved"}).json()
+        client.put(f"/api/credential-refs/{ref['id']}/secret",
+                   json={"username": user, "password": password})
+        body = dict(body, credential_ref_id=ref["id"])
+    r = client.post(f"/api/projects/{pid}/devices", json=body)
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+def go(client, did, name="lab-modem", **over):
+    return client.post(f"/api/devices/{did}/provisioning/console-bootstrap", json={
+        "serial_port": "SIMULATED", "baudrate": 115200, "confirm_device_name": name, **over})
+
+
+def test_api_preview_run_rerun_and_audit(client):
+    did = add(client, SIM_MODEM)
+    pre = client.post(f"/api/devices/{did}/provisioning/console-bootstrap/preview", json={}).json()
+    assert pre["supported"] and pre["procedure"] == "first_access"
+    assert "sros (within 25 seconds)" in pre["commands"] and "bof save" in pre["commands"]
+    assert not any(PASSWORD in line for line in pre["commands"] + pre["notes"])
+    assert go(client, did, name="other").status_code == 409
+    r = go(client, did)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["status"] == "bootstrapped" and out["saved"] and out["password_set"]
+    assert out["facts"]["type"] == "7705 SAR-Hmc" and "configuration" in out["network_hint"]
+    assert PASSWORD not in r.text
+    # The unit's own name (its serial number from the factory) is masked in the shared text.
+    assert "NS00SIM0001" not in out["sanitized_transcript"]
+    assert client.get(f"/api/devices/{did}").json()["provisioning_status"] == "bootstrapped"
+    assert go(client, did).json()["status"] == "already_configured"
+    entry = client.get("/api/audit", params={"target_id": did}).json()[0]
+    assert entry["action"] == "provisioning.console_bootstrap"
+    assert entry["details"]["procedure"] == "sros_sar_first_access"
+    assert "transcript" not in entry["details"] and PASSWORD not in str(entry)
+    # The modem has no network address: tests say so instead of failing oddly.
+    test = client.post(f"/api/devices/{did}/operations/check_reachability")
+    assert "console cable only" in test.text
+    ident = client.post(f"/api/devices/{did}/provisioning/console-identify",
+                        json={"serial_port": "SIMULATED"})
+    assert ident.status_code == 400
+
+
+def test_api_needs_a_usable_login_before_anything_is_sent(client):
+    no_login = add(client, SIM_MODEM, password=None)
+    r = go(client, no_login)
+    assert r.status_code == 409 and "Choose this device's login first" in r.json()["error"]
+    other_user = add(client, dict(SIM_MODEM, name="lab-modem-2"), user="manager")
+    r = go(client, other_user, name="lab-modem-2")
+    assert r.status_code == 409 and "administrator is 'admin'" in r.json()["error"]
+    assert prov._simulated_sar == {}  # noqa: SLF001 - no console was opened
+
+
+def test_api_real_modem_needs_the_write_switch_and_a_real_port(client, monkeypatch):
+    opened = []
+    monkeypatch.setattr(prov, "open_serial", lambda port, baud: opened.append((port, baud)))
+    did = add(client, dict(SIM_MODEM, name="bench-modem", driver_id="console.nokia.sar",
+                           environment="lab"))
+    r = go(client, did, name="bench-modem", serial_port="COM7")
+    assert r.status_code == 403 and "Real-device changes are off" in r.json()["error"]
+    assert go(client, did, name="bench-modem").status_code == 400  # SIMULATED refused
+    assert opened == []
+
+
+def test_api_real_modem_runs_at_115200_with_the_switch_on(monkeypatch):
+    previous = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    sim = SimulatedSarConsole()
+    opened = []
+
+    def open_serial(port, baud):
+        opened.append((port, baud))
+        sim.power_cycle()  # "the person switches it off and on" once UNDM listens
+        return sim
+    monkeypatch.setattr(prov, "open_serial", open_serial)
+    monkeypatch.setattr(prov.sros_sar, "Timing", lambda: FAST)
+    client, _ = make_client(enable_real_device_writes=True)
+    try:
+        with client:
+            did = add(client, dict(SIM_MODEM, name="bench-modem", driver_id="console.nokia.sar",
+                                   environment="lab"))
+            r = go(client, did, name="bench-modem", serial_port="COM7")
+            assert r.status_code == 200 and r.json()["status"] == "bootstrapped", r.text
+            assert opened == [("COM7", 115200)] and sim.closed
+    finally:
+        keyring.set_keyring(previous)
+
+
+def test_finish_staging_counts_a_console_only_device_after_its_first_access(client):
+    did = add(client, SIM_MODEM)
+    pid = client.get(f"/api/devices/{did}").json()["project_id"]
+    r = client.post(f"/api/projects/{pid}/finish", json={"device_ids": [did]})
+    assert r.status_code == 409 and "has not had its console setup" in r.json()["error"]
+    assert go(client, did).json()["status"] == "bootstrapped"
+    r = client.post(f"/api/projects/{pid}/finish", json={"device_ids": [did]})
+    assert r.status_code == 200 and r.json()["staged_at"]

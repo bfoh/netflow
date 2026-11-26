@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import re
 import time
-from dataclasses import dataclass, field
-from enum import StrEnum
+from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Interface
 
 from undm.drivers.base import Credentials
 from undm.provisioning.console import ConsoleError, ConsoleSession, ConsoleTimeoutError
+from undm.provisioning.results import BootstrapResult, BootstrapStatus
+
+__all__ = ["BootstrapResult", "BootstrapStatus"]  # re-exported for existing callers
 
 PROMPT = re.compile(
     r"(?:^|\n)[ \t]*(?P<name>[A-Za-z0-9_.-]{1,64})(?P<ctx>\([A-Za-z0-9_/ .-]*\))?(?P<mode>[#>]) ?$")
@@ -85,13 +87,6 @@ class NewSwitchError(ConsoleError):
     """A read-only look met a new switch asking to set its manager credentials."""
 
 
-class BootstrapStatus(StrEnum):
-    BOOTSTRAPPED = "bootstrapped"
-    ALREADY_CONFIGURED = "already_configured"
-    REFUSED = "refused"
-    FAILED = "failed"
-
-
 @dataclass(frozen=True)
 class BootstrapParams:
     vlan_id: int
@@ -128,26 +123,6 @@ class EraseRequest:
     restart_timeout: float = 420.0  # erase, restart and console banner
     down_delay: float = 20.0  # let the switch go down before pressing Enter
     poll: float = 10.0  # press Enter this often until the console answers
-
-
-@dataclass
-class BootstrapResult:
-    status: BootstrapStatus
-    message: str
-    commands_sent: list[str] = field(default_factory=list)
-    findings: list[str] = field(default_factory=list)
-    verified: bool = False
-    saved: bool = False
-    transcript: str = ""
-    credentials_set: bool = False  # a new switch's first-login credentials were set
-    erased: str = ""  # hostname of the configuration that was erased first, if any
-    # The approved login was refused and the switch was reached with the login it has now
-    # (e.g. its password survived the erase): that login stays the switch's (D-102).
-    kept_current_login: bool = False
-    # The switch asked for no password and none was set: it has no manager password.
-    no_password: bool = False
-    # The switch had no manager password; UNDM set the device's login (verified).
-    password_set: bool = False
 
 
 def _expand_ports(spec: str) -> set[str]:

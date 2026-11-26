@@ -38,7 +38,8 @@ independent of it: no DIMETRA assumptions, no TNDM code, no TNDM assets.
   (`domain/lifecycle.py`); no API endpoint may change a device directly. One exception:
   console bootstrap of factory-default devices (`services/provisioning.py`), which has
   its own safeguards (preview, typed confirmation, write switch, factory-default check,
-  read-back before save, audit) — see DECISIONS D-025. A preconfigured switch may be
+  read-back before save, audit) — see DECISIONS D-025; the Nokia 7705 SAR-Hmc first access
+  (D-112) is such a bootstrap. A preconfigured switch may be
   erased first only on explicit request, with its current login and its typed hostname
   (D-057, product owner decision). Do not add other exceptions.
 - Unsupported operations return `OperationResult.unsupported(...)`; they do not raise.
@@ -58,8 +59,10 @@ backend/            FastAPI app, package `undm` (src layout)
   src/undm/configgen/ intent -> config rendering, Jinja2 templates, diff
   src/undm/drivers/   driver contract, registry, mock/ simulated lab + drivers, ssh/ real (experimental),
                       fortinet/ FortiOS file recognition + SSH procedures (experimental),
-                      aruba/ 2930F file recognition, blackbox/ Black Box file recognition
-  src/undm/provisioning/  serial console sessions, console bootstrap procedures, simulated console
+                      aruba/ 2930F file recognition, blackbox/ Black Box file recognition,
+                      nokia/ 7705 SAR-Hmc over its console (experimental)
+  src/undm/provisioning/  serial console sessions, console bootstrap procedures (2930F; Nokia
+                      7705 SAR-Hmc first access), simulated consoles
   src/undm/transfer/  built-in TFTP server (read-only, per job, per device) and its hub
   src/undm/domain/    enums, intent model, validation, lifecycle, operation impact
   src/undm/inventory/ device model catalog, driver/environment rules
@@ -96,7 +99,8 @@ Frontend (from `frontend/`):
 
 ## Primary use case
 Staging four factory-default devices per system (FortiGate 101F, a Black Box switch,
-two Aruba 2930F) from one laptop: `docs/requirements/staging-use-case.md` and
+two Aruba 2930F) from one laptop, plus a Nokia 7705 SAR-Hmc modem (console only, D-112) and
+a Nokia Flexi BBU (guided by hand first, D-113): `docs/requirements/staging-use-case.md` and
 `docs/requirements/staging-run-design.md`; FortiGate two-file method in
 `docs/vendor-support/fortigate-101f-staging.md`. Prioritise work that serves it.
 

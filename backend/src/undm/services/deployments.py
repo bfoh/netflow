@@ -31,7 +31,7 @@ from undm.db.models import (
     FirmwareImage,
     Project,
 )
-from undm.domain.enums import DeviceDeploymentStatus, DeviceEnvironment
+from undm.domain.enums import DeviceDeploymentStatus, DeviceEnvironment, ProvisioningStatus
 from undm.domain.lifecycle import (
     TRANSIENT_STATES,
     DeploymentState,
@@ -687,6 +687,12 @@ class DeploymentService:
             audit.record(self.s, actor, "system.reopened", "project", project_id,
                          details={"reason": reason})
 
+    def _console_only(self, device: Device) -> bool:
+        if device.driver_id not in self.registry:
+            return False
+        caps = self.registry.get(device.driver_id).info.capabilities
+        return Capability.SERIAL_CONSOLE in caps and Capability.SSH not in caps
+
     def finish_system(self, project_id: str, device_ids: list[str], actor: str) -> Project:
         """Record that staging of a system is finished: every named device's latest staging
         plan succeeded, and none is still off the network (D-107)."""
@@ -704,7 +710,13 @@ class DeploymentService:
                 raise NotFoundError(f"Device {did} not found in project")
             names.append(device.name)
             mine = latest.get(did)
-            if not mine:
+            if not mine and self._console_only(device):
+                # Staged over its console only, with no plan (the modem, D-112): its console
+                # setup is its staging until its configuration load is built.
+                if device.provisioning_status not in (ProvisioningStatus.BOOTSTRAPPED.value,
+                                                      ProvisioningStatus.MANAGED.value):
+                    problems.append(f"{device.name} has not had its console setup")
+            elif not mine:
                 problems.append(f"{device.name} has no staging plan")
             elif any(r.state != S.SUCCEEDED.value for r in mine):
                 problems.append(f"{device.name}'s latest staging plan has not succeeded")

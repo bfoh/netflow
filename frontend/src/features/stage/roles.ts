@@ -1,10 +1,10 @@
 /**
- * The four devices of a system, by role (staging use case, docs/requirements). Addresses are
+ * The devices of a system, by role (staging use case, docs/requirements). Addresses are
  * the bench defaults of docs/requirements/staging-run-design.md; they can be changed per device.
  */
 import type { Device, LoginDefaults } from '../../types/api';
 
-export type RoleKey = 'firewall' | 'blackbox' | 'aruba_a' | 'aruba_b';
+export type RoleKey = 'firewall' | 'blackbox' | 'aruba_a' | 'aruba_b' | 'modem';
 export type StepKind = 'console' | 'first_login' | 'firmware' | 'base' | 'site' | 'file';
 
 export interface Role {
@@ -29,6 +29,8 @@ export interface Role {
   loginAfter?: string;
   /** 2930F: the port its console setup puts in the management VLAN (the bench cabling). */
   consolePort?: string;
+  /** What this role's console step is called, when it is not the 2930F's console setup. */
+  consoleWords?: string;
 }
 
 export const ROLES: Role[] = [
@@ -56,7 +58,20 @@ export const ROLES: Role[] = [
     hint: 'Temporary address so both switches fit on the bench; its file sets the final one.',
     cable: 'USB console cable first; after its console setup, port 3 → small switch', addressAfter: '192.168.1.1',
     consolePort: '3' },
+  // Console cable only: no bench address. Its configuration load is not built yet (D-112).
+  { key: 'modem', title: 'Nokia 7705 SAR-Hmc (modem)', model: '7705 SAR-Hmc', modelId: 'nokia-7705-sar-hmc',
+    realDriver: 'console.nokia.sar', simulatedDriver: 'mock.nokia.sar', nameSuffix: 'modem',
+    address: '', steps: ['console'],
+    hint: 'Console cable only. Its first access starts it once without its factory configuration and sets the admin password.',
+    cable: 'USB console cable only (speed 115200); no network cable on the bench', addressAfter: '',
+    consoleWords: 'First access (console)' },
 ];
+
+/** A role staged over its console only, with no plan (yet): the modem, until its file load is built. */
+export const consoleOnly = (role: Role) => role.steps.every((k) => k === 'console');
+
+/** Console steps done: the device has been set up over its console. */
+export const CONSOLE_DONE = new Set(['bootstrapped', 'managed']);
 
 /** The wizard role a device was added for (Stage a system sets `device.role`). */
 export function roleOf(device: Device): Role | undefined {
@@ -138,5 +153,6 @@ export function roleDefaults(role: Role, d: LoginDefaults | undefined): {
   if (!d?.firewall || !d.blackbox || !d.aruba) return none;
   if (role.key === 'firewall') return { ...none, login: d.firewall.login, loginAfter: d.firewall.login_after, tunnelKey: d.firewall.tunnel_key };
   if (role.key === 'blackbox') return { ...none, login: d.blackbox.login, loginAfter: d.blackbox.login_after };
+  if (role.key === 'modem') return none; // no default login for the modem yet
   return { ...none, login: d.aruba.login, current: d.aruba.current };
 }

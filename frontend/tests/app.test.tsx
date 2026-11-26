@@ -1014,3 +1014,73 @@ describe('files from the team templates (D-111)', () => {
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/templates/files.zip?zone=7')).toBe(true));
   });
 });
+
+describe('Nokia modem: first access over the console (D-112)', () => {
+  const modem = (over: Partial<Device> = {}) => device({ id: 'm1', name: 'lab-modem', manufacturer: 'Nokia', model: '7705 SAR-Hmc',
+    category: 'router', role: 'Nokia 7705 SAR-Hmc (modem)', driver_id: 'mock.nokia.sar', management_address: '',
+    credential_ref_id: 'approved', ...over });
+  const driver = { driver_id: 'mock.nokia.sar', platform: 'sros_sar', simulated: true, vendor: 'Nokia', os_family: 'SR OS (7705 SAR)',
+    description: '', capabilities: [], maturity: 'simulation', transport: 'simulated', notes: [] };
+  const preview = { supported: true, procedure: 'first_access', commands: ['a key, within 3 seconds of its question', 'sros (within 25 seconds)', 'bof save'],
+    notes: ['Console speed 115200.'] };
+
+  it('Console setup shows the steps and runs the first access after the typed name', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({
+      '/devices': [modem()], '/drivers': [driver], '/projects/p1/credential-refs': [{ id: 'approved', name: 'approved', shared: true }],
+      '/provisioning/serial-ports': [{ port: 'SIMULATED', description: 'Simulated console', hardware_id: '' }],
+      '/devices/m1/provisioning/console-bootstrap/preview': preview,
+      '/devices/m1/provisioning/console-bootstrap': { status: 'bootstrapped', message: 'First access done on NS00SIM0001.', commands_sent: [],
+        findings: [], verified: true, saved: true, transcript: 'Login: admin', sanitized_transcript: 'Login: admin', password_set: true,
+        network_reachable: null, network_hint: 'Next: its configuration.', facts: { type: '7705 SAR-Hmc', version: 'B-20.5.R1' } },
+    });
+    renderAt('/provisioning?device=m1');
+    expect(await screen.findByText(/sros \(within 25 seconds\)/)).toBeInTheDocument();
+    // No VLAN or address to enter: that is the 2930F's console setup.
+    expect(screen.queryByLabelText(/Untagged port/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Run first access…' }));
+    const go = await screen.findByRole('button', { name: 'Run first access' });
+    expect(go).toBeDisabled();
+    expect(screen.getByText(/Then switch the modem off and on/)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/Type the device name to confirm/), 'lab-modem');
+    await userEvent.click(go);
+    expect(await screen.findByText('First access done')).toBeInTheDocument();
+    const sent = calls.find((c) => c.url === '/api/devices/m1/provisioning/console-bootstrap' && c.init?.method === 'POST');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ serial_port: 'SIMULATED', baudrate: 115200, confirm_device_name: 'lab-modem', allow_configured: false });
+    expect(screen.getByText('admin password set')).toBeInTheDocument();
+    expect(screen.getByText('7705 SAR-Hmc · B-20.5.R1')).toBeInTheDocument();
+  });
+
+  it('a login the modem cannot take blocks the run with the reason', async () => {
+    mockApi({
+      '/devices': [modem()], '/drivers': [driver], '/projects/p1/credential-refs': [],
+      '/provisioning/serial-ports': [{ port: 'SIMULATED', description: 'Simulated console', hardware_id: '' }],
+      '/devices/m1/provisioning/console-bootstrap/preview': { ...preview, notes: ["Before you run: The modem's administrator is 'admin': choose a login with that user name."] },
+    });
+    renderAt('/provisioning?device=m1');
+    expect(await screen.findByText(/The modem's administrator is 'admin'/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run first access…' })).toBeDisabled();
+  });
+
+  it('the wizard stages the modem over its console only: no plan, no network test', async () => {
+    const project = { id: 'p1', name: 'Lab z045', description: '', site: '', purpose: '', created_at: '', updated_at: '',
+      certificate_subject: null, staged_at: null, staged_by: '', zone: 45 };
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': [modem({ provisioning_status: 'planned' })], '/projects/p1/staging-plans': [],
+      '/policy': { enable_real_device_writes: false, enable_real_device_firmware: false, firmware_require_separate_approver: false, locked: [] } });
+    const first = renderAt('/stage/p1?step=3');
+    expect(await screen.findByText('1. First access (console)')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open console setup' })).toHaveAttribute('href', '/provisioning?device=m1');
+    expect(screen.queryByRole('button', { name: 'Make the plan' })).not.toBeInTheDocument();
+    first.unmount();
+    const bench = renderAt('/stage/p1?step=2');
+    expect(await screen.findByText('Console cable only: no network test')).toBeInTheDocument();
+    expect(screen.getByText(/Nokia modem: its console cable only, at speed 115200/)).toBeInTheDocument();
+    bench.unmount();
+    // After its first access it counts as staged in the report.
+    mockApi({ '/projects/p1': project, '/projects/p1/devices': [modem({ provisioning_status: 'bootstrapped' })], '/projects/p1/staging-plans': [],
+      '/policy': { enable_real_device_writes: false, enable_real_device_firmware: false, firmware_require_separate_approver: false, locked: [] } });
+    renderAt('/stage/p1?step=4');
+    expect(await screen.findByText(/First access \(console\):/)).toBeInTheDocument();
+    expect(screen.queryByText(/Still to do in step 4/)).not.toBeInTheDocument();
+  });
+});

@@ -10,13 +10,12 @@ import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import type { Device, StagingIndex } from '../../types/api';
 import { type Choice, EMPTY_CHOICE, planSteps, wantsFirstLogin } from './choices';
-import { addressTakenBy, canMoveAside, portOff, type Role, STEP_TIME, STEP_WORDS, type StepKind } from './roles';
+import { addressTakenBy, canMoveAside, CONSOLE_DONE, consoleOnly, portOff, type Role, STEP_TIME, STEP_WORDS, type StepKind } from './roles';
 import { StagingControls } from './StagingControls';
 import { stagingStatus } from './staging';
 import { EmptyState } from '../../components/EmptyState';
 import { Notice } from '../../components/Notice';
 
-const CONSOLE_DONE = new Set(['bootstrapped', 'managed']);
 
 /** The step kinds a plan will have, in words, with the console setup in front for the Aruba. */
 function stepKinds(role: Role, c: Choice, device: Device): StepKind[] {
@@ -28,7 +27,7 @@ function PlannedSteps({ role, choice, device }: { role: Role; choice: Choice; de
     <Stack gap={4}>
       {stepKinds(role, choice, device).map((k, i) => (
         <Group key={k} justify="space-between" wrap="nowrap">
-          <Text size="sm">{i + 1}. {STEP_WORDS[k]}</Text>
+          <Text size="sm">{i + 1}. {k === 'console' && role.consoleWords ? role.consoleWords : STEP_WORDS[k]}</Text>
           {k === 'console'
             ? (CONSOLE_DONE.has(device.provisioning_status)
               ? <Badge color="teal" variant="light" tt="none">Done</Badge>
@@ -64,6 +63,37 @@ function LivePlan({ stagingId }: { stagingId: string }) {
         <Anchor component={Link} to={`/staging/${stagingId}`} size="xs">All events</Anchor>
       </Group>
     </Stack>
+  );
+}
+
+/** A device staged over its console only (the modem): no plan, its console step is the work. */
+function ConsoleOnlyRun({ role, device }: { role: Role; device: Device }) {
+  const done = CONSOLE_DONE.has(device.provisioning_status);
+  return (
+    <Card withBorder>
+      <Group justify="space-between" mb="xs" wrap="nowrap">
+        <div>
+          <Title order={3} size="h5">{device.name}</Title>
+          <Text size="xs" c="dimmed">{role.title} · console cable only</Text>
+        </div>
+        {done && <Badge color="teal" variant="filled" tt="none">First access done</Badge>}
+      </Group>
+      <Stack gap="xs">
+        <PlannedSteps role={role} choice={EMPTY_CHOICE} device={device} />
+        {done ? (
+          <Notice kind="settled" compact>
+            Its configuration is still pasted on the console by hand (then <code>admin save</code>): UNDM&apos;s own load of the
+            modem&apos;s file is being built.
+          </Notice>
+        ) : (
+          <Notice kind="caution" compact action={<Button size="xs" variant="light" component={Link} to={`/provisioning?device=${device.id}`}
+            leftSection={<IconTerminal2 size={14} />}>Open console setup</Button>}>
+            A modem from the factory: UNDM starts it once without its configuration and sets the admin password. You switch it
+            off and on when asked.
+          </Notice>
+        )}
+      </Stack>
+    </Card>
   );
 }
 
@@ -143,11 +173,13 @@ export function RunStep({ projectId, roles, choices, stagings }: {
         leave this page. Order inside each device: as listed. Two devices that end at the same address (the two 2930F) run one
         after the other: the card says which to unplug first.</Text>
       <SimpleGrid cols={{ base: 1, md: 2, xl: 4 }}>
-        {roles.map(({ role, device }) => (
+        {roles.map(({ role, device }) => (consoleOnly(role) ? (
+          <ConsoleOnlyRun key={role.key} role={role} device={device} />
+        ) : (
           <DeviceRun key={role.key} projectId={projectId} role={role} device={device}
             choice={choices[role.key] ?? EMPTY_CHOICE}
             latest={stagings.find((x) => x.device_id === device.id)} all={roles} />
-        ))}
+        )))}
       </SimpleGrid>
     </Stack>
   );

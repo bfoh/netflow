@@ -59,6 +59,34 @@ checked) and the FortiGate base file. Then, for each system:
    `fc /b` shows no difference). Templates imported before v83 were kept with Unix line
    endings: import them once again to have the team's formatting.
 
+## Nokia modem (7705 SAR-Hmc): first access (since v84, D-112, experimental)
+For a modem straight from the factory, which refuses the default login. UNDM does what the
+team does by hand on the console; it has not yet run on a modem, so read the transcript of
+the first run and send it back.
+1. In **Stage a system**, step 1, add the Nokia modem and choose **its login**: the approved
+   login with user name `admin`. Its password becomes the modem's admin password (the modem
+   refuses one it finds too simple).
+2. Connect the console cable (115200). Close PuTTY.
+3. Step 4, the modem's card: **Open console setup**. Choose the COM port, press
+   **Run first access…**, type the device name, press **Run first access**.
+4. **Then switch the modem off and on.** UNDM presses the key at the 3-second question,
+   answers the boot menu (configuration file `none`, auto-discovery `no`, boot options file
+   not written), waits for the start (2–4 minutes), logs in, sets the password and saves.
+5. The result says "First access done" with the modem's own name, type and software.
+   The console stays logged in as admin.
+6. Its configuration is still pasted on the console by hand, then `admin save`.
+
+If it stops:
+- "start-up text did not appear": the modem was not switched off and on after Run, or the
+  COM port or speed is wrong. Nothing was changed.
+- "started normally instead of asking to type sros": the key came too late. Nothing was
+  changed; run again.
+- "asked … where UNDM expected": the modem asked something UNDM has no answer for (a boot
+  menu password, for example). Send the transcript.
+- "refused the new admin password": choose a login with a longer, less simple password;
+  switch the modem off and on, then run again.
+- A modem that already had its first access is left alone ("already done" or "refused").
+
 ## Cabling (all four at once)
 One small switch, connected to nothing else, one cable per device (two would make a loop):
 

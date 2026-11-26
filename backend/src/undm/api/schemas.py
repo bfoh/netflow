@@ -587,6 +587,8 @@ class BootstrapPreviewOut(BaseModel):
     supported: bool
     commands: list[str]
     notes: list[str]
+    # "management_vlan" (2930F) or "first_access" (Nokia 7705 SAR-Hmc, D-112).
+    procedure: str = "management_vlan"
 
 
 class ConsoleBootstrapIn(BaseModel):
@@ -629,6 +631,7 @@ class ConsoleBootstrapOut(BaseModel):
     erased: str = ""  # hostname of the configuration erased first, if any
     no_password: bool = False  # the switch asked for no password: it has no manager password
     password_set: bool = False  # it had none; UNDM set the device's login (confirmed)
+    facts: dict[str, str] = {}  # what the device said about itself, where the procedure reads it
     network_reachable: bool | None
     network_hint: str
 

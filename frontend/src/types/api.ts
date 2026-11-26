@@ -361,7 +361,7 @@ export interface BootstrapProfile {
 
 export interface SerialPort { port: string; description: string; hardware_id: string }
 
-export interface BootstrapPreview { supported: boolean; commands: string[]; notes: string[] }
+export interface BootstrapPreview { supported: boolean; commands: string[]; notes: string[]; procedure?: 'management_vlan' | 'first_access' }
 
 export interface BootstrapResult {
   status: 'bootstrapped' | 'already_configured' | 'refused' | 'failed';
@@ -372,6 +372,8 @@ export interface BootstrapResult {
   saved: boolean;
   transcript: string;
   sanitized_transcript: string;
+  /** What the device said about itself (name, type, version), where the procedure reads it. */
+  facts?: Record<string, string>;
   /** A new switch's mandatory first-login credentials were set to the device's login. */
   credentials_set?: boolean;
   /** Hostname of the preconfigured configuration that was erased first, if any. */

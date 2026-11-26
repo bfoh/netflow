@@ -367,10 +367,27 @@ class MockArubaOSSwitchDriver(MockDriver):
         return inspect_aos_switch_file(text)
 
 
+class MockNokiaSarDriver(MockDriver):
+    model = "SIM-SAR-Hmc"
+    initial_os_version = "sim-20.5.R1"
+    info = DriverInfo(
+        driver_id="mock.nokia.sar",
+        vendor="Nokia",
+        platform="sros_sar",
+        os_family="SR OS (7705 SAR)",
+        description="Simulated Nokia 7705 SAR-Hmc (proves the workflow only); its first "
+                    "access runs on the simulated console",
+        simulated=True,
+        capabilities=frozenset({C.SERIAL_CONSOLE, C.CONFIGURATION_BACKUP,
+                                C.CONFIGURATION_APPLY}),
+    )
+
+
 MOCK_DRIVERS: tuple[type[MockDriver], ...] = (
     MockArubaOSSwitchDriver,
     MockFortiGateDriver,
     MockBlackBoxSwitchDriver,
+    MockNokiaSarDriver,
     MockArubaAOSCXDriver,
     MockCiscoIOSXEDriver,
 )

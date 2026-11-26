@@ -68,9 +68,11 @@ driver has passed acceptance tests for the exact model and firmware.
   any network other than an isolated lab, and only after approval.
 - Firmware is never downloaded from unverified sources and never installed on real
   equipment during development.
-- UNDM sets a device password only in three cases: the console bootstrap of a
+- UNDM sets a device password only in four cases: the console bootstrap of a
   factory-default unit (D-043); when a device demands a new password at login after a
-  planned load (D-066); and the approved first-login plan of a new unit (D-073). It always
+  planned load (D-066); the approved first-login plan of a new unit (D-073); and the first
+  access of a factory Nokia 7705 SAR-Hmc over its console (D-112), where the password is
+  typed on a command line and masked wherever the console is recorded. It always
   sets the device's own stored (approved) login, and only answers questions recorded from
   the bench. Audited as `device.password_set`; values never logged or shown.
 - Older SSH methods (SHA-1 key exchanges, `ssh-rsa`/`ssh-dss` host keys) are switched off
@@ -88,6 +90,10 @@ driver has passed acceptance tests for the exact model and firmware.
 |---|---|---|---|---|
 | 2026-11-19 | Aruba 2930F-48G-4SFP (ArubaOS-Switch), named by the product owner | WC.16.10.0025 | lab/spare status to be confirmed by the product owner | Phase A read-only (`docs/vendor-support/aruba-2930f-acceptance.md`); writes only in phase B after phase A is accepted |
 | 2026-11-19 | Aruba JL260A 2930F-48G-4SFP, spare **new** unit on an isolated bench (product owner) | WC.16.11.0001 as shipped | spare, factory default, not part of any running system | Console bootstrap; firmware to the approved WC.16.10.0025 (approved downgrade); complete-file load. Serial number not recorded here |
+
+No Nokia device is listed yet: the 7705 SAR-Hmc first access (D-112) has run only on the
+simulated console. Record the bench unit here before its first run (model, software release;
+no serial number).
 
 Real-device output shared with the developer must go through **Sanitized diagnostics**
 (or equivalent manual masking) and be reviewed by the product owner first.

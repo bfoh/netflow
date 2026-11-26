@@ -18,7 +18,13 @@ from undm.configgen.engine import GenerationResult, UnknownPlatformError, genera
 from undm.db.models import ConfigVersion, Device
 from undm.domain.intent import DeviceIntent
 from undm.domain.operations import DeviceOperation, is_impacting
-from undm.drivers.base import ConfigFileReport, Credentials, DeviceDriver, DeviceTarget
+from undm.drivers.base import (
+    Capability,
+    ConfigFileReport,
+    Credentials,
+    DeviceDriver,
+    DeviceTarget,
+)
 from undm.drivers.registry import DriverRegistry
 from undm.security import credentials as creds
 from undm.services import audit
@@ -76,10 +82,15 @@ def set_login_after_loading_needed(device: Device, needed: bool) -> None:
 def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
     if device.driver_id not in registry:
         raise ServiceError(f"Unknown driver {device.driver_id!r}")
+    driver_cls = registry.get(device.driver_id)
     if not device.management_address:
+        caps = driver_cls.info.capabilities
+        if Capability.SERIAL_CONSOLE in caps and Capability.SSH not in caps:
+            raise ServiceError(
+                f"{device.name} is reached over its console cable only: use Console setup. "
+                "It has no network address for UNDM to test or read.")
         raise ServiceError(f"Device {device.name} has no management address")
     credentials: Credentials | None = None
-    driver_cls = registry.get(device.driver_id)
     if device.credential_ref is not None:
         try:
             credentials = creds.resolve(device.credential_ref.provider,

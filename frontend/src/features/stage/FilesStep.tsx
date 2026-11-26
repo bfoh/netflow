@@ -8,7 +8,7 @@ import { fmtDate } from '../../services/format';
 import type { Device, Project } from '../../types/api';
 import { keptPreviousLogin, type Choice, type Choices, EMPTY_CHOICE, planSteps } from './choices';
 import { GeneratePanel } from './GeneratePanel';
-import { roleDefaults, type Role } from './roles';
+import { consoleOnly, roleDefaults, type Role } from './roles';
 import { EmptyState } from '../../components/EmptyState';
 
 /** Choose one of the device's imported files, or import one; shows what UNDM found in it. */
@@ -187,10 +187,16 @@ export function FilesStep({ project, roles, choices, onChange, onReplace }: {
     <Stack>
       {project && onReplace && <GeneratePanel project={project} roles={roles} choices={choices} onReplace={onReplace} />}
       <SimpleGrid cols={{ base: 1, lg: 2 }}>
-        {roles.map(({ role, device }) => (
+        {roles.map(({ role, device }) => (consoleOnly(role) ? (
+          <Card withBorder key={role.key}>
+            <Title order={3} size="h5" mb={4}>{role.title} · {device.name}</Title>
+            <Text size="sm" c="dimmed">Nothing to choose yet. After its first access (step 4), its configuration is pasted on the
+              console by hand; UNDM&apos;s own load of the modem&apos;s file is being built.</Text>
+          </Card>
+        ) : (
           <DeviceFiles key={role.key} role={role} device={device} choice={choices[role.key] ?? EMPTY_CHOICE}
             onChange={(c) => onChange(role.key, c)} />
-        ))}
+        )))}
       </SimpleGrid>
     </Stack>
   );
