@@ -15,6 +15,35 @@ import { downloadText } from '../../services/format';
 import type { BootstrapResult, Device } from '../../types/api';
 
 const BAUD = ['9600', '19200', '38400', '57600', '115200'];
+/** What the run is doing, in words (stages of sros_sar.first_access). */
+const STAGE_WORDS: Record<string, string> = {
+  opening: 'Opening the console',
+  listening: 'Waiting for the modem’s start-up: switch it off and on now',
+  question_answered: 'Its 3-second question answered: Enter sent',
+  boot_menu: 'Answering its boot menu',
+  starting: 'The modem is starting without its configuration (about 2–3 minutes)',
+  logged_in: 'Logged in with the factory login',
+  commands: 'Setting the admin password and boot options',
+  saved: 'Saved; reading its information',
+  finished: 'Done',
+};
+const mmss = (s: number) => `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`;
+
+/** What UNDM sees on the console while the run is under way (polled). */
+function Progress({ deviceId }: { deviceId: string }) {
+  const p = useQuery({ queryKey: ['console-progress', deviceId], queryFn: () => api.consoleProgress(deviceId), refetchInterval: 2000 });
+  const d = p.data;
+  if (!d?.stage) return null;
+  const words = d.stage === 'listening' && d.received > 0
+    ? 'The modem is starting (its start-up text is arriving): UNDM answers its 3-second question by itself'
+    : STAGE_WORDS[d.stage] ?? d.stage;
+  return (
+    <Stack gap={2} mt={4}>
+      <Text size="sm"><b>{words}</b> · {mmss(d.seconds)} · {d.received.toLocaleString()} bytes received</Text>
+      {d.last_line && <Text size="xs" ff="monospace" c="dimmed" lineClamp={1}>{d.last_line}</Text>}
+    </Stack>
+  );
+}
 const STATUS: Record<BootstrapResult['status'], { kind: NoticeKind; title: string }> = {
   bootstrapped: { kind: 'success', title: 'First access done' },
   already_configured: { kind: 'success', title: 'Already done — nothing was changed' },
@@ -109,6 +138,13 @@ export function ModemFirstAccess({ device, simulated }: { device: Device; simula
           </Group>
           <Text size="sm" fw={600}>Console transcript</Text>
           <Code block mah={360} style={{ overflow: 'auto', fontSize: 11 }}>{result.transcript}</Code>
+          {result.diagnostics && Object.keys(result.diagnostics).length > 0 && (
+            <Hint more={<Code block mah={240} style={{ overflow: 'auto', fontSize: 11 }}>
+              {Object.entries(result.diagnostics).map(([k, v]) => `${k}:${v.includes('\n') ? '\n' : ' '}${v}`).join('\n\n')}</Code>}>
+              Technical details: what the console sent around the question, control characters written out (\r, \b, \x00). They
+              are included when you copy or download the sanitized transcript.
+            </Hint>
+          )}
           <Group mt="xs">
             <CopyButton value={result.sanitized_transcript}>{({ copied, copy }) => <Button size="xs" variant="default" onClick={copy}>{copied ? 'Copied' : 'Copy sanitized transcript'}</Button>}</CopyButton>
             <Button size="xs" variant="default" leftSection={<IconDownload size={14} />}
@@ -122,16 +158,19 @@ export function ModemFirstAccess({ device, simulated }: { device: Device; simula
         <Stack>
           <List size="sm" type="ordered" spacing={4}>
             <List.Item>Press <b>Run first access</b> below. UNDM starts listening on the console.</List.Item>
-            <List.Item><b>Then switch the modem off and on</b> (within 4 minutes). UNDM presses the key and answers its start-up questions.</List.Item>
-            <List.Item>Wait: the modem starts (2–4 minutes), UNDM logs in, sets the admin password and saves. Keep this window open.</List.Item>
+            <List.Item><b>Then switch the modem off and on.</b> About 2½ minutes later it asks for a key for 3 seconds: UNDM
+              presses Enter and answers its start-up questions. UNDM waits up to 10 minutes for that question.</List.Item>
+            <List.Item>Wait: the modem starts again (2–3 minutes), UNDM logs in, sets the admin password and saves. The whole run
+              takes up to about 15 minutes. Keep this window open.</List.Item>
           </List>
           <Notice kind="caution" compact>
             For a modem from the factory. One whose boot options have no auto-discovery is left alone: UNDM sends no key and changes nothing.
           </Notice>
           <TextInput label={`Type the device name to confirm: ${device.name}`} value={confirm} onChange={(e) => setConfirm(e.currentTarget.value)} />
           {run.isPending && (
-            <Notice kind="status" compact title="Listening on the console">
-              Switch the modem off and on now. Keep the cable connected and this window open; this takes up to 10 minutes.
+            <Notice kind="status" compact title="Working on the console">
+              Keep the cable connected and this window open.
+              <Progress deviceId={device.id} />
             </Notice>
           )}
           <DialogError error={run.error} />

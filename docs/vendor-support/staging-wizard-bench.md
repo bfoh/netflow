@@ -69,16 +69,20 @@ the first run and send it back.
 2. Connect the console cable (115200). Close PuTTY.
 3. Step 4, the modem's card: **Open console setup**. Choose the COM port, press
    **Run first access…**, type the device name, press **Run first access**.
-4. **Then switch the modem off and on.** UNDM presses the key at the 3-second question,
-   answers the boot menu (configuration file `none`, auto-discovery `no`, boot options file
-   not written), waits for the start (2–4 minutes), logs in, sets the password and saves.
+4. **Then switch the modem off and on.** About 2.5 minutes later the modem asks for a key
+   for 3 seconds; UNDM presses Enter, answers the boot menu (configuration file `none`,
+   auto-discovery `no`, boot options file not written), waits for the start (2–3 minutes),
+   logs in, sets the password and saves. While it runs, the dialog shows what UNDM sees
+   (stage, time, bytes received, last line). The whole run takes up to about 15 minutes.
 5. The result says "First access done" with the modem's own name, type and software.
    The console stays logged in as admin.
 6. Its configuration is still pasted on the console by hand, then `admin save`.
 
 If it stops:
-- "start-up text did not appear": the modem was not switched off and on after Run, or the
-  COM port or speed is wrong. Nothing was changed.
+- "Nothing arrived from the console": the modem was not switched off and on after Run, or
+  the COM port or speed is wrong. Nothing was changed.
+- "start-up text arrived, but … question …": send the transcript with its technical details
+  (Copy sanitized transcript includes them). Nothing was changed.
 - "started normally instead of asking to type sros": the key came too late. Nothing was
   changed; run again.
 - "asked … where UNDM expected": the modem asked something UNDM has no answer for (a boot

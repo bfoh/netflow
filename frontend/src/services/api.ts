@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -234,6 +234,7 @@ export const api = {
   serialPorts: () => request<SerialPort[]>('GET', '/provisioning/serial-ports'),
   bootstrapPreview: (id: string, profile: BootstrapProfile) =>
     request<BootstrapPreview>('POST', `/devices/${id}/provisioning/console-bootstrap/preview`, { profile }),
+  consoleProgress: (id: string) => request<ConsoleProgress>('GET', `/devices/${id}/provisioning/console-progress`),
   /** The modem's first access (D-112): no settings to send. */
   firstAccessPreview: (id: string) =>
     request<BootstrapPreview>('POST', `/devices/${id}/provisioning/console-bootstrap/preview`, {}),

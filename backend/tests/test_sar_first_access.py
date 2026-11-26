@@ -4,6 +4,8 @@ Synthetic values only: a made-up system name and password. The normal path of th
 console follows the product owner's recording; these tests prove UNDM's handling of it, not
 the behaviour of a real modem."""
 
+import time
+
 import keyring
 import pytest
 from api_helpers import make_client
@@ -34,7 +36,8 @@ def test_first_access_follows_the_recording_and_never_shows_the_password():
     # The boot menu: the recorded answers, in the recorded order; the boot options file is
     # written once, by 'bof save', never from the boot menu.
     assert r.commands_sent[:9] == [
-        "(a key)", "sros (within 25 seconds)", "Enter (begin)", "Enter (keep the software image)",
+        "Enter (at its 3-second question)", "sros (within 25 seconds)", "Enter (begin)",
+        "Enter (keep the software image)",
         "none (start without its file)", "Enter (keep the fips setting)",
         "no (auto-discovery off)", "no (the boot options file is not written here)",
         "Login: admin (the factory login)"]
@@ -43,7 +46,7 @@ def test_first_access_follows_the_recording_and_never_shows_the_password():
         f'configure system security user "admin" password {PASSWORD}',
         "bof primary-config cf3:\\config.cfg", "show bof", "bof persist on", "show bof",
         "bof save", "admin save", "show system information"]
-    assert sim.bof_writes == 1
+    assert sim.bof_writes == 1 and sim.keys == ["\r"]  # Enter, as the team presses
     assert sim.bof == {"primary-image": ["cf3:/TiMOS-SR-20.5.R1"], "wait": ["3"],
                        "persist": ["on"], "console-speed": ["115200"],
                        "primary-config": ["cf3:\\config.cfg"]}
@@ -60,7 +63,8 @@ def test_a_second_run_changes_nothing():
     run(sim)
     again = run(sim)
     assert again.status is BootstrapStatus.ALREADY_CONFIGURED and sim.bof_writes == 1
-    assert "(a key)" not in again.commands_sent and "Nothing was changed" in again.message
+    assert sim.keys == ["\r"] and "Nothing was changed" in again.message  # no key this time
+    assert not any(c.startswith("Enter") for c in again.commands_sent)
     # Not a factory unit and another password: refused, nothing sent but the login.
     other = run(sim, password="Another-Pass-88")
     assert other.status is BootstrapStatus.REFUSED
@@ -69,7 +73,7 @@ def test_a_second_run_changes_nothing():
 
 
 @pytest.mark.parametrize(("kw", "words"), [
-    ({"silent": True}, "start-up text did not appear"),
+    ({"silent": True}, "Nothing arrived from the console"),
     ({"key_ignored": True}, "started normally instead of asking to type"),
     ({"extra_question": "Enter the BOF password:"}, "Enter the BOF password:"),
     ({"fail_on": {"admin save config.cfg"}}, "Saving the starting configuration"),
@@ -107,11 +111,12 @@ def test_a_listening_start_too_late_and_a_pager_are_handled():
     # Started listening after the 3-second question: the modem is at its login.
     sim = SimulatedSarConsole(key_window=0.0)
     sim.power_cycle()
-    for _ in range(3):
-        sim.read(4096)  # the question passes unanswered; it starts normally
+    sim.read(8192)  # the start and the question pass before UNDM listens
     session = ConsoleSession(sim, read_timeout=1, settle_time=0)
     late = sar.first_access(session, Credentials("admin", PASSWORD), FAST)
-    assert late.status is BootstrapStatus.FAILED and "start-up text did not appear" in late.message
+    assert late.status is BootstrapStatus.FAILED
+    assert "reached its login without UNDM seeing its 3-second question" in late.message
+    assert sim.keys == [] and sim.bof_writes == 0
     # 'environment no more' refused: answers are paged and UNDM presses a key per page.
     sim = SimulatedSarConsole(no_paging_command=False)
     r = run(sim)
@@ -121,6 +126,8 @@ def test_a_listening_start_too_late_and_a_pager_are_handled():
 
 def test_the_patterns_match_the_recorded_wording():
     assert sar.HIT_KEY.search("Hit a key within 3 seconds to change boot parameters...")
+    # As printed on the bench, counting down, with whatever follows each sentence.
+    assert sar.HIT_KEY.search("Hit a key within 1 second to change boot parameters...\b\b\b")
     assert sar.HIT_KEY.search("Hit a key within 3 seconds to change boot parms...")  # Nokia guide
     assert sar.PROMPT.search("\n*A:NS00SIM0001# ") and sar.PROMPT.search("\nA:NS00SIM0001# ")
     assert sar.PROMPT.search("\n*A:lab-modem>config>system# ")
@@ -132,6 +139,8 @@ def test_the_patterns_match_the_recorded_wording():
     assert bof == {"primary-config": ["cf3:/config.cfg"], "persist": ["off"],
                    "auto-discover": ["a.example", "b.example"]}
     assert sar.preview_steps()[-1] == "show system information"
+    assert sar.preview_steps()[1].startswith("Enter")
+    assert sar.prompt_names("x\n*A:NS00SIM0001# show bof\nA:NS00SIM0001# ") == ["NS00SIM0001"]
     assert not any(PASSWORD in s for s in sar.preview_steps())
 
 
@@ -252,3 +261,125 @@ def test_finish_staging_counts_a_console_only_device_after_its_first_access(clie
     assert go(client, did).json()["status"] == "bootstrapped"
     r = client.post(f"/api/projects/{pid}/finish", json={"device_ids": [did]})
     assert r.status_code == 200 and r.json()["staged_at"]
+
+
+
+# -- the first bench run (2026-11-26): the question was printed but never answered -------
+class TimedFeed:
+    """Bytes that arrive at given times, read like a serial port (each read waits a little
+    for data). For testing UNDM's real session settings, not a model of the modem."""
+
+    def __init__(self, events, read_wait=0.05):
+        self.events = sorted(events)
+        self.read_wait = read_wait
+        self.start = time.monotonic()
+        self.written = []
+
+    def read(self, size=1):
+        end = time.monotonic() + self.read_wait
+        while True:
+            now = time.monotonic() - self.start
+            ready = [e for e in self.events if e[0] <= now]
+            if ready:
+                self.events = [e for e in self.events if e[0] > now]
+                return b"".join(e[1] for e in ready)
+            if time.monotonic() >= end:
+                return b""
+            time.sleep(0.005)
+
+    def write(self, data):
+        self.written.append((time.monotonic() - self.start, data))
+        return len(data)
+
+    def close(self):
+        pass
+
+
+START = (b"TiMOS-L-20.5.R1 boot/sar Nokia 7705 SAR Copyright (c) 2000-2020 Nokia.\r\n"
+         b"Contents of Boot Options File on cf3:\r\n    primary-image    cf3:/x\r\n"
+         b"    auto-discover    a.example\r\n\r\n")
+
+
+def sentence(n, tail=b"   "):
+    unit = b"second" if n == 1 else b"seconds"
+    return b"Hit a key within %d %s to change boot parameters..." % (n, unit) + tail
+
+
+@pytest.mark.parametrize("form", ["spaces", "backspaces", "busy line"])
+def test_the_question_is_answered_at_once_with_the_real_session_settings(form):
+    tail = b"\b\b\b" if form == "backspaces" else b"   "
+    events = [(0.0, START + sentence(3, tail)), (1.0, b"\r" + sentence(2, tail)),
+              (2.0, b"\r" + sentence(1, tail)), (3.0, b"\r\n\r\nPrimary image location: x\r\n")]
+    if form == "busy line":
+        events += [(0.02 * i, b"\x00") for i in range(1, 150)]
+    feed = TimedFeed(events)
+    session = ConsoleSession(feed)  # settle 0.15 s, as in UNDM
+    session.secrets.append(PASSWORD)
+    r = sar.first_access(session, Credentials("admin", PASSWORD),
+                         sar.Timing(power_on=5, menu=0.3, boot=0.3, command=0.3))
+    # Enter went within half a second of the first sentence (the unit waits 3 seconds).
+    assert feed.written and feed.written[0][1] == b"\r" and feed.written[0][0] < 0.5
+    assert r.diagnostics["at_question"].rstrip().endswith(
+        "parameters...\\b\\b\\b" if form == "backspaces" else "parameters...")
+    if form == "backspaces":
+        assert r.diagnostics["control_characters_ignored"].startswith("\\b ×3")
+
+
+def test_text_without_a_known_question_is_reported_as_such():
+    start = START + b"Hit a key within 3 seconds to stop the countdown"  # not the known form
+    feed = TimedFeed([(0.0, start)])
+    r = sar.first_access(ConsoleSession(feed), Credentials("admin", PASSWORD),
+                         sar.Timing(power_on=0.5))
+    assert r.status is BootstrapStatus.FAILED and feed.written == []
+    assert "start-up text arrived, but UNDM did not recognise its 3-second question" in r.message
+    assert "nothing was changed" in r.message and "technical details" in r.message
+    assert "stop the countdown" in r.diagnostics["last_received"]
+    feed = TimedFeed([(0.0, b"U-Boot\r\nStarting kernel ...\r\n")])
+    r = sar.first_access(ConsoleSession(feed), Credentials("admin", PASSWORD),
+                         sar.Timing(power_on=0.5))
+    assert "its 3-second question did not appear" in r.message and feed.written == []
+
+
+def test_bench_forms_on_the_simulated_modem_complete_with_real_settings():
+    for kw in ({"question_tail": "\b\b\b"}, {"trickle": True}):
+        sim = SimulatedSarConsole(key_window=3.0, **kw)
+        sim.power_cycle()
+        r = sar.first_access(ConsoleSession(sim), Credentials("admin", PASSWORD),
+                             sar.Timing(power_on=5, menu=2, boot=2, command=2))
+        assert r.status is BootstrapStatus.BOOTSTRAPPED, (kw, r.message)
+        assert sim.keys == ["\r"] and sim.bof_writes == 1
+
+
+def test_stages_are_reported_in_order():
+    seen = []
+    sim = SimulatedSarConsole(key_window=0.0)
+    sim.power_cycle()
+    sar.first_access(ConsoleSession(sim, read_timeout=1, settle_time=0),
+                     Credentials("admin", PASSWORD), FAST, on_stage=seen.append)
+    assert [s for s in sar.STAGES if s in seen] == list(dict.fromkeys(seen))
+    assert seen[0] == "listening" and seen[-1] == "finished"
+
+
+
+def test_api_progress_and_masked_diagnostics(client):
+    did = add(client, SIM_MODEM)
+    idle = client.get(f"/api/devices/{did}/provisioning/console-progress").json()
+    assert idle == {"running": False, "stage": None, "seconds": 0, "received": 0,
+                    "last_line": ""}
+    out = go(client, did).json()
+    done = client.get(f"/api/devices/{did}/provisioning/console-progress").json()
+    assert done["running"] is False and done["stage"] == "finished" and done["received"] > 0
+    assert "NS00SIM0001" not in done["last_line"]  # the unit's name is masked
+    diag = out["diagnostics"]
+    assert "Hit a key within 3 seconds" in diag["at_question"]
+    assert "--- Technical details (UNDM) ---" in out["sanitized_transcript"]
+    assert PASSWORD not in str(out) and PASSWORD not in str(done)
+    entry = client.get("/api/audit", params={"target_id": did}).json()[0]
+    assert "at_question" in entry["details"]["diagnostics"]
+    assert client.get("/api/devices/nope/provisioning/console-progress").status_code == 404
+
+
+def test_shared_text_masks_uuids():
+    from undm.security.sanitize import sanitize
+    text = "UUID 01234567-89AB-4DEC-A75A-0123456789AB, again 01234567-89ab-4dec-a75a-0123456789ab"
+    assert sanitize(text) == "UUID <uuid-1>, again <uuid-1>"

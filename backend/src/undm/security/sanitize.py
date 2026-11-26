@@ -20,6 +20,8 @@ _MAC = re.compile(
     r"|(?:[0-9A-Fa-f]{4}\.){2}[0-9A-Fa-f]{4}"  # 0011.2233.4455 (Cisco)
     r")(?![\w:.-])"
 )
+# A flash volume or board UUID (seen in a modem's start-up text, 2026-11-26).
+_UUID = re.compile(r"(?<![\w-])[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}(?![\w-])")
 # Separators use [ \t] only: a label with an empty value must never swallow the next line.
 _SERIAL_LABEL = re.compile(
     r"((?:Chassis )?Serial[- ]?(?:Number|Nbr|No\.?)|Processor board ID)([ \t]*:?[ \t]*)"
@@ -65,6 +67,7 @@ def sanitize(text: str, known_values: Iterable[tuple[str, str]] = (),
     out = _NAME_LABEL.sub(
         lambda x: x.group(1) + x.group(2)
         + (x.group(3) if x.group(3).startswith("<") else m("name", x.group(3))), out)
+    out = _UUID.sub(lambda x: m("uuid", x.group(0).lower()), out)
     out = _MAC.sub(lambda x: m("mac", x.group(0).lower()), out)
     out = _IPV4.sub(lambda x: m("ip", x.group(0)) if _valid_ip(x.group(0)) else x.group(0), out)
     return out

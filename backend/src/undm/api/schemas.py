@@ -632,8 +632,17 @@ class ConsoleBootstrapOut(BaseModel):
     no_password: bool = False  # the switch asked for no password: it has no manager password
     password_set: bool = False  # it had none; UNDM set the device's login (confirmed)
     facts: dict[str, str] = {}  # what the device said about itself, where the procedure reads it
+    diagnostics: dict[str, str] = {}  # how the console behaved (masked), for the bench
     network_reachable: bool | None
     network_hint: str
+
+
+class ConsoleProgressOut(BaseModel):
+    running: bool
+    stage: str | None
+    seconds: int
+    received: int  # bytes from the console so far
+    last_line: str  # the last line of console text (masked)
 
 
 # -- team templates (D-111) -------------------------------------------------------------

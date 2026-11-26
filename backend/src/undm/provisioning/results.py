@@ -33,3 +33,5 @@ class BootstrapResult:
     password_set: bool = False
     # What the device said about itself (name, type, version), where the procedure reads it.
     facts: dict[str, str] = field(default_factory=dict)
+    # How the console behaved (raw characters around a question, ignored control characters).
+    diagnostics: dict[str, str] = field(default_factory=dict)

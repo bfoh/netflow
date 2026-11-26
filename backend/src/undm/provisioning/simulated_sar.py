@@ -5,6 +5,12 @@ without hardware. The texts of the normal path follow the product owner's consol
 recording (2026-11-26, identifiers replaced by made-up ones). Everything outside that
 recording is an approximation and marked so: the password rule, the refusal wording at the
 login, and what the unit does with unexpected answers.
+
+The start follows the first bench run (2026-11-26): a long start-up text (here a short
+SYNTHETIC stand-in), then the 3-second question printed again each second as it counts
+down. How the real unit separates the countdown sentences is not known exactly (the
+transcript is cleaned); ``question_tail`` and ``trickle`` reproduce the two forms that kept
+UNDM v84 from answering.
 """
 
 from __future__ import annotations
@@ -22,6 +28,13 @@ SECTIONS = ("System Configuration", "System Security Configuration", "Log Config
             "Router (Network Side) Configuration", "Service Configuration",
             "Router (Service Side) Configuration")
 RULE = "=" * 79
+# A SYNTHETIC stand-in for the long start before the boot loader (U-Boot, Linux, the boot
+# ROM): on the bench it took about 2.5 minutes and several thousand lines.
+PREAMBLE = ("U-Boot (SIMULATED)\r\nAutoboot in 3 seconds\r\n"
+            "[    0.000000] Booting Linux (SIMULATED)\r\n"
+            "Starting OpenBSD Secure Shell server: sshd\r\ndone.\r\n"
+            "Loading image /cf3/TiMOS-SR-20.5.R1/both.tim\r\n"
+            "Looking for boot parameters.\r\n\r\nauto-booting...\r\n")
 
 
 @dataclass
@@ -36,12 +49,17 @@ class SimulatedSarConsole:
     min_password_length: int = 8  # SYNTHETIC rule; the real one is the unit's own
     no_paging_command: bool = True  # False: 'environment no more' is refused (SYNTHETIC)
     key_window: float = 1.0  # seconds it waits for a key (3 on the real unit)
+    # Written after each countdown sentence, e.g. "\b\b\b" (cursor moved back). SYNTHETIC.
+    question_tail: str = "   "
+    # Sends a NUL on every read while it waits for the key (a busy line). SYNTHETIC.
+    trickle: bool = False
 
     def __post_init__(self) -> None:
         self._out = bytearray()
         self._in = ""
         self._state = "off"
         self._asked_at = 0.0
+        self._left = 3  # seconds left in the countdown, as last printed
         # The saved boot options file and configuration file.
         self.bof: dict[str, list[str]] = {
             "primary-image": [IMAGE], "primary-config": ["cf3:/config.cfg"], "wait": ["3"],
@@ -56,14 +74,23 @@ class SimulatedSarConsole:
         self.paging = True
         self.commands_received: list[str] = []
         self.bof_writes = 0
+        self.keys: list[str] = []  # keys pressed at the 3-second question
         self.closed = False
 
     # -- transport -----------------------------------------------------------------
     def read(self, size: int = 1) -> bytes:
-        if (not self._out and self._state == "hit_key"
-                and time.monotonic() - self._asked_at >= self.key_window):
-            # Nobody pressed a key in time: it starts with its saved boot options.
-            self._boot(dict(self.bof))
+        if not self._out and self._state == "hit_key":
+            elapsed = time.monotonic() - self._asked_at
+            if elapsed >= self.key_window:
+                # Nobody pressed a key in time: it starts with its saved boot options.
+                self._boot(dict(self.bof))
+            else:
+                left = 3 - int(elapsed * 3 / self.key_window)
+                if left < self._left:  # the countdown, as on the bench
+                    self._left = left
+                    self._emit("\r" + self._question(left))
+                elif self.trickle:
+                    self._emit("\x00")
         data = bytes(self._out[:size])
         del self._out[:size]
         return data
@@ -73,8 +100,9 @@ class SimulatedSarConsole:
             return len(data)
         text = data.decode("ascii", "replace")
         if self._state in ("hit_key", "pager") and text:
-            was, text = self._state, text[1:]
+            was, key, text = self._state, text[0], text[1:]
             if was == "hit_key":
+                self.keys.append(key)
                 self._key()
             else:
                 self._emit("\r\n" + self._rest + "\r\n" + self._prompt())
@@ -91,14 +119,18 @@ class SimulatedSarConsole:
     def power_cycle(self) -> None:
         """Switched off and on: the boot loader lists its boot options and asks for a key."""
         self._out.clear()
-        self._in, self._asked_at = "", time.monotonic()
+        self._in, self._asked_at, self._left = "", time.monotonic(), 3
         if self.silent:
             return
-        self._emit("\r\n" + BANNER.format(kind="L", what="boot") + "\r\nTiMOS BOOT LOADER\r\n"
-                   "Looking for cf3:/bof.cfg ... OK, reading\r\n\r\n"
+        self._emit(PREAMBLE + "\r\n" + BANNER.format(kind="L", what="boot")
+                   + "\r\nTiMOS BOOT LOADER\r\nLooking for cf3:/bof.cfg ... OK, reading\r\n\r\n"
                    "Contents of Boot Options File on cf3:\r\n" + self._bof_lines(self.bof)
-                   + "Hit a key within 3 seconds to change boot parameters...")
+                   + "\r\n" + self._question(3))
         self._state = "hit_key"
+
+    def _question(self, left: int) -> str:
+        unit = "second" if left == 1 else "seconds"
+        return f"Hit a key within {left} {unit} to change boot parameters...{self.question_tail}"
 
     # -- behaviour -----------------------------------------------------------------
     def _emit(self, text: str) -> None:

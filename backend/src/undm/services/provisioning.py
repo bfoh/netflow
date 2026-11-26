@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import socket
 import threading
+import time
 from ipaddress import IPv4Interface
 from typing import Any
 
@@ -33,7 +34,7 @@ from undm.provisioning.results import BootstrapStatus
 from undm.provisioning.simulated import SimulatedArubaConsole
 from undm.provisioning.simulated_sar import SimulatedSarConsole
 from undm.security import credentials as creds
-from undm.security.sanitize import sanitize
+from undm.security.sanitize import new_mapper, sanitize
 from undm.services import app_settings, audit
 from undm.services.devices import set_login_after_loading_needed
 from undm.services.errors import ConflictError, ForbiddenError, ServiceError
@@ -53,11 +54,28 @@ _registry_lock = threading.Lock()
 # One simulated console per simulated device, so repeated runs see earlier changes.
 _simulated_consoles: dict[str, SimulatedArubaConsole] = {}
 _simulated_sar: dict[str, SimulatedSarConsole] = {}
+# What a first access running on a console is doing, per device, for progress reports
+# (in memory only; nothing about it is stored).
+_progress: dict[str, dict[str, Any]] = {}
 
 
 def reset_simulation() -> None:
     _simulated_consoles.clear()
     _simulated_sar.clear()
+    _progress.clear()
+
+
+def console_progress(device_id: str) -> dict[str, Any]:
+    """What the device's console procedure is doing now (or did last). Read-only."""
+    p = _progress.get(device_id)
+    if p is None:
+        return {"running": False, "stage": None, "seconds": 0, "received": 0, "last_line": ""}
+    session: ConsoleSession | None = p.get("session")
+    end = p.get("ended") or time.monotonic()
+    return {"running": p["ended"] is None, "stage": p["stage"],
+            "seconds": int(end - p["started"]),
+            "received": session.received if session is not None else 0,
+            "last_line": sanitize(session.last_line, p["known"]) if session is not None else ""}
 
 
 def serial_ports() -> list[dict[str, str]]:
@@ -135,7 +153,8 @@ def _sar_preview(device: Device, simulated: bool, policy: Policy) -> dict[str, A
     login = device.credential_ref.name if device.credential_ref is not None else None
     notes = [
         "For a modem straight from the factory. Press Run first, then switch the modem off "
-        "and on: UNDM must be listening when it asks for a key (3 seconds).",
+        "and on. About 2.5 minutes later it asks for a key for 3 seconds: UNDM presses Enter "
+        "at once (it waits up to 10 minutes for that question).",
         f"Console speed {sros_sar.CONSOLE_SPEED}. UNDM answers only the questions listed "
         "here, in this order; any other question ends the run with the modem's own words.",
         "The boot menu is told not to write the boot options file. The modem then starts "
@@ -440,6 +459,9 @@ def _run_sar_first_access(
     if not lock.acquire(blocking=False):
         raise ConflictError(f"{serial_port} is already in use by another console session")
     transport: Transport | None = None
+    progress: dict[str, Any] = {"stage": "opening", "started": time.monotonic(), "ended": None,
+                                "session": None, "known": [("hostname", device.name)]}
+    _progress[device.id] = progress
     try:
         try:
             if simulated:
@@ -455,8 +477,11 @@ def _run_sar_first_access(
                 timing = sros_sar.Timing()
         except ConsoleError as e:
             raise ServiceError(str(e)) from e
-        result = sros_sar.first_access(console_session, credentials, timing)
+        progress["session"] = console_session
+        result = sros_sar.first_access(console_session, credentials, timing,
+                                       on_stage=lambda stage: progress.update(stage=stage))
     finally:
+        progress["ended"] = time.monotonic()
         if transport is not None and not simulated:
             transport.close()
         lock.release()
@@ -467,7 +492,15 @@ def _run_sar_first_access(
     known = [("hostname", device.name)]
     if result.facts.get("name"):
         known.append(("hostname", result.facts["name"]))
-    shown = sanitize(result.transcript, known)
+    # A factory unit is named after its serial number: mask the names its prompts show.
+    known += [("hostname", n) for n in sros_sar.prompt_names(result.transcript)]
+    progress["known"] = known
+    mapper = new_mapper()
+    shown = sanitize(result.transcript, known, mapper)
+    diagnostics = {k: sanitize(v, known, mapper) for k, v in result.diagnostics.items()}
+    if diagnostics:
+        shown += "\n\n--- Technical details (UNDM) ---\n" + "\n".join(
+            f"{k}:\n{v}" if "\n" in v else f"{k}: {v}" for k, v in diagnostics.items())
     tail = shown[-1500:] if result.status.value == "failed" else None
     audit.record(session, actor, "provisioning.console_bootstrap", "device", device.id,
                  result.status.value, {
@@ -475,7 +508,7 @@ def _run_sar_first_access(
                      "commands_sent": result.commands_sent, "findings": result.findings,
                      "verified": result.verified, "saved": result.saved,
                      "message": result.message, "admin_password_set": result.password_set,
-                     "facts": result.facts,
+                     "facts": result.facts, "diagnostics": diagnostics,
                      "credential": device.credential_ref.name if device.credential_ref
                      else None, **({"transcript_tail": tail} if tail else {})})
     hint = ("Next: its configuration. For now that is pasted on the console by hand (then "
@@ -488,4 +521,5 @@ def _run_sar_first_access(
         "credentials_set": False, "erased": "", "no_password": False,
         "password_set": result.password_set, "sanitized_transcript": shown,
         "network_reachable": None, "network_hint": hint, "facts": result.facts,
+        "diagnostics": diagnostics,
     }

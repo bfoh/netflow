@@ -1032,7 +1032,8 @@ describe('Nokia modem: first access over the console (D-112)', () => {
       '/devices/m1/provisioning/console-bootstrap/preview': preview,
       '/devices/m1/provisioning/console-bootstrap': { status: 'bootstrapped', message: 'First access done on NS00SIM0001.', commands_sent: [],
         findings: [], verified: true, saved: true, transcript: 'Login: admin', sanitized_transcript: 'Login: admin', password_set: true,
-        network_reachable: null, network_hint: 'Next: its configuration.', facts: { type: '7705 SAR-Hmc', version: 'B-20.5.R1' } },
+        network_reachable: null, network_hint: 'Next: its configuration.', facts: { type: '7705 SAR-Hmc', version: 'B-20.5.R1' },
+        diagnostics: { at_question: 'Hit a key within 3 seconds to change boot parameters...\\b\\b\\b', control_characters_ignored: '\\b ×3' } },
     });
     renderAt('/provisioning?device=m1');
     expect(await screen.findByText(/sros \(within 25 seconds\)/)).toBeInTheDocument();
@@ -1049,6 +1050,29 @@ describe('Nokia modem: first access over the console (D-112)', () => {
     expect(JSON.parse(String(sent?.init?.body))).toEqual({ serial_port: 'SIMULATED', baudrate: 115200, confirm_device_name: 'lab-modem', allow_configured: false });
     expect(screen.getByText('admin password set')).toBeInTheDocument();
     expect(screen.getByText('7705 SAR-Hmc · B-20.5.R1')).toBeInTheDocument();
+    expect(screen.getByText(/Technical details: what the console sent around the question/)).toBeInTheDocument();
+  });
+
+  it('while the first access runs, it shows what UNDM sees on the console', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    mockApi({
+      '/devices': [modem()], '/drivers': [driver], '/projects/p1/credential-refs': [{ id: 'approved', name: 'approved', shared: true }],
+      '/provisioning/serial-ports': [{ port: 'SIMULATED', description: 'Simulated console', hardware_id: '' }],
+      '/devices/m1/provisioning/console-bootstrap/preview': preview,
+      '/devices/m1/provisioning/console-progress': { running: true, stage: 'listening', seconds: 100, received: 23456, last_line: '[   21.5] Run /sbin/init' },
+    });
+    const answered = globalThis.fetch;
+    // The run itself never answers in this test: the page stays on "working".
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => (url === '/api/devices/m1/provisioning/console-bootstrap' && init?.method === 'POST'
+      ? new Promise(() => {}) : answered(url, init))));
+    renderAt('/provisioning?device=m1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Run first access…' }));
+    expect(screen.getByText(/About 2½ minutes later it asks for a key for 3 seconds/)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/Type the device name to confirm/), 'lab-modem');
+    await userEvent.click(screen.getByRole('button', { name: 'Run first access' }));
+    expect(await screen.findByText(/its start-up text is arriving/)).toBeInTheDocument();
+    expect(screen.getByText(/1 min 40 s · 23,456 bytes received/)).toBeInTheDocument();
+    expect(screen.getByText(/21\.5\] Run \/sbin\/init/)).toBeInTheDocument();
   });
 
   it('a login the modem cannot take blocks the run with the reason', async () => {

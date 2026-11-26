@@ -45,6 +45,20 @@ which is its serial number from the factory, and the new password) are not recor
 
 After that the team pastes the modem's configuration into the prompt.
 
+### The first bench run (2026-11-26, UNDM v84)
+The console of a factory unit from power-on, as UNDM received it (identifiers not recorded;
+the unit's MAC addresses and flash volume UUID are masked):
+1. U-Boot ("Model: Nokia SAR-Hmc Board", "Autoboot in 3 seconds"), then Linux starting
+   (about 75 seconds of kernel and service messages), then the TiMOS boot ROM
+   ("auto-booting..."), then the boot loader with the boot options listed above.
+2. The question is printed again each second as it counts down:
+   `Hit a key within 3 seconds to change boot parameters...   Hit a key within 2 seconds…
+   Hit a key within 1 second…` (three spaces between them in the cleaned transcript).
+3. With no key, it loads the image (`Loading image cf3:\TiMOS-SR-20.5.R1\both.tim`).
+
+Timing: by the unit's own clock lines, the boot loader started about 2.5 minutes after the
+kernel. UNDM v84 did not answer the question (D-112, fixed in v85).
+
 ### Nokia's public documentation (read 2026-11-26 on documentation.nokia.com)
 7705 SAR Basic System Configuration Guide 26.4.R1 (generic to the 7705 SAR family) unless
 noted. Quotes are Nokia's words.
@@ -81,8 +95,12 @@ recovery for this family; the team's procedure combines documented boot-menu ste
 - It is a console setup of a factory unit, so it uses the safeguards of that exception
   (D-025): an exact preview, the typed device name, the real-device switch, a factory check,
   a read-back before saving, and an audit record.
-- The person presses Run, **then switches the modem off and on**. UNDM must be listening
-  when the 3-second question appears.
+- The person presses Run, **then switches the modem off and on**. UNDM waits up to 10
+  minutes for the 3-second question (about 2.5 minutes after power-on) and presses **Enter**
+  as soon as the sentence arrives, as the team does.
+- Questions and the login prompts are found wherever they appear in the output, whatever
+  follows them (control characters are dropped and counted); command-line prompts wait for
+  the answer to end. The raw characters at the question are kept as technical details.
 - Before sending a key UNDM reads the boot options the modem lists:
   - no "Nokia 7705 SAR" in the start-up text: no key, nothing changed;
   - no `auto-discover` line: not a factory unit. No key is sent. If it then accepts this

@@ -1501,6 +1501,36 @@ the team "breaks" it with a boot-menu procedure, recorded on the console and sup
   file by zone, facts, backup, firmware. Open questions Q-49 to Q-53.
 - **Status:** experimental. Run only on the simulated console; the first bench run decides
   the rest.
+- **First bench run (2026-11-26, v84): the question was never answered.** UNDM received the
+  whole start of a factory unit (U-Boot, Linux, the TiMOS boot ROM, the boot loader), the
+  boot options and the 3-second question, printed again each second as it counts down. It
+  pressed no key; the unit started normally and UNDM gave up after its 4-minute limit with
+  "start-up text did not appear". Nothing was changed. Causes, all UNDM's:
+  - questions were matched only at the very end of the output, after a pause. A control
+    character after the sentence (backspaces to redraw the countdown, say) or a steady
+    trickle of bytes kept that from ever happening. Reproduced with the real session
+    settings; the cleaned transcript cannot show which one the unit does;
+  - the unit reaches the question about 2.5 minutes after power-on (its own clock lines),
+    which left under 90 seconds to switch it off and on;
+  - the message said nothing had appeared although text had.
+- **Fix (v85):**
+  - questions with a time limit, and the login prompts, are found anywhere in the output and
+    answered at once (`ConsoleSession.wait_for`); command-line prompts still wait for the
+    answer to end;
+  - control characters other than line feed and tab are dropped from the text and counted;
+    a matched prompt never waits past its deadline;
+  - the key is **Enter**, as the team presses (product owner, 2026-11-26; closes Q-49);
+  - UNDM waits up to 10 minutes for the question;
+  - messages tell "nothing arrived" from "text arrived but no question" and from "not
+    recognised";
+  - the raw characters at the question (control characters written out) and the counts of
+    dropped ones are returned as technical details, masked, added to the sanitized
+    transcript and the audit: the next bench run shows exactly how the unit writes it
+    (Q-55);
+  - while it runs, Console setup shows the stage, the time, the bytes received and the last
+    line (`GET /api/devices/{id}/provisioning/console-progress`, in memory, read-only);
+  - shared text also masks UUIDs (the unit's flash volume UUID appears in its start).
+- The steps after the question (boot menu, login, commands) have still not run on a modem.
 
 ### D-113 Nokia Flexi BBU (FSMF): guided by hand first (2026-11-26)
 Product owner: the BBU is an FSMF staged in the browser through WebEM on the LMP port

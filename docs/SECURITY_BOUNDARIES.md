@@ -90,10 +90,7 @@ driver has passed acceptance tests for the exact model and firmware.
 |---|---|---|---|---|
 | 2026-11-19 | Aruba 2930F-48G-4SFP (ArubaOS-Switch), named by the product owner | WC.16.10.0025 | lab/spare status to be confirmed by the product owner | Phase A read-only (`docs/vendor-support/aruba-2930f-acceptance.md`); writes only in phase B after phase A is accepted |
 | 2026-11-19 | Aruba JL260A 2930F-48G-4SFP, spare **new** unit on an isolated bench (product owner) | WC.16.11.0001 as shipped | spare, factory default, not part of any running system | Console bootstrap; firmware to the approved WC.16.10.0025 (approved downgrade); complete-file load. Serial number not recorded here |
-
-No Nokia device is listed yet: the 7705 SAR-Hmc first access (D-112) has run only on the
-simulated console. Record the bench unit here before its first run (model, software release;
-no serial number).
+| 2026-11-26 | Nokia 7705 SAR-Hmc, factory unit on the product owner's bench (console cable only) | TiMOS 20.5.R1 as shipped | factory default, not part of any running system | Console first access (D-112). First run (v84) read its start-up only; nothing was changed. Serial number not recorded here |
 
 Real-device output shared with the developer must go through **Sanitized diagnostics**
 (or equivalent manual masking) and be reviewed by the product owner first.

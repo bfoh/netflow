@@ -13,9 +13,15 @@ two additions that Nokia documents publicly (7705 SAR Basic System Configuration
 text "Press any key to continue (Q to quit)". Message families ``MINOR:``, ``MAJOR:``,
 ``CRITICAL:`` and ``Error:`` are Nokia's documented formats; the recording shows ``MINOR:``.
 
-EXPERIMENTAL: built from one recording; not yet run by UNDM on hardware. It answers only
-the listed questions, in the listed order: anything else ends the procedure with the
-unit's own text (D-031), and the boot options file is never written from the boot menu.
+EXPERIMENTAL: built from one recording. The first bench run (2026-11-26) showed the start
+of a real unit and how its 3-second question is printed (counting down); the steps after the
+question have not yet run on hardware. It answers only the listed questions, in the listed
+order: anything else ends the procedure with the unit's own text (D-031), and the boot
+options file is never written from the boot menu.
+
+Questions are found anywhere in the unit's output (``ConsoleSession.wait_for``), not only at
+its very end: the first bench run printed the 3-second question but UNDM, waiting for the
+output to end with it, never answered (D-112).
 """
 
 from __future__ import annotations
@@ -38,17 +44,21 @@ CONSOLE_SPEED = 115200  # the factory boot options' console-speed (recording; No
 FACTORY_USER = "admin"
 FACTORY_PASSWORD = "admin"  # noqa: S105 - the vendor's documented factory default
 
-# -- what the console shows (recording) ----------------------------------------------
-HIT_KEY = re.compile(r"Hit a key within \d+ seconds? to change boot par(?:ameter|m)s\.\.\.\s*$")
+# -- what the console shows (recording; bench 2026-11-26) ------------------------------
+# Questions: matched wherever they appear (each sentence occurs once per question).
+HIT_KEY = re.compile(r"Hit a key within \d+ seconds? to change boot par(?:ameter|m)s\.\.\.")
+HIT_KEY_START = "Hit a key within"  # to tell "not recognised" from "not shown"
 TYPE_SROS = re.compile(
-    r'Type "sros" and hit ENTER within \d+ seconds? to begin changing parameters:\s*$')
-PRESS_ENTER = re.compile(r"Press ENTER to begin, or 'flash' to enter firmware update\.\.\.\s*$")
-IMAGE_URL = re.compile(r"Software Image URL:\s*$")
-CONFIG_URL = re.compile(r"Config File URL:\s*$")
-FIPS = re.compile(r"press ENTER to keep existing fips configuration\s*$")
-AUTO_DISCOVERY = re.compile(r"Would you like to keep auto-discovery enabled\? \(yes/no\)\s*$")
-OVERWRITE_BOF = re.compile(
-    r"Do you want to overwrite \S+ with the new settings\? \(yes/no\):\s*$")
+    r'Type "sros" and hit ENTER within \d+ seconds? to begin changing parameters:')
+PRESS_ENTER = re.compile(r"Press ENTER to begin, or 'flash' to enter firmware update\.\.\.")
+IMAGE_URL = re.compile(r"Software Image URL:")
+CONFIG_URL = re.compile(r"Config File URL:")
+FIPS = re.compile(r"press ENTER to keep existing fips configuration")
+AUTO_DISCOVERY = re.compile(r"Would you like to keep auto-discovery enabled\? \(yes/no\)")
+OVERWRITE_BOF = re.compile(r"Do you want to overwrite \S+ with the new settings\? \(yes/no\):")
+LOGIN_SEEN = re.compile(r"(?:^|\n)Login:")
+PASSWORD_SEEN = re.compile(r"(?:^|\n)Password:")
+# After an answer: the end of the output (the next question or the prompt).
 LOGIN = re.compile(r"(?:^|\n)Login:\s*$")
 PASSWORD = re.compile(r"(?:^|\n)Password:\s*$")
 # "*A:name#" (the asterisk: unsaved changes), also inside a context ("A:name>config#").
@@ -101,16 +111,23 @@ COMMANDS: tuple[str, ...] = (
 )
 
 
+# The key at "Hit a key within 3 seconds": Enter, as the team presses (product owner,
+# 2026-11-26).
+KEY = "\r"
+
+
 def preview_steps() -> list[str]:
     """What UNDM types, in order (the password is never shown)."""
-    return (["(you switch the modem off and on)", "a key, within 3 seconds of its question"]
+    return (["(you switch the modem off and on)", "Enter, within 3 seconds of its question"]
             + [f"{a.shown}" for a in BOOT_MENU]
             + [f"Login: {FACTORY_USER} (the factory login)"] + list(COMMANDS))
 
 
 @dataclass(frozen=True)
 class Timing:
-    power_on: float = 240.0  # for the person to switch the unit off and on
+    # From Run to the 3-second question: the person switches the unit off and on, and the
+    # unit takes about 2.5 minutes to reach the question (bench 2026-11-26).
+    power_on: float = 600.0
     menu: float = 20.0  # each boot-menu question
     boot: float = 420.0  # from the last answer to "Login:"
     command: float = 40.0
@@ -155,16 +172,39 @@ def parse_system_information(text: str) -> dict[str, str]:
     return out
 
 
+_PROMPT_NAME = re.compile(r"(?:^|\n)\*?[AB]:([^\s#$>]+)")
+
+
+def prompt_names(text: str) -> list[str]:
+    """The unit names its prompts show (a factory unit is named after its serial number)."""
+    return sorted({m.group(1) for m in _PROMPT_NAME.finditer(text)})
+
+
 def _last_line(text: str) -> str:
     lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
     return lines[-1][-160:] if lines else "(nothing)"
 
 
+# Stages of a first access, for progress reports while it runs.
+STAGES = ("listening", "question_answered", "boot_menu", "starting", "logged_in", "commands",
+          "saved", "finished")
+
+
+def _counts(session: ConsoleSession) -> str:
+    return ", ".join(f"{k} ×{n}" for k, n in session.ignored.most_common()) or "none"
+
+
 class SarConsole:
-    def __init__(self, session: ConsoleSession, timing: Timing | None = None) -> None:
+    def __init__(self, session: ConsoleSession, timing: Timing | None = None,
+                 on_stage: Callable[[str], None] | None = None) -> None:
         self.s = session
         self.t = timing or Timing()
         self.sent: list[str] = []
+        self.on_stage = on_stage
+
+    def stage(self, name: str) -> None:
+        if self.on_stage is not None:
+            self.on_stage(name)
 
     def command(self, cmd: str, timeout: float | None = None) -> str:
         """Send one command and return what the unit printed up to its next prompt."""
@@ -196,27 +236,33 @@ class SarConsole:
     def login(self, user: str, password: str, timeout: float) -> bool:
         """Answer "Login:" and "Password:"; False when the unit asks for the login again."""
         self.s.write_line(user)
-        self.s.read_until_any([PASSWORD], timeout)
+        self.s.wait_for([PASSWORD_SEEN], timeout)
         self.s.write_secret(password)
         idx, _ = self.s.read_until_any([PROMPT, LOGIN, PASSWORD], timeout)
         return idx == 0
 
 
 def first_access(session: ConsoleSession, new: Credentials | None,
-                 timing: Timing | None = None) -> BootstrapResult:
+                 timing: Timing | None = None,
+                 on_stage: Callable[[str], None] | None = None) -> BootstrapResult:
     """Run the first access. ``new`` is the device's login: its password becomes admin's."""
-    console = SarConsole(session, timing)
+    console = SarConsole(session, timing, on_stage)
     t = console.t
     findings: list[str] = []
     facts: dict[str, str] = {}
+    diagnostics: dict[str, str] = {}
     state = {"saved": False, "verified": False, "password_set": False}
 
     def result(status: BootstrapStatus, message: str) -> BootstrapResult:
+        diagnostics["received_bytes"] = str(session.received)
+        diagnostics["control_characters_ignored"] = _counts(session)
+        if status in (BootstrapStatus.FAILED, BootstrapStatus.REFUSED) and session.received:
+            diagnostics["last_received"] = session.raw_tail(400)
         return BootstrapResult(
             status=status, message=message, commands_sent=list(console.sent),
             findings=findings, verified=state["verified"], saved=state["saved"],
             transcript=session.transcript_text, password_set=state["password_set"],
-            facts=facts)
+            facts=facts, diagnostics=diagnostics)
 
     problem = password_problem(new)
     if problem or new is None:
@@ -224,19 +270,34 @@ def first_access(session: ConsoleSession, new: Credentials | None,
     session.secrets.append(new.password)
 
     try:
-        # 1. Power-on: the boot loader lists its boot options, then asks for a key.
+        # 1. Power-on: the boot loader lists its boot options, then asks for a key. Found as
+        # soon as the sentence arrives; the key goes at once (the unit waits 3 seconds).
+        console.stage("listening")
+        minutes = (f"{t.power_on / 60:.0f} minutes" if t.power_on >= 120
+                   else f"{t.power_on:g} seconds")
         try:
-            idx, text = session.read_until_any([HIT_KEY, LOGIN], t.power_on)
+            idx, text = session.wait_for([HIT_KEY, LOGIN_SEEN], t.power_on)
         except ConsoleTimeoutError:
+            if not session.received:
+                raise _Stop(BootstrapStatus.FAILED,
+                            f"Nothing arrived from the console in {minutes}. Check the "
+                            "console cable, the COM port and the speed "
+                            f"({CONSOLE_SPEED}), and switch the modem off and on after "
+                            "pressing Run. Nothing was changed.") from None
             raise _Stop(BootstrapStatus.FAILED,
-                        "The modem's start-up text did not appear. Press Run first, then "
-                        "switch the modem off and on; check the console cable, the COM port "
-                        f"and the speed ({CONSOLE_SPEED}). Nothing was changed.") from None
+                        "The modem's start-up text arrived, but "
+                        + ("UNDM did not recognise its 3-second question"
+                           if HIT_KEY_START in session.transcript_text else
+                           "its 3-second question did not appear")
+                        + f" in {minutes}. No key was sent and nothing was changed. "
+                        "Please send the transcript with its technical details.") from None
+        diagnostics["at_question"] = session.raw_tail(300)
         if idx == 1:
             raise _Stop(BootstrapStatus.FAILED,
-                        "The modem was already past its 3-second question when UNDM began "
-                        "listening (it is at its login now). Press Run first, then switch "
-                        "the modem off and on. Nothing was changed.")
+                        "The modem reached its login without UNDM seeing its 3-second "
+                        "question: it was probably already starting when UNDM began "
+                        "listening. Nothing was changed. Press Run first, then switch the "
+                        "modem off and on.")
         if FAMILY not in text:
             raise _Stop(BootstrapStatus.REFUSED,
                         f"The device starting on this console did not name itself '{FAMILY}'. "
@@ -253,12 +314,13 @@ def first_access(session: ConsoleSession, new: Credentials | None,
             return _already_done(console, new, result, facts, state)
 
         # 2. The boot menu: only the recorded questions, in the recorded order.
-        session.write_key(" ")
-        console.sent.append("(a key)")
+        session.write_key(KEY, "(Enter)")
+        console.sent.append("Enter (at its 3-second question)")
+        console.stage("question_answered")
         questions = [a.question for a in BOOT_MENU]
         for step in BOOT_MENU:
             try:
-                idx, text = session.read_until_any([*questions, LOGIN], t.menu)
+                idx, text = session.wait_for([*questions, LOGIN_SEEN], t.menu)
             except ConsoleTimeoutError:
                 last = _last_line(session.transcript[-1] if session.transcript else "")
                 hint = ("it is probably starting normally (the key came too late)"
@@ -291,10 +353,12 @@ def first_access(session: ConsoleSession, new: Credentials | None,
                         k for k in ("primary-config", "auto-discover") if k in planned))
             session.write_line(step.answer)
             console.sent.append(step.shown)
+            console.stage("boot_menu")
 
         # 3. It starts without its configuration: the factory login works now.
+        console.stage("starting")
         try:
-            session.read_until_any([LOGIN], t.boot)
+            session.wait_for([LOGIN_SEEN], t.boot)
         except ConsoleTimeoutError:
             raise _Stop(BootstrapStatus.FAILED,
                         "The modem did not reach its login after the boot menu. The boot "
@@ -306,8 +370,10 @@ def first_access(session: ConsoleSession, new: Credentials | None,
                         "started without its configuration. Nothing was changed; switch it "
                         "off and on to return to its factory start.")
         console.sent.append(f"Login: {FACTORY_USER} (the factory login)")
+        console.stage("logged_in")
 
         # 4. The command line, as recorded. Paging off for this session first (documented).
+        console.stage("commands")
         if ERROR.search(console.command("environment no more")):
             findings.append("'environment no more' was not accepted: long answers are paged "
                             "and UNDM presses a key at each page.")
@@ -356,6 +422,7 @@ def first_access(session: ConsoleSession, new: Credentials | None,
                      saved_so_far="The boot options are saved; the configuration (with the "
                                   "new password) may not be: type 'admin save' on the console.")
         state["saved"] = True
+        console.stage("saved")
 
         # 5. What the unit says about itself.
         facts.update(parse_system_information(console.command("show system information")))
@@ -366,6 +433,7 @@ def first_access(session: ConsoleSession, new: Credentials | None,
         if not state["verified"]:
             findings.append("The unit did not confirm 'Changes Since Last Save: No'.")
         name = facts.get("name") or "the modem"
+        console.stage("finished")
         return result(
             BootstrapStatus.BOOTSTRAPPED,
             f"First access done on {name}"
@@ -393,7 +461,7 @@ def _already_done(console: SarConsole, new: Credentials,
     whether it already has this device's login."""
     s, t = console.s, console.t
     try:
-        s.read_until_any([LOGIN], t.boot)
+        s.wait_for([LOGIN_SEEN], t.boot)
     except ConsoleTimeoutError:
         raise _Stop(BootstrapStatus.REFUSED,
                     "This modem's boot options have no auto-discovery, so it is not in its "

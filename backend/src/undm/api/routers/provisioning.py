@@ -11,6 +11,7 @@ from undm.api.schemas import (
     ConsoleBootstrapOut,
     ConsoleIdentifyIn,
     ConsoleIdentifyOut,
+    ConsoleProgressOut,
     SerialPortOut,
 )
 from undm.services import provisioning as svc
@@ -61,3 +62,11 @@ def console_identify(device_id: str, body: ConsoleIdentifyIn, session: SessionDe
         session, d, registry, actor, serial_port=body.serial_port, baudrate=body.baudrate,
         current_credential_ref_id=body.current_credential_ref_id)
 
+
+
+@router.get("/api/devices/{device_id}/provisioning/console-progress",
+            response_model=ConsoleProgressOut)
+def console_progress(device_id: str, session: SessionDep) -> dict[str, Any]:
+    """What a console procedure running on this device is doing now (read-only)."""
+    get_device(session, device_id)
+    return svc.console_progress(device_id)

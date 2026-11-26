@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -38,10 +39,35 @@ _NEXT_LINE = re.compile(r"\x1bE")
 _COMPLETE = re.compile(r"\x1b(?:\[[0-9;?]*[ -/]*[@-~]|[@-Z\\-_])")
 
 
-def clean(text: str) -> str:
+# Control characters that are not text: carriage returns on their own, backspaces, bells,
+# NULs, a stray escape, DEL. A console can print them around a question (to redraw a
+# countdown, for example); kept, they would hide the question from a pattern (bench
+# 2026-11-26, D-112). Line feeds and tabs are text.
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+def control_name(ch: str) -> str:
+    """A control character in words for diagnostics: \\r, \\b, \\x00 ..."""
+    return {"\r": "\\r", "\b": "\\b", "\t": "\\t", "\n": "\\n", "\x1b": "\\e"}.get(
+        ch, f"\\x{ord(ch):02x}")
+
+
+def clean(text: str, dropped: Counter[str] | None = None) -> str:
+    """Console output as text: escape sequences removed, CR LF made LF, and every other
+    control character dropped (counted in ``dropped`` when given)."""
     text = _INSERT_LINES.sub(lambda m: "\n" * int(m.group(1) or 1), text)
     text = _NEXT_LINE.sub("\n", text)
-    return _ANSI.sub("", text).replace("\r\n", "\n").replace("\r", "").replace("\x00", "")
+    text = _ANSI.sub("", text).replace("\r\n", "\n")
+    if dropped is not None:
+        dropped.update(control_name(c) for c in _CONTROL.findall(text))
+    return _CONTROL.sub("", text)
+
+
+def visible(raw: str) -> str:
+    """Raw console characters with every control character written out (``\\r``, ``\\b``,
+    ``\\x00``), line feeds kept as line breaks: shows exactly what the device sent."""
+    return "".join(c if c == "\n" or (c != "\t" and not _CONTROL.match(c))
+                   else control_name(c) for c in raw)
 
 
 @dataclass
@@ -53,8 +79,14 @@ class ConsoleSession:
     # Values that must never reach the transcript or a message: a password typed on a
     # command line is echoed by the device, so both directions are masked.
     secrets: list[str] = field(default_factory=list)
+    received: int = 0  # bytes read from the device
+    # Control characters dropped from the text, by kind (diagnostics).
+    ignored: Counter[str] = field(default_factory=Counter)
+    raw_keep: int = 1200  # how many raw characters to keep for diagnostics
     _buffer: str = ""
     _carry: str = ""  # the start of an escape sequence cut off by the previous read
+    _raw: str = ""  # the last raw characters received, before cleaning
+    _last_line: str = ""  # the last visible line, for progress reports
 
     def mask(self, text: str) -> str:
         for secret in self.secrets:
@@ -71,9 +103,9 @@ class ConsoleSession:
         self._typed(self.mask(text) or "(Enter)")
         self.transport.write((text + "\r").encode("ascii", "replace"))
 
-    def write_key(self, key: str = " ") -> None:
-        """One key without Enter (e.g. to interrupt a boot loader's countdown)."""
-        self._typed("(a key)")
+    def write_key(self, key: str = " ", shown: str = "(a key)") -> None:
+        """One key without Enter after it (e.g. to interrupt a boot loader's countdown)."""
+        self._typed(shown)
         self.transport.write(key.encode("ascii", "replace"))
 
     def write_secret(self, secret: str) -> None:
@@ -82,18 +114,61 @@ class ConsoleSession:
         self.transport.write((secret + "\r").encode("utf-8"))
 
     def _fill(self) -> bool:
+        """Read once; True when visible text arrived (control characters alone do not
+        count, so a device that keeps sending them never looks busy)."""
         chunk = self.transport.read(256)
-        if chunk:
-            data = self._carry + chunk.decode("utf-8", "replace")
-            self._carry = ""
-            # A serial read can end in the middle of an escape sequence (seen on the bench:
-            # "ESC" in one read, "[24;18H" in the next). Keep that start for the next read so
-            # the whole sequence is removed; never hold back more than a short tail.
-            esc = data.rfind("\x1b")
-            if esc != -1 and len(data) - esc < 16 and not _COMPLETE.match(data, esc):
-                data, self._carry = data[:esc], data[esc:]
-            self._buffer += clean(data)
-        return bool(chunk)
+        if not chunk:
+            return False
+        self.received += len(chunk)
+        data = self._carry + chunk.decode("utf-8", "replace")
+        self._raw = (self._raw + data[len(self._carry):])[-self.raw_keep:]
+        self._carry = ""
+        # A serial read can end in the middle of an escape sequence (seen on the bench:
+        # "ESC" in one read, "[24;18H" in the next). Keep that start for the next read so
+        # the whole sequence is removed; never hold back more than a short tail.
+        esc = data.rfind("\x1b")
+        if esc != -1 and len(data) - esc < 16 and not _COMPLETE.match(data, esc):
+            data, self._carry = data[:esc], data[esc:]
+        text = clean(data, self.ignored)
+        self._buffer += text
+        lines = [ln for ln in self._buffer[-400:].split("\n") if ln.strip()]
+        if lines:
+            self._last_line = lines[-1].strip()[-160:]
+        return bool(text)
+
+    def raw_tail(self, size: int = 400) -> str:
+        """The last characters the device sent, control characters written out, masked."""
+        return visible(self.mask(self._raw)[-size:])
+
+    @property
+    def last_line(self) -> str:
+        return self.mask(self._last_line)
+
+    def _take(self, end: int) -> str:
+        text, self._buffer = self.mask(self._buffer[:end]), self._buffer[end:]
+        self.transcript.append(text)
+        return text
+
+    def wait_for(
+        self, patterns: list[re.Pattern[str]], timeout: float | None = None
+    ) -> tuple[int, str]:
+        """Read until one pattern is found anywhere in the unread output and return
+        (index, text up to the end of the match) at once: no waiting for the output to
+        pause. For questions with a time limit, whose full sentence does not appear in
+        passing; output after the match stays unread. The earliest match wins."""
+        deadline = time.monotonic() + (timeout if timeout is not None else self.read_timeout)
+        while True:
+            found = [(m.start(), m.end(), idx) for idx, p in enumerate(patterns)
+                     if (m := p.search(self._buffer))]
+            if found:
+                _, end, idx = min(found)
+                return idx, self._take(end)
+            if time.monotonic() > deadline:
+                text = self._take(len(self._buffer))
+                raise ConsoleTimeoutError(
+                    "No expected question from the console within "
+                    f"{timeout or self.read_timeout:.0f}s. Last output: {text[-200:]!r}")
+            self._fill()
 
     def read_until_any(
         self, patterns: list[re.Pattern[str]], timeout: float | None = None
@@ -104,7 +179,9 @@ class ConsoleSession:
             for idx, pattern in enumerate(patterns):
                 if pattern.search(self._buffer):
                     # A prompt-like fragment can appear mid-output; make sure output stopped.
-                    settle = time.monotonic() + self.settle_time
+                    # Never past the deadline: a device that keeps sending would otherwise
+                    # keep a matched prompt waiting for ever.
+                    settle = min(time.monotonic() + self.settle_time, deadline)
                     grew = False
                     while time.monotonic() < settle:
                         if self._fill():
