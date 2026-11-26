@@ -16,8 +16,10 @@ from undm.api.schemas import (
     DeploymentOut,
     DeploymentSummary,
     DeviceStagingIn,
+    FinishStagingIn,
     FirmwareDeploymentIn,
     FirstLoginIn,
+    ProjectOut,
     StagingApproveIn,
     StagingIndexOut,
     StagingPlanIn,
@@ -276,6 +278,18 @@ def create_device_staging(project_id: str, body: DeviceStagingIn, session: Sessi
         for s in body.steps]
     made = svc.create_device_staging(project_id, body.device_id, actor, steps)
     return _staging(str(made[0].staging_id), made)
+
+
+@router.post("/api/projects/{project_id}/finish", response_model=ProjectOut)
+def finish_staging(project_id: str, body: FinishStagingIn, svc: ServiceDep,
+                   actor: ActorDep) -> Any:
+    """Staging of the system is finished (D-108): checked, recorded and audited."""
+    return svc.finish_system(project_id, body.device_ids, actor)
+
+
+@router.post("/api/projects/{project_id}/reopen", response_model=ProjectOut)
+def reopen_staging(project_id: str, svc: ServiceDep, actor: ActorDep) -> Any:
+    return svc.reopen_system(project_id, actor)
 
 
 @router.get("/api/projects/{project_id}/staging-plans", response_model=list[StagingIndexOut])

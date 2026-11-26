@@ -75,6 +75,9 @@ class Project(TimestampMixin, Base):
     # Subject for self-signed HTTPS certificates created on the project's devices before a
     # file that needs one is loaded (organisation details; kept only in this database).
     certificate_subject: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
+    # Staging of the system finished (D-108): when and by whom; cleared by a new staging plan.
+    staged_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    staged_by: Mapped[str] = mapped_column(String(120), default="", server_default="")
 
     devices: Mapped[list[Device]] = relationship(
         back_populates="project", cascade="all, delete-orphan"

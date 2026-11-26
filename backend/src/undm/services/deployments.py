@@ -496,6 +496,7 @@ class DeploymentService:
         site = self._choose_config(device, site_version_id)
         self._check_file_can_be_applied(device, site, ApplyMode.MERGE)  # before any preview
         staging_id = str(uuid.uuid4())
+        self._reopen_system(project_id, actor)
         steps: list[DeploymentRecord] = []
         if first_login:
             steps.append(self.create_first_login(project_id, device_id, actor,
@@ -543,6 +544,7 @@ class DeploymentService:
         for n, step in enumerate(steps, 1):
             self._check_staging_step(device, n, step)
         staging_id = str(uuid.uuid4())
+        self._reopen_system(project_id, actor)
         made: list[DeploymentRecord] = []
         for n, step in enumerate(steps, 1):
             later = (f"it is made at the run, after step {n - 1} ({_STEP_WORDS[steps[n - 2].kind]})"
@@ -656,6 +658,53 @@ class DeploymentService:
         audit.record(self.s, actor, "staging.approve", "staging_plan", staging_id,
                      details={"steps": [r.id for r in waiting]})
         return steps
+
+    # -- the end of staging a system (D-108) ---------------------------------------------
+    def _reopen_system(self, project_id: str, actor: str, *, reason: str = "new staging plan"
+                       ) -> None:
+        project = self.s.get(Project, project_id)
+        if project is not None and project.staged_at is not None:
+            project.staged_at, project.staged_by = None, ""
+            audit.record(self.s, actor, "system.reopened", "project", project_id,
+                         details={"reason": reason})
+
+    def finish_system(self, project_id: str, device_ids: list[str], actor: str) -> Project:
+        """Record that staging of a system is finished: every named device's latest staging
+        plan succeeded, and none is still off the network (D-107)."""
+        project = self.s.get(Project, project_id)
+        if project is None:
+            raise NotFoundError("Project not found")
+        latest: dict[str, list[DeploymentRecord]] = {}
+        for _sid, device_id, steps in self.project_stagings(project_id):
+            latest.setdefault(device_id, steps)  # newest first
+        problems: list[str] = []
+        names: list[str] = []
+        for did in dict.fromkeys(device_ids):
+            device = self.s.get(Device, did)
+            if device is None or device.project_id != project_id:
+                raise NotFoundError(f"Device {did} not found in project")
+            names.append(device.name)
+            mine = latest.get(did)
+            if not mine:
+                problems.append(f"{device.name} has no staging plan")
+            elif any(r.state != S.SUCCEEDED.value for r in mine):
+                problems.append(f"{device.name}'s latest staging plan has not succeeded")
+            if port_off(device):
+                problems.append(f"{device.name} still has its management port off: switch it "
+                                "off and on, then Test it")
+        if problems:
+            raise ConflictError("Staging is not finished: " + "; ".join(problems))
+        project.staged_at, project.staged_by = datetime.now(UTC), actor
+        audit.record(self.s, actor, "system.staged", "project", project_id,
+                     details={"devices": names})
+        return project
+
+    def reopen_system(self, project_id: str, actor: str) -> Project:
+        project = self.s.get(Project, project_id)
+        if project is None:
+            raise NotFoundError("Project not found")
+        self._reopen_system(project_id, actor, reason="reopened by a person")
+        return project
 
     def project_stagings(self, project_id: str) -> list[tuple[str, str, list[DeploymentRecord]]]:
         """(staging id, device id, steps) for every staging plan of a project, newest first."""

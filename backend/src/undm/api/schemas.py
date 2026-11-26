@@ -96,6 +96,8 @@ class ProjectOut(ORM):
     site: str
     purpose: str
     certificate_subject: CertificateSubject | None = None
+    staged_at: datetime | None = None  # staging of the system finished (D-108)
+    staged_by: str = ""
     created_at: datetime
     updated_at: datetime
 
@@ -130,6 +132,12 @@ class CertificateSetting(BaseModel):
     """The HTTPS certificate answers for all systems (null: none set)."""
 
     subject: CertificateSubject | None = None
+
+
+class FinishStagingIn(BaseModel):
+    """The devices the person staged (the wizard's roles): each must be finished."""
+
+    device_ids: list[str] = Field(min_length=1, max_length=50)
 
 
 class CredentialRefIn(BaseModel):

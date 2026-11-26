@@ -53,8 +53,8 @@ def test_health_and_api_errors_explain_the_upgrade(tmp_path):
         health = c.get("/api/health").json()
         assert health["status"] == "database_upgrade_needed"
         assert "alembic upgrade head" in health["problem"]
-        pid = c.post("/api/projects", json={"name": "P"}).json()["id"]
-        r = c.get(f"/api/projects/{pid}/devices")
+        # The projects table itself lacks newer columns, so any use of it explains the upgrade.
+        r = c.post("/api/projects", json={"name": "P"})
         assert r.status_code == 500
         assert r.json()["error"].startswith("Database error (OperationalError)")
         assert "alembic upgrade head" in r.json()["error"]

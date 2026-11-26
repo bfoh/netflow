@@ -16,6 +16,7 @@ import {
   useAction, useCredentialRefs, useDeviceModels, useLoginDefaults, useProject, useProjectDevices, useProjects, useProjectStagings,
 } from '../hooks/queries';
 import { api } from '../services/api';
+import { fmtDate } from '../services/format';
 import type { Device } from '../types/api';
 import { Hint } from '../components/Hint';
 
@@ -169,11 +170,13 @@ function StageSystem({ projectId }: { projectId: string }) {
       <PageHeader title={`Stage a system · ${project.data.name}`}
         description="Step by step: the devices, their files and firmware, the bench, then one plan per device. Nothing changes a device until you approve and run its plan."
         actions={<Button variant="default" component={Link} to={`/projects/${projectId}`}>System page</Button>} />
-      <Stepper active={active} onStepClick={setActive} size="sm" mb="lg" allowNextStepsSelect>
+      {/* A finished system shows every step done (D-108); the content still follows `active`. */}
+      <Stepper active={project.data.staged_at ? STEPS.length : active} onStepClick={setActive} size="sm" mb="lg" allowNextStepsSelect>
         {STEPS.map((label, i) => (
           <Stepper.Step key={label} label={label}
             completedIcon={<IconCheck size={16} />}
-            description={i === 0 ? `${roles.length} of ${ROLES.length} devices` : i === 1 ? (filesReady ? 'ready' : 'to choose') : undefined} />
+            description={i === 0 ? `${roles.length} of ${ROLES.length} devices` : i === 1 ? (filesReady ? 'ready' : 'to choose')
+              : i === STEPS.length - 1 && project.data!.staged_at ? `finished ${fmtDate(project.data!.staged_at)}` : undefined} />
         ))}
       </Stepper>
       {active === 0 && (

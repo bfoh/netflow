@@ -205,6 +205,7 @@ class ArubaOSSwitchSsh(SshCliDriver):
     # refuses a second address in its network, and its team file accepts management only
     # from that network ('ip authorized-managers').
     port_off_wait: ClassVar[float] = 30.0
+    port_off_read: ClassVar[float] = 10.0
 
     @staticmethod
     def _vlan_blocks(running: str) -> dict[int, list[str]]:
@@ -283,8 +284,10 @@ class ArubaOSSwitchSsh(SshCliDriver):
         command = f"interface {port} disable"
         output = ""
         try:
+            # Bench 2026-11-26: the session stays open but silent once the port is off, so
+            # a short read timeout (a refusal is printed at once).
             output = str(self._conn.send_config_set(
-                [command], error_pattern=self.error_pattern, read_timeout=self.read_timeout))
+                [command], error_pattern=self.error_pattern, read_timeout=self.port_off_read))
         except ConfigInvalidException as e:
             said = redact_text(str(e))[-300:]
             return OperationResult.failed(

@@ -1,4 +1,4 @@
-import { Anchor, Button, Card, Group, Stack, Table, Text, Title } from '@mantine/core';
+import { Button, Card, Group, Stack, Table, Text, Title } from '@mantine/core';
 import { IconDownload, IconPrinter } from '@tabler/icons-react';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -10,9 +10,9 @@ import type { Device, Project, StagingIndex, StagingPlan } from '../../types/api
 import type { Role } from './roles';
 import { EmptyState } from '../../components/EmptyState';
 import { BenchLogButton } from '../systems/BenchLogButton';
-import { DownloadBackupsButton } from '../systems/SystemPackage';
 import { Notice } from '../../components/Notice';
-import { Link } from 'react-router';
+import { FinishChecklist } from './FinishChecklist';
+import { loadTicks, saveTicks, type Ticks } from './finishTicks';
 
 const minutes = (a: string, b: string) => {
   const ms = new Date(b).getTime() - new Date(a).getTime();
@@ -33,7 +33,11 @@ export function ReportStep({ project, roles, stagings }: {
   });
   const rows = roles.map(({ role, device }, i) => ({ role, device, plan: plans[i]?.data as StagingPlan | undefined }));
   const [madeAt] = useState(() => new Date().toISOString());
+  const [ticks, setTicks] = useState<Ticks>(() => loadTicks(project.id));
+  const onTicks = (t: Ticks) => { setTicks(t); saveTicks(project.id, t); };
+  const saved = () => onTicks({ ...ticks, report: true });
   const html = () => {
+    saved();
     const el = document.getElementById('staging-report');
     const body = el ? el.outerHTML : '';
     downloadText(`staging-report-${project.name.replace(/[^\w.-]+/g, '_')}.html`,
@@ -45,7 +49,7 @@ export function ReportStep({ project, roles, stagings }: {
   return (
     <Stack>
       <Group justify="flex-end" className="no-print">
-        <Button variant="default" leftSection={<IconPrinter size={16} />} onClick={() => window.print()}>Print</Button>
+        <Button variant="default" leftSection={<IconPrinter size={16} />} onClick={() => { saved(); window.print(); }}>Print</Button>
         <Button variant="default" leftSection={<IconDownload size={16} />} onClick={html}>Save as HTML</Button>
         <BenchLogButton projectId={project.id} />
       </Group>
@@ -53,24 +57,19 @@ export function ReportStep({ project, roles, stagings }: {
       {roles.length > 0 && (() => {
         // The end of the run, said plainly (bench 2026-11-25: "how does it complete?").
         const open = rows.filter(({ plan }) => !plan || plan.steps.length === 0 || plan.steps.some((s) => s.state !== 'succeeded'));
-        return <div className="no-print">{open.length === 0 ? (
-          <Notice kind="success" title={`All ${rows.length} devices are staged`}
-            action={<DownloadBackupsButton projectId={project.id} />}>
-            Staging of this system is complete. If a FortiGate needs its license, load it from its menu (⋯ → Load license…).
-            To finish: save this report (Print or Save as HTML), download the backups,
-            turn the safety switches off (<Anchor component={Link} to="/settings?tab=safety" size="sm">Settings → Safety</Anchor>),
-            then power the devices off and label them.
-          </Notice>
-        ) : (
-          <Notice kind="status" title={`${rows.length - open.length} of ${rows.length} devices are staged`}>
-            Still to do in step 4 (Run): {open.map(({ device }) => device.name).join(', ')}. The system is complete when every
-            device's latest plan has succeeded.
-          </Notice>
-        )}</div>;
+        return <Stack className="no-print">
+          {open.length > 0 && !project.staged_at && (
+            <Notice kind="status" title={`${rows.length - open.length} of ${rows.length} devices are staged`}>
+              Still to do in step 4 (Run): {open.map(({ device }) => device.name).join(', ')}.
+            </Notice>
+          )}
+          <FinishChecklist project={project} rows={roles} allStaged={open.length === 0} ticks={ticks} onTicks={onTicks} />
+        </Stack>;
       })()}
       <div id="staging-report">
         <Title order={2} size="h4" mb="xs">Staging report · {project.name}</Title>
-        <Text size="sm" c="dimmed" mb="md">Made {fmtDate(madeAt)}. One section per device: its latest staging plan.</Text>
+        <Text size="sm" c="dimmed" mb="md">Made {fmtDate(madeAt)}. One section per device: its latest staging plan.
+          {project.staged_at ? ` Staging finished ${fmtDate(project.staged_at)}${project.staged_by ? ` by ${project.staged_by}` : ''}.` : ' Staging not finished yet.'}</Text>
         <Stack>
           {rows.map(({ role, device, plan }) => {
             const facts = (device.observed_facts ?? {}) as Record<string, unknown>;

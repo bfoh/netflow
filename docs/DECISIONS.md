@@ -1328,4 +1328,31 @@ is withdrawn.
   stay.
 - The timed variant asked for on 2026-11-25 (port back after ~30 minutes) still has no
   verified command; A stays off the network until it is switched off and on.
+- **Bench, 2026-11-26 08:27 (first run):** worked. The session stayed open and silent after
+  the command, so UNDM waited out its read timeout (2 minutes) before checking; since v80 that
+  read waits 10 s. B's file then loaded at 192.168.1.1.
+
+### D-108 A real finish to staging a system (2026-11-26)
+Product owner, after the first system staged end to end through the wizard (Make room
+included): "I still do not see the whole process being finished or completed". The Report
+step said "All 4 devices are staged" in prose; the stepper stayed open and nothing recorded
+the end.
+- **Finish checklist** on the Report step. Ticked by UNDM:
+  - every device's latest staging plan succeeded;
+  - no switch left with its port off (D-107), with a Test button after switching it off and
+    on;
+  - safety switches off, with **Turn them off** (the audited policy change).
+
+  Ticked by the person (kept per system in the browser):
+  - the FortiGate license loaded or not needed;
+  - report saved (Print / Save as HTML tick it);
+  - backups downloaded (the download ticks it);
+  - devices powered off and labelled.
+- **Finish staging** is enabled when all are ticked. The server checks again: the named
+  devices' latest staging plans succeeded and none has its port off. It records
+  `Project.staged_at` / `staged_by` (migration 1e637569cbdd) and audits `system.staged`.
+- **Shown everywhere:** the stepper shows every step done ("finished <date>"); the report
+  says when and by whom; the Systems list, the system page and Home show **Staged <date>**.
+- **Reopen** by hand (`system.reopened`), or automatically when a new staging plan is made
+  on the system, so a finished system never hides newer work.
 

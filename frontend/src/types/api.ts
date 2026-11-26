@@ -12,6 +12,9 @@ export interface Project {
   purpose: string;
   /** Answers to the switch's certificate questions (2930F); organisation details. */
   certificate_subject?: CertificateSubject | null;
+  /** Staging of the system finished (D-108): when and by whom; null while open. */
+  staged_at?: string | null;
+  staged_by?: string;
   created_at: string;
   updated_at: string;
 }

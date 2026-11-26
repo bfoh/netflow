@@ -37,7 +37,20 @@ test('stage a system with the wizard (simulated Black Box)', async ({ page }) =>
   await page.getByRole('button', { name: 'Next: Report' }).click();
   await expect(page.getByRole('heading', { name: `Staging report · ${system}` })).toBeVisible();
   await expect(page.locator('#staging-report').getByText('Succeeded')).toBeVisible();
-  await expect(page.getByText('All 1 devices are staged')).toBeVisible();
+  await expect(page.getByText('The latest staging plan of each device succeeded.')).toBeVisible();
+
+  // The end of the run (D-108): the checklist, then Finish staging, recorded by UNDM.
+  const finish = page.getByRole('button', { name: 'Finish staging' });
+  await expect(finish).toBeDisabled();
+  for (const name of ['Report saved', 'Backups downloaded', 'Devices powered off and labelled']) {
+    await page.getByRole('checkbox', { name }).check();
+  }
+  const turnOff = page.getByRole('button', { name: 'Turn them off' });
+  if (await turnOff.isVisible()) await turnOff.click();
+  await expect(finish).toBeEnabled();
+  await finish.click();
+  await expect(page.getByText(/^Staging finished · /)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reopen' })).toBeVisible();
 
   // The masked bench log lists the run and hides the system's name (D-090).
   await page.getByRole('button', { name: 'Bench log…' }).click();

@@ -51,6 +51,7 @@ manager, topology._
 | For all systems (v78) | Logins (tunnel key included), default logins per device and the 2930F certificate answers set once in Settings → For all systems; the wizard and console setup start from them; a system can still use its own (D-105, migration 2abfdc4c7344) |
 | Make room (v78) | The 2930F's "overlapping network" refusal is recognised over SSH; a refused move fails cleanly; the spare address is 192.0.2.3 in the other bench network (D-106, experimental) |
 | Make room (v79) | Switches off the first 2930F's management port, unsaved, and checks its address goes quiet; replaces the spare address, which a staged switch cannot use (authorized managers); 'invalid port' recognised; a step that leaves the switch as it was ends Failed (D-107, experimental) |
+| Finish staging (v80) | Report step checklist (staged, switches back on their address, license, report, backups, safety switches off, powered off) and Finish staging, checked by the server and recorded; Staged badge on Systems, system page and Home; reopen by hand or by a new plan (D-108). Make room worked on hardware (D-107) |
 | Erase dialog (v73) | Shows the login the switch gets after the erase and blocks early when it has no password or is the login being erased (D-101) |
 | FortiGate license (v72) | "Load license…" in a FortiGate's menu: the team's file is kept for the device (never shown or exported) and loaded through an approved plan with `execute restore manual-license tftp` (Fortinet-documented; **experimental, not yet run on hardware**, Q-46, D-100) |
 | Working with devices (v71) | Device menu everywhere (⋯ and right-click): Open SSH window (PC's own SSH program, password typed by the person, D-098), web page, check information, test, wait until it answers, back up, log, restart (approved plan; 2930F and LIG1014A), console setup. System tree with tick boxes, watch devices (reachability dots), device log (D-099) |
@@ -82,16 +83,16 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-26, v79)
+## Test results (2026-11-26, v80)
 | Suite | Result |
 |---|---|
-| Backend pytest | 499 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
+| Backend pytest | 502 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
 | Backend PostgreSQL integration | 2 passed; `alembic check`: no pending changes; new migration down/up OK |
 | SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
 | ruff / mypy --strict | clean / clean (79 files) |
-| Frontend Vitest | 76 passed |
+| Frontend Vitest | 80 passed |
 | tsc / oxlint / vite build | clean / clean / success |
-| Playwright E2E | 7 passed (a login for all systems and its default reach a new system; device menu, check information, test and log on a simulated switch; acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box; export and import of a system) |
+| Playwright E2E | 7 passed (wizard now ends with Finish staging; a login for all systems and its default reach a new system; device menu, check information, test and log on a simulated switch; acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box; export and import of a system) |
 
 ## Known issues and limitations
 - Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole

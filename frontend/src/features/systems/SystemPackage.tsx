@@ -40,7 +40,7 @@ export function ExportSystemButton({ projectId }: { projectId: string }) {
 }
 
 /** Every backup UNDM took of the system's devices, as text files in one zip (D-097). */
-export function DownloadBackupsButton({ projectId }: { projectId: string }) {
+export function DownloadBackupsButton({ projectId, onDownloaded }: { projectId: string; onDownloaded?: () => void }) {
   const [opened, { open, close }] = useDisclosure();
   const run = useAction(() => api.downloadBackups(projectId), (name) => `Saved ${name} to your downloads`, { errorInDialog: true });
   return (
@@ -57,7 +57,7 @@ export function DownloadBackupsButton({ projectId }: { projectId: string }) {
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Back</Button>
             <Button leftSection={<IconDownload size={16} />} loading={run.isPending}
-              onClick={() => run.mutate(undefined, { onSuccess: close })}>Download</Button>
+              onClick={() => run.mutate(undefined, { onSuccess: () => { close(); onDownloaded?.(); } })}>Download</Button>
           </Group>
         </Stack>
       </Modal>

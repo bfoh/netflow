@@ -1,3 +1,4 @@
+import { StagedBadge } from '../features/systems/StagedBadge';
 import { ActionIcon, Anchor, Button, Card, Modal, Stack, Table, Text, TextInput, Textarea, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
@@ -43,7 +44,7 @@ export function ProjectsPage() {
             <Table.Tbody>
               {(projects.data ?? []).map((p) => (
                 <Table.Tr key={p.id}>
-                  <Table.Td><Anchor component={Link} to={`/projects/${p.id}`} fw={600}>{p.name}</Anchor></Table.Td>
+                  <Table.Td><Anchor component={Link} to={`/projects/${p.id}`} fw={600}>{p.name}</Anchor> <StagedBadge project={p} /></Table.Td>
                   <Table.Td>{p.site || '—'}</Table.Td>
                   <Table.Td>{p.purpose || '—'}</Table.Td>
                   <Table.Td>{(devices.data ?? []).filter((d) => d.project_id === p.id).length}</Table.Td>

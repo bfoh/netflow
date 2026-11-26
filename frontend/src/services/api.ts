@@ -113,6 +113,8 @@ export const api = {
   drivers: () => request<Driver[]>('GET', '/drivers'),
   policy: () => request<Policy>('GET', '/policy'),
   changePolicy: (changes: Partial<Record<SafetySwitch, boolean>>) => request<Policy>('PUT', '/policy', changes),
+  finishStaging: (pid: string, deviceIds: string[]) => request<Project>('POST', `/projects/${pid}/finish`, { device_ids: deviceIds }),
+  reopenStaging: (pid: string) => request<Project>('POST', `/projects/${pid}/reopen`),
   credentialRefs: (pid: string) => request<CredentialRef[]>('GET', `/projects/${pid}/credential-refs`),
   createCredentialRef: (pid: string, body: { name: string; provider?: string; locator?: string }) =>
     request<CredentialRef>('POST', `/projects/${pid}/credential-refs`, body),

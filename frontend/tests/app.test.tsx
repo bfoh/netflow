@@ -840,3 +840,83 @@ describe('For all systems (D-105)', () => {
     expect(await screen.findByText(/uses the answers for all systems/)).toBeInTheDocument();
   });
 });
+
+describe('finishing a system (D-108)', () => {
+  const project = (over: Record<string, unknown> = {}) => ({ id: 'p1', name: 'Lab A', description: '', site: '', purpose: '',
+    created_at: '', updated_at: '', certificate_subject: null, staged_at: null, staged_by: '', ...over });
+  const bb = (over: Record<string, unknown> = {}) => device({ id: 'bb', name: 'lab-a-bb', manufacturer: 'Black Box', model: 'LIG1014A',
+    role: 'Black Box LIG1014A', driver_id: 'mock.blackbox.switch', management_address: '192.0.2.1', ...over });
+  const plan = { staging_id: 'sp1', steps: [{ id: 'd1', project_id: 'p1', kind: 'configuration', state: 'succeeded', dry_run: false,
+    apply_mode: 'replace', created_by: 't', approved_by: 't', approved_at: null, created_at: '', updated_at: '', firmware_image_id: null,
+    window_start: null, window_end: null, staging_id: 'sp1', staging_step: 1, targets: [], events: [] }] };
+  const policyOn = { enable_real_device_writes: true, enable_real_device_firmware: true, allow_production_read_only: false,
+    allow_production_deployments: false, require_separate_approver: false, firmware_require_separate_approver: false, locked: [] };
+
+  it('a checklist leads to Finish staging, which UNDM records', async () => {
+    window.localStorage.removeItem('undm.finish.p1');
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({
+      '/projects/p1': project(), '/projects/p1/devices': [bb()], '/policy': policyOn, '/staging-plans/sp1': plan,
+      '/projects/p1/staging-plans': [{ staging_id: 'sp1', device_id: 'bb', created_at: '', kinds: ['configuration'], states: ['succeeded'] }],
+      '/projects/p1/finish': project({ staged_at: '2026-11-26T09:00:00Z', staged_by: 'tester' }),
+    });
+    renderAt('/stage/p1?step=4');
+    const finish = await screen.findByRole('button', { name: 'Finish staging' });
+    expect(await screen.findByText('The latest staging plan of each device succeeded.')).toBeInTheDocument();
+    expect(finish).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Turn them off' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/policy' && c.init?.method === 'PUT')).toBe(true));
+    const put = calls.find((c) => c.url === '/api/policy' && c.init?.method === 'PUT');
+    expect(JSON.parse(String(put?.init?.body))).toEqual({ enable_real_device_writes: false, enable_real_device_firmware: false });
+    for (const name of ['Report saved', 'Backups downloaded', 'Devices powered off and labelled']) {
+      await userEvent.click(screen.getByRole('checkbox', { name }));
+    }
+    expect(JSON.parse(window.localStorage.getItem('undm.finish.p1') ?? '{}')).toEqual({ report: true, backups: true, powered: true });
+    expect(finish).toBeDisabled();  // the safety switches are still on (the mock answers with the old policy)
+  });
+
+  it('with everything ticked, Finish staging sends the staged devices', async () => {
+    window.localStorage.setItem('undm.finish.p1', JSON.stringify({ report: true, backups: true, powered: true }));
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({
+      '/projects/p1': project(), '/projects/p1/devices': [bb()], '/staging-plans/sp1': plan,
+      '/policy': { ...policyOn, enable_real_device_writes: false, enable_real_device_firmware: false },
+      '/projects/p1/staging-plans': [{ staging_id: 'sp1', device_id: 'bb', created_at: '', kinds: ['configuration'], states: ['succeeded'] }],
+      '/projects/p1/finish': project({ staged_at: '2026-11-26T09:00:00Z', staged_by: 'tester' }),
+    });
+    renderAt('/stage/p1?step=4');
+    const finish = await screen.findByRole('button', { name: 'Finish staging' });
+    await vi.waitFor(() => expect(finish).toBeEnabled());
+    await userEvent.click(finish);
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1/finish')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/projects/p1/finish');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ device_ids: ['bb'] });
+    window.localStorage.removeItem('undm.finish.p1');
+  });
+
+  it('a switch with its port off must be switched off and on first', async () => {
+    mockApi({
+      '/projects/p1': project(), '/policy': { ...policyOn, enable_real_device_writes: false, enable_real_device_firmware: false },
+      '/projects/p1/devices': [device({ id: 'sa', name: 'lab-a-sw-a', model: '2930F', role: 'Aruba 2930F (OOBM port 2)',
+        driver_id: 'mock.aruba.aos_switch', management_address: '192.168.1.1',
+        observed_facts: { extra: { management_port_off: { port: '2', since: '' } } } as never })],
+      '/projects/p1/staging-plans': [],
+    });
+    renderAt('/stage/p1?step=4');
+    expect(await screen.findByText(/port 2 is off until then/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Test' })).toBeInTheDocument();
+  });
+
+  it('a finished system says so, with Reopen, and its stepper is complete', async () => {
+    mockApi({
+      '/projects/p1': project({ staged_at: '2026-11-26T09:00:00Z', staged_by: 'tester' }), '/projects/p1/devices': [bb()],
+      '/staging-plans/sp1': plan,
+      '/projects/p1/staging-plans': [{ staging_id: 'sp1', device_id: 'bb', created_at: '', kinds: ['configuration'], states: ['succeeded'] }],
+    });
+    renderAt('/stage/p1?step=4');
+    expect(await screen.findByText(/^Staging finished · .* by tester$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reopen' })).toBeInTheDocument();
+    expect(screen.getByText(/^finished /)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Finish staging' })).not.toBeInTheDocument();
+  });
+});

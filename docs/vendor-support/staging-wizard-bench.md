@@ -114,6 +114,14 @@ plan (its file moves B to A's address). The Black Box and the FortiGate can run 
 - **Site**: statement by statement; "Command fail … -61" on the first `end` is expected.
   Revisions are saved after each file.
 
+## End of the run (wizard step 5, since v80, D-108)
+The Report step has a checklist. UNDM ticks what it can see: every device staged, every
+switch back at its own address, and the safety switches off (**Turn them off**). Switch
+A, whose port Make room switched off, must be switched off and on, then press its
+**Test**. You tick the rest: license loaded or not needed, report saved, backups
+downloaded, devices powered off and labelled. Then press **Finish staging**: the system
+shows **Staged <date>** everywhere. A new plan on one of its devices reopens it.
+
 ## If a step stops
 - **The plan says "Needs attention"**: check the device on its console. When it is right,
   open the plan and press **Mark as checked…**. Then make a new plan for that device; the

@@ -1,3 +1,4 @@
+import { StagedBadge } from '../features/systems/StagedBadge';
 import { Anchor, Badge, Button, Card, Group, List, SimpleGrid, Stack, Table, Text, ThemeIcon, Title } from '@mantine/core';
 import type { ReactNode } from 'react';
 import { IconAlertTriangle, IconCircleCheck, IconListCheck, IconPlus } from '@tabler/icons-react';
@@ -137,7 +138,8 @@ export function DashboardPage() {
                     <Anchor component={Link} to={`/projects/${p.id}`}>{p.name}</Anchor>
                     <Group gap="xs" wrap="nowrap">
                       <Text size="sm" c="dimmed">{mine.length} {mine.length === 1 ? 'device' : 'devices'}</Text>
-                      {mine.length > 0 && <Badge variant="light" color={done === mine.length ? 'teal' : 'gray'} radius="sm" tt="none">{done} of {mine.length} up to date</Badge>}
+                      {p.staged_at ? <StagedBadge project={p} />
+                        : mine.length > 0 && <Badge variant="light" color={done === mine.length ? 'teal' : 'gray'} radius="sm" tt="none">{done} of {mine.length} up to date</Badge>}
                     </Group>
                   </Group>
                 );
