@@ -168,6 +168,9 @@ def test_first_access_then_its_file_as_a_plan(monkeypatch):
                 == "bootstrapped"
             device = client.get(f"/api/devices/{did}").json()
             assert device["console_port"] == "COM7"
+            # A modem first accessed before v90 has no port saved: its first access gives it.
+            assert client.patch(f"/api/devices/{did}", json={"console_port": None}).json()[
+                "console_port"] is None
             version = client.post(f"/api/devices/{did}/configs/import", json={
                 "filename": "LTEModemz41.txt", "text": FILE}).json()
             pid = device["project_id"]
@@ -185,6 +188,10 @@ def test_first_access_then_its_file_as_a_plan(monkeypatch):
             assert "configuration line(s) sent over the console" in events
             assert "system name " + NAME in events
             assert sim.system_name == NAME and not sim.unsaved
+            assert client.get(f"/api/devices/{did}").json()["console_port"] == "COM7"
+            found = [a for a in client.get("/api/audit").json()
+                     if a["action"] == "device.console_port_set"]
+            assert found and found[0]["details"]["console_port"] == "COM7"
             assert PASSWORD not in repr(out) + client.get("/api/audit").text
     finally:
         keyring.set_keyring(previous)

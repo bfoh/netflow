@@ -1736,3 +1736,10 @@ second step, "Its configuration file (console)", after its first access. Driver
 - all 90 checkable lines were present afterwards.
 
 The simulated unit accepts any line (SYNTHETIC); how a real modem takes each line is Q-58.
+
+**Amendment (2026-11-26, v91): a modem first accessed before v90.** Bench: making the
+modem's plan answered "say which serial port of this PC it is on". The unit had its first
+access under v87, before the port was saved. When a console-only device has no port, UNDM now
+takes the port of its last successful first access, as audited then. It is the port the
+person chose; UNDM saves it on the device and audits it (`device.console_port_set`). Without
+one, the message says where to set it (Edit on the device page, Console port).

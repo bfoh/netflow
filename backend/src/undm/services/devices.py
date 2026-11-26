@@ -12,10 +12,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from undm.configgen.engine import GenerationResult, UnknownPlatformError, generate
-from undm.db.models import ConfigVersion, Device
+from undm.db.models import AuditEvent, ConfigVersion, Device
 from undm.domain.intent import DeviceIntent
 from undm.domain.operations import DeviceOperation, is_impacting
 from undm.drivers.base import (
@@ -79,6 +79,31 @@ def set_login_after_loading_needed(device: Device, needed: bool) -> None:
     device.observed_facts = facts
 
 
+def _first_access_port(device: Device) -> str | None:
+    """The serial port of the device's last successful first access, for devices set up
+    before UNDM saved the port (v90, D-116). It is the port the person chose then; it is
+    saved on the device and audited."""
+    session = object_session(device)
+    if session is None:
+        return None
+    for event in session.scalars(
+            select(AuditEvent).where(AuditEvent.target_id == device.id,
+                                     AuditEvent.action == "provisioning.console_bootstrap",
+                                     AuditEvent.outcome.in_(("bootstrapped",
+                                                             "already_configured")))
+            .order_by(AuditEvent.timestamp.desc())):
+        port = (event.details or {}).get("serial_port")
+        if isinstance(port, str) and _CONSOLE_PORT.fullmatch(port) and port != "SIMULATED":
+            audit.record(session, "undm", "device.console_port_set", "device", device.id,
+                         details={"console_port": port,
+                                  "from": f"first access on {event.timestamp:%Y-%m-%d %H:%M}"})
+            return port
+    return None
+
+
+_CONSOLE_PORT = re.compile(r"[A-Za-z0-9_./:\\-]{1,64}")
+
+
 def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
     if device.driver_id not in registry:
         raise ServiceError(f"Unknown driver {device.driver_id!r}")
@@ -93,10 +118,12 @@ def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
                 f"{device.name} is reached over its console cable only: use Console setup. "
                 "It has no network address for UNDM to test or read.")
         if not driver_cls.info.simulated and not device.console_port:
+            device.console_port = _first_access_port(device)
+        if not driver_cls.info.simulated and not device.console_port:
             raise ServiceError(
                 f"{device.name} is reached over its console cable: say which serial port of "
-                "this PC it is on. Its first access in Console setup saves it, or set it with "
-                "Edit on its device page.")
+                "this PC it is on (the one chosen in Console setup, e.g. COM3): Edit on its "
+                "device page, Console port. Its first access saves it from now on.")
     credentials: Credentials | None = None
     if device.credential_ref is not None:
         try:
