@@ -12,12 +12,34 @@ After **each device**, open **Bench log…** (system page, or the wizard's Repor
 read it, and send it. It replaces screenshots: it lists every step and what the devices
 printed, with addresses, serials, names and logins masked (D-090).
 
+## What is new in v94 (the screens moved; nothing about the devices changed)
+- **Sidebar:** Work (Home, Stage a system, Systems), Setup (Firmware, Settings), Advanced
+  (Devices, Plans, Console tool, Topology, Audit log). Old bookmarks still open.
+- **Home → Set up once** lists what is still to set (your name, logins, default logins with
+  the modem's, templates, PCI table, certificate, approved images), each with its button.
+  **Stage a system** goes back to the system you left, at its step.
+- **Settings** tabs: Logins, Templates, Certificate, Safety, Your name and appearance, About.
+- **Step 1:** the zone and system save by themselves ("Saved"); **Add all missing devices**.
+- **Step 2:** the only approved image that fits a real device is chosen once by itself.
+- **Step 3:** **Test all**. A 2930F (and the modem) waits for its console setup first. The
+  console setup opens **inside the wizard** (Open console setup) and **Back to Bench check**
+  returns.
+- **Step 4:** each card has **Check and run…**: the check changes nothing, then one
+  confirmation **Approve and run**. **Start all ready** starts every device that can start
+  (switch B waits until A is staged). Staging alone: when approving a firmware plan you made,
+  tick **I am staging alone** (the second-approver rule is off for that approval only and
+  back on at once, both in the audit log). A switch that is off can be turned on right there
+  ("Turn real-device changes on…"), with the same confirmation as in Settings.
+- **Step 5:** the Finish checklist also checks that "A second person approves firmware
+  plans" is back on (**Put it back on**).
+
 ## Before you start (once)
-1. **UNDM v60 installed.** Run `backend\.venv\Scripts\python.exe undm_update_v60.py` in the
-   `undm` folder, then restart the backend.
+1. **UNDM v94 installed** (or later). Run the latest `undm_update_vNN.py` in the `undm`
+   folder, then restart the backend.
 2. **Settings → Safety**:
    - turn **Real-device changes** and **Firmware changes** on;
-   - turn **A second person approves firmware plans** off if you stage alone.
+   - leave **A second person approves firmware plans** on: staging alone, tick **I am staging
+     alone** when you approve (v94).
 3. **Firmware** page: the approved images are there:
    - FortiGate 7.6.5
    - LIG1014A v00.01.01
@@ -25,15 +47,15 @@ printed, with addresses, serials, names and logins masked (D-090).
 4. **Stage a system → A new system**: give it a placeholder name. Then **Real devices on the
    bench**, and **Add it** for each of the four roles. Change an address on the device
    page if this bench differs.
-5. **Settings → For all systems** (since v78, once for every system, D-105):
+5. **Settings → Logins** and **Settings → Certificate** (since v78, once for every system, D-105):
    - **Logins for all systems**: approved; black box factory (user `admin`, tick **No
      password**); aruba factory / 2930F current; FortiGate base; the tunnel key.
    - **Default logins per device**: FortiGate: approved, after loading FortiGate base,
      tunnel key; Black Box: black box factory, after loading approved; 2930F: approved, login
-     it has now aruba factory.
+     it has now aruba factory; modem: the modem's approved login (user admin, v94).
    - **HTTPS certificate (Aruba 2930F)**: the team's answers.
-6. **Wizard step 1**: **Add it** gives each new device its default login; for devices added
-   before, press **Use the default logins**. A device that differs can get another login
+6. **Wizard step 1**: **Add all missing devices** (or **Add it** per role) gives each new
+   device its default login; for devices added before, press **Use the default logins**. A device that differs can get another login
    there.
 7. **Wizard step 2** (files and firmware):
    - **FortiGate**: tick "New unit", choose 7.6.5, the base file, the site file and the
@@ -46,10 +68,10 @@ printed, with addresses, serials, names and logins masked (D-090).
    192.168.1.50/24 and 192.0.2.50/24; close PuTTY; allow incoming UDP 69 on the PC.
 
 ## Files from the team's templates (since v82, D-111)
-Once, in **Settings → For all systems → Configuration templates**, import the team's
+Once, in **Settings → Templates → Configuration templates**, import the team's
 current files (one zone's file each; add the same file for a second zone to have it
 checked) and the FortiGate base file. Then, for each system:
-1. In wizard step 1, check the **Zone** (read from the system name) and press **Save zone**.
+1. In wizard step 1, check the **Zone** (read from the system name): it saves by itself ("Saved").
 2. In step 2, press **Generate the files for zone N**: the four devices get their files and
    they are chosen.
 3. If the team's own files for that zone are already on the devices, press **Compare with
@@ -98,8 +120,8 @@ If it stops:
 After the first access, with the console cable still on the same COM port:
 1. Step 1: set the zone and system (B007) of the system; step 2: **Generate the files**
    gives the modem its configuration file (its password comes from the modem's login).
-2. Step 4, the modem's card: **Make the plan** (it logs in over the console and reads the
-   configuration; nothing changes), **Approve all steps**, **Run**. The lines go one at a
+2. Step 4, the modem's card: **Check and run…** (it logs in over the console and reads the
+   configuration; nothing changes), then **Approve and run**. The lines go one at a
    time; about 1–2 minutes.
 3. Success: "N line(s) accepted", "saved ('admin save': Completed.)", then "logged in again
    with its login; system name …; nothing unsaved". The card shows **Staged**.
@@ -113,7 +135,7 @@ After the first access, with the console cable still on the same COM port:
 - A modem that already had its first access is left alone ("already done" or "refused").
 
 ## The modem's file and the BBU's SCF (since v88, D-114)
-Once, in **Settings → For all systems**:
+Once, in **Settings → Templates**:
 1. **Configuration templates → LTE modem → Import…**: one system's modem file. Add another
    system's and zone's file as the check; it should say "byte for byte".
 2. **Flexi BBU site configuration file (SCF) → Import…**: one system's SCF, with another
@@ -123,7 +145,7 @@ Once, in **Settings → For all systems**:
 
 For each system:
 1. In wizard step 1, check the **System** (read from the name, e.g. B007) next to the zone.
-   The PCIs of its cells are shown, and **Save**.
+   The PCIs of its cells are shown; it saves by itself.
 2. Choose the modem's login (step 1).
 3. In step 2, press **Download the files for zone N · B…**. The zip holds every team file
    for the system, with the modem's file (its password from the modem's login) and the
@@ -252,7 +274,7 @@ Done by hand in its portal; UNDM checks, hands out the files and records:
 1. **Before.**
    - Upload the software package once on the Firmware page (platform "Nokia Flexi BBU
      (SBTS)") with its SHA-256 from `certutil -hashfile <file> SHA256`, then approve it.
-   - Import the SCF template and the PCI table (Settings → For all systems).
+   - Import the SCF template and the PCI table (Settings → Templates).
 2. **Step 1.** Add the BBU (no login). **Step 2.** Generate (it gets its SCF) and choose the
    software package.
 3. **Cabling.** The LMP cable goes to the PC (or the small switch). Add 192.168.255.126/24 to

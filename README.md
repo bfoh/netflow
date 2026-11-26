@@ -10,7 +10,13 @@ backup, verification and recovery; design topologies; manage firmware images and
 > changes are off by default; real-device firmware upgrades are not implemented.
 
 ## What you can do today
-- Projects and network elements (simulated, or real lab devices over SSH).
+- **Stage a system**: a five-step wizard (devices, files and firmware, bench check, run,
+  report) that takes a system's devices from factory default to their approved firmware and
+  files, one approved plan per device ("Check and run", "Start all ready").
+- Sidebar: **Work** (Home, Stage a system, Systems), **Setup** (Firmware, Settings) and
+  **Advanced** (Devices of all systems, Plans, Console tool, Topology, Audit log). Light or
+  dark (the moon at the top right); designed for WCAG 2.2 AA.
+- Systems and devices (simulated, or real lab devices over SSH or their console).
 - Vendor-neutral intent (hostname, VLANs, L3 interfaces, static routes) → generated
   configuration for ArubaOS-Switch (e.g. 2930F), AOS-CX, FortiOS, IOS-XE; or
   **import a configuration file**.
@@ -128,7 +134,7 @@ TFTP program may be running. The TFTP server only runs during a job that needs i
 Your team's order, each step an approved job: firmware 7.2.7 → 7.6.5 (Firmware page), then
 the **base** file (restored by TFTP; the unit restarts), then the **site** file (sent
 statement by statement), with a revision named after each file. Import both files on the
-device (Configurations → Import configuration file); UNDM tells you what each is. In a new
+device (its Files tab → Import configuration file); UNDM tells you what each is. In a new
 deployment plan, choosing the base file switches to Replace and the site file to Merge; for
 the site file choose the credential that holds the approved tunnel key under **Value for
 psksecret**. The first login (forced password change) is still done in the browser. Not yet
@@ -136,7 +142,7 @@ run on a FortiGate: do the first run on a spare unit with
 `docs/vendor-support/fortigate-101f-bench.md`.
 
 ## Aruba 2930F complete configuration files (experimental)
-Import the team's file on the switch (Configurations tab): UNDM shows the address it will
+Import the team's file on the switch (its Files tab): UNDM shows the address it will
 have after loading, who may manage it, and points to check. A plan with that file runs in
 Replace mode: UNDM first creates the HTTPS certificate your files require (enter the subject
 once under Project settings → HTTPS certificate), then the switch fetches the file by TFTP
@@ -148,15 +154,16 @@ switch: `docs/vendor-support/aruba-2930f-staging.md`.
 
 ## Black Box configuration files
 Add the switch with model **LIG1014A** or **LE2700A** (simulated for now) and import the
-team's file (CLI text for the LIG1014A, XML for the LE2700A) on its Configurations tab: UNDM shows where the switch answers after loading, its access rules,
+team's file (CLI text for the LIG1014A, XML for the LE2700A) on its Files tab: UNDM shows where the switch answers after loading, its access rules,
 and a warning about the base64 password. Loading it onto a real switch is not built yet —
 see `docs/vendor-support/blackbox-staging.md`.
 
-## Console bootstrap (Aruba 2930F and other ArubaOS-Switch models)
+## Console setup (Aruba 2930F and other ArubaOS-Switch models)
 New units ask to set the manager credentials on first login: attach the approved login to the
-device first and the bootstrap sets it. For a factory-default switch with no management address: **Provisioning** → choose the
-switch → enter the management VLAN, port and address → **Preview commands** → choose the
-console cable's COM port → **Run console bootstrap**. Simulated devices use the
+device first and the console setup sets it. For a factory-default switch with no management address: in
+Stage a system, step 3, **Open console setup** (or Advanced → **Console tool**) → enter the
+management VLAN, port and address → **Preview commands** → choose the console cable's COM port
+→ **Run console setup…**. Simulated devices use the
 `SIMULATED` console port, so you can try the workflow without hardware. Real switches
 need Real-device changes on (Settings → Safety); PuTTY must be closed while UNDM uses the COM
 port. First real run: follow `docs/vendor-support/aruba-2930f-console-bootstrap.md`

@@ -1,14 +1,12 @@
 # Development Status
 
-_Last updated: 2026-11-24 — Plan A (UI/UX) started: plain words, a work-ordered navigation and a
-Home page (D-083); safety switches changeable in Settings → Safety, audited (D-082). Before: 2026-11-23 — first fully automatic 2930F file load on the bench; restart banner and
-configuration after deployment; Stop for running deployments, runs continue on the server;
-firmware plans can also write the secondary flash; first 2930F console
-bootstrap and firmware downgrade on hardware (2026-11-19); FortiGate 101F staging procedures (firmware, base restore,
-site script with the tunnel key from the credential store, revisions; experimental, bench
-run pending); startup database check; on top of the TFTP server, 2930F firmware, console
-bootstrap, the 2930F platform, configuration import, SSH drivers, credentials, firmware
-manager, topology._
+_Last updated: 2026-11-26 — v94, UI/UX pass 2: one design system checked for WCAG 2.2 AA
+(D-119), navigation in three groups with one place for every address (D-120), Stage a system
+with Check and run, Start all ready, staging alone and safety switches in place (D-121),
+device/system/plan pages with one main action (D-122), one word for each thing and a setup
+checklist on Home (D-123), the modem's default login (D-124). Before: 2026-11-24 — Plan A
+(UI/UX) started: plain words, a work-ordered navigation and a Home page (D-083); safety
+switches changeable in Settings → Safety, audited (D-082)._
 
 ## What works (implemented and tested)
 | Area | Details |
@@ -76,7 +74,10 @@ manager, topology._
 | Messages | Four kinds only (problem, caution, status, help) from one component; explanations as quiet hints; empty states; safety switch state shown next to actions on real devices instead of the header; guarded by a test (D-089) A real device without a login says so in plain words, with where to choose one (v62). |
 | Needs attention, deleting | A plan that needs attention stops waiting once a later real plan succeeded on its devices or a person records a check (note, audited); Home shows only those still waiting. Delete devices (row or several), systems and plans (a staging step takes its whole staging plan; never while running); audited (D-088) |
 | System packages | Export a system to one `.undm` file (settings, devices, login names, files, topology, optionally approved firmware; no passwords; checksummed manifest) and import it on another copy: checked completely before anything is created; logins arrive empty, images unapproved (D-087) |
-| Plain words and navigation | One glossary (device, system, plan, login, file); states, drivers, platforms, facts, capabilities shown in words; internals under "Technical details"; sidebar Home · Systems · Devices · Files · Firmware · Console setup · Plans · Advanced (Topology, Audit log) · Settings; Home page with what is waiting for the user and each system's progress (D-083) |
+| Plain words and navigation | One glossary (D-123, `services/labels.ts`); sidebar **Work** (Home, Stage a system, Systems) · **Setup** (Firmware, Settings) · **Advanced** (Devices, Plans, Console tool, Topology, Audit log); addresses `/systems`, `/plans`, `/plans/new`, `/plans/staging/:id`, `/console`, old ones redirect; breadcrumbs; Page not found; Settings tabs Logins · Templates · Certificate · Safety · Your name and appearance · About (D-120); Home with **Set up once** and **Continue staging** (D-123) |
+| Design system and accessibility (v94) | Theme tokens for light and dark (contrast proven by a test), headings by level, toned tags, status with icon and words, dialogs that start on Cancel and give focus back, page titles, focus to the title on navigation, skip link; axe (WCAG 2.0–2.2 A/AA) on every page and the Start all dialog in light and dark; no sideways scroll at 1366 and 390 px; a conventions test keeps hand-picked colours, sizes, unnamed tables, written-out addresses and old words at 0 (D-119, D-123) |
+| Stage a system, pass 2 (v94) | Zone and system saved by themselves; Add all missing devices; one login picker; the only fitting approved image chosen once; Test all; console setup inside the wizard; **Check and run** (check, then one Approve and run); **Start all ready** (switch B after A); **I am staging alone** (second-approver rule off for one approval, on again at once, audited; Finish checklist checks it); safety switches turned on in place with the Settings dialog (D-121). Simulated devices and tests only: **not yet used on the bench** |
+| Pages, pass 2 (v94) | Device page: Test connection, Edit, the device menu (now with Edit and Delete), one Read information, login changed in place; Edit device with Advanced settings; system page with Stage this system, Add device and More; Plans list with filters and New plan; plan page badges and More; Firmware upload from the device model (`?model=`); Audit log in words with names and links, every backend action labelled (test against the backend source); Topology keyboard edit, dashed problem links (D-122) |
 | Console bootstrap (provisioning) | ArubaOS-Switch over a serial console from the PC running UNDM: new units' mandatory first-login credentials set to the device's attached login (D-043); per-device settings (VLAN, port, address), command preview, factory-default check, stop on first error, read-back before `write memory`, idempotent re-run, transcript (raw + sanitized). Experimental: **one complete run on hardware** (spare 2930F JL260A, WC.16.11.0001, new unit, 2026-11-19: credentials set, VLAN/address verified and saved); re-run and network check on that unit pending |
 | Sanitized diagnostics | Shareable report of last retrieved device output with IPs, MACs, serials, names and secrets masked |
 | Migrations | Three Alembic revisions; batch mode; tested on SQLite with existing data and on PostgreSQL |
@@ -98,16 +99,15 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-26, v93)
+## Test results (2026-11-26, v94)
 | Suite | Result |
 |---|---|
-| Backend pytest | 603 passed, 2 skipped (PostgreSQL suite skips without DB URL; paramiko 3.5.1) |
-| Backend PostgreSQL integration | 2 passed; new migration 4dbe2fd28d85 down/up OK |
-| SQLite migration of previous-version data | upgrade → downgrade → upgrade OK, data intact |
+| Backend pytest | 606 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend PostgreSQL integration | 2 passed |
 | ruff / mypy --strict | clean / clean (100 files) |
-| Frontend Vitest | 100 passed |
+| Frontend Vitest | 141 passed (theme contrast, conventions at 0, audit words vs backend, solo approval, start order, wizard, pages) |
 | tsc / oxlint / vite build | clean / clean / success |
-| Playwright E2E | 10 passed (the Flexi BBU's guided steps on a simulated unit; first access of a simulated Nokia modem from the wizard, then its file by a plan; a file generated from a template for the system's zone, downloaded byte for byte; wizard now ends with Finish staging; a login for all systems and its default reach a new system; device menu, check information, test and log on a simulated switch; acceptance flow; import + topology + firmware; console bootstrap on the simulated console; Stage a system wizard on a simulated Black Box; export and import of a system) |
+| Playwright | 13 passed: 10 workflows (1280 px), axe on every page light and dark plus the Start all dialog (1366 px), no sideways scroll at 1366 and 390 px |
 
 ## Known issues and limitations
 - Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole
@@ -131,6 +131,10 @@ secondary flash done once on a new unit (2026-11-19/23); file load: **succeeded 
 FortiGate 101F staging.
 
 ## Next milestone
+**v94 on the bench** (2026-11-27): the reworked screens on real devices, with the checklist's
+"What is new in v94" (`vendor-support/staging-wizard-bench.md`): Test all, Check and run,
+console setup inside the wizard, staging alone, Start all ready. Earlier plan below.
+
 **Plan A — UI/UX for colleagues** (product owner, 2026-11-24; plan B, the portable Windows
 app, is deferred). Done: A0 baseline screenshots, A1a words, A1b safety switches, A2
 navigation, A1c feedback and confirmations (D-084), A3 the **Stage a system** wizard on a
