@@ -21,7 +21,7 @@ test('console bootstrap on the simulated console: run, verify, re-run is a no-op
   // D-122: console setup is in the device's menu (⋯), with the rest of what can be done to it.
   await page.getByRole('button', { name: `Actions for ${name}` }).click();
   await page.getByRole('menuitem', { name: 'Console setup' }).click();
-  await expect(page.getByRole('heading', { name: 'Console setup' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Console tool' })).toBeVisible();
 
   await page.getByLabel('Untagged port').fill('2');
   await page.getByLabel('Address / prefix').fill('192.168.1.2/24');

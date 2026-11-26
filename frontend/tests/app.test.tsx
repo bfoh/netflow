@@ -413,16 +413,36 @@ describe('audit trail', () => {
         target_type: 'device', target_id: 'c4e8e81f-0000', outcome: 'failed', details: { message: 'Authentication failed' } },
     ] });
     renderAt('/audit');
-    await userEvent.type(await screen.findByLabelText('Filter audit events'), 'first_login');
-    expect(screen.queryByText('device.check_reachability')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'All details' }));
+    // D-122: in words; the codes are only under Technical details.
+    expect(await screen.findByRole('cell', { name: 'Console setup run' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Connection tested' })).toBeInTheDocument();
+    expect(screen.queryByText('provisioning.console_bootstrap')).not.toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search' }), 'first_login');
+    expect(screen.queryByRole('cell', { name: 'Connection tested' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Details of Console setup run/ }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('First login credentials set')).toBeInTheDocument();
     expect(within(dialog).getByText('approved login')).toBeInTheDocument();
+    expect(within(dialog).getByText('no')).toBeInTheDocument();  // false, in words
   });
 });
 
 describe('firmware repository', () => {
+  it('the upload starts from the device model: the platform and compatible model follow (D-122)', async () => {
+    mockApi({ '/firmware/images': [],
+      '/device-models': [{ model_id: 'aruba-2930f', manufacturer: 'Aruba', product_family: '', model: '2930F', category: 'switch',
+        os_family: 'ArubaOS-Switch', drivers: ['mock.aruba.aos_switch', 'ssh.aruba.aos_switch'], support: '', notes: '' }],
+      '/drivers': [
+        { driver_id: 'mock.aruba.aos_switch', platform: 'aos_switch', simulated: true, capabilities: [], description: '', vendor: 'Aruba', os_family: '', maturity: 'simulation', transport: '', notes: [] },
+        { driver_id: 'ssh.aruba.aos_switch', platform: 'aos_switch', simulated: false, capabilities: [], description: '', vendor: 'Aruba', os_family: '', maturity: 'experimental', transport: '', notes: [] }] });
+    // From Stage a system: "no approved image for this model" links here with ?model=.
+    renderAt('/firmware?model=2930F');
+    const dialog = await screen.findByRole('dialog', { name: 'Upload a firmware image' });
+    expect(await within(dialog).findByDisplayValue('Aruba 2930F')).toBeInTheDocument();
+    expect(within(dialog).getByRole('textbox', { name: 'Platform' })).toHaveValue('ArubaOS-Switch (e.g. 2930F)');
+    expect(within(dialog).getByRole('button', { name: 'Upload' })).toHaveAccessibleDescription(/Still needed: the image file, the version\./);
+  });
+
   it('an unverified image can be verified with the vendor checksum after upload', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     const img = { id: 'fg', vendor: 'Fortinet', platform: 'fortios', version: '7.6.5', filename: 'FGT_101F.out',
@@ -431,7 +451,7 @@ describe('firmware repository', () => {
       approved_by: null, approved_at: null, created_by: 'tester', created_at: '2026-11-24T08:00:00Z' };
     const calls = mockApi({ '/firmware/images': [img], '/firmware/images/fg/checksum': { ...img, integrity_verified: true } });
     renderAt('/firmware');
-    expect(await screen.findByLabelText(/Vendor checksum \(SHA-256 or SHA-512\)/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Upload image…' })).toBeInTheDocument();
     await userEvent.click(await screen.findByRole('button', { name: 'Add vendor checksum…' }));
     const dialog = await screen.findByRole('dialog');
     await userEvent.type(within(dialog).getByLabelText('Vendor checksum'), 'ab'.repeat(64));

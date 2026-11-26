@@ -1975,6 +1975,22 @@ mode, and Cancel and Delete sat next to Approve and Run.
 - **Plan page.** State and options as badges ("Backup slot too", "Older approved version
   allowed"); no raw apply mode; Approve or Run as the main action; **Cancel plan…** and
   **Delete…** under More.
+- **Firmware.** **Upload image…** opens a dialog that starts from the device model; the
+  platform follows from the model's real driver and the model is the first compatible one (a
+  model UNDM cannot place still lets the person choose the platform). `?model=` (from Stage a
+  system's "no approved image") opens it for that model. The checksum's explanation is under
+  More; a missing field is named next to Upload.
+- **Console tool** (Advanced): the same console forms as Stage a system; a device staged with
+  the wizard links to its console work there.
+- **Audit log.** Columns When, Who, What, On, Result. Every action the backend records has
+  words (`AUDIT_ACTIONS`; a test reads the backend's source and fails on a missing one).
+  Devices, systems and plans are named and linked; details are in words (yes/no, lists), with
+  the action code and the recorded JSON under "Technical details". Filters: search, What,
+  Result.
+- **Topology.** Line colours from the theme; a link with a problem is also dashed, and the
+  legend says so; issues show an icon and words; the node's environment uses the shared badge;
+  every link in the list has an **Edit** button, so links can be edited from the keyboard; the
+  side panel goes below the canvas under 1408 px.
 
 ### D-124 The modem has a default login (2026-11-26)
 

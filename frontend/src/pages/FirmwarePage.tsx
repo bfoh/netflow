@@ -4,7 +4,7 @@ import {
 } from '@mantine/core';
 import { IconAlertTriangle, IconCheck, IconShieldCheck, IconUpload, IconX } from '@tabler/icons-react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { Hint } from '../components/Hint';
 import { Notice } from '../components/Notice';
@@ -12,9 +12,10 @@ import { PageHeader, QueryState } from '../components/Page';
 import { SafetyHint } from '../components/SafetyHint';
 import { DialogError } from '../components/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
-import { useAction, useDeviceModels, useFirmwareImages, useProjectDevices, useProjects } from '../hooks/queries';
+import { useAction, useDeviceModels, useDrivers, useFirmwareImages, useProjectDevices, useProjects } from '../hooks/queries';
 import { api } from '../services/api';
-import type { Compatibility, FirmwareImage } from '../types/api';
+import type { Compatibility, DeviceModel, Driver, FirmwareImage } from '../types/api';
+import { ReasonButton } from '../components/ReasonButton';
 import { driverLabel, platformLabel, stateLabel } from '../services/labels';
 import { paths } from '../paths';
 
@@ -27,12 +28,30 @@ const VENDOR_OF: Record<string, string> = { aos_switch: 'Aruba', aoscx: 'Aruba',
 const OS_OF: Record<string, string> = { aos_switch: 'ArubaOS-Switch', aoscx: 'AOS-CX', fortios: 'FortiOS', iosxe: 'IOS-XE', blackbox_lig1014a: 'Black Box managed switch', flexi_sbts: 'SBTS (Flexi Multiradio 10)' };
 const fmtSize = (b: number) => (b > 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)} MiB` : `${(b / 1024).toFixed(1)} KiB`);
 
-function UploadForm() {
+/** The platform of a catalog model: the one its real driver uses (D-122). */
+function platformOfModel(model: DeviceModel | undefined, drivers: Driver[] | undefined): string | null {
+  if (!model || !drivers) return null;
+  const platforms = model.drivers.map((id) => drivers.find((d) => d.driver_id === id)).filter((d) => d && !d.simulated).map((d) => d!.platform);
+  const known = platforms.filter((p) => PLATFORMS.some((x) => x.value === p));
+  return known[0] ?? null;
+}
+
+/** Upload an image for a device model (D-122): the platform and the first compatible model
+ *  follow from the model; the platform can still be chosen for a model UNDM cannot place. */
+function UploadForm({ initialModel, onDone }: { initialModel: string | null; onDone: () => void }) {
   const models = useDeviceModels();
+  const drivers = useDrivers();
+  const real = (models.data ?? []).filter((m) => platformOfModel(m, drivers.data));
+  const [modelId, setModelId] = useState<string | null>(null);
+  const chosen = (models.data ?? []).find((m) => m.model_id === modelId)
+    ?? (modelId === null && initialModel ? (models.data ?? []).find((m) => m.model === initialModel) : undefined);
+  const derived = platformOfModel(chosen, drivers.data);
+  const [platformChoice, setPlatform] = useState<string | null>(null);
+  const platform = derived ?? platformChoice;
   const [file, setFile] = useState<File | null>(null);
-  const [platform, setPlatform] = useState<string | null>('aos_switch');
   const [version, setVersion] = useState('');
-  const [compatible, setCompatible] = useState<string[]>([]);
+  const [extra, setCompatible] = useState<string[] | null>(null);
+  const compatible = extra ?? (chosen ? [chosen.model] : []);
   const [sha, setSha] = useState('');
   const [minFrom, setMinFrom] = useState('');
   const [notes, setNotes] = useState('');
@@ -47,33 +66,41 @@ function UploadForm() {
     if (minFrom.trim()) form.append('min_from_version', minFrom.trim());
     form.append('release_notes', notes);
     return api.uploadFirmware(form);
-  }, (img) => `Uploaded ${img.filename}${img.integrity_verified ? ' (checksum verified)' : ''}`);
-  const missing = [!file && 'the image file', !version.trim() && 'the version',
+  }, (img) => `Uploaded ${img.filename}${img.integrity_verified ? ' (checksum verified)' : ''}`, { errorInDialog: true });
+  const missing = [!platform && 'the device model', !file && 'the image file', !version.trim() && 'the version',
     compatible.length === 0 && 'at least one compatible model (type it, then press Enter)'].filter(Boolean);
   const suggestions = (models.data ?? []).filter((m) => m.os_family === OS_OF[platform ?? '']).map((m) => m.model);
 
   return (
-    <Card withBorder>
       <Stack>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <Select label="Device model" placeholder="The model this image is for" searchable data-autofocus
+            data={real.map((m) => ({ value: m.model_id, label: `${m.manufacturer} ${m.model}` }))}
+            value={chosen?.model_id ?? null} onChange={(v) => { setModelId(v); setCompatible(null); }} />
+          {chosen && derived
+            ? <TextInput label="Platform" value={PLATFORMS.find((x) => x.value === derived)?.label ?? derived} readOnly
+              description="Follows from the model." />
+            : <Select label="Platform" placeholder="Choose the platform" data={PLATFORMS} value={platformChoice} onChange={setPlatform} />}
           <FileInput label="Firmware image file" placeholder="Choose the vendor image" value={file} onChange={setFile} required />
-          <Select label="Platform" data={PLATFORMS} value={platform} onChange={setPlatform} allowDeselect={false} />
           <TextInput label="Version" placeholder="as reported by the device, e.g. WC.16.11.0003" value={version} onChange={(e) => setVersion(e.currentTarget.value)} required />
           <TagsInput label="Compatible models" placeholder="choose from the list, or type and press Enter" data={suggestions} value={compatible} onChange={setCompatible} />
-          <TextInput label="Vendor checksum (SHA-256 or SHA-512)" description="Copy it from the vendor's download page (Fortinet: the SHA-512 under 'Checksum'). MD5 is not accepted. Required for approval; it can also be added after the upload." value={sha} onChange={(e) => setSha(e.currentTarget.value)} />
+          <TextInput label="Vendor checksum (SHA-256 or SHA-512)" description="From the vendor's download page; needed to approve it." value={sha} onChange={(e) => setSha(e.currentTarget.value)} />
           <TextInput label="Minimum version to upgrade from (optional)" description="Upgrade-path rule from the release notes" value={minFrom} onChange={(e) => setMinFrom(e.currentTarget.value)} />
         </SimpleGrid>
         <Textarea label="Release notes / reference" autosize minRows={2} value={notes} onChange={(e) => setNotes(e.currentTarget.value)} />
-        <Group>
-          <Button leftSection={<IconUpload size={16} />} loading={upload.isPending} disabled={!file || !version.trim() || compatible.length === 0}
-            onClick={() => upload.mutate(undefined, { onSuccess: () => { setFile(null); setVersion(''); setSha(''); setMinFrom(''); setNotes(''); } })}>
-            Upload to repository
-          </Button>
-          <Text size="xs" c="dimmed">{missing.length ? `Still needed: ${missing.join(', ')}.`
-            : "Only upload images obtained from the vendor. The file is stored in the backend's data folder."}</Text>
+        <Hint more={<>Fortinet publishes the SHA-512 under “Checksum” next to the download; MD5 is not accepted. Without it the
+          image can be uploaded, and the checksum added later (“Add vendor checksum…”). Only upload images obtained from the
+          vendor: the file is kept in UNDM's data folder.</>}>The checksum proves the file is the vendor's, undamaged.</Hint>
+        <DialogError error={upload.error} />
+        <Group justify="flex-end" align="flex-start">
+          <Button variant="default" onClick={onDone}>Cancel</Button>
+          <ReasonButton leftSection={<IconUpload size={16} />} loading={upload.isPending} disabled={missing.length > 0}
+            reason={missing.length ? `Still needed: ${missing.join(', ')}.` : null}
+            onClick={() => upload.mutate(undefined, { onSuccess: onDone })}>
+            Upload
+          </ReasonButton>
         </Group>
       </Stack>
-    </Card>
   );
 }
 
@@ -258,9 +285,18 @@ function Planner({ images }: { images: FirmwareImage[] }) {
 
 export function FirmwarePage() {
   const images = useFirmwareImages();
+  const [params, setParams] = useSearchParams();
+  // `?model=` (from Stage a system: "no approved image for this model") opens the upload for it.
+  const model = params.get('model');
+  const [uploading, setUploading] = useState(!!model);
+  const close = () => { setUploading(false); if (model) setParams({}, { replace: true }); };
   return (
     <>
-      <PageHeader title="Firmware" description="Upload firmware images, approve them, then make an upgrade plan for the devices that need them." />
+      <PageHeader title="Firmware" description="Upload firmware images, approve them, then make an upgrade plan for the devices that need them."
+        primary={<Button leftSection={<IconUpload size={16} />} onClick={() => setUploading(true)}>Upload image…</Button>} />
+      <Modal opened={uploading} onClose={close} title="Upload a firmware image" size="lg">
+        {uploading && <UploadForm initialModel={model} onDone={close} />}
+      </Modal>
       <Hint mb="md" more={<>Real devices with an upgrade procedure: Aruba 2930F, FortiGate 101F and Black Box LIG1014A. Each has
         been run on bench units and stays marked experimental. The device fetches the image from this PC and restarts into
         it, so use a spare unit on an isolated bench. Other real models are shown as not compatible. A dry run only reads the
@@ -273,7 +309,7 @@ export function FirmwarePage() {
           <Tabs.Tab value="repo">Images ({images.data?.length ?? 0})</Tabs.Tab>
           <Tabs.Tab value="plan">Make an upgrade plan</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel value="repo"><Stack><UploadForm /><ImageTable images={images.data ?? []} /></Stack></Tabs.Panel>
+        <Tabs.Panel value="repo"><ImageTable images={images.data ?? []} /></Tabs.Panel>
         <Tabs.Panel value="plan"><Planner images={images.data ?? []} /></Tabs.Panel>
       </Tabs>
       <Text size="xs" c="dimmed" mt="md">Upgrade plans and their history are on the Plans page.</Text>

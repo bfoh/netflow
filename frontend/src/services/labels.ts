@@ -181,20 +181,47 @@ export function capabilityLabel(cap: string): string {
 }
 
 /** An audit action such as "deployment.execute.start" as words. */
+/** Every action the backend writes to the audit log, in words (D-123). A test checks the
+ *  backend's source, so a new action without words here fails. */
+export const AUDIT_ACTIONS: Record<string, string> = {
+  'config.generate': 'File generated from its settings', 'config.import': 'File imported',
+  'credential.secret.set': 'Login password stored', 'credential_ref.create': 'Login added', 'credential_ref.delete': 'Login deleted',
+  'credential_ref.share_all': 'Logins of the systems brought into Settings',
+  'deployment.approve': 'Plan approved', 'deployment.cancel': 'Plan cancelled', 'deployment.checked': 'Plan marked as checked',
+  'deployment.create': 'Plan made', 'deployment.delete': 'Plan deleted', 'deployment.execute': 'Plan run',
+  'deployment.execute.error': 'Plan run ended with an error', 'deployment.execute.start': 'Plan started',
+  'deployment.interrupted': 'Plan interrupted (UNDM stopped)', 'deployment.stop': 'Plan stopped',
+  'deployment.stop_requested': 'Stop requested',
+  'device.address_changed': 'Device address changed', 'device.console_port_set': 'Console port saved',
+  'device.create': 'Device added', 'device.credential_changed': 'Device login changed', 'device.delete': 'Device deleted',
+  'device.diagnostics.export': 'Diagnostics exported', 'device.intent.set': 'Intended settings saved',
+  'device.license_stored': 'License file stored', 'device.management_port_off': 'Management port switched off (not saved)',
+  'device.management_port_on': 'Management port on again', 'device.password_set': 'Device password set',
+  'device.rename_skipped': 'Device not renamed (name in use)', 'device.renamed': 'Device renamed',
+  'device.session_opened': 'SSH or console window opened', 'device.update': 'Device edited',
+  'device.get_facts': 'Information read', 'device.check_reachability': 'Connection tested',
+  'device.get_running_configuration': 'Configuration read', 'device.backup_configuration': 'Backed up',
+  'device.get_firmware_information': 'Firmware read',
+  'firmware.approve': 'Firmware image approved', 'firmware.delete': 'Firmware image deleted', 'firmware.retire': 'Firmware image retired',
+  'firmware.upload': 'Firmware image uploaded', 'firmware.verify': 'Firmware checksum checked',
+  'firmware_deployment.create': 'Firmware plan made',
+  'guided.step_done': 'Step recorded (by hand)', 'guided.step_undone': 'Step undone (by hand)',
+  'policy.change': 'Safety switch changed',
+  'project.create': 'System created', 'project.delete': 'System deleted', 'project.seed': 'Example system added',
+  'project.update': 'System edited',
+  'provisioning.console_bootstrap': 'Console setup run', 'provisioning.console_identify': 'Name read over the console',
+  'settings.certificate': 'Certificate answers saved', 'settings.defaults': 'Default logins saved',
+  'settings.pci_mapping': 'PCI table imported',
+  'staging.approve': 'Staging plan approved', 'staging.create': 'Staging plan made',
+  'system.backups_export': 'Backups downloaded', 'system.bench_log': 'Bench log made', 'system.export': 'System exported',
+  'system.import': 'System imported', 'system.reopened': 'Staging reopened', 'system.staged': 'Staging finished',
+  'template.delete': 'Template deleted', 'template.files_export': 'Files downloaded from the templates',
+  'template.import': 'Template imported',
+  'topology.link.create': 'Link added', 'topology.link.delete': 'Link deleted', 'topology.link.update': 'Link edited',
+};
+
 export function auditActionLabel(action: string): string {
-  const words: Record<string, string> = {
-    'deployment.create': 'Plan created', 'deployment.approve': 'Plan approved', 'deployment.execute': 'Plan run',
-    'deployment.execute.start': 'Plan started', 'deployment.cancel': 'Plan cancelled', 'deployment.stop': 'Plan stopped',
-    'deployment.stop_requested': 'Stop requested', 'device.password_set': 'Device password set',
-    'device.credential_changed': 'Device login changed', 'device.address_changed': 'Device address changed',
-    'firmware.upload': 'Firmware image uploaded', 'firmware.approve': 'Firmware image approved',
-    'firmware.verify': 'Firmware checksum checked', 'firmware.retire': 'Firmware image retired',
-    'staging.create': 'Staging plan created', 'staging.approve': 'Staging plan approved',
-    'policy.change': 'Safety switch changed', 'device.create': 'Device added', 'device.update': 'Device edited',
-    'device.delete': 'Device deleted', 'project.create': 'System created', 'project.update': 'System edited',
-    'project.delete': 'System deleted',
-  };
-  return words[action] ?? humanize(action);
+  return AUDIT_ACTIONS[action] ?? humanize(action);
 }
 
 const STAGES: Record<string, string> = {

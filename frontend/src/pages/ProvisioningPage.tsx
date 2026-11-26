@@ -1,5 +1,5 @@
-import { Card, Group, Select, Stack, Text } from '@mantine/core';
-import { useSearchParams } from 'react-router';
+import { Anchor, Card, Group, Select, Stack, Text } from '@mantine/core';
+import { Link, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge } from '../components/Badges';
 import { PageHeader, QueryState } from '../components/Page';
@@ -7,6 +7,8 @@ import { CONSOLE_PLATFORMS } from '../features/provisioning/consolePlatforms';
 import { ConsoleSetup } from '../features/provisioning/ConsoleSetup';
 import { useAllDevices, useDrivers, useProjects } from '../hooks/queries';
 import { driverLabel, stateLabel } from '../services/labels';
+import { roleOf } from '../features/stage/roles';
+import { paths } from '../paths';
 
 export function ProvisioningPage() {
   const [params, setParams] = useSearchParams();
@@ -21,7 +23,7 @@ export function ProvisioningPage() {
 
   return (
     <>
-      <PageHeader title="Console setup"
+      <PageHeader title="Console tool"
         description="Through the console cable: give a new Aruba switch its first address and login, or a Nokia modem from the factory its first access." />
       <QueryState isLoading={devices.isLoading || drivers.isLoading} error={devices.error ?? drivers.error} />
       <Stack>
@@ -31,6 +33,11 @@ export function ProvisioningPage() {
             data={eligible.map((d) => ({ value: d.id, label: `${d.name} — ${d.manufacturer} ${d.model} (${names.get(d.project_id) ?? ''})` }))}
             value={device?.id ?? null} onChange={(v) => setParams(v ? { device: v } : {})} />
           {device && <Group gap="xs" mt="xs"><EnvironmentBadge env={device.environment} /><Text size="sm">{driverLabel(device.driver_id, drivers.data)} · setup: {stateLabel(device.provisioning_status).toLowerCase()}</Text></Group>}
+          {device && roleOf(device) && (
+            <Text size="sm" mt={4}>{device.name} is staged with Stage a system:{' '}
+              <Anchor component={Link} to={paths.stage(device.project_id, 2, { console: device.id })} size="sm">do its console work there</Anchor>,
+              and come back to the step you were on.</Text>
+          )}
           <Text size="xs" c="dimmed" mt="xs">
             Only devices that need the console are listed: Aruba 2930F (ArubaOS-Switch), new or preconfigured (it can
             be erased first), and the Nokia 7705 SAR-Hmc modem (its first access). The other devices need none: a new FortiGate answers at its factory address, and a First login

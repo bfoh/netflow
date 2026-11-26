@@ -93,5 +93,5 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
 
   // 14. audit record
   await openFromNav(page, 'Audit log');
-  await expect(page.getByText('deployment.execute', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Plan run', exact: true }).first()).toBeVisible();  // D-122: in words
 });

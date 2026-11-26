@@ -1,6 +1,6 @@
 import '@xyflow/react/dist/style.css';
 
-import { Badge, Button, Card, Grid, Group, Select, Stack, Table, Text, Title, useComputedColorScheme } from '@mantine/core';
+import { Button, Card, Grid, Group, Select, Stack, Table, Text, Title, useComputedColorScheme } from '@mantine/core';
 import { IconCircleCheck, IconLayoutGrid } from '@tabler/icons-react';
 import {
   Background, ConnectionMode, Controls, type Connection, type Edge, MarkerType, Position, ReactFlow, ReactFlowProvider,
@@ -15,11 +15,15 @@ import { LinkModal } from '../features/topology/LinkModal';
 import { useAction, useProjects, useTopology } from '../hooks/queries';
 import { api } from '../services/api';
 import type { Topology, TopologyLink, TopologyLinkInput } from '../types/api';
+import { Tag } from '../components/Badges';
+import { InlineStatus } from '../components/InlineStatus';
 import { EmptyState } from '../components/EmptyState';
 
 const nodeTypes = { device: DeviceNode };
 const ROW: Record<string, number> = { firewall: 0, router: 1, switch: 2 };
-const MODE_COLOR: Record<string, string> = { routed: '#7048e8', trunk: '#1c7ed6', access: '#0ca678' };
+// Theme tokens, so the lines keep their contrast in light and dark (D-119); a problem is also dashed.
+const MODE_COLOR: Record<string, string> = { routed: 'var(--mantine-color-violet-filled)', trunk: 'var(--mantine-color-blue-filled)', access: 'var(--mantine-color-teal-filled)' };
+const PROBLEM_COLOR = 'var(--mantine-color-red-filled)';
 
 /** Default positions for devices never placed: one row per category. */
 function layout(topo: Topology, force = false): DeviceNodeType[] {
@@ -50,16 +54,19 @@ function edgeFor(l: TopologyLink, hasError: boolean, pos: Record<string, XY>): E
   return {
     id: l.id, source: l.a_device_id, target: l.b_device_id, sourceHandle, targetHandle,
     label: `${l.a_interface} ↔ ${l.b_interface}${vl}`,
-    style: { stroke: hasError ? '#e03131' : MODE_COLOR[l.mode], strokeWidth: 2 },
+    style: { stroke: hasError ? PROBLEM_COLOR : MODE_COLOR[l.mode], strokeWidth: 2, ...(hasError ? { strokeDasharray: '6 4' } : {}) },
     labelStyle: { fontSize: 11 }, labelBgPadding: [4, 2], labelBgBorderRadius: 4,
     markerEnd: undefined, interactionWidth: 16, data: { link: l },
   };
 }
 
-function Canvas({ projectId, topo }: { projectId: string; topo: Topology }) {
+type Editing = { id?: string; link: TopologyLinkInput; pick?: boolean } | null;
+
+function Canvas({ projectId, topo, editing, setEditing }: {
+  projectId: string; topo: Topology; editing: Editing; setEditing: (e: Editing) => void;
+}) {
   const scheme = useComputedColorScheme('light');
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNodeType>(layout(topo));
-  const [editing, setEditing] = useState<{ id?: string; link: TopologyLinkInput; pick?: boolean } | null>(null);
   const names = useMemo(() => Object.fromEntries(topo.nodes.map((n) => [n.device_id, n.name])), [topo.nodes]);
   const errorLinks = new Set(topo.issues.filter((i) => i.severity === 'error' && i.path.startsWith('links/')).map((i) => i.path.slice(6)));
   const positions = Object.fromEntries(nodes.map((n) => [n.id, n.position]));
@@ -115,7 +122,7 @@ function Canvas({ projectId, topo }: { projectId: string; topo: Topology }) {
         {Object.entries({ routed: 'Routed (L3)', trunk: 'Trunk', access: 'Access (one VLAN)' }).map(([m, label]) => (
           <Group key={m} gap={4}><span style={{ width: 18, height: 3, background: MODE_COLOR[m], display: 'inline-block' }} /><Text size="xs">{label}</Text></Group>
         ))}
-        <Group gap={4}><span style={{ width: 18, height: 3, background: '#e03131', display: 'inline-block' }} /><Text size="xs">Has a problem (see the list)</Text></Group>
+        <Group gap={4}><span style={{ width: 18, height: 0, borderTop: `3px dashed ${PROBLEM_COLOR}`, display: 'inline-block' }} /><Text size="xs">Dashed: has a problem (see the list)</Text></Group>
       </Group>
       {editing && (
         <LinkModal initial={editing.link} names={names} busy={create.isPending || update.isPending} pickDevices={editing.pick}
@@ -129,37 +136,40 @@ function Canvas({ projectId, topo }: { projectId: string; topo: Topology }) {
   );
 }
 
-function Side({ topo }: { topo: Topology }) {
+function Side({ topo, onEdit }: { topo: Topology; onEdit?: (l: Topology['links'][number]) => void }) {
   const names = Object.fromEntries(topo.nodes.map((n) => [n.device_id, n.name]));
   const errors = topo.issues.filter((i) => i.severity === 'error');
   return (
     <Stack>
       <Card withBorder>
         <Group justify="space-between" mb="xs">
-          <Title order={2} size="h5">Validation</Title>
+          <Title order={2} size="h4">Validation</Title>
           {topo.issues.length === 0
-            ? <Badge color="teal" variant="light" leftSection={<IconCircleCheck size={12} />}>no issues</Badge>
-            : <Badge color={errors.length ? 'red' : 'yellow'} variant="light">{errors.length} errors · {topo.issues.length - errors.length} warnings</Badge>}
+            ? <Tag tone="success" icon={<IconCircleCheck size={12} aria-hidden />}>no issues</Tag>
+            : <Tag tone={errors.length ? 'danger' : 'warning'}>{errors.length} errors · {topo.issues.length - errors.length} warnings</Tag>}
         </Group>
         <Stack gap={6}>
           {topo.issues.map((i, n) => (
-            <Text key={n} size="sm" c={i.severity === 'error' ? 'red' : 'yellow.8'}>
-              <b>{i.severity}</b> · {i.message}
-            </Text>
+            <InlineStatus key={n} size="sm" tone={i.severity === 'error' ? 'danger' : 'warning'}>
+              <b>{i.severity === 'error' ? 'Error' : 'Warning'}</b> · {i.message}
+            </InlineStatus>
           ))}
           {topo.issues.length === 0 && <Text size="sm" c="dimmed">Checks: interfaces used twice, self links, subnet mismatch, VLANs not defined, duplicate IPs, isolated devices.</Text>}
         </Stack>
       </Card>
       <Card withBorder padding={0}>
-        <Title order={2} size="h5" p="sm" pb={0}>Links ({topo.links.length})</Title>
+        <Title order={2} size="h4" p="sm" pb={0}>Links ({topo.links.length})</Title>
         <Table.ScrollContainer minWidth={520}>
-          <Table verticalSpacing={4} horizontalSpacing="sm">
+          <Table verticalSpacing={4} horizontalSpacing="sm" aria-label="Links">
             <Table.Tbody>
               {topo.links.map((l) => (
                 <Table.Tr key={l.id}>
                   <Table.Td><Text size="xs">{names[l.a_device_id]}:{l.a_interface}</Text></Table.Td>
                   <Table.Td><Text size="xs">{names[l.b_device_id]}:{l.b_interface}</Text></Table.Td>
                   <Table.Td><Text size="xs">{l.mode}{l.vlans.length ? ` ${l.vlans.join(',')}` : ''}</Text></Table.Td>
+                  {/* A link can be edited from the keyboard too, not only by clicking it on the canvas. */}
+                  <Table.Td>{onEdit && <Button size="compact-xs" variant="subtle" onClick={() => onEdit(l)}
+                    aria-label={`Edit link ${names[l.a_device_id]}:${l.a_interface} to ${names[l.b_device_id]}:${l.b_interface}`}>Edit</Button>}</Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
@@ -175,6 +185,8 @@ export function TopologyPage() {
   const projects = useProjects();
   const projectId = params.get('project') ?? projects.data?.[0]?.id ?? '';
   const topo = useTopology(projectId);
+  // The link being edited: from the canvas, or from the Links list (keyboard).
+  const [editing, setEditing] = useState<Editing>(null);
   return (
     <>
       <PageHeader title="Topology" description="Design devices and the links between their interfaces. The graph, not the drawing, is what UNDM validates." />
@@ -188,10 +200,10 @@ export function TopologyPage() {
       )}
       {topo.data && topo.data.nodes.length > 0 && (
         <Grid>
-          <Grid.Col span={{ base: 12, lg: 9 }}>
-            <ReactFlowProvider><Canvas key={projectId} projectId={projectId} topo={topo.data} /></ReactFlowProvider>
+          <Grid.Col span={{ base: 12, xl: 9 }}>
+            <ReactFlowProvider><Canvas key={projectId} projectId={projectId} topo={topo.data} editing={editing} setEditing={setEditing} /></ReactFlowProvider>
           </Grid.Col>
-          <Grid.Col span={{ base: 12, lg: 3 }}><Side topo={topo.data} /></Grid.Col>
+          <Grid.Col span={{ base: 12, xl: 3 }}><Side topo={topo.data} onEdit={(l) => { const { id, ...rest } = l; setEditing({ id, link: rest }); }} /></Grid.Col>
         </Grid>
       )}
     </>

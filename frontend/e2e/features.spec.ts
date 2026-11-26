@@ -68,14 +68,17 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   // Firmware: upload with vendor checksum, approve, plan
   const image = Buffer.from(`SYNTHETIC E2E IMAGE ${id}\n`.repeat(100));
   await nav(page, 'Firmware');
-  await page.locator('input[type=file]').setInputFiles({ name: `cx-${id}.swi`, mimeType: 'application/octet-stream', buffer: image });
-  await page.getByRole('combobox', { name: 'Platform' }).click();
-  await page.getByRole('option', { name: 'Aruba AOS-CX' }).click();
-  await page.getByRole('textbox', { name: 'Version', exact: true }).fill('10.2.0');
-  await page.getByRole('combobox', { name: 'Compatible models' }).fill('6300M');
-  await page.getByRole('combobox', { name: 'Compatible models' }).press('Enter');
-  await page.getByLabel('Vendor checksum (SHA-256 or SHA-512)').fill(createHash('sha256').update(image).digest('hex'));
-  await page.getByRole('button', { name: 'Upload to repository' }).click();
+  // D-122: the upload starts from the device model; the platform and compatible model follow.
+  await page.getByRole('button', { name: 'Upload image…' }).click();
+  const upload = page.getByRole('dialog', { name: 'Upload a firmware image' });
+  await upload.getByRole('combobox', { name: 'Device model' }).click();
+  await page.getByRole('option', { name: /6300M/ }).click();
+  await expect(upload.getByRole('textbox', { name: 'Platform' })).toHaveValue('Aruba AOS-CX');
+  await upload.locator('input[type=file]').setInputFiles({ name: `cx-${id}.swi`, mimeType: 'application/octet-stream', buffer: image });
+  await upload.getByRole('textbox', { name: 'Version', exact: true }).fill('10.2.0');
+  await upload.getByLabel('Vendor checksum (SHA-256 or SHA-512)').fill(createHash('sha256').update(image).digest('hex'));
+  await upload.getByRole('button', { name: 'Upload', exact: true }).click();
+  await expect(upload).toBeHidden();
   const row = page.getByRole('row', { name: new RegExp(`cx-${id}`) });
   await expect(row.getByText('Verified')).toBeVisible();
   await row.getByRole('button', { name: 'Approve' }).click();
