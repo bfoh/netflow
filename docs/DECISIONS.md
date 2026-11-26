@@ -1636,3 +1636,48 @@ and checked systems.
 the template anyway: "Keep it anyway", `accept_differences`, recorded as
 `counts.accepted_differences`, audited with line numbers only.
 
+
+**Amendment (2026-11-26, v89): reading a team file's zone and system.** Bench: the import
+dialog left the zone empty for the modem file `LTEModem…z<zone>.txt` (written without
+leading zeros), and the system empty for an SCF whose name holds both `MRBTS-<n>` and the
+eNodeB's `eNB1`.
+- File names: the zone is `z`/`Zone` + 1 to 3 digits (`zone_from_name`). A file's text
+  keeps the strict three digits (`zone_from_text`): there a short `z1` could be anything.
+- System in a name: the letter + 3 digits or `MRBTS-<n>`, either case; a shorter `B7` only
+  when the name has neither, and never after `eN` (eNodeB).
+- The dialog reads the name first and the file's text when the name says nothing. It says
+  where each value came from, keeps what the person typed, and points out a name and text
+  that name different zones or systems.
+
+**Amendment (2026-11-26, v89): a team file's own `${…}`.** The team's FortiGate base file
+was refused because it contains `${hostname}`, `${vdom}` and the like: FortiOS's own report
+layout variables. Only UNDM's own markers (`${zone}`, `${sys}`, `${pci_1}`, …) are refused
+now. Any other `${…}` is the file's text: rendering touches only UNDM's markers, so it
+reaches the device unchanged. Checked locally on the team's base file: imported, and
+downloaded byte for byte.
+
+### D-115 The systems' own logins become logins for all systems (2026-11-26)
+**Request (product owner):** bring all logins of the existing systems into Settings → For
+all systems, so every system can use them, under clearer names. D-105 had left existing
+systems' logins where they were.
+
+**Decision.** Settings → For all systems shows **Logins made in the systems** while any
+system has logins of its own. **Bring them here…** first shows what will happen, then does it
+in one step (audited, `credential_ref.share_all`):
+- A login keeps its id, its password in the Credential Manager, and the devices and plans
+  that use it. Only its owner (and its name) changes.
+- Logins with the same user name and password are one login. The oldest is kept, or the
+  login for all systems that already has them. The others' devices and plans (login after
+  loading, file secrets) move to it, and they are removed with their stored password. The
+  wizard's choices kept in the browser follow.
+- Passwords are compared in memory only. A login without a stored password is never merged.
+- Suggested names, editable before confirming:
+  - the manufacturer and model of the devices that use the login (two at most, else "All
+    devices"), then its user name: "Aruba 2930F – manager";
+  - "(no password)" for a login without a password;
+  - "tunnel key" for a FortiGate site file's pre-shared key;
+  - two suggestions that would clash get the old name in brackets;
+  - a login nothing uses keeps its name.
+- Names are unique among the logins for all systems (case ignored).
+- Refused while a plan is running, so no run loses its login in the middle.
+- A system can still add a login of its own for a device that differs (D-105).

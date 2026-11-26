@@ -1,3 +1,5 @@
+from dataclasses import asdict
+
 from fastapi import APIRouter, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -12,10 +14,13 @@ from undm.api.schemas import (
     ProjectIn,
     ProjectOut,
     ProjectPatch,
+    SharedLoginGroupOut,
+    SharedLoginsResultOut,
+    ShareLoginsIn,
 )
 from undm.db.models import CredentialRef, Device, Project
 from undm.security import credentials as creds
-from undm.services import app_settings, audit
+from undm.services import app_settings, audit, shared_logins
 from undm.services.errors import ConflictError, NotFoundError, ServiceError
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -145,6 +150,21 @@ def list_shared_logins(session: SessionDep) -> list[CredentialRefOut]:
 def create_shared_login(body: CredentialRefIn, session: SessionDep,
                         actor: ActorDep) -> CredentialRefOut:
     return _create_ref(session, actor, body, None)
+
+
+@credentials_router.get("/from-systems", response_model=list[SharedLoginGroupOut])
+def preview_share_all(session: SessionDep) -> list[SharedLoginGroupOut]:
+    """What bringing the systems' own logins in would do, with suggested names (D-115).
+    Changes nothing."""
+    return [SharedLoginGroupOut.model_validate(asdict(g)) for g in shared_logins.plan(session)]
+
+
+@credentials_router.post("/from-systems", response_model=SharedLoginsResultOut)
+def share_all(body: ShareLoginsIn, session: SessionDep, actor: ActorDep) -> SharedLoginsResultOut:
+    """Make every system's own login a login for all systems (D-115)."""
+    groups, replaced = shared_logins.share_all(session, actor, body.names)
+    return SharedLoginsResultOut(logins=[SharedLoginGroupOut.model_validate(asdict(g))
+                                         for g in groups], replaced=replaced)
 
 
 def _get_ref(session: SessionDep, ref_id: str) -> CredentialRef:

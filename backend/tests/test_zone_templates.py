@@ -55,6 +55,29 @@ def test_zone_bounds_and_the_zone_in_a_name():
     assert zr.zone_from_text("Lab-z007-system") == 7 and zr.zone_from_text("B001z045") == 45
     assert zr.zone_from_text("z041 and z042") is None
     assert zr.zone_from_text("no zone") is None
+    # File names: also without leading zeros (the team's modem file "…z41.txt", bench 2026-11-26).
+    assert zr.zone_from_name("LTEModemz41.txt") == 41
+    assert zr.zone_from_name("scf_x-Z041_y.xml") == 41
+    assert zr.zone_from_name("B007z045") == 45 and zr.zone_from_name("lab-z7.pcc") == 7
+    assert zr.zone_from_name("z41 z42.txt") is None and zr.zone_from_name("z0.txt") is None
+    assert zr.zone_from_name("z129.txt") is None and zr.zone_from_text("LTEModemz41.txt") is None
+
+
+def test_a_files_own_dollar_braces_are_kept_only_undms_markers_are_refused(client):
+    # FortiOS report layouts carry their own ${…} variables (a team base file, bench 2026-11-26).
+    own = "config report layout\n    set title \"${hostname} ${vdom}\"\nend\n"
+    base = imp(client, role="fortigate_base", filename="base-v03.conf", text=own)
+    assert base.status_code == 201
+    got = client.get("/api/templates/fortigate_base/file")
+    assert got.status_code == 200 and got.content == own.encode()
+    # In a file that depends on the zone they pass through the template unchanged.
+    templated = zr.templatize(ZONE41 + own, 41)
+    assert zr.render(templated.text, 42) == zone42() + own
+    for marker in ("${zone}", "${admin_password}", "${pci_1}"):
+        r = imp(client, role="fortigate_base", filename="base-v04.conf", text=f"set x {marker}\n")
+        assert r.status_code == 400 and marker in r.json()["error"]
+        with pytest.raises(zr.ZoneError, match="own marker"):
+            zr.templatize(ZONE41 + marker, 41)
 
 
 def test_other_forms_of_the_zone_are_listed_for_a_person():

@@ -51,6 +51,28 @@ export function saveChoices(projectId: string, choices: Choices) {
   }
 }
 
+/** Logins that became one (D-115): the wizard's choices kept in this browser follow. */
+export function replaceLogins(replaced: Record<string, string>) {
+  if (!Object.keys(replaced).length) return;
+  const swap = (id: string | null) => (id && replaced[id]) || id;
+  try {
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const k = window.localStorage.key(i);
+      if (!k?.startsWith('undm.stage.')) continue;
+      const pid = k.slice('undm.stage.'.length);
+      const choices = loadChoices(pid);
+      for (const c of Object.values(choices)) {
+        if (!c) continue;
+        c.loginAfter = swap(c.loginAfter);
+        c.secrets = Object.fromEntries(Object.entries(c.secrets ?? {}).map(([slot, id]) => [slot, swap(id) ?? id]));
+      }
+      saveChoices(pid, choices);
+    }
+  } catch {
+    // storage unavailable: nothing kept to update
+  }
+}
+
 /** Whether a first login step applies: chosen, and the device can do it (real FortiGate). */
 export function wantsFirstLogin(c: Choice, device?: Device): boolean {
   return c.firstLogin && (!device || device.capabilities.includes('supports_first_login_setup'));

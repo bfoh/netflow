@@ -106,6 +106,20 @@ export interface Driver {
   notes: string[];
 }
 
+/** One login for all systems made from systems' own logins (D-115). Never a password. */
+export interface SharedLoginGroup {
+  /** The login kept. */ id: string;
+  /** Suggested name, or the name of the login for all systems it joins. */ name: string;
+  existing: boolean;
+  members: { id: string; name: string; system: string; devices: number }[];
+  devices: number;
+}
+
+export interface SharedLoginsResult {
+  logins: SharedLoginGroup[];
+  /** Logins that became one: old id -> the id that replaces it. */ replaced: Record<string, string>;
+}
+
 export interface CredentialRef {
   id: string;
   name: string;

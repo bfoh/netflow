@@ -173,6 +173,34 @@ class CredentialRefOut(ORM):
     shared: bool = False  # a login for all systems (D-105)
 
 
+class SharedLoginMemberOut(BaseModel):
+    id: str
+    name: str
+    system: str
+    devices: int
+
+
+class SharedLoginGroupOut(BaseModel):
+    """One login for all systems made from systems' logins (D-115). Never a password."""
+
+    id: str  # the login kept
+    name: str  # suggested (or, when it joins one, the existing login's name)
+    existing: bool
+    members: list[SharedLoginMemberOut]
+    devices: int
+
+
+class ShareLoginsIn(BaseModel):
+    # The id of the login kept -> its name for all systems; missing: the suggested name.
+    names: dict[str, str] = {}
+
+
+class SharedLoginsResultOut(BaseModel):
+    logins: list[SharedLoginGroupOut]
+    # Logins that became one: old id -> the id that replaces it (for choices kept elsewhere).
+    replaced: dict[str, str] = {}
+
+
 class CredentialSecretIn(BaseModel):
     """Write-only. Never returned by any endpoint."""
 

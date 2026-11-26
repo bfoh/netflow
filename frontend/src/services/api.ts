@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -174,6 +174,9 @@ export const api = {
   deleteCredentialRef: (refId: string) => request<void>('DELETE', `/credential-refs/${refId}`),
   // For all systems (D-105).
   sharedLogins: () => request<CredentialRef[]>('GET', '/credential-refs'),
+  loginsFromSystems: () => request<SharedLoginGroup[]>('GET', '/credential-refs/from-systems'),
+  shareLogins: (names: Record<string, string>) =>
+    request<SharedLoginsResult>('POST', '/credential-refs/from-systems', { names }),
   createSharedLogin: (body: { name: string; provider?: string; locator?: string }) =>
     request<CredentialRef>('POST', '/credential-refs', body),
   loginDefaults: () => request<LoginDefaults>('GET', '/settings/defaults'),

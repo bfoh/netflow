@@ -122,6 +122,11 @@ def test_system_rules_give_the_other_systems_files():
     out = zr.render(m.text, 7, zr.SystemRef("B", 11), secret="x")
     assert "LTEmodemABCB011-Zone007" in out and "10.134.201.65" in out
     assert zr.parse_system("b7").tag == "B007" and zr.system_from_text("x-MRBTS-9_y") == b9
+    # A name: either case; eNodeB's "eNB1" is not a system (bench 2026-11-26).
+    name = "Full_Configuration_scf_MRBTS-9_eNB1-ABCB-009-Z042_20260101-1200.xml"
+    assert zr.system_from_text(name, name=True) == b9 and zr.zone_from_name(name) == 42
+    assert zr.system_from_text("abcb009z042.txt", name=True) == b9
+    assert zr.system_from_text("abcb009z042.txt") is None  # a file's text: as written
     with pytest.raises(zr.ZoneError, match="Only B"):
         zr.parse_system("C7")
 
@@ -195,6 +200,11 @@ def test_import_checks_against_another_system_and_keeps_no_password(client):
     assert no_cells.status_code == 400 and "phyCellId" in no_cells.json()["error"]
     unknown = imp(client, "modem", modem(7, 41).replace("ABCB007", "ABC"), "modem.txt", zone=41)
     assert unknown.status_code == 400 and "Say which system" in unknown.json()["error"]
+    # The zone from a name without leading zeros (…z41.txt), the system from the text.
+    r = imp(client, "modem", modem(7, 41).replace("-Zone041", ""), "LTEModemz41.txt")
+    assert r.status_code == 201, r.text
+    t = r.json()["template"]
+    assert t["reference_zone"] == 41 and t["reference_system"] == "B007"
 
 
 def test_a_systems_files_byte_for_byte_with_pcis_from_the_table_and_the_modems_login(client):

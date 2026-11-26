@@ -84,8 +84,8 @@ class Imported:
     accepted: list[str] = field(default_factory=list)
 
 
-def _system(role: str, given: str | None, *texts: str) -> zr.SystemRef | None:
-    """The system of a file of a system role: given, or read from its name or text."""
+def _system(role: str, given: str | None, name: str, text: str) -> zr.SystemRef | None:
+    """The system of a file of a system role: given, or read from its name, else its text."""
     if role not in SYSTEM_ROLES:
         return None
     try:
@@ -93,11 +93,7 @@ def _system(role: str, given: str | None, *texts: str) -> zr.SystemRef | None:
             return zr.parse_system(given)
     except zr.ZoneError as e:
         raise ServiceError(str(e)) from e
-    for text in texts:
-        found = zr.system_from_text(text)
-        if found is not None:
-            return found
-    return None
+    return zr.system_from_text(name, name=True) or zr.system_from_text(text)
 
 
 def _name_pattern(role: str, name: str, ref: int | None, system: zr.SystemRef | None) -> str:
@@ -134,10 +130,12 @@ def import_template(session: Session, actor: str, role: str, filename: str, text
                            "names none")
     if role in NO_ZONE:
         templated, ref = zr.Templated(text=text), None
-        if "${" in text:
-            raise ServiceError("The file contains '${', which UNDM uses for its own markers")
+        try:
+            zr.check_no_markers(text)
+        except zr.ZoneError as e:
+            raise ServiceError(str(e)) from e
     else:
-        ref = zone if zone is not None else (zr.zone_from_text(name) or zr.zone_from_text(text))
+        ref = zone if zone is not None else (zr.zone_from_name(name) or zr.zone_from_text(text))
         if ref is None:
             raise ServiceError("Say which zone this file is for (its name or text names none)")
         try:
@@ -155,7 +153,7 @@ def import_template(session: Session, actor: str, role: str, filename: str, text
     accepted: list[str] = []
     if verify is not None:
         v_name, v_text, v_zone, v_system = verify
-        other = v_zone if v_zone is not None else (zr.zone_from_text(v_name)
+        other = v_zone if v_zone is not None else (zr.zone_from_name(v_name)
                                                     or zr.zone_from_text(v_text))
         other_system = _system(role, v_system, v_name, v_text)
         if role in NO_ZONE:

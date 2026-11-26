@@ -1,6 +1,6 @@
 import { Badge, Button, Card, FileInput, Group, Modal, NumberInput, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { IconDownload, IconFileImport } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { DialogError } from '../../components/ConfirmDialog';
 import { Notice } from '../../components/Notice';
@@ -10,7 +10,7 @@ import { useAction, useTemplates } from '../../hooks/queries';
 import { api, ApiError } from '../../services/api';
 import { fmtDate } from '../../services/format';
 import type { ConfigTemplate, TemplateRole } from '../../types/api';
-import { formatWords, normalSystem, systemInName, TEMPLATE_ROLES, zoneInName } from '../stage/zone';
+import { type FileFacts, formatWords, normalSystem, readFileFacts, TEMPLATE_ROLES } from '../stage/zone';
 
 const RULE_WORDS: Record<string, string> = {
   zone_tag: 'zone tag', ten_plus127: '10.(127+zone)', ten_zone: '10.zone', ten_zero_zone: '10.0.zone', onethirty_zone: '130.zone',
@@ -20,18 +20,49 @@ const RULE_WORDS: Record<string, string> = {
 const systemRole = (r: TemplateRole) => !!TEMPLATE_ROLES.find((x) => x.role === r)?.system;
 const secretRole = (r: TemplateRole) => !!TEMPLATE_ROLES.find((x) => x.role === r)?.secret;
 type Done = { template: ConfigTemplate; to_check: string[]; verified_bytes: boolean | null; accepted: string[] };
+const FROM = { name: 'Read from its name.', text: 'Read from the file (its name does not say).' } as const;
+
+/** A zone and a system read from a chosen file: filled in unless the person typed their own. */
+function useFileFields(bySystem: boolean) {
+  const [zone, setZone] = useState<number | string>('');
+  const [system, setSystem] = useState('');
+  const [facts, setFacts] = useState<FileFacts | null>(null);
+  const [typed, setTyped] = useState({ zone: false, system: false });
+  const seq = useRef(0);
+  const read = async (f: File | null) => {
+    const n = ++seq.current;
+    if (!f) { setFacts(null); return; }
+    const got = await readFileFacts(f);
+    if (n !== seq.current) return; // another file was chosen meanwhile
+    setFacts(got);
+    if (!typed.zone) setZone(got.zone ?? '');
+    if (bySystem && !typed.system) setSystem(got.system ?? '');
+  };
+  return {
+    zone, system, read,
+    setZone: (v: number | string) => { setZone(v); setTyped((t) => ({ ...t, zone: v !== '' })); },
+    setSystem: (v: string) => { setSystem(v); setTyped((t) => ({ ...t, system: v.trim() !== '' })); },
+    zoneFrom: !typed.zone && facts?.zoneFrom && zone !== '' ? FROM[facts.zoneFrom] : undefined,
+    systemFrom: bySystem && !typed.system && facts?.systemFrom && system ? FROM[facts.systemFrom] : undefined,
+    disagree: (facts?.disagree ?? []).filter((d) => bySystem || d.includes('zone')),
+  };
+}
+
+function Disagree({ items }: { items: string[] }) {
+  return items.length ? <Text size="xs" c="orange">Check this file: {items.join('; ')}.</Text> : null;
+}
 
 /** Import a team file as the template of a role, optionally checked against another zone's file. */
 function ImportTemplate({ role, label, onClose }: { role: TemplateRole; label: string; onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
-  const [zone, setZone] = useState<number | string>('');
   const [other, setOther] = useState<File | null>(null);
-  const [otherZone, setOtherZone] = useState<number | string>('');
-  const [system, setSystem] = useState('');
-  const [otherSystem, setOtherSystem] = useState('');
   const [done, setDone] = useState<Done | null>(null);
   const base = role === 'fortigate_base';
   const bySystem = systemRole(role);
+  const mine = useFileFields(bySystem);
+  const its = useFileFields(bySystem);
+  const { zone, system } = mine;
+  const { zone: otherZone, system: otherSystem } = its;
   const run = useAction(async (accept: boolean) => ({
     ...(await api.importTemplate({
       role, filename: file!.name, text: await file!.text(), zone: zone === '' ? null : Number(zone),
@@ -79,26 +110,28 @@ function ImportTemplate({ role, label, onClose }: { role: TemplateRole; label: s
   }
   return (
     <Stack>
-      <FileInput label="The team's file" placeholder="Choose the file" value={file} onChange={(f) => { setFile(f); if (f && zone === '') setZone(zoneInName(f.name) ?? ''); }} clearable />
+      <FileInput label="The team's file" placeholder="Choose the file" value={file} onChange={(f) => { setFile(f); if (!base) void mine.read(f); }} clearable />
       {!base && (
         <>
           <Group grow align="flex-start">
-            <NumberInput label="Zone of this file" description="Read from its name or text when it has one (z041 → 41)." min={1} max={128} value={zone} onChange={setZone} />
-            {bySystem && <TextInput label="System of this file" description="Read from its name or text when left empty (e.g. B007)."
-              value={system} onChange={(e) => setSystem(e.currentTarget.value)} placeholder="e.g. B007" />}
+            <NumberInput label="Zone of this file" description={mine.zoneFrom ?? 'Read from its name or text when it has one (z041 → 41).'}
+              min={1} max={128} value={zone} onChange={mine.setZone} />
+            {bySystem && <TextInput label="System of this file" description={mine.systemFrom ?? 'Read from its name or text when it has one (e.g. B007).'}
+              value={system} onChange={(e) => mine.setSystem(e.currentTarget.value)} placeholder="e.g. B007" />}
           </Group>
+          <Disagree items={mine.disagree} />
           <FileInput label={bySystem ? 'Same file for another system and zone (to check, optional)' : 'Same file for another zone (to check, optional)'}
             description="UNDM keeps the template only if it gives this file exactly (or you accept the differences it shows)."
-            placeholder="Choose the file" value={other} onChange={(f) => {
-              setOther(f);
-              if (f && otherZone === '') setOtherZone(zoneInName(f.name) ?? '');
-              if (f && bySystem && !otherSystem) setOtherSystem(systemInName(f.name) ?? '');
-            }} clearable />
+            placeholder="Choose the file" value={other} onChange={(f) => { setOther(f); void its.read(f); }} clearable />
           {other && (
-            <Group grow align="flex-start">
-              <NumberInput label="Its zone" min={1} max={128} value={otherZone} onChange={setOtherZone} />
-              {bySystem && <TextInput label="Its system" value={otherSystem} onChange={(e) => setOtherSystem(e.currentTarget.value)} placeholder="e.g. B009" />}
-            </Group>
+            <>
+              <Group grow align="flex-start">
+                <NumberInput label="Its zone" description={its.zoneFrom} min={1} max={128} value={otherZone} onChange={its.setZone} />
+                {bySystem && <TextInput label="Its system" description={its.systemFrom} value={otherSystem}
+                  onChange={(e) => its.setSystem(e.currentTarget.value)} placeholder="e.g. B009" />}
+              </Group>
+              <Disagree items={its.disagree} />
+            </>
           )}
         </>
       )}

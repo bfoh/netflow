@@ -766,6 +766,45 @@ describe('For all systems (D-105)', () => {
     expect(JSON.parse(String(cert?.init?.body)).subject.common_name).toBe('lab-cn');
   });
 
+  it('brings the systems\' own logins here under names the person can change (D-115)', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const groups = [
+      { id: 'a-appr', name: 'Aruba 2930F – manager', existing: false, devices: 3,
+        members: [{ id: 'a-appr', name: 'approved', system: 'Lab A', devices: 2 }, { id: 'b-appr', name: 'approved', system: 'Lab B', devices: 1 }] },
+      { id: 'tk', name: 'FortiGate tunnel key', existing: true, devices: 0,
+        members: [{ id: 'b-psk', name: 'psk', system: 'Lab B', devices: 0 }] },
+    ];
+    mockApi({ '/credential-refs': [], '/credential-refs/from-systems': groups, '/settings/certificate': { subject: null },
+      '/settings/defaults': { firewall: { login: null, login_after: null, tunnel_key: null }, blackbox: { login: null, login_after: null }, aruba: { login: null, current: null } } });
+    const answered = globalThis.fetch;
+    const posted: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/credential-refs/from-systems' && init?.method === 'POST') {
+        posted.push(JSON.parse(String(init.body)));
+        return Promise.resolve(new Response(JSON.stringify({ logins: groups, replaced: { 'b-appr': 'a-appr', 'b-psk': 'tk' } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return answered(url, init);
+    }));
+    window.localStorage.setItem('undm.stage.p2', JSON.stringify({ blackbox: { loginAfter: 'b-appr', secrets: {} },
+      firewall: { loginAfter: null, secrets: { 'vpn > psksecret': 'b-psk' } } }));
+    renderAt('/settings');
+    expect(await screen.findByText(/2 systems still have 3 logins of their own/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Bring them here…' }));
+    const dialog = await screen.findByRole('dialog');
+    const name = within(dialog).getByLabelText('Name for approved, approved');
+    expect(name).toHaveValue('Aruba 2930F – manager');
+    expect(within(dialog).getByText('already here: joins it')).toBeInTheDocument();
+    await userEvent.clear(name);
+    expect(within(dialog).getByRole('button', { name: 'Bring 3 logins here' })).toBeDisabled();
+    await userEvent.type(name, 'Approved manager login');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Bring 3 logins here' }));
+    await vi.waitFor(() => expect(posted).toEqual([{ names: { 'a-appr': 'Approved manager login' } }]));
+    await vi.waitFor(() => expect(JSON.parse(window.localStorage.getItem('undm.stage.p2')!)).toMatchObject({
+      blackbox: { loginAfter: 'a-appr' }, firewall: { secrets: { 'vpn > psksecret': 'tk' } } }));
+    window.localStorage.removeItem('undm.stage.p2');
+  });
+
   it('the wizard adds a real device with its default login and fills the ones without', async () => {
     const { default: userEvent } = await import('@testing-library/user-event');
     const calls = mockApi({
@@ -1182,7 +1221,7 @@ describe('the modem and the BBU: files by zone and system (D-114)', () => {
     // Mantine's file inputs: a button with a hidden <input type=file> (the team's file, then the second file).
     await userEvent.upload(dialog.querySelectorAll('input[type="file"]')[0] as HTMLInputElement, new File(['<raml/>'], 'scf_MRBTS-7_x-Z041.xml'));
     await userEvent.upload(dialog.querySelectorAll('input[type="file"]')[1] as HTMLInputElement, new File(['<raml/>'], 'scf_MRBTS-9_x-Z042.xml'));
-    await userEvent.type(within(dialog).getByLabelText('Its system'), 'B009');
+    await vi.waitFor(() => expect(within(dialog).getByLabelText('Its system')).toHaveValue('B009')); // from MRBTS-9 in its name
     await userEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
     expect(await within(dialog).findByText("line 4: UNDM 'label A' / file 'label B'")).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Keep it anyway' }));
@@ -1190,6 +1229,62 @@ describe('the modem and the BBU: files by zone and system (D-114)', () => {
     expect(bodies).toHaveLength(2);
     expect((bodies[1] as { accept_differences?: boolean; verify?: { system?: string } }).accept_differences).toBe(true);
     expect((bodies[1] as { verify?: { system?: string } }).verify?.system).toBe('B009');
+  });
+
+  it('the import reads the zone and the system from the file name, else from its text', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const { systemInName, zoneInName } = await import('../src/features/stage/zone');
+    // Names as the team writes them (bench, 2026-11-26): zone without leading zeros; eNB1 is not a system.
+    expect(zoneInName('LTEModemz41.txt')).toBe(41);
+    expect(zoneInName('B007z045')).toBe(45);
+    expect(zoneInName('z41-z42.txt')).toBeUndefined();
+    expect(systemInName('Full_Configuration_scf_MRBTS-7_eNB1-ABCB-007-Z041_20260101-1200.xml')).toBe('B007');
+    expect(systemInName('lab b7 zone')).toBe('B007');
+    expect(systemInName('eNB1.xml')).toBeUndefined();
+    const bodies: Record<string, unknown>[] = [];
+    mockApi({ '/templates': [], '/credential-refs': [], '/settings/certificate': { subject: null }, '/settings/pci-mapping': null });
+    const answered = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/templates' && init?.method === 'POST') {
+        bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+        return Promise.resolve(new Response(JSON.stringify({ template: tpl('modem'), to_check: [], verified_bytes: null, accepted: [] }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return answered(url, init);
+    }));
+    renderAt('/settings');
+    const row = (await screen.findByText('LTE modem (Nokia 7705 SAR-Hmc)')).closest('tr')!;
+    await userEvent.click(within(row).getByRole('button', { name: 'Import…' }));
+    const dialog = await screen.findByRole('dialog');
+    const files = () => dialog.querySelectorAll('input[type="file"]');
+    await userEvent.upload(files()[0] as HTMLInputElement,
+      new File(['configure\n  system\n    name "LTEmodemABCB007"\n  exit\n'], 'LTEModemz41.txt'));
+    await vi.waitFor(() => expect(within(dialog).getByLabelText('Zone of this file')).toHaveValue('41'));
+    expect(within(dialog).getByLabelText('System of this file')).toHaveValue('B007');
+    expect(within(dialog).getByText('Read from its name.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Read from the file (its name does not say).')).toBeInTheDocument();
+    // A second file whose name and text disagree is pointed out.
+    await userEvent.upload(files()[1] as HTMLInputElement, new File(['name "LTEmodemABCB009-Zone043"'], 'LTEModemz42.txt'));
+    expect(await within(dialog).findByText('Check this file: its name says zone 42, its text zone 43.')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Its system')).toHaveValue('B009');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
+    await vi.waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ role: 'modem', filename: 'LTEModemz41.txt', zone: 41, system: 'B007',
+      verify: { filename: 'LTEModemz42.txt', zone: 42, system: 'B009' } });
+  });
+
+  it('a zone typed by the person is kept when a file is chosen', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    mockApi({ '/templates': [], '/credential-refs': [], '/settings/certificate': { subject: null }, '/settings/pci-mapping': null });
+    renderAt('/settings');
+    const row = (await screen.findByText('Flexi BBU site configuration file (SCF)')).closest('tr')!;
+    await userEvent.click(within(row).getByRole('button', { name: 'Import…' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText('Zone of this file'), '45');
+    await userEvent.upload(dialog.querySelectorAll('input[type="file"]')[0] as HTMLInputElement,
+      new File(['<raml/>'], 'Full_Configuration_scf_MRBTS-7_eNB1-ABCB-007-Z041_20260101-1200.xml'));
+    await vi.waitFor(() => expect(within(dialog).getByLabelText('System of this file')).toHaveValue('B007'));
+    expect(within(dialog).getByLabelText('Zone of this file')).toHaveValue('45');
   });
 
   it('the PCI table is imported once and looked up by system', async () => {

@@ -37,8 +37,9 @@ from dataclasses import dataclass, field
 
 ZONE_MIN, ZONE_MAX = 1, 128  # 127 + zone must stay a valid octet
 
-# Markers in a stored template. "${" does not occur in the team's files; a file that has it
-# is refused rather than guessed.
+# Markers in a stored template. A team file that already holds one of these exact markers is
+# refused rather than guessed; any other "${…}" is the file's own text and is kept as it is
+# (FortiOS report layouts use ${hostname}, ${vdom} and the like).
 TAG, PLUS127, ZONE = "${zone_tag}", "${zone_127}", "${zone}"
 ZONE3, SYS, SYS3, SECRET, STAMP = "${zone3}", "${sys}", "${sys3}", "${admin_password}", "${stamp}"
 MARKER = re.compile(r"\$\{(?:zone_tag|zone_127|zone3|zone|sys3|sys|pci_\d+|admin_password|stamp)\}")
@@ -77,12 +78,34 @@ def zone_tag(zone: int) -> str:
     return f"z{check_zone(zone):03d}"
 
 
-def zone_from_text(text: str) -> int | None:
-    """A zone named in a file or system name (``z041-…``, ``B001z045``, ``Zone041``), if
-    exactly one."""
-    found = {int(m.group(1)) for m in re.finditer(r"(?i)z(?:one)?(\d{3})(?!\d)", text)}
+def _one_zone(pattern: str, text: str) -> int | None:
+    found = {int(m.group(1)) for m in re.finditer(pattern, text)}
     found = {z for z in found if ZONE_MIN <= z <= ZONE_MAX}
     return found.pop() if len(found) == 1 else None
+
+
+def zone_from_text(text: str) -> int | None:
+    """A zone named in a file's text or a system name (``z041-…``, ``B001z045``,
+    ``Zone041``), if exactly one. Three digits: in a file a shorter ``z1`` could be anything."""
+    return _one_zone(r"(?i)z(?:one)?(\d{3})(?!\d)", text)
+
+
+def zone_from_name(name: str) -> int | None:
+    """A zone in a file's name, if exactly one: also without leading zeros, as the team names
+    the modem's file (``…z41.txt``, ``…Z041_…``)."""
+    return _one_zone(r"(?i)z(?:one)?(\d{1,3})(?!\d)", name)
+
+
+def own_markers(text: str) -> list[str]:
+    """UNDM's own markers already in a team file (it cannot be made into a template)."""
+    return sorted(set(MARKER.findall(text)))
+
+
+def check_no_markers(text: str) -> None:
+    found = own_markers(text)
+    if found:
+        raise ZoneError(f"The file contains {', '.join(found)}, which UNDM uses as its own "
+                        "marker: it cannot be kept as a template")
 
 
 @dataclass(frozen=True)
@@ -112,14 +135,16 @@ def parse_system(text: str) -> SystemRef:
     return SystemRef(letter, int(m.group(2)))
 
 
-def system_from_text(text: str) -> SystemRef | None:
+def system_from_text(text: str, *, name: bool = False) -> SystemRef | None:
     """A system named in a system or file name, or in a file: B007 (alone or after a site
-    type, with or without a dash) or MRBTS-7; None unless exactly one."""
+    type, with or without a dash) or MRBTS-7; None unless exactly one. In a name (``name``)
+    either case is accepted (``b007z041``)."""
+    flags = re.IGNORECASE if name else 0
     found: set[int] = set()
     for letter in SYSTEM_LETTERS:
         found |= {int(m.group(1)) for m in re.finditer(
-            rf"(?<!\d){letter}-?(\d{{3}})(?![0-9A-Fa-f])", text)}
-    found |= {int(m.group(1)) for m in re.finditer(r"MRBTS-(\d{1,3})(?!\d)", text)}
+            rf"(?<!\d){letter}-?(\d{{3}})(?![0-9A-Fa-f])", text, flags)}
+    found |= {int(m.group(1)) for m in re.finditer(r"MRBTS-(\d{1,3})(?!\d)", text, flags)}
     found = {n for n in found if 1 <= n <= 999}
     return SystemRef(SYSTEM_LETTERS[0], found.pop()) if len(found) == 1 else None
 
@@ -184,8 +209,7 @@ def templatize(text: str, zone: int, system: SystemRef | None = None, *,
     """Replace the reference zone's values by markers, following the five rules; with a
     system, also the system's rules (6 to 10, D-114)."""
     check_zone(zone)
-    if "${" in text:
-        raise ZoneError("The file contains '${', which UNDM uses for its own markers")
+    check_no_markers(text)
     out = Templated(text="")
     if system is not None:
         out.counts.update({k: 0 for k, _ in SYSTEM_RULES})

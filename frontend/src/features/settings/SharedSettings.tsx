@@ -8,6 +8,7 @@ import type { LoginDefaults } from '../../types/api';
 import { CredentialsPanel } from '../devices/CredentialsPanel';
 import { CertificateForm } from './CertificateForm';
 import { PciTableCard } from './PciTableCard';
+import { BringLoginsIn } from './BringLoginsIn';
 import { TemplatesCard } from './TemplatesCard';
 
 const EMPTY: LoginDefaults = {
@@ -97,6 +98,7 @@ export function SharedSettings() {
         <Title order={2} size="h5" mb="sm">Logins for all systems</Title>
         <CredentialsPanel />
       </Card>
+      <BringLoginsIn />
       <DefaultLogins />
       <TemplatesCard />
       <PciTableCard />
