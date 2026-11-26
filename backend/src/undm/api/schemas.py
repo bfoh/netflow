@@ -6,8 +6,9 @@ from datetime import datetime
 from ipaddress import IPv4Interface
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from undm.configgen import zone as zone_rules
 from undm.domain.enums import (
     DeviceCategory,
     DeviceEnvironment,
@@ -88,6 +89,18 @@ class ProjectPatch(BaseModel):
     purpose: str | None = None
     certificate_subject: CertificateSubject | None = None  # explicit null clears it
     zone: int | None = Field(default=None, ge=1, le=128)  # explicit null clears it (D-111)
+    # Its system, e.g. "B007" or "B7" (stored as B007); explicit null clears it (D-114).
+    system_id: str | None = Field(default=None, max_length=8)
+
+    @field_validator("system_id")
+    @classmethod
+    def _system(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return None
+        try:
+            return zone_rules.parse_system(v).tag
+        except zone_rules.ZoneError as e:
+            raise ValueError(str(e)) from e
 
 
 class ProjectOut(ORM):
@@ -100,6 +113,7 @@ class ProjectOut(ORM):
     staged_at: datetime | None = None  # staging of the system finished (D-108)
     staged_by: str = ""
     zone: int | None = None  # its files are generated for this zone (D-111)
+    system_id: str | None = None  # e.g. B007: the modem's and BBU's files depend on it (D-114)
     created_at: datetime
     updated_at: datetime
 
@@ -646,15 +660,22 @@ class ConsoleProgressOut(BaseModel):
 
 
 # -- team templates (D-111) -------------------------------------------------------------
+TemplateRole = Literal["fortigate_base", "fortigate_site", "bhdmz", "lte", "tetra", "modem",
+                       "bbu_scf"]
+
+
 class TemplateFileIn(BaseModel):
     filename: str = Field(min_length=1, max_length=200)
     text: str
     zone: int | None = Field(default=None, ge=1, le=128)
+    system: str | None = Field(default=None, max_length=8)  # files that depend on it (D-114)
 
 
 class TemplateImportIn(TemplateFileIn):
-    role: Literal["fortigate_base", "fortigate_site", "bhdmz", "lte", "tetra"]
+    role: TemplateRole
     verify: TemplateFileIn | None = None  # the same file for another zone
+    # Keep the template although the second file differs in the lines shown (D-114).
+    accept_differences: bool = False
 
 
 class TemplateOut(ORM):
@@ -663,8 +684,10 @@ class TemplateOut(ORM):
     version: str
     filename: str
     reference_zone: int | None
+    reference_system: str | None = None
     counts: dict[str, int]
     verified_zone: int | None
+    verified_system: str | None = None
     line_ending: Literal["lf", "crlf"] = "lf"  # the team file's formatting, kept on download
     final_newline: bool = True
     created_by: str
@@ -676,6 +699,7 @@ class TemplateImportOut(BaseModel):
     template: TemplateOut
     to_check: list[str] = []
     verified_bytes: bool | None = None  # the second zone's file also matched byte for byte
+    accepted: list[str] = []  # differences kept by the person's decision
 
 
 class TemplatePreviewOut(BaseModel):
@@ -686,8 +710,28 @@ class TemplatePreviewOut(BaseModel):
 class GenerateFilesIn(BaseModel):
     """Which device of the system gets which template's file."""
 
-    assignments: dict[Literal["fortigate_base", "fortigate_site", "bhdmz", "lte", "tetra"], str] \
-        = Field(min_length=1)
+    assignments: dict[TemplateRole, str] = Field(min_length=1)
+
+
+class FilesZipIn(BaseModel):
+    """Which device of the system plays which template's role (the modem's login gives
+    its file's password); none needed for files without one."""
+
+    assignments: dict[TemplateRole, str] = {}
+
+
+class PciMappingOut(BaseModel):
+    filename: str
+    sha256: str
+    imported_at: datetime | None
+    imported_by: str
+    systems: int
+    cells: int
+
+
+class PciRowOut(BaseModel):
+    system: str
+    pcis: list[int | None]
 
 
 class GeneratedFileOut(BaseModel):

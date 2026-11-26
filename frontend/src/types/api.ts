@@ -17,6 +17,8 @@ export interface Project {
   staged_by?: string;
   /** The zone its files are generated for (D-111): 1-128. */
   zone?: number | null;
+  /** Its system, e.g. B007 (D-114): the modem's and BBU's files depend on it. */
+  system_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -392,15 +394,18 @@ export interface BootstrapResult {
 }
 
 /** Team templates for all systems (D-111). */
-export type TemplateRole = 'fortigate_base' | 'fortigate_site' | 'bhdmz' | 'lte' | 'tetra';
+export type TemplateRole = 'fortigate_base' | 'fortigate_site' | 'bhdmz' | 'lte' | 'tetra' | 'modem' | 'bbu_scf';
 export interface ConfigTemplate {
   id: string;
   role: TemplateRole;
   version: string;
   filename: string;
   reference_zone: number | null;
+  /** For files that also depend on the system (D-114). */
+  reference_system?: string | null;
   counts: Record<string, number>;
   verified_zone: number | null;
+  verified_system?: string | null;
   /** The team file's formatting, kept byte for byte on download (v83). */
   line_ending: 'lf' | 'crlf';
   final_newline: boolean;
@@ -408,7 +413,9 @@ export interface ConfigTemplate {
   created_at: string;
   older: number;
 }
-export interface TemplateFile { filename: string; text: string; zone?: number | null }
+export interface TemplateFile { filename: string; text: string; zone?: number | null; system?: string | null }
+/** The team's PCI table (D-114): which table is in use, not its rows. */
+export interface PciMapping { filename: string; sha256: string; imported_at: string | null; imported_by: string; systems: number; cells: number }
 export interface GeneratedFile {
   role: TemplateRole; device_id: string; version_id: string; filename: string;
   template_version: string; verified_zone: number | null;

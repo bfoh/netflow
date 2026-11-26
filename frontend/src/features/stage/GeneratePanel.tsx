@@ -1,34 +1,50 @@
-import { Anchor, Badge, Button, Card, Group, NumberInput, Stack, Table, Text, Title } from '@mantine/core';
+import { Anchor, Badge, Button, Card, Group, NumberInput, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
 import { IconDownload, IconFileCode, IconScale } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
 import { DialogError } from '../../components/ConfirmDialog';
+import { Notice } from '../../components/Notice';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useAction, useTemplates } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { ComparedFile, Device, Project, TemplateRole } from '../../types/api';
 import { type Choice, type Choices, EMPTY_CHOICE } from './choices';
 import type { Role, RoleKey } from './roles';
-import { TEMPLATE_ROLES, zoneInName, zoneWords } from './zone';
+import { normalSystem, systemInName, TEMPLATE_ROLES, zoneInName, zoneWords } from './zone';
 
-/** Step 1: the system's zone (D-111), prefilled from its name (B001z045 → 45). */
+/** Step 1: the system's zone (D-111) and system (D-114), prefilled from its name (B007z045 → B007, 45). */
 export function ZoneField({ project }: { project: Project }) {
   const guess = zoneInName(project.name);
+  const sysGuess = systemInName(project.name);
   const [value, setValue] = useState<number | string>(project.zone ?? guess ?? '');
-  const save = useAction((z: number | null) => api.updateProject(project.id, { zone: z }), 'Zone saved');
+  const [sysText, setSysText] = useState(project.system_id ?? sysGuess ?? '');
+  const save = useAction((body: { zone: number | null; system_id: string | null }) => api.updateProject(project.id, body),
+    'Zone and system saved');
   const zone = typeof value === 'number' ? value : undefined;
-  const changed = (zone ?? null) !== (project.zone ?? null);
+  const system = sysText.trim() ? normalSystem(sysText) : null;
+  const changed = (zone ?? null) !== (project.zone ?? null) || (system ?? null) !== (project.system_id ?? null);
+  const pcis = useQuery({ queryKey: ['pci-row', system], queryFn: () => api.pciRow(system!), enabled: !!system, retry: false });
   return (
     <Card withBorder>
       <Group align="flex-end" gap="sm" wrap="wrap">
         <NumberInput label="Zone" w={120} min={1} max={128} value={value} onChange={setValue}
           description={!project.zone && guess ? `From the name: ${guess}` : undefined} />
-        <Button variant={changed ? 'filled' : 'default'} disabled={!changed || (zone !== undefined && (zone < 1 || zone > 128))}
-          loading={save.isPending} onClick={() => save.mutate(zone ?? null)}>Save zone</Button>
+        <TextInput label="System" w={140} value={sysText} onChange={(e) => setSysText(e.currentTarget.value)}
+          placeholder="e.g. B007" error={sysText.trim() && !system ? 'A B system, e.g. B007' : undefined}
+          description={!project.system_id && sysGuess ? `From the name: ${sysGuess}` : undefined} />
+        <Button variant={changed ? 'filled' : 'default'} disabled={!changed || (zone !== undefined && (zone < 1 || zone > 128)) || system === undefined}
+          loading={save.isPending} onClick={() => save.mutate({ zone: zone ?? null, system_id: system ?? null })}>Save</Button>
         {zone && zone >= 1 && zone <= 128 && <Text size="sm" c="dimmed" pb={6}>{zoneWords(zone)}</Text>}
       </Group>
-      <Text size="xs" c="dimmed" mt={4}>The devices&apos; files are generated for this zone in step 2, from the templates in Settings → For all systems.</Text>
+      {system && (
+        <Text size="xs" c="dimmed" mt={4}>
+          {system} · MRBTS-{Number(system.slice(1))} · {pcis.data ? `cell PCIs ${pcis.data.pcis.filter((p) => p !== null).join(', ')} (PCI table)`
+            : pcis.isError ? 'not in the PCI table (Settings → For all systems)' : '…'}
+        </Text>
+      )}
+      <Text size="xs" c="dimmed" mt={4}>The devices&apos; files are generated for this zone (and the modem&apos;s and BBU&apos;s for this system) in step 2, from the templates in Settings → For all systems.</Text>
     </Card>
   );
 }
@@ -40,15 +56,18 @@ export function GeneratePanel({ project, roles, choices, onReplace }: {
   const templates = useTemplates();
   const have = new Set((templates.data ?? []).map((t) => t.role));
   const byRole = new Map(roles.map(({ role, device }) => [role.key, device]));
-  const wanted = TEMPLATE_ROLES.filter((t) => byRole.has(t.wizardRole));
+  const wanted = TEMPLATE_ROLES.filter((t) => t.wizardRole && byRole.has(t.wizardRole));
   const ready = wanted.filter((t) => have.has(t.role));
-  const assignments = Object.fromEntries(ready.map((t) => [t.role, byRole.get(t.wizardRole)!.id])) as Partial<Record<TemplateRole, string>>;
+  const assignments = Object.fromEntries(ready.map((t) => [t.role, byRole.get(t.wizardRole!)!.id])) as Partial<Record<TemplateRole, string>>;
+  const needsSystem = ready.some((t) => t.system) && !project.system_id;
+  const bbu = have.has('bbu_scf');
+  const [skipped, setSkipped] = useState<string[] | null>(null);
   const [compared, setCompared] = useState<ComparedFile[] | null>(null);
   const [ask, confirmDialog] = useConfirm();
   const generate = useAction(() => api.generateFiles(project.id, assignments),
     (r) => `${r.length} files made for zone ${project.zone}`, { errorInDialog: true });
   const compare = useAction(() => api.compareFiles(project.id, assignments), undefined, { errorInDialog: true });
-  const save = useAction(() => api.downloadTemplateFiles(project.zone!), (n) => `Downloaded ${n}`, { errorInDialog: true });
+  const save = useAction(() => api.downloadSystemFiles(project.id, assignments), (r) => `Downloaded ${r.name}`, { errorInDialog: true });
   const apply = (made: { role: TemplateRole; version_id: string }[]) => {
     const next: Choices = { ...choices };
     for (const m of made) {
@@ -59,9 +78,9 @@ export function GeneratePanel({ project, roles, choices, onReplace }: {
     onReplace(next);
   };
   const run = () => generate.mutate(undefined, { onSuccess: apply });
-  const chosen = ready.some((t) => (choices[t.wizardRole] as Choice | undefined)?.[t.slot]);
+  const chosen = ready.some((t) => (choices[t.wizardRole!] as Choice | undefined)?.[t.slot]);
   const name = (r: TemplateRole) => TEMPLATE_ROLES.find((x) => x.role === r)?.label ?? r;
-  if (wanted.length === 0) return null;
+  if (wanted.length === 0 && !bbu) return null;
   return (
     <Card withBorder>
       {confirmDialog}
@@ -71,7 +90,9 @@ export function GeneratePanel({ project, roles, choices, onReplace }: {
       </Group>
       {!project.zone ? (
         <Text size="sm">Set the system&apos;s zone in step 1 first.</Text>
-      ) : ready.length === 0 ? (
+      ) : needsSystem ? (
+        <Text size="sm">Set the system (e.g. B007) in step 1 first: the modem&apos;s and the BBU&apos;s files depend on it.</Text>
+      ) : ready.length === 0 && !bbu ? (
         <Text size="sm">No templates yet: import the team&apos;s files once in <Anchor component={Link} to="/settings?tab=shared" size="sm">Settings → For all systems</Anchor>. Files can still be imported by hand below.</Text>
       ) : (
         <Stack gap="xs">
@@ -85,9 +106,17 @@ export function GeneratePanel({ project, roles, choices, onReplace }: {
             <Button variant="default" leftSection={<IconScale size={16} />} loading={compare.isPending}
               onClick={() => compare.mutate(undefined, { onSuccess: setCompared })}>Compare with the devices&apos; files</Button>
             <Button variant="default" leftSection={<IconDownload size={16} />} loading={save.isPending}
-              onClick={() => save.mutate(undefined)}>Download the files for zone {project.zone}</Button>
+              onClick={() => save.mutate(undefined, { onSuccess: (r) => setSkipped(r.skipped) })}>
+              Download the files for zone {project.zone}{project.system_id ? ` · ${project.system_id}` : ''}</Button>
           </Group>
-          <Text size="xs" c="dimmed">The download is byte for byte as the team writes the files (their line endings and last line).</Text>
+          <Text size="xs" c="dimmed">The download is byte for byte as the team writes the files (their line endings and last line).
+            {bbu && ' It includes the Flexi BBU’s SCF, with its cells’ PCIs from the PCI table.'}
+            {ready.some((t) => t.secret) && ' The modem’s file gets its admin password from the modem’s login.'}</Text>
+          {skipped && skipped.length > 0 && (
+            <Notice kind="caution" compact title="Not in the download">
+              {skipped.map((s) => <div key={s}>{s}</div>)}
+            </Notice>
+          )}
           <DialogError error={generate.error ?? compare.error ?? save.error} />
           {compared && (
             <Table.ScrollContainer minWidth={520}>

@@ -164,9 +164,17 @@ recovery for this family; the team's procedure combines documented boot-menu ste
   (Basic System Configuration Guide, CLI usage). A missing prompt is reported, not a
   failure; everything is saved by then.
 
+## Its configuration file (D-114)
+The team's file for each system is generated from a template:
+- by zone and system: `Zone` + 3 digits, the system letter + 3 digits after the site-type
+  prefix, 130.zone and 10.(127+zone);
+- the admin password is a secret slot, filled from the modem's login only when the file is
+  downloaded from Stage a system;
+- checked on two systems in two zones: byte for byte.
+
 ## Not built yet
 - Loading the modem's configuration (today: pasted on the console by hand, then
-  `admin save`). Planned as a normal plan (preview, approve, run) that types the file over
+  `admin save`); the file itself is generated (D-114). Planned as a normal plan (preview, approve, run) that types the file over
   the console and stops at the first refused line; needs the team's files for two zones.
 - The modem's file by zone (D-111), once two zones' files prove the rules.
 - Reading facts, backups and firmware for this model.

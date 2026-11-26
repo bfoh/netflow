@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -65,6 +65,30 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
+/** Download a zip of files; returns its name and what the backend left out (and why). */
+async function downloadZip(method: 'GET' | 'POST', path: string, fallbackName: string, body?: unknown): Promise<{ name: string; skipped: string[] }> {
+  const res = await fetch(`/api${path}`, {
+    method, headers: { 'X-UNDM-Actor': getActor(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) {
+    const data: unknown = await res.json().catch(() => null);
+    throw new ApiError(res.status, describe(data, res.status));
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? fallbackName;
+  let skipped: string[] = [];
+  try {
+    skipped = JSON.parse(decodeURIComponent(res.headers.get('X-UNDM-Skipped') ?? '%5B%5D')) as string[];
+  } catch {
+    skipped = [];
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return { name, skipped };
+}
+
 /** Download a file the backend makes (e.g. a system package) under the name it gives. */
 async function download(path: string, fallbackName: string): Promise<string> {
   const res = await fetch(`/api${path}`, { headers: { 'X-UNDM-Actor': getActor() } });
@@ -118,12 +142,23 @@ export const api = {
   // Team templates and generated files (D-111).
   templates: () => request<ConfigTemplate[]>('GET', '/templates'),
   importTemplate: (body: TemplateFile & { role: TemplateRole; verify?: TemplateFile }) =>
-    request<{ template: ConfigTemplate; to_check: string[]; verified_bytes: boolean | null }>('POST', '/templates', body),
-  /** Every template for a zone, byte for byte as the team writes the files (one zip). */
-  downloadTemplateFiles: (zone: number) =>
-    download(`/templates/files.zip?zone=${zone}`, `z${String(zone).padStart(3, '0')}-files.zip`),
-  downloadTemplateFile: (role: TemplateRole, zone: number | null) =>
-    download(`/templates/${role}/file${zone ? `?zone=${zone}` : ''}`, `${role}.txt`),
+    request<{ template: ConfigTemplate; to_check: string[]; verified_bytes: boolean | null; accepted: string[] }>('POST', '/templates', body),
+  /** Every template for a zone (and system), byte for byte as the team writes the files (one zip). */
+  downloadTemplateFiles: (zone: number, system?: string | null) =>
+    downloadZip('GET', `/templates/files.zip?zone=${zone}${system ? `&system=${encodeURIComponent(system)}` : ''}`,
+      `z${String(zone).padStart(3, '0')}-files.zip`),
+  downloadTemplateFile: (role: TemplateRole, zone: number | null, system?: string | null) =>
+    download(`/templates/${role}/file?${zone ? `zone=${zone}` : ''}${system ? `&system=${encodeURIComponent(system)}` : ''}`, `${role}.txt`),
+  /** A system's files for its zone and system (the modem's password from its login, D-114). */
+  downloadSystemFiles: (pid: string, assignments: Partial<Record<TemplateRole, string>>) =>
+    downloadZip('POST', `/projects/${pid}/files.zip`, 'files.zip', { assignments }),
+  pciMapping: () => request<PciMapping | null>('GET', '/settings/pci-mapping'),
+  importPciMapping: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<PciMapping>('POST', '/settings/pci-mapping', form);
+  },
+  pciRow: (system: string) => request<{ system: string; pcis: (number | null)[] }>('GET', `/settings/pci-mapping/${encodeURIComponent(system)}`),
   deleteTemplate: (id: string) => request<void>('DELETE', `/templates/${id}`),
   previewTemplate: (role: TemplateRole, zone: number) =>
     request<{ filename: string; text: string }>('GET', `/templates/${role}/preview?zone=${zone}`),

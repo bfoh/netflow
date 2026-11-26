@@ -13,6 +13,20 @@ convention, not vendor facts:
 
 Everything else is copied unchanged. A template also keeps the file's formatting (line
 endings, final line break) so a download is the team's file byte for byte (``as_file``).
+
+Files that also depend on the system (the modem's configuration and the Flexi BBU's site
+configuration file, D-114) are made into templates with more rules, again the team's
+convention as shown by two systems' files in two zones (2026-11-26; their files differ
+in nothing else):
+
+6. the zone as ``Z`` or ``Zone`` + three digits (``Z041``, ``Zone041``);
+7. the zone in the SCF's ``tac`` parameter, without leading zeros;
+8. the system number in ``MRBTS-<n>``, and as its letter + three digits, alone or after a
+   site-type prefix and with or without a dash (``-B007-``, ``…B-007``, ``…B007``);
+9. each cell's ``phyCellId`` (``LNCEL-<k>``), from the team's PCI table, not from the file;
+10. the modem's ``password "…"`` line: a secret slot, filled from the modem's login when a
+    file is handed out, never kept in the template.
+
 Pure functions: no database, no web framework.
 """
 
@@ -26,7 +40,9 @@ ZONE_MIN, ZONE_MAX = 1, 128  # 127 + zone must stay a valid octet
 # Markers in a stored template. "${" does not occur in the team's files; a file that has it
 # is refused rather than guessed.
 TAG, PLUS127, ZONE = "${zone_tag}", "${zone_127}", "${zone}"
-MARKER = re.compile(r"\$\{zone(_tag|_127)?\}")
+ZONE3, SYS, SYS3, SECRET, STAMP = "${zone3}", "${sys}", "${sys3}", "${admin_password}", "${stamp}"
+MARKER = re.compile(r"\$\{(?:zone_tag|zone_127|zone3|zone|sys3|sys|pci_\d+|admin_password|stamp)\}")
+SYSTEM_LETTERS = "B"  # B systems (two cells) only, for now (product owner, 2026-11-26)
 
 RULES = (
     ("zone_tag", "zone tag (z + 3 digits)"),
@@ -34,6 +50,13 @@ RULES = (
     ("ten_zone", "10.zone.x.x"),
     ("ten_zero_zone", "10.0.zone.x"),
     ("onethirty_zone", "130.zone.x.x"),
+)
+SYSTEM_RULES = (
+    ("zone3", "Z / Zone + zone (3 digits)"),
+    ("tac", "tac = zone"),
+    ("system", "system number"),
+    ("pci", "phyCellId of each cell"),
+    ("secret", "admin password (from the login)"),
 )
 
 _IPV4 = re.compile(r"(?<![\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![\d.])")
@@ -55,26 +78,118 @@ def zone_tag(zone: int) -> str:
 
 
 def zone_from_text(text: str) -> int | None:
-    """A zone named in a file or system name (``z041-…``, ``B001z045``), if exactly one."""
-    found = {int(m.group(1)) for m in re.finditer(r"(?i)z(\d{3})(?!\d)", text)}
+    """A zone named in a file or system name (``z041-…``, ``B001z045``, ``Zone041``), if
+    exactly one."""
+    found = {int(m.group(1)) for m in re.finditer(r"(?i)z(?:one)?(\d{3})(?!\d)", text)}
     found = {z for z in found if ZONE_MIN <= z <= ZONE_MAX}
     return found.pop() if len(found) == 1 else None
+
+
+@dataclass(frozen=True)
+class SystemRef:
+    """A system's number with its letter, e.g. B007: letter B, number 7."""
+
+    letter: str
+    number: int
+
+    @property
+    def tag(self) -> str:
+        return f"{self.letter}{self.number:03d}"  # B007
+
+    @property
+    def table_key(self) -> str:
+        return f"{self.letter}{self.number}"  # B7, as the PCI table writes it
+
+
+def parse_system(text: str) -> SystemRef:
+    """'B007', 'B7' or 'b7' -> B007. Only the letters UNDM supports so far."""
+    m = re.fullmatch(r"\s*([A-Za-z])-?0*(\d{1,3})\s*", text or "")
+    if not m or not 1 <= int(m.group(2)) <= 999:
+        raise ZoneError("The system is a letter and a number, e.g. B007")
+    letter = m.group(1).upper()
+    if letter not in SYSTEM_LETTERS:
+        raise ZoneError(f"Only {', '.join(SYSTEM_LETTERS)} systems are supported so far")
+    return SystemRef(letter, int(m.group(2)))
+
+
+def system_from_text(text: str) -> SystemRef | None:
+    """A system named in a system or file name, or in a file: B007 (alone or after a site
+    type, with or without a dash) or MRBTS-7; None unless exactly one."""
+    found: set[int] = set()
+    for letter in SYSTEM_LETTERS:
+        found |= {int(m.group(1)) for m in re.finditer(
+            rf"(?<!\d){letter}-?(\d{{3}})(?![0-9A-Fa-f])", text)}
+    found |= {int(m.group(1)) for m in re.finditer(r"MRBTS-(\d{1,3})(?!\d)", text)}
+    found = {n for n in found if 1 <= n <= 999}
+    return SystemRef(SYSTEM_LETTERS[0], found.pop()) if len(found) == 1 else None
 
 
 @dataclass
 class Templated:
     text: str
     counts: dict[str, int] = field(default_factory=lambda: {k: 0 for k, _ in RULES})
+    cells: int = 0  # cells found (phyCellId), for files that have them
     # Lines that still hold the zone's numbers in another form: for a person to check.
     to_check: list[tuple[int, str]] = field(default_factory=list)
 
 
-def templatize(text: str, zone: int) -> Templated:
-    """Replace the reference zone's values by markers, following the five rules."""
+_LNCEL = re.compile(r'(<managedObject\b[^>]*\bdistName="[^"]*/LNCEL-(\d+)"[^>]*>)(.*?)'
+                    r"(</managedObject>)", re.S)
+_PCI = re.compile(r'(<p name="phyCellId">)\d+(</p>)')
+_PASSWORD = re.compile(r'(?m)^([ \t]*password[ \t]+)"[^"\r\n]*"')
+
+
+def mask_secrets(text: str) -> tuple[str, int]:
+    """The ``password "…"`` lines with the secret slot instead of the value."""
+    return _PASSWORD.subn(lambda m: f'{m.group(1)}"{SECRET}"', text)
+
+
+def _system_rules(text: str, zone: int, system: SystemRef, out: Templated,
+                  cells: bool, secrets: bool) -> str:
+    def count(kind: str, n: int = 1) -> None:
+        out.counts[kind] = out.counts.get(kind, 0) + n
+
+    def zone3(m: re.Match[str]) -> str:
+        if int(m.group(2)) != zone:
+            return m.group(0)
+        count("zone3")
+        return m.group(1) + ZONE3
+
+    text = re.sub(r"(?<![A-Za-z0-9])(Z|Zone)(\d{3})(?!\d)", zone3, text)
+    text, n = re.subn(rf'(<p name="tac">){zone}(</p>)', rf"\g<1>{ZONE}\g<2>", text)
+    count("tac", n)
+    text, n = re.subn(rf"MRBTS-{system.number}(?!\d)", f"MRBTS-{SYS}", text)
+    count("system", n)
+    # Not inside a number, and not followed by a hex digit (certificate and serial values).
+    text, n = re.subn(rf"(?<!\d){system.letter}(-?){system.number:03d}(?![0-9A-Fa-f])",
+                      rf"{system.letter}\g<1>{SYS3}", text)
+    count("system", n)
+    if cells:
+        def cell(m: re.Match[str]) -> str:
+            body, k = _PCI.subn(rf"\g<1>${{pci_{m.group(2)}}}\g<2>", m.group(3))
+            if k:
+                out.cells = max(out.cells, int(m.group(2)))
+                count("pci", k)
+            return m.group(1) + body + m.group(4)
+
+        text = _LNCEL.sub(cell, text)
+    if secrets:
+        text, n = mask_secrets(text)
+        count("secret", n)
+    return text
+
+
+def templatize(text: str, zone: int, system: SystemRef | None = None, *,
+               cells: bool = False, secrets: bool = False) -> Templated:
+    """Replace the reference zone's values by markers, following the five rules; with a
+    system, also the system's rules (6 to 10, D-114)."""
     check_zone(zone)
     if "${" in text:
         raise ZoneError("The file contains '${', which UNDM uses for its own markers")
     out = Templated(text="")
+    if system is not None:
+        out.counts.update({k: 0 for k, _ in SYSTEM_RULES})
+        text = _system_rules(text, zone, system, out, cells, secrets)
     lines: list[str] = []
     for n, line in enumerate(text.split("\n"), 1):
         def tag_sub(m: re.Match[str]) -> str:
@@ -104,18 +219,69 @@ def templatize(text: str, zone: int) -> Templated:
         line = _IPV4.sub(ip_sub, line)
         # The zone's numbers left in another form (e.g. "92" or "219" on their own).
         rest = MARKER.sub("", line)
-        if re.search(rf"(?<![\d.]){zone}(?![\d.])|(?<![\d.]){127 + zone}(?![\d.])", rest):
+        other = (rf"|(?<![\d.]){system.number}(?![\d.])|{system.number:03d}"
+                 if system is not None else "")
+        if re.search(rf"(?<![\d.]){zone}(?![\d.])|(?<![\d.]){127 + zone}(?![\d.]){other}",
+                     rest):
             out.to_check.append((n, line.strip()[:160]))
         lines.append(line)
     out.text = "\n".join(lines)
     return out
 
 
-def render(template: str, zone: int) -> str:
-    """The file for ``zone``."""
+def render(template: str, zone: int, system: SystemRef | None = None,
+           pcis: tuple[int, ...] = (), secret: str | None = None, stamp: str | None = None,
+           keep_secret: bool = False) -> str:
+    """The file for ``zone`` (and ``system``, its cells' PCIs, the modem's password and a
+    time stamp, where the template has those markers). ``keep_secret`` leaves the password
+    slot in place (files stored for a later load)."""
     check_zone(zone)
-    values = {TAG: f"z{zone:03d}", PLUS127: str(127 + zone), ZONE: str(zone)}
-    return MARKER.sub(lambda m: values[m.group(0)], template)
+    values = {TAG: f"z{zone:03d}", PLUS127: str(127 + zone), ZONE: str(zone),
+              ZONE3: f"{zone:03d}"}
+    if system is not None:
+        values |= {SYS: str(system.number), SYS3: f"{system.number:03d}"}
+    values |= {f"${{pci_{k}}}": str(v) for k, v in enumerate(pcis, 1)}
+    if secret is not None:
+        values[SECRET] = secret
+    if stamp is not None:
+        values[STAMP] = stamp
+
+    def fill(m: re.Match[str]) -> str:
+        marker = m.group(0)
+        if marker in values:
+            return values[marker]
+        if marker == SECRET and keep_secret:
+            return marker
+        raise ZoneError(_MISSING.get(marker.split("_")[0] if marker.startswith("${pci")
+                                     else marker, f"This template needs {marker}"))
+    return MARKER.sub(fill, template)
+
+
+_MISSING = {
+    SYS: "This template needs the system (e.g. B007): set it in Stage a system, step 1",
+    SYS3: "This template needs the system (e.g. B007): set it in Stage a system, step 1",
+    "${pci": "This template needs the cells' PCIs: import the PCI table in Settings → For "
+             "all systems, with this system in it",
+    SECRET: "This file sets the modem's admin password: choose the modem's login first",
+    STAMP: "This template's file name needs a time stamp",
+}
+
+
+def needs(template: str) -> set[str]:
+    """What a template needs besides the zone: 'system', 'pci', 'secret'."""
+    found = set(MARKER.findall(template))
+    out = set()
+    if SYS in found or SYS3 in found:
+        out.add("system")
+    if any(m.startswith("${pci_") for m in found):
+        out.add("pci")
+    if SECRET in found:
+        out.add("secret")
+    return out
+
+
+def cells_of(template: str) -> int:
+    return max((int(k) for k in re.findall(r"\$\{pci_(\d+)\}", template)), default=0)
 
 
 def markers(template: str) -> int:

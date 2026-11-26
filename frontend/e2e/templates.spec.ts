@@ -17,8 +17,8 @@ test('generate a device file from a template for the system zone', async ({ page
 
   await page.goto(`/stage/${p.id}?step=0`);
   await expect(page.getByLabel('Zone')).toHaveValue('7');
-  await page.getByRole('button', { name: 'Save zone' }).click();
-  await expect(page.getByText('Zone saved')).toBeVisible();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('Zone and system saved')).toBeVisible();
   await page.goto(`/stage/${p.id}?step=1`);
   await page.getByRole('button', { name: 'Generate the files for zone 7' }).click();
   await expect(page.getByText(/files? made for zone 7/)).toBeVisible();
@@ -28,7 +28,7 @@ test('generate a device file from a template for the system zone', async ({ page
   // The download is byte for byte as the team writes the file.
   const [download] = await Promise.all([page.waitForEvent('download'),
     page.getByRole('button', { name: 'Download the files for zone 7' }).click()]);
-  expect(download.suggestedFilename()).toBe('z007-files.zip');
+  expect(download.suggestedFilename()).toMatch(/^E2E_z007_\d+-files\.zip$/);
   const one = await request.get('/api/templates/bhdmz/file?zone=7');
   expect((await one.body()).toString('utf8')).toBe(text.replace('z041', 'z007').replace('10.168.', '10.134.'));
 });

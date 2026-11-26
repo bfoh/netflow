@@ -7,6 +7,7 @@ import { api } from '../../services/api';
 import type { LoginDefaults } from '../../types/api';
 import { CredentialsPanel } from '../devices/CredentialsPanel';
 import { CertificateForm } from './CertificateForm';
+import { PciTableCard } from './PciTableCard';
 import { TemplatesCard } from './TemplatesCard';
 
 const EMPTY: LoginDefaults = {
@@ -98,6 +99,7 @@ export function SharedSettings() {
       </Card>
       <DefaultLogins />
       <TemplatesCard />
+      <PciTableCard />
       <SharedCertificate />
     </Stack>
   );

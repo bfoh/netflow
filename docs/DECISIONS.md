@@ -1581,3 +1581,58 @@ operations.
   browser automation after bench screenshots.
 - Not built yet; needs the answers to Q-54.
 
+### D-114 The modem's file and the Flexi BBU's SCF from templates, by zone and system (2026-11-26)
+The product owner supplied, for two systems in two zones, the LTE modem's configuration
+file and the Flexi BBU's site configuration file (SCF, RAML XML), plus the team's PCI table
+(a workbook). Their decisions, the same day:
+- the cells' PCIs come from the PCI table's **Compact Sector** columns (cell 1, cell 2),
+  never from the supplied file;
+- latitude, longitude, altitude and the cells' root sequence index stay as in the template;
+- the SCF's `descriptiveName` follows the pattern `<site type>-<system>-Z<zone> …`, even
+  though one supplied file has a free-text label there;
+- the modem's admin password is not kept in a template; a handed-out file takes it from the
+  modem's login;
+- a generated SCF's name ends with the time it was made;
+- B systems (two cells) only, for now.
+
+**Rules** (`configgen/zone.py`), applied only to the roles `modem` and `bbu_scf`, beyond
+D-111's five:
+1. `Z`/`Zone` + the zone in 3 digits;
+2. `tac` = the zone;
+3. `MRBTS-<n>`, and the system letter + 3 digits, alone or after a site-type prefix, with or
+   without a dash. Never inside a number or before a hex digit, so certificate and serial
+   values are left alone;
+4. `phyCellId` of `LNCEL-<k>` = the table's PCI for cell k;
+5. the modem's `password "…"` becomes a secret slot.
+
+The modem file's name keeps its zone tag without leading zeros (`…z<zone>.txt`), as the
+team names it.
+
+**Proof (local, not committed).** The first system's files, made into templates and
+rendered for the second system and zone:
+- the modem file came out byte for byte identical;
+- the SCF came out identical except three lines, each from a decision above: the two
+  `phyCellId` values (now from the table) and `descriptiveName` (now the pattern).
+
+**System.** `Project.system_id` (e.g. B007), prefilled from the system name and set in
+wizard step 1 with the zone (migration 96bf3e258ce6). Templates record their reference
+and checked systems.
+
+**PCI table.** Settings → For all systems → PCI table:
+- imported from .xlsx (read with the standard library; no new dependency) or CSV;
+- kept in `app_settings`; audited without its rows;
+- PCIs must be 0–503 (3GPP TS 36.211).
+
+**Downloads:**
+- `POST /api/projects/{id}/files.zip` gives a system's files for its zone and system. The
+  modem's file gets the password of the modem device's login and is left out, with the
+  reason, when there is none.
+- Settings downloads never include the modem's file.
+- What was left out travels in `X-UNDM-Skipped`.
+- Generated files stored on the modem device keep the password slot, for the console load
+  still to be built.
+
+**Import check.** A second file that differs is shown line by line. The person may keep
+the template anyway: "Keep it anyway", `accept_differences`, recorded as
+`counts.accepted_differences`, audited with line numbers only.
+

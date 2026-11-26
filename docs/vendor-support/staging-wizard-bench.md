@@ -95,6 +95,23 @@ If it stops:
   switch the modem off and on, then run again.
 - A modem that already had its first access is left alone ("already done" or "refused").
 
+## The modem's file and the BBU's SCF (since v88, D-114)
+Once, in **Settings → For all systems**:
+1. **Configuration templates → LTE modem → Import…**: one system's modem file. Add another
+   system's and zone's file as the check; it should say "byte for byte".
+2. **Flexi BBU site configuration file (SCF) → Import…**: one system's SCF, with another
+   system's as the check. A line written by hand (a site label) is shown: press **Keep it
+   anyway** if it differs on purpose.
+3. **PCI table → Import the table…**: the team's PCI workbook.
+
+For each system:
+1. In wizard step 1, check the **System** (read from the name, e.g. B007) next to the zone.
+   The PCIs of its cells are shown, and **Save**.
+2. Choose the modem's login (step 1).
+3. In step 2, press **Download the files for zone N · B…**. The zip holds every team file
+   for the system, with the modem's file (its password from the modem's login) and the
+   BBU's SCF (its name stamped with the time).
+
 ## Cabling (all four at once)
 One small switch, connected to nothing else, one cable per device (two would make a loop):
 

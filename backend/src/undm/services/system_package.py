@@ -29,6 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from undm import __version__
+from undm.configgen import zone as zone_rules
 from undm.db.models import (
     ConfigVersion,
     CredentialRef,
@@ -83,7 +84,7 @@ def export_system(session: Session, project: Project, actor: str, *,
         "system": {"name": project.name, "description": project.description,
                    "site": project.site, "purpose": project.purpose,
                    "certificate_subject": project.certificate_subject,
-                   "zone": project.zone},
+                   "zone": project.zone, "system_id": project.system_id},
         "logins": sorted({r.name for r in refs.values()}),
         "shared_logins": sorted({r.name for r in shared.values()}),
         "devices": [], "files": [], "links": [], "firmware": [],
@@ -216,7 +217,8 @@ def import_system(session: Session, package: BinaryIO, actor: str,
                           site=str(system.get("site", "")), purpose=str(system.get("purpose", "")),
                           certificate_subject=system.get("certificate_subject"),
                           zone=system.get("zone") if isinstance(system.get("zone"), int)
-                          and 1 <= system["zone"] <= 128 else None)
+                          and 1 <= system["zone"] <= 128 else None,
+                          system_id=_system_id(system.get("system_id")))
         session.add(project)
         session.flush()
         logins: dict[str, CredentialRef] = {}
@@ -339,3 +341,12 @@ def export_backups(session: Session, project: Project, actor: str,
                           "since": since.isoformat() if since else None})
     return out.getvalue()
 
+
+def _system_id(value: object) -> str | None:
+    """A system's number from a package, if it is one UNDM understands (D-114)."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return zone_rules.parse_system(value).tag
+    except zone_rules.ZoneError:
+        return None

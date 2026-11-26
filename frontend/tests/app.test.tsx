@@ -951,10 +951,10 @@ describe('files from the team templates (D-111)', () => {
     renderAt('/stage/p1?step=0');
     expect(await screen.findByDisplayValue('45')).toBeInTheDocument();
     expect(screen.getByText('z045 · 10.172.x · 10.45.x · 10.0.45.x · 130.45.x')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Save zone' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1' && c.init?.method === 'PATCH')).toBe(true));
     const sent = calls.find((c) => c.url === '/api/projects/p1' && c.init?.method === 'PATCH');
-    expect(JSON.parse(String(sent?.init?.body))).toEqual({ zone: 45 });
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ zone: 45, system_id: null });
   });
 
   it('Generate makes the files and chooses them; Compare shows the result per device', async () => {
@@ -983,12 +983,14 @@ describe('files from the team templates (D-111)', () => {
   });
 
   it('Settings lists each template and what it was checked against', async () => {
-    mockApi({ '/templates': [tpl('bhdmz')], '/credential-refs': [], '/settings/certificate': { subject: null } });
+    mockApi({ '/templates': [tpl('bhdmz')], '/credential-refs': [], '/settings/certificate': { subject: null },
+      '/settings/pci-mapping': null });
     renderAt('/settings');
     const table = await screen.findByText('BH-DMZ switch (2930F, OOBM port 2)');
     expect(table).toBeInTheDocument();
     expect(await screen.findByText('against zone 42')).toBeInTheDocument();
-    expect(screen.getAllByText('not imported').length).toBe(4);
+    // Six templates not imported, and the PCI table not imported either.
+    await vi.waitFor(() => expect(screen.getAllByText('not imported').length).toBe(7));
     expect(screen.getByText('Windows line endings (CRLF) · no final line break')).toBeInTheDocument();
   });
 
@@ -998,11 +1000,14 @@ describe('files from the team templates (D-111)', () => {
     const calls = mockApi({
       '/projects/p1': project({ zone: 45 }), '/projects/p1/staging-plans': [],
       '/projects/p1/devices': [sw('a', 'Aruba 2930F (OOBM port 2)')], '/templates': [tpl('bhdmz')],
-      '/credential-refs': [], '/settings/certificate': { subject: null },
+      '/credential-refs': [], '/settings/certificate': { subject: null }, '/settings/pci-mapping': null,
     });
     const view = renderAt('/stage/p1?step=1');
     await userEvent.click(await screen.findByRole('button', { name: 'Download the files for zone 45' }));
-    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/templates/files.zip?zone=45')).toBe(true));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1/files.zip')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/projects/p1/files.zip');
+    expect(sent?.init?.method).toBe('POST');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ assignments: { bhdmz: 'a' } });
     view.unmount();
     renderAt('/settings');
     const one = await screen.findByRole('button', { name: 'Download BH-DMZ switch (2930F, OOBM port 2)' });
@@ -1106,5 +1111,98 @@ describe('Nokia modem: first access over the console (D-112)', () => {
     renderAt('/stage/p1?step=4');
     expect(await screen.findByText(/First access \(console\):/)).toBeInTheDocument();
     expect(screen.queryByText(/Still to do in step 4/)).not.toBeInTheDocument();
+  });
+});
+
+describe('the modem and the BBU: files by zone and system (D-114)', () => {
+  const project = (over: Record<string, unknown> = {}) => ({ id: 'p1', name: 'Lab B7z045', description: '', site: '', purpose: '',
+    created_at: '', updated_at: '', certificate_subject: null, staged_at: null, staged_by: '', zone: null, system_id: null, ...over });
+  const tpl = (role: string, over: Record<string, unknown> = {}) => ({ id: `t-${role}`, role, version: 'v1', filename: 'x', reference_zone: 41,
+    reference_system: 'B007', counts: {}, verified_zone: 42, verified_system: 'B009', line_ending: 'lf', final_newline: true,
+    created_by: 't', created_at: '', older: 0, ...over });
+
+  it('the system starts from the system name, is saved with the zone and shows its PCIs', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/projects/p1': project(), '/projects/p1/devices': [], '/projects/p1/staging-plans': [],
+      '/settings/pci-mapping/B007': { system: 'B007', pcis: [12, 13] } });
+    renderAt('/stage/p1?step=0');
+    expect(await screen.findByDisplayValue('B007')).toBeInTheDocument();
+    expect(await screen.findByText(/MRBTS-7 · cell PCIs 12, 13 \(PCI table\)/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1' && c.init?.method === 'PATCH')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/projects/p1' && c.init?.method === 'PATCH');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ zone: 45, system_id: 'B007' });
+  });
+
+  it('the wizard asks for the system before files that depend on it, and says what the download left out', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() }));
+    const modemDevice = device({ id: 'm', name: 'lab-modem', manufacturer: 'Nokia', model: '7705 SAR-Hmc', category: 'router',
+      role: 'Nokia 7705 SAR-Hmc (modem)', driver_id: 'mock.nokia.sar', management_address: '' });
+    mockApi({ '/projects/p1': project({ zone: 45 }), '/projects/p1/staging-plans': [], '/projects/p1/devices': [modemDevice],
+      '/templates': [tpl('modem'), tpl('bbu_scf')] });
+    const first = renderAt('/stage/p1?step=1');
+    expect(await screen.findByText(/Set the system \(e\.g\. B007\) in step 1 first/)).toBeInTheDocument();
+    first.unmount();
+    const calls = mockApi({ '/projects/p1': project({ zone: 45, system_id: 'B007' }), '/projects/p1/staging-plans': [],
+      '/projects/p1/devices': [modemDevice], '/templates': [tpl('modem'), tpl('bbu_scf')] });
+    const answered = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => (url === '/api/projects/p1/files.zip'
+      ? Promise.resolve(new Response('zip', { status: 200, headers: { 'Content-Disposition': 'attachment; filename="B007-files.zip"',
+        'X-UNDM-Skipped': encodeURIComponent(JSON.stringify(["LTE modem configuration: choose the modem's login first (step 1)"])) } }))
+      : answered(url, init))));
+    renderAt('/stage/p1?step=1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Download the files for zone 45 · B007' }));
+    expect(await screen.findByText(/choose the modem's login first/)).toBeInTheDocument();
+    expect(screen.getByText(/It includes the Flexi BBU’s SCF/)).toBeInTheDocument();
+    expect(calls.length).toBeGreaterThan(0);
+  });
+
+  it('an import whose second file differs shows the lines and can be kept anyway', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    mockApi({ '/templates': [], '/credential-refs': [], '/settings/certificate': { subject: null }, '/settings/pci-mapping': null });
+    const answered = globalThis.fetch;
+    const bodies: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/templates' && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as { accept_differences?: boolean };
+        bodies.push(body);
+        return Promise.resolve(body.accept_differences
+          ? new Response(JSON.stringify({ template: tpl('bbu_scf', { counts: { accepted_differences: 1 } }), to_check: [], verified_bytes: false,
+            accepted: ["line 4: UNDM 'label A' / file 'label B'"] }), { status: 201, headers: { 'Content-Type': 'application/json' } })
+          : new Response(JSON.stringify({ error: 'The template does not give the zone 42, system B009 file exactly: 1 line(s) differ, first at line 4. Nothing was kept.',
+            details: ["line 4: UNDM 'label A' / file 'label B'"] }), { status: 409, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return answered(url, init);
+    }));
+    renderAt('/settings');
+    const row = (await screen.findByText('Flexi BBU site configuration file (SCF)')).closest('tr')!;
+    await userEvent.click(within(row).getByRole('button', { name: 'Import…' }));
+    const dialog = await screen.findByRole('dialog');
+    // Mantine's file inputs: a button with a hidden <input type=file> (the team's file, then the second file).
+    await userEvent.upload(dialog.querySelectorAll('input[type="file"]')[0] as HTMLInputElement, new File(['<raml/>'], 'scf_MRBTS-7_x-Z041.xml'));
+    await userEvent.upload(dialog.querySelectorAll('input[type="file"]')[1] as HTMLInputElement, new File(['<raml/>'], 'scf_MRBTS-9_x-Z042.xml'));
+    await userEvent.type(within(dialog).getByLabelText('Its system'), 'B009');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
+    expect(await within(dialog).findByText("line 4: UNDM 'label A' / file 'label B'")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Keep it anyway' }));
+    expect(await within(dialog).findByText(/except 1 accepted line/)).toBeInTheDocument();
+    expect(bodies).toHaveLength(2);
+    expect((bodies[1] as { accept_differences?: boolean; verify?: { system?: string } }).accept_differences).toBe(true);
+    expect((bodies[1] as { verify?: { system?: string } }).verify?.system).toBe('B009');
+  });
+
+  it('the PCI table is imported once and looked up by system', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/templates': [], '/credential-refs': [], '/settings/certificate': { subject: null },
+      '/settings/pci-mapping': { filename: 'pci.xlsx', sha256: 'x', imported_at: null, imported_by: 'tester', systems: 3, cells: 2 },
+      '/settings/pci-mapping/B007': { system: 'B007', pcis: [12, 13] } });
+    renderAt('/settings');
+    expect(await screen.findByText('3 systems')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Look up a system'), 'b7');
+    expect(await screen.findByText('B007: 12, 13')).toBeInTheDocument();
+    const input = document.querySelector('input[type="file"][accept=".xlsx,.csv,text/csv"]') as HTMLInputElement;
+    await userEvent.upload(input, new File(['x'], 'pci.xlsx'));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/settings/pci-mapping' && c.init?.method === 'POST')).toBe(true));
   });
 });

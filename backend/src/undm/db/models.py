@@ -81,6 +81,9 @@ class Project(TimestampMixin, Base):
     staged_by: Mapped[str] = mapped_column(String(120), default="", server_default="")
     # The zone its files are generated for (D-111): 1-128.
     zone: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Its system, a letter and three digits such as B007 (D-114): the modem's and the BBU's
+    # files depend on it, and its cells' PCIs come from the team's PCI table.
+    system_id: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
     devices: Mapped[list[Device]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
@@ -344,10 +347,13 @@ class ConfigTemplate(Base):
     version: Mapped[str] = mapped_column(String(40), default="")
     filename: Mapped[str] = mapped_column(String(200))  # as imported, e.g. "z041-Sw-v09.pcc"
     reference_zone: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # For files that also depend on the system (D-114): the system of the imported file.
+    reference_system: Mapped[str | None] = mapped_column(String(8), nullable=True)
     text: Mapped[str] = mapped_column(Text)
     sha256: Mapped[str] = mapped_column(String(64))  # of the imported file
     counts: Mapped[dict[str, Any]] = mapped_column(default=dict)
     verified_zone: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    verified_system: Mapped[str | None] = mapped_column(String(8), nullable=True)
     # The team file's formatting, so a download is byte for byte like it (v83).
     line_ending: Mapped[str] = mapped_column(String(4), default="lf", server_default="lf")
     final_newline: Mapped[bool] = mapped_column(default=True, server_default=true())

@@ -11,6 +11,17 @@ search found, and the decision on how UNDM will help (D-113).
   the work is done in the web portal (WebEM) in a browser.
 - The team has no Nokia tool or manual for scripted BTS operations.
 
+## Given by the product owner (2026-11-26, later the same day)
+- Software package: `SBTS26R2_FSM3_0000_000091_000000_release_BTSSM_downloadable_A54`. It is
+  too large to send and stays on the technician's PC; its size and SHA-256 will let UNDM
+  check the file chosen.
+- Laptop address on the LMP: 192.168.255.126 (mask assumed 255.255.255.0).
+- The SCF: a full RAML 2.1 export (`raml21.xsd`, `cmData`), 207 managed objects, 86 of them
+  runtime (`_R`) objects. UNDM generates it from the team's template by zone and system,
+  with the cells' PCIs from the team's PCI table (D-114).
+- The portal steps will be recorded in a first run done together (screenshots), then
+  turned into UNDM's guided steps.
+
 ## What a web search found (2026-11-26): all unverified
 None of this is from Nokia's own public pages. The sources are copies of Nokia manuals on
 document-sharing sites and forum or blog posts, read as search-engine extracts: the pages
