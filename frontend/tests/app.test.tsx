@@ -936,3 +936,58 @@ describe('finishing a system (D-108)', () => {
     expect(screen.queryByRole('button', { name: 'Finish staging' })).not.toBeInTheDocument();
   });
 });
+
+describe('files from the team templates (D-111)', () => {
+  const project = (over: Record<string, unknown> = {}) => ({ id: 'p1', name: 'Lab z045', description: '', site: '', purpose: '',
+    created_at: '', updated_at: '', certificate_subject: null, staged_at: null, staged_by: '', zone: null, ...over });
+  const sw = (id: string, role: string) => device({ id, name: `lab-${id}`, manufacturer: 'Aruba', model: '2930F', role,
+    driver_id: 'mock.aruba.aos_switch', management_address: '192.168.1.1' });
+  const tpl = (role: string) => ({ id: `t-${role}`, role, version: 'v03', filename: '${zone_tag}-x-v03.pcc', reference_zone: 41,
+    counts: {}, verified_zone: 42, created_by: 't', created_at: '', older: 0 });
+
+  it('the zone starts from the system name and is saved on the system', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/projects/p1': project(), '/projects/p1/devices': [], '/projects/p1/staging-plans': [] });
+    renderAt('/stage/p1?step=0');
+    expect(await screen.findByDisplayValue('45')).toBeInTheDocument();
+    expect(screen.getByText('z045 · 10.172.x · 10.45.x · 10.0.45.x · 130.45.x')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save zone' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1' && c.init?.method === 'PATCH')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/projects/p1' && c.init?.method === 'PATCH');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ zone: 45 });
+  });
+
+  it('Generate makes the files and chooses them; Compare shows the result per device', async () => {
+    window.localStorage.removeItem('undm.stage.p1');
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({
+      '/projects/p1': project({ zone: 45 }), '/projects/p1/staging-plans': [],
+      '/projects/p1/devices': [sw('a', 'Aruba 2930F (OOBM port 2)'), sw('b', 'Aruba 2930F (OOBM port 3)')],
+      '/templates': [tpl('bhdmz')],
+      '/projects/p1/generate-files': [{ role: 'bhdmz', device_id: 'a', version_id: 'v-new', filename: 'z045-x-v03.pcc',
+        template_version: 'v03', verified_zone: 42 }],
+      '/projects/p1/compare-files': [{ role: 'bhdmz', device_id: 'a', generated_name: 'z045-x-v03.pcc', file_name: 'z045-x-v03.pcc',
+        same: false, lines: 16, differences: [[6, 'logging 10.172.201.65', 'logging 10.1.1.1']] }],
+    });
+    renderAt('/stage/p1?step=1');
+    expect(await screen.findByText(/No template for: LTE switch/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Generate the files for zone 45' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/projects/p1/generate-files')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/projects/p1/generate-files');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ assignments: { bhdmz: 'a' } });
+    await vi.waitFor(() => expect(JSON.parse(window.localStorage.getItem('undm.stage.p1') ?? '{}').aruba_a?.fileId).toBe('v-new'));
+    await userEvent.click(screen.getByRole('button', { name: 'Compare with the devices\' files' }));
+    expect(await screen.findByText('differs')).toBeInTheDocument();
+    expect(screen.getByText(/line 6: template “logging 10.172.201.65” · file “logging 10.1.1.1”/)).toBeInTheDocument();
+    window.localStorage.removeItem('undm.stage.p1');
+  });
+
+  it('Settings lists each template and what it was checked against', async () => {
+    mockApi({ '/templates': [tpl('bhdmz')], '/credential-refs': [], '/settings/certificate': { subject: null } });
+    renderAt('/settings');
+    const table = await screen.findByText('BH-DMZ switch (2930F, OOBM port 2)');
+    expect(table).toBeInTheDocument();
+    expect(await screen.findByText('against zone 42')).toBeInTheDocument();
+    expect(screen.getAllByText('not imported').length).toBe(4);
+  });
+});

@@ -45,6 +45,16 @@ printed, with addresses, serials, names and logins masked (D-090).
 8. **Wizard step 3** (Bench check): cable as in the table below; give the PC
    192.168.1.50/24 and 192.0.2.50/24; close PuTTY; allow incoming UDP 69 on the PC.
 
+## Files from the team's templates (since v82, D-111)
+Once, in **Settings → For all systems → Configuration templates**, import the team's
+current files (one zone's file each; add the same file for a second zone to have it
+checked) and the FortiGate base file. Then, for each system:
+1. In wizard step 1, check the **Zone** (read from the system name) and press **Save zone**.
+2. In step 2, press **Generate the files for zone N**: the four devices get their files and
+   they are chosen.
+3. If the team's own files for that zone are already on the devices, press **Compare with
+   the devices' files**: every line must be identical.
+
 ## Cabling (all four at once)
 One small switch, connected to nothing else, one cable per device (two would make a loop):
 

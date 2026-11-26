@@ -1392,3 +1392,48 @@ bank that is not running and starts from it (as also seen on 2026-11-24).
 - The wizard ticks the option by default when an image is chosen for a switch that has a
   second bank (2930F, LIG1014A); it can be unticked.
 
+### D-111 Generating a system's files from the team's templates by zone (2026-11-26)
+Product owner: UNDM should generate the files of all four devices of a system; the FortiGate
+base file stays the same for every zone. The product owner supplied the current files of
+two zones.
+- **The team's numbering convention.** Five rules turn every file of one zone into the
+  other zone's file exactly (all four files, every line):
+  1. the zone tag `z` + 3 digits;
+  2. `10.(127+zone).x.x`;
+  3. `10.zone.x.x`;
+  4. `10.0.zone.x`;
+  5. `130.zone.x.x`.
+
+  Everything else is copied unchanged. Zones run from 1 to 128 (127+zone ≤ 255). These are
+  the team's convention as shown by its files, not vendor facts; a new file version is
+  checked again on import.
+- **Templates stay outside the code.** They are kept in UNDM's database on the PC
+  (`config_templates`, migration bc4f1515c70a), imported in Settings → For all systems →
+  Configuration templates, one per role:
+  - FortiGate base (used as it is);
+  - FortiGate site script;
+  - BH-DMZ 2930F;
+  - LTE 2930F;
+  - Tetra Black Box.
+
+  The team's files are never committed; tests use fictional zones.
+- **Import.** The reference zone comes from the file name, or is given. UNDM counts the
+  replacements per rule and lists lines that still hold the zone's number in another form,
+  for a person to check. With the same file for a second zone, the template is kept only
+  if it gives that file exactly (`verified_zone`). A newer version becomes current; older
+  ones are kept.
+- **A system's zone.** `Project.zone`, set in Stage a system step 1 and prefilled from a
+  `zNNN` in the system name.
+- **Generate** (wizard step 2): renders each role's template for the zone and stores it on
+  its device as an imported file named as the team names it. Every existing check applies:
+  recognition, the secret slot, the HTTPS-certificate requirement, naming from the hostname.
+  The wizard's choices are filled.
+- **Compare with the devices' files** (read-only): each rendered file against the best
+  matching file a person imported on that device, line by line, with the first differences.
+- Generated files reach devices only through approved plans, as before.
+- Audited: `template.import`, `template.delete`, `config.generate` (versions, zone, hashes;
+  never content).
+- **Local check (2026-11-26, not committed):** the four zone-92 files imported with the
+  zone-93 files as proof all verified. Generating for zone 93 through the API gave the
+  zone-93 files identical line for line.
+

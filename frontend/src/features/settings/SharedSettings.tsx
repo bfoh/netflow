@@ -7,6 +7,7 @@ import { api } from '../../services/api';
 import type { LoginDefaults } from '../../types/api';
 import { CredentialsPanel } from '../devices/CredentialsPanel';
 import { CertificateForm } from './CertificateForm';
+import { TemplatesCard } from './TemplatesCard';
 
 const EMPTY: LoginDefaults = {
   firewall: { login: null, login_after: null, tunnel_key: null },
@@ -90,12 +91,13 @@ function SharedCertificate() {
 export function SharedSettings() {
   return (
     <Stack>
-      <Hint>Every system of this project uses the same logins and certificate answers: set them once here.</Hint>
+      <Hint>Every system of this project uses the same logins, templates and certificate answers: set them once here.</Hint>
       <Card withBorder>
         <Title order={2} size="h5" mb="sm">Logins for all systems</Title>
         <CredentialsPanel />
       </Card>
       <DefaultLogins />
+      <TemplatesCard />
       <SharedCertificate />
     </Stack>
   );

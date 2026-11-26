@@ -79,6 +79,7 @@ export const useCredentialRefs = (pid: string) =>
 export const useSharedLogins = () => useQuery({ queryKey: ['shared-logins'], queryFn: api.sharedLogins });
 export const useLoginDefaults = () => useQuery({ queryKey: ['login-defaults'], queryFn: api.loginDefaults });
 export const useSharedCertificate = () => useQuery({ queryKey: ['shared-certificate'], queryFn: api.sharedCertificate });
+export const useTemplates = () => useQuery({ queryKey: ['templates'], queryFn: api.templates });
 export const useDeviceModels = () => useQuery({ queryKey: keys.models, queryFn: api.deviceModels });
 
 /** Mutation that refreshes all cached data afterwards and reports errors as notifications. */

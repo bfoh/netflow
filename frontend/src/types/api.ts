@@ -15,6 +15,8 @@ export interface Project {
   /** Staging of the system finished (D-108): when and by whom; null while open. */
   staged_at?: string | null;
   staged_by?: string;
+  /** The zone its files are generated for (D-111): 1-128. */
+  zone?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -380,4 +382,28 @@ export interface BootstrapResult {
   password_set?: boolean;
   network_reachable: boolean | null;
   network_hint: string;
+}
+
+/** Team templates for all systems (D-111). */
+export type TemplateRole = 'fortigate_base' | 'fortigate_site' | 'bhdmz' | 'lte' | 'tetra';
+export interface ConfigTemplate {
+  id: string;
+  role: TemplateRole;
+  version: string;
+  filename: string;
+  reference_zone: number | null;
+  counts: Record<string, number>;
+  verified_zone: number | null;
+  created_by: string;
+  created_at: string;
+  older: number;
+}
+export interface TemplateFile { filename: string; text: string; zone?: number | null }
+export interface GeneratedFile {
+  role: TemplateRole; device_id: string; version_id: string; filename: string;
+  template_version: string; verified_zone: number | null;
+}
+export interface ComparedFile {
+  role: TemplateRole; device_id: string; generated_name: string; file_name: string | null;
+  same: boolean; lines: number; differences: [number, string, string][];
 }

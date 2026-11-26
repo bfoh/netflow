@@ -5,8 +5,9 @@ import { useEffect } from 'react';
 import { useAction, useConfig, useConfigs, useCredentialRefs, useFirmwareImages, useLoginDefaults } from '../../hooks/queries';
 import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
-import type { Device } from '../../types/api';
-import { keptPreviousLogin, type Choice, EMPTY_CHOICE, planSteps } from './choices';
+import type { Device, Project } from '../../types/api';
+import { keptPreviousLogin, type Choice, type Choices, EMPTY_CHOICE, planSteps } from './choices';
+import { GeneratePanel } from './GeneratePanel';
 import { roleDefaults, type Role } from './roles';
 import { EmptyState } from '../../components/EmptyState';
 
@@ -174,18 +175,23 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
 }
 
 /** Step 2: files and firmware per device. */
-export function FilesStep({ roles, choices, onChange }: {
+export function FilesStep({ project, roles, choices, onChange, onReplace }: {
+  project?: Project;
   roles: { role: Role; device: Device }[];
   choices: Partial<Record<string, Choice>>;
   onChange: (key: string, c: Choice) => void;
+  onReplace?: (next: Choices) => void;
 }) {
   if (roles.length === 0) return <EmptyState>Add the devices first (step 1: System and devices).</EmptyState>;
   return (
-    <SimpleGrid cols={{ base: 1, lg: 2 }}>
-      {roles.map(({ role, device }) => (
-        <DeviceFiles key={role.key} role={role} device={device} choice={choices[role.key] ?? EMPTY_CHOICE}
-          onChange={(c) => onChange(role.key, c)} />
-      ))}
-    </SimpleGrid>
+    <Stack>
+      {project && onReplace && <GeneratePanel project={project} roles={roles} choices={choices} onReplace={onReplace} />}
+      <SimpleGrid cols={{ base: 1, lg: 2 }}>
+        {roles.map(({ role, device }) => (
+          <DeviceFiles key={role.key} role={role} device={device} choice={choices[role.key] ?? EMPTY_CHOICE}
+            onChange={(c) => onChange(role.key, c)} />
+        ))}
+      </SimpleGrid>
+    </Stack>
   );
 }

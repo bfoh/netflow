@@ -82,7 +82,8 @@ def export_system(session: Session, project: Project, actor: str, *,
         "created_at": datetime.now(UTC).isoformat(), "created_by": actor,
         "system": {"name": project.name, "description": project.description,
                    "site": project.site, "purpose": project.purpose,
-                   "certificate_subject": project.certificate_subject},
+                   "certificate_subject": project.certificate_subject,
+                   "zone": project.zone},
         "logins": sorted({r.name for r in refs.values()}),
         "shared_logins": sorted({r.name for r in shared.values()}),
         "devices": [], "files": [], "links": [], "firmware": [],
@@ -213,7 +214,9 @@ def import_system(session: Session, package: BinaryIO, actor: str,
         # Everything is checked: create the system.
         project = Project(name=new_name, description=str(system.get("description", "")),
                           site=str(system.get("site", "")), purpose=str(system.get("purpose", "")),
-                          certificate_subject=system.get("certificate_subject"))
+                          certificate_subject=system.get("certificate_subject"),
+                          zone=system.get("zone") if isinstance(system.get("zone"), int)
+                          and 1 <= system["zone"] <= 128 else None)
         session.add(project)
         session.flush()
         logins: dict[str, CredentialRef] = {}

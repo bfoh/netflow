@@ -9,6 +9,7 @@ import { PageHeader, QueryState } from '../components/Page';
 import { BenchStep } from '../features/stage/BenchStep';
 import { type Choice, type Choices, EMPTY_CHOICE, loadChoices, planSteps, saveChoices } from '../features/stage/choices';
 import { FilesStep } from '../features/stage/FilesStep';
+import { ZoneField } from '../features/stage/GeneratePanel';
 import { ReportStep } from '../features/stage/ReportStep';
 import { assignRoles, roleDefaults, ROLES, type Role, type RoleKey } from '../features/stage/roles';
 import { RunStep } from '../features/stage/RunStep';
@@ -186,6 +187,7 @@ function StageSystem({ projectId }: { projectId: string }) {
             <SegmentedControl size="xs" aria-label="Devices to add" value={simulated} onChange={setSimulated}
               data={[{ value: 'real', label: 'Real devices on the bench' }, { value: 'simulated', label: 'Practice (simulated)' }]} />
           </Group>
+          <ZoneField key={`${project.data.id}-${project.data.zone ?? ''}`} project={project.data} />
           {(devices.data ?? []).length > roles.length && (
             <Hint>This system also has devices that play no staging role; they are left out here.</Hint>
           )}
@@ -198,7 +200,8 @@ function StageSystem({ projectId }: { projectId: string }) {
           <DefaultLoginsBar roles={roles} />
         </Stack>
       )}
-      {active === 1 && <FilesStep roles={roles} choices={choices} onChange={setChoice} />}
+      {active === 1 && <FilesStep project={project.data} roles={roles} choices={choices} onChange={setChoice}
+        onReplace={(next) => { setChoices(next); saveChoices(projectId, next); }} />}
       {active === 2 && <BenchStep roles={roles} />}
       {active === 3 && <RunStep projectId={projectId} roles={roles} choices={choices} stagings={stagings.data ?? []} />}
       {active === 4 && <ReportStep project={project.data} roles={roles} stagings={stagings.data ?? []} />}

@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, LoginDefaults, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -115,6 +115,17 @@ export const api = {
   changePolicy: (changes: Partial<Record<SafetySwitch, boolean>>) => request<Policy>('PUT', '/policy', changes),
   finishStaging: (pid: string, deviceIds: string[]) => request<Project>('POST', `/projects/${pid}/finish`, { device_ids: deviceIds }),
   reopenStaging: (pid: string) => request<Project>('POST', `/projects/${pid}/reopen`),
+  // Team templates and generated files (D-111).
+  templates: () => request<ConfigTemplate[]>('GET', '/templates'),
+  importTemplate: (body: TemplateFile & { role: TemplateRole; verify?: TemplateFile }) =>
+    request<{ template: ConfigTemplate; to_check: string[] }>('POST', '/templates', body),
+  deleteTemplate: (id: string) => request<void>('DELETE', `/templates/${id}`),
+  previewTemplate: (role: TemplateRole, zone: number) =>
+    request<{ filename: string; text: string }>('GET', `/templates/${role}/preview?zone=${zone}`),
+  compareFiles: (pid: string, assignments: Partial<Record<TemplateRole, string>>) =>
+    request<ComparedFile[]>('POST', `/projects/${pid}/compare-files`, { assignments }),
+  generateFiles: (pid: string, assignments: Partial<Record<TemplateRole, string>>) =>
+    request<GeneratedFile[]>('POST', `/projects/${pid}/generate-files`, { assignments }),
   credentialRefs: (pid: string) => request<CredentialRef[]>('GET', `/projects/${pid}/credential-refs`),
   createCredentialRef: (pid: string, body: { name: string; provider?: string; locator?: string }) =>
     request<CredentialRef>('POST', `/projects/${pid}/credential-refs`, body),

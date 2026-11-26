@@ -87,6 +87,7 @@ class ProjectPatch(BaseModel):
     site: str | None = None
     purpose: str | None = None
     certificate_subject: CertificateSubject | None = None  # explicit null clears it
+    zone: int | None = Field(default=None, ge=1, le=128)  # explicit null clears it (D-111)
 
 
 class ProjectOut(ORM):
@@ -98,6 +99,7 @@ class ProjectOut(ORM):
     certificate_subject: CertificateSubject | None = None
     staged_at: datetime | None = None  # staging of the system finished (D-108)
     staged_by: str = ""
+    zone: int | None = None  # its files are generated for this zone (D-111)
     created_at: datetime
     updated_at: datetime
 
@@ -629,3 +631,65 @@ class ConsoleBootstrapOut(BaseModel):
     password_set: bool = False  # it had none; UNDM set the device's login (confirmed)
     network_reachable: bool | None
     network_hint: str
+
+
+# -- team templates (D-111) -------------------------------------------------------------
+class TemplateFileIn(BaseModel):
+    filename: str = Field(min_length=1, max_length=200)
+    text: str
+    zone: int | None = Field(default=None, ge=1, le=128)
+
+
+class TemplateImportIn(TemplateFileIn):
+    role: Literal["fortigate_base", "fortigate_site", "bhdmz", "lte", "tetra"]
+    verify: TemplateFileIn | None = None  # the same file for another zone
+
+
+class TemplateOut(ORM):
+    id: str
+    role: str
+    version: str
+    filename: str
+    reference_zone: int | None
+    counts: dict[str, int]
+    verified_zone: int | None
+    created_by: str
+    created_at: datetime
+    older: int = 0
+
+
+class TemplateImportOut(BaseModel):
+    template: TemplateOut
+    to_check: list[str] = []
+
+
+class TemplatePreviewOut(BaseModel):
+    filename: str
+    text: str
+
+
+class GenerateFilesIn(BaseModel):
+    """Which device of the system gets which template's file."""
+
+    assignments: dict[Literal["fortigate_base", "fortigate_site", "bhdmz", "lte", "tetra"], str] \
+        = Field(min_length=1)
+
+
+class GeneratedFileOut(BaseModel):
+    role: str
+    device_id: str
+    version_id: str
+    filename: str
+    template_version: str
+    verified_zone: int | None
+
+
+class ComparedFileOut(BaseModel):
+    role: str
+    device_id: str
+    generated_name: str
+    file_name: str | None
+    same: bool
+    lines: int
+    differences: list[tuple[int, str, str]]
+

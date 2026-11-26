@@ -78,6 +78,8 @@ class Project(TimestampMixin, Base):
     # Staging of the system finished (D-108): when and by whom; cleared by a new staging plan.
     staged_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
     staged_by: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    # The zone its files are generated for (D-111): 1-128.
+    zone: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     devices: Mapped[list[Device]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
@@ -327,3 +329,24 @@ class AppSetting(Base):
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now, onupdate=_now)
+
+
+class ConfigTemplate(Base):
+    """A team configuration file made into a zone template (D-111), for all systems.
+
+    Imported on this PC from the team's files: never part of the code. ``text`` holds the
+    file with the zone's values replaced by markers (``configgen.zone``)."""
+
+    __tablename__ = "config_templates"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    role: Mapped[str] = mapped_column(String(30), index=True)
+    version: Mapped[str] = mapped_column(String(40), default="")
+    filename: Mapped[str] = mapped_column(String(200))  # as imported, e.g. "z041-Sw-v09.pcc"
+    reference_zone: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    text: Mapped[str] = mapped_column(Text)
+    sha256: Mapped[str] = mapped_column(String(64))  # of the imported file
+    counts: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    verified_zone: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_now)
+
