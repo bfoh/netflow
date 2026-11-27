@@ -1019,6 +1019,9 @@ class DeploymentService:
                     if device.credential_ref_id:
                         by_id[tr.device_id].credentials_before = self._credentials_for(
                             device, device.credential_ref_id)
+                    # Its login now is one it kept, not the approved one (D-102, D-131).
+                    by_id[tr.device_id].previous_login_interim = login_after_loading_needed(
+                        device)
         mode = ApplyMode(rec.apply_mode)
         needs_files = not rec.dry_run and any(
             not t.driver.info.simulated and t.driver.needs_file_server(rec.kind, mode)

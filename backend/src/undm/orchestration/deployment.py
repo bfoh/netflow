@@ -119,6 +119,9 @@ class DeploymentTarget:
     observed_serial: str | None = None
     # Login valid once the configuration is applied (the file changes the password).
     credentials_after: Credentials | None = field(default=None, repr=False)
+    # The device's login before the load is one it kept from before staging, not the approved
+    # one (a switch that kept its password, D-131): keeping it after the load is a warning.
+    previous_login_interim: bool = False
     # The device's own login before loading. Used after a restart when the unit, on the
     # login chosen for after loading, demands a new password and a person sets this one
     # on it by hand (D-065); the device then keeps this login.
@@ -254,6 +257,14 @@ class DeploymentOrchestrator:
                         f"the new password was set, but logging in again with it failed: "
                         f"{last.message}")
                 self._emit(dep, "deploy", "ok", "logged in again with the device's login", t)
+            elif last.ok and t.kept_previous_login and t.previous_login_interim:
+                # Bench 2026-11-27: a 2930F's team file did not set the approved password,
+                # so the switch stayed on the login it kept from before staging (D-131).
+                self._emit(dep, "deploy", "warning", "the login chosen for after loading is "
+                           "refused: the file did not give the device that password. It still "
+                           "answers to the login it had before staging, not the approved one: "
+                           "give it the approved password on its console before it leaves the "
+                           "bench", t)
             elif last.ok and t.kept_previous_login:
                 self._emit(dep, "deploy", "ok", "logged in with the device's previous "
                            "login (set on the unit by hand); the device keeps it", t)

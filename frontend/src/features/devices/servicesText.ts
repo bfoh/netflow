@@ -1,5 +1,9 @@
 import type { Device, DeviceServices } from '../../types/api';
 
+/** A certificate's common name often starts with the unit's serial number (a factory Flexi
+ *  BBU: "<serial>.nokiasolutionsandnetworks.com", bench 2026-11-27): hidden in the copy. */
+export const unitMasked = (subject: string) => subject.replace(/CN=([^,.]+)\./, 'CN=<unit>.');
+
 /** Plain text to send to the team or UNDM's developers: what was read, no login secret. */
 export function asText(device: Device, data: DeviceServices): string {
   const lines = [`Management services of ${device.name} (${device.model || device.manufacturer})`];
@@ -7,7 +11,7 @@ export function asText(device: Device, data: DeviceServices): string {
   if (s) {
     lines.push(`Read ${s.at} at ${s.address}${s.simulated ? ' (SIMULATED)' : ''}`);
     for (const p of s.ports) {
-      const what = [p.banner, p.certificate && `certificate ${p.certificate.subject}; issuer ${p.certificate.issuer}; until ${p.certificate.not_after}${p.certificate.tls ? `; ${p.certificate.tls}` : ''}`, p.note]
+      const what = [p.banner, p.certificate && `certificate ${unitMasked(p.certificate.subject)}; issuer ${p.certificate.issuer}; until ${p.certificate.not_after}${p.certificate.tls ? `; ${p.certificate.tls}` : ''}`, p.note]
         .filter(Boolean).join(' | ');
       lines.push(`  ${p.port} ${p.name}: ${p.open ? 'answers' : 'no answer'}${what ? ` | ${what}` : ''}`);
     }

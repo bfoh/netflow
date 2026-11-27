@@ -410,6 +410,27 @@ def test_api_password_set_by_hand_after_the_base_restore_is_waited_for(api):
     assert APPROVED not in repr(out) and BASE_PW not in repr(out)
 
 
+def test_api_a_kept_interim_login_after_the_load_is_a_warning(api):
+    """Bench 2026-11-27 (D-131): the device ran on a login it kept from before staging, and
+    the file did not set the one chosen for after loading. UNDM continues with the kept login,
+    but says so as a warning: the device is not on the approved login."""
+    from undm.db.models import Device
+    from undm.services.devices import set_login_after_loading_needed
+
+    client, pid, did, fg, refs = api
+    with client.app.state.session_factory() as session:
+        device = session.get(Device, did)
+        set_login_after_loading_needed(device, True)
+        session.commit()
+    fg.restore_sets_password, fg.restore_forces_password_change = BASE_PW, True
+    fg.hand_change_after, fg.hand_password = 2, APPROVED
+    out, events = _restore_base(client, pid, did, after=refs["base"])
+    assert out["state"] == "succeeded", events
+    kept = [e for e in out["events"] if "not the approved one" in e["message"]]
+    assert kept and kept[0]["status"] == "warning"
+    assert "set on the unit by hand" not in events
+
+
 def test_api_nobody_sets_the_password_the_run_says_why(api):
     client, pid, did, fg, refs = api
     fg.restore_sets_password, fg.restore_forces_password_change = BASE_PW, True

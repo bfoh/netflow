@@ -323,7 +323,7 @@ def _two_logins(monkeypatch, sim):
     return previous
 
 
-def test_after_an_erase_that_kept_the_password_the_current_login_is_used(monkeypatch):
+def test_after_an_erase_that_kept_the_password_the_approved_one_is_given(monkeypatch):
     import keyring
 
     sim = SimulatedArubaConsole(hostname="lab-bhdmz-sw02", username="manager",
@@ -350,22 +350,19 @@ def test_after_an_erase_that_kept_the_password_the_current_login_is_used(monkeyp
                       erase_existing=True, current_credential_ref_id=factory,
                       confirm_hostname="lab-bhdmz-sw02").json()
             assert out["status"] == "bootstrapped", (out["message"], out["transcript"])
-            assert sim.erased == 1 and sim.password == "Example-Only-Factory"  # it survived
+            # The erase kept the old password (bench 2026-11-27); the team file does not set
+            # one either, so the setup gives the switch the approved password itself.
+            assert sim.erased == 1 and sim.password == "Example-Only-Approved-1"
             assert "Authentication failed" in out["transcript"]
             assert "trying the login it has now" in out["transcript"]
-            assert "kept the password of the login it had" in out["message"]
+            assert "now has the approved login's password" in out["message"]
+            assert "file sets the approved password" not in out["message"]
+            assert "password manager" in out["commands_sent"]
             device = client.get(f"/api/devices/{did}").json()
-            assert device["credential_ref_id"] == factory  # what the switch answers to now
-            assert device["observed_facts"]["extra"]["login_after_loading_needed"] is True
+            assert device["credential_ref_id"] == approved  # it answers to the approved now
+            extra = (device["observed_facts"] or {}).get("extra") or {}
+            assert not extra.get("login_after_loading_needed")
             assert "Example-Only" not in repr(out)
-            # Its file must then say which login is valid after loading.
-            v = client.post(f"/api/devices/{did}/configs/import", json={
-                "filename": "team.pcc", "text": "; JL260A Configuration Editor; Created on "
-                "release #WC.16.10.0025\nhostname \"lab-sw\"\nvlan 222\n   name \"OOBM\"\n"
-                "   untagged 2\n   ip address 192.168.1.1 255.255.255.0\n   exit\n"}).json()
-            r = client.post(f"/api/projects/{pid}/deployments", json={
-                "device_ids": [did], "apply_mode": "replace", "config_versions": {did: v["id"]}})
-            assert r.status_code == 409 and "Login after loading" in r.json()["error"]
     finally:
         keyring.set_keyring(previous)
 
@@ -395,6 +392,8 @@ def test_without_erase_the_current_login_is_tried_when_enable_refuses_the_approv
                       current_credential_ref_id=refs[1]).json()
             assert out["status"] == "bootstrapped", (out["message"], out["transcript"])
             assert "Unable to verify password" in out["transcript"]
-            assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == refs[1]
+            # It answered to its old password only: it now has the approved one.
+            assert sim.password == "Example-Only-Approved-1"
+            assert client.get(f"/api/devices/{did}").json()["credential_ref_id"] == refs[0]
     finally:
         keyring.set_keyring(previous)

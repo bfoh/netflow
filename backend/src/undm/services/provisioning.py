@@ -125,6 +125,10 @@ def preview(device: Device, registry: DriverRegistry, policy: Policy,
          if login else
          "New switches ask to 'Configure the manager credentials' before anything else: "
          "attach the approved login to the device first, or the bootstrap stops there."),
+        ("If the switch answers only to the login it has now (an erase keeps its password), "
+         f"UNDM gives it the password of '{login}' with 'password manager' (the switch asks "
+         "for it twice) and saves it, so it ends on the approved login."
+         if login else ""),
         f"Port {params.untagged_port} leaves the default VLAN and becomes the untagged member "
         f"of VLAN {params.vlan_id}.",
         "The configuration is saved with 'write memory' only after it has been read back "
@@ -137,7 +141,7 @@ def preview(device: Device, registry: DriverRegistry, policy: Policy,
         if problem:
             notes.append("Blocked at the moment: " + problem)
         notes.append("Close PuTTY or any other program using the COM port before running.")
-    return {"supported": True, "commands": params.commands(), "notes": notes}
+    return {"supported": True, "commands": params.commands(), "notes": [n for n in notes if n]}
 
 
 def _device_credentials(device: Device) -> Credentials | None:

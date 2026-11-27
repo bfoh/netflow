@@ -582,12 +582,14 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
         if password_set:
             message += (". The switch had no manager password: it was set to the device's "
                         "attached login and saved")
+        if approved_given:
+            message += (". The switch had kept the password of the login it had (an erase "
+                        "does not clear it): it now has the approved login's password, saved")
         if console.used_fallback and status in (BootstrapStatus.BOOTSTRAPPED,
                                                 BootstrapStatus.ALREADY_CONFIGURED):
             message += (". The switch kept the password of the login it had (the approved "
-                        "login was refused), so that login is now its login in UNDM. Choose "
-                        "the approved login as 'Login after loading' for its team file: the "
-                        "file sets the approved password")
+                        "login was refused), so that login is now its login in UNDM: set the "
+                        "approved password on its console before it leaves the bench")
         if no_password:
             message += (". Note: the switch asked for no password, so it has no manager "
                         "password and SSH with the device's login will fail. Either set the "
@@ -602,6 +604,33 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
                                **kw)  # type: ignore[arg-type]
 
     console.fallback = current  # the login the switch has now, if the person gave it
+    approved = console.credentials
+    approved_given = False
+
+    def give_approved_password() -> None:
+        """The switch kept the password it had (an erase does not clear it; bench
+        2026-11-27): give it the approved one with the same two questions as a switch
+        without a password (D-058), save, confirm, and log in with it from now on."""
+        nonlocal approved_given
+        assert approved is not None
+        console.credentials = approved
+        console.set_manager_password()
+        sent.append(SET_PASSWORD_COMMAND)
+        out = console.command("write memory", timeout=30)
+        if ERROR.search(out):
+            raise ConsoleError("The approved manager password was set but 'write memory' "
+                               "reported an error; it will be lost on reboot.")
+        if not PASSWORD_LINE.search(console.running_config()):
+            raise ConsoleError("The approved manager password was entered, but the "
+                               "configuration does not show it; check the switch on the "
+                               "console.")
+        console.used_fallback = False
+        approved_given = True
+
+    def keeps_old_password() -> bool:
+        return (console.used_fallback and approved is not None and bool(approved.password)
+                and approved.username == "manager")
+
     try:
         if erase is not None:
             console.fallback = erase.current
@@ -616,6 +645,8 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
         if is_configured(before, params):
             if needs_password():
                 give_password()
+            if keeps_old_password():
+                give_approved_password()
             return done(BootstrapStatus.ALREADY_CONFIGURED,
                         f"VLAN {params.vlan_id} already has {params.address} with port "
                         f"{params.untagged_port} untagged"
@@ -660,6 +691,14 @@ def bootstrap(console: ArubaOSSwitchConsole, params: BootstrapParams,
             except ConsoleError as e:
                 return done(BootstrapStatus.FAILED,
                             f"VLAN {params.vlan_id} and the address are saved, but: {e}",
+                            findings=findings, verified=True, saved=True)
+        if keeps_old_password():
+            try:
+                give_approved_password()
+            except ConsoleError as e:
+                return done(BootstrapStatus.FAILED,
+                            f"VLAN {params.vlan_id} and the address are saved, but: {e}. "
+                            "The switch still has the password of the login it had",
                             findings=findings, verified=True, saved=True)
         return done(BootstrapStatus.BOOTSTRAPPED,
                     f"VLAN {params.vlan_id} ({params.vlan_name}) with port "

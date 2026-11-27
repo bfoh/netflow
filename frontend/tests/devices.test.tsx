@@ -221,5 +221,7 @@ describe('management services of the Flexi BBU (D-130)', () => {
     expect(text).toContain('22 SSH: no answer');
     expect(text).toContain('urn:example:abc:sw?module=abc-software');
     expect(text).toContain('login "bbu-login"');
+    const { unitMasked } = await import('../src/features/devices/servicesText');
+    expect(unitMasked('CN=AB1234567.example.com,O=Example')).toBe('CN=<unit>.example.com,O=Example');
   });
 });

@@ -2191,3 +2191,27 @@ commands are not public; NetAct uses NE3S/WS; SSH on the FSMF is a service acces
   Nokia's Remote Tool (Q-65); the reading is repeated once the SCF is active. A guided
   device's page no longer asks for a login or shows the safety switches (it needs none).
 
+### D-131 A 2930F that kept its old password gets the approved one at its console setup (2026-11-27, v98)
+
+**Bench (first full hardware run of Stage a system, new system):** every device staged. The
+preconfigured 2930F (BH-DMZ, erased first, D-057) **kept its manager password** through
+`erase startup-config`: the approved login was refused and UNDM went on with its current
+login, saying "the file sets the approved password". The team file did not: after the load the
+login after loading was refused, UNDM logged in with the old login and reported it as ok, so
+the switch ended staged on a non-approved password.
+
+**Decision.**
+- **Console setup (2930F):** when the switch answers only to the login it has now (after an
+  erase or not), UNDM gives it the approved login's password with `password manager`, the two
+  questions seen on the bench (as for a switch without a password, D-058), `write memory`,
+  confirms the `password manager` line and keeps the approved login as the device's login. Any
+  other question stops with the switch's words (nothing saved). The preview says so. Only for
+  the user name `manager`.
+- **File load:** when the login after loading is refused and the device still answers to a
+  login it kept from before staging (`login_after_loading_needed`), the event is a **warning**
+  ("not the approved one: give it the approved password on its console"), no longer ok. A
+  previous login a person set by hand (D-065) stays ok.
+- **Masking:** the bench log masks the modem's unit name (its serial) from its first access;
+  the services Copy hides the unit-specific part of a certificate name.
+- The wrong sentence "the file sets the approved password" is gone.
+

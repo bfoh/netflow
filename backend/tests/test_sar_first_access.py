@@ -207,6 +207,10 @@ def test_api_preview_run_rerun_and_audit(client):
     ident = client.post(f"/api/devices/{did}/provisioning/console-identify",
                         json={"serial_port": "SIMULATED"})
     assert ident.status_code == 400
+    # The bench log masks it too (bench 2026-11-27: "First access done on <serial>" was clear).
+    pid = client.get(f"/api/devices/{did}").json()["project_id"]
+    log = client.get(f"/api/projects/{pid}/bench-log").text
+    assert "First access done on" in log and "NS00SIM0001" not in log
 
 
 def test_api_needs_a_usable_login_before_anything_is_sent(client):

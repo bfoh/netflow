@@ -255,6 +255,8 @@ plan (its file moves B to A's address). The Black Box and the FortiGate can run 
 
   Expected: the erase, then a restart (about 1–2 minutes), "Press Enter twice", then the
   bootstrap. The log records the switch's own words for the erase confirmation (Q-37).
+  If the switch keeps its old manager password through the erase (seen 2026-11-27), the setup
+  gives it the approved one (`password manager`, asked twice) and says so (since v98, D-131).
 - **Plan: firmware → team file.** Expected:
   - Firmware: the switch pulls the image, restarts, runs WC.16.10.0025.
   - File: certificate, load, restart. Back with the approved login on the file's

@@ -1,6 +1,9 @@
 # Development Status
 
-_Last updated: 2026-11-27 — v97, the Flexi BBU's management services read from the unit
+_Last updated: 2026-11-27 — v98, after the **first full hardware run of Stage a system** (a
+new system: FortiGate, Black Box, modem and both 2930F staged; the BBU by its guided steps): a
+2930F that kept its old password gets the approved one at its console setup, a kept interim
+login after a load is a warning, masking gaps closed (D-131). Before: v97, the Flexi BBU's management services read from the unit
 (SSH, portal, NETCONF; its NETCONF <hello> with a chosen login), to find a documented way to
 stage it without the browser (D-130). Before: v96, forms and pages tidied after bench feedback: fields and
 buttons aligned, a tag only for simulated and production devices, the firmware upload and
@@ -111,15 +114,16 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-27, v97)
+## Test results (2026-11-27, v98)
 | Suite | Result |
 |---|---|
-| Backend pytest | 717 passed, 2 skipped (PostgreSQL suite skips without DB URL); the BBU's management services read from fake sockets and from SSH/TLS servers on this PC's loopback (a test fixture refuses any other address); one login attempt, nothing sent after it |
+| Backend pytest | 718 passed, 2 skipped (PostgreSQL suite skips without DB URL); a simulated 2930F that keeps its password through the erase gets the approved one; a kept interim login after a load is a warning; the bench log masks the modem's serial |
 | Backend PostgreSQL integration | 2 passed |
 | ruff / mypy --strict | clean / clean (109 files) |
-| Frontend Vitest | 150 passed (the services dialog waits for a chosen login; the copied result holds no secret) |
+| Frontend Vitest | 150 passed |
 | tsc / oxlint / vite build | clean / clean / success |
-| Playwright | 15 passed: 12 workflows (1280 px, the simulated BBU's services and NETCONF reading), axe on every page light and dark (1366 px), no sideways scroll at 1366 and 390 px |
+| Playwright | 15 passed: 12 workflows (1280 px), axe on every page light and dark (1366 px), no sideways scroll at 1366 and 390 px |
+| Hardware | 2026-11-27: first full run of Stage a system on a new system (FortiGate 101F, LIG1014A, two 2930F, 7705 SAR-Hmc; Flexi BBU by its guided steps) |
 
 ## Known issues and limitations
 - A 2930F whose network cable is in during its console setup takes a DHCP address on VLAN 1

@@ -29,6 +29,7 @@ from undm.services import app_settings, audit
 from undm.services.safety_settings import effective
 
 _FILE_HOSTNAME = re.compile(r'^\s*(?:set\s+)?hostname\s+"?([^"\s]+)"?', re.M | re.I)
+_FIRST_ACCESS_ON = re.compile(r"First access done on (\S+)")
 _QUOTED = re.compile(r'"([^"\n]{3,80})"')
 # Revisions are named after the file (``services/deployments.py``): "revision 'name' saved".
 _REVISION = re.compile(r"(revision ')([^'\n]{1,80})(')")
@@ -83,6 +84,15 @@ def bench_log(session: Session, project: Project, registry: DriverRegistry, sett
     for a in setups:
         for key in ("erased_hostname", "current_login", "credential"):
             known.append(("name", str(a.details.get(key) or "")))
+        # A factory modem is named after its serial number, which its first access reports
+        # (bench 2026-11-27: it showed in clear in the message).
+        setup_facts = a.details.get("facts")
+        if isinstance(setup_facts, dict):
+            known += [("serial", str(setup_facts.get(k) or ""))
+                      for k in ("name", "serial", "serial_number")]
+        named = _FIRST_ACCESS_ON.search(str(a.details.get("message") or ""))
+        if named:
+            known.append(("serial", named.group(1)))
     # A factory hostname is often just the model (e.g. "FortiGate-101F"): that says nothing
     # about the system and is kept, so the log still names the models.
     generic = {v.lower() for d in devices for v in (d.model, d.manufacturer, d.product_family) if v}
