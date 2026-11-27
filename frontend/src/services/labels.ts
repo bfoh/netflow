@@ -221,6 +221,7 @@ export const AUDIT_ACTIONS: Record<string, string> = {
   'system.backups_export': 'Backups downloaded', 'system.bench_log': 'Bench log made', 'system.export': 'System exported',
   'system.import': 'System imported', 'system.reopened': 'Staging reopened', 'system.staged': 'Staging finished',
   'system.reached_via_changed': 'Moved between the bench and the network',
+  'device.discover_services': 'Management services read', 'device.netconf_hello': 'NETCONF capabilities read',
   'troubleshoot.ping': 'Ping', 'troubleshoot.traceroute': 'Traceroute', 'troubleshoot.check_all': 'Check all devices',
   'template.delete': 'Template deleted', 'template.files_export': 'Files downloaded from the templates',
   'template.import': 'Template imported',

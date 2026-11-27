@@ -33,6 +33,17 @@ printed, with addresses, serials, names and logins masked (D-090).
 - **Step 5:** the Finish checklist also checks that "A second person approves firmware
   plans" is back on (**Put it back on**).
 
+## What is new in v97: what the Flexi BBU offers (D-130)
+Read-only: nothing is changed on the BBU, so the staged unit can be used.
+1. The BBU on its LMP cable, this PC at 192.168.255.126/24 on that adapter.
+2. Its device page → **⋯** → **Find its management services…** → **Read its services**.
+   UNDM opens a connection to SSH (22), the portal (443) and NETCONF (830) and reads only
+   what each presents by itself.
+3. If **NETCONF over SSH** answers: choose the BBU's login (the one used in WebEM, added on
+   the system's Logins tab) → **Read its NETCONF capabilities**. One login attempt; nothing is
+   sent after it.
+4. **Copy the result** and send it (it contains no password). It answers Q-66.
+
 ## What is new in v95: after staging, in the network (D-125 to D-128)
 Nothing about staging changed. Every step below only **reads** devices; none changes them.
 

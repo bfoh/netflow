@@ -61,7 +61,9 @@ def test_the_driver_only_checks_that_the_portal_answers(monkeypatch):
     monkeypatch.setattr(flexi, "tcp_port_open", lambda h, p, t: False)
     no = d.connect()
     assert not no.ok and "192.168.255.126/24" in no.message
-    assert NokiaFlexiGuided.info.capabilities == frozenset({Capability.GUIDED_STAGING})
+    # Its reading of management services is read-only too (D-130): nothing that changes it.
+    assert NokiaFlexiGuided.info.capabilities == frozenset({Capability.GUIDED_STAGING,
+                                                            Capability.SERVICE_DISCOVERY})
     assert not d.apply_configuration("x", None).ok  # never changes the BBU  # type: ignore[arg-type]
 
 

@@ -24,7 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27", "mypy>=1.10", "ruff>=0.5", "types-pyserial>=3.5",
-       "tftpy>=0.8"]  # tftpy: independent TFTP client used only by tests
+       "types-paramiko>=3.5,<4", "tftpy>=0.8"]  # tftpy: independent TFTP client used only by tests
 
 [build-system]
 requires = ["hatchling"]

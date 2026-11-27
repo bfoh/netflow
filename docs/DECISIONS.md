@@ -2156,3 +2156,34 @@ everything, and the firmware upload's fields were not aligned. Applied across th
 - **Flexi BBU card**: long package names and checksums wrap; the step note says what to copy
   from the portal; step 2 says why no package is offered (not approved yet, or its models do
   not include FSMF; model names compared ignoring case).
+
+### D-130 The Flexi BBU without the browser: ask the unit, ask Nokia (2026-11-27, v97)
+
+**Request (product owner):** after staging the BBU by hand, UNDM should stage it itself. The
+product owner is not comfortable with UNDM driving the WebEM pages in a browser, and asked
+for research into other ways in, NETCONF in particular.
+
+**Research** (`docs/vendor-support/nokia-flexi-bbu.md`, all unverified): no public source says
+the FSMF/SBTS offers NETCONF; Nokia's WebEM User Guide calls WebEM's interface binary and not
+for third parties and names the **WebEM Remote Tool** (former BTS CLI) for automation, whose
+commands are not public; NetAct uses NE3S/WS; SSH on the FSMF is a service access.
+
+**Decision.**
+- UNDM does not build on WebEM's binary interface and does not drive its pages.
+- **Ask the unit (built, read-only):** device menu → **Find its management services…**
+  (capability `supports_service_discovery`, `drivers/discovery.py`). Without a login, UNDM
+  opens a TCP connection to SSH (22), HTTPS (443) and NETCONF over SSH (830) and reads only
+  what each presents by itself: the SSH identification line (RFC 4253 §4.2; nothing sent) and
+  the portal's certificate (a TLS handshake, no HTTP request). Only if NETCONF answers, and
+  with a login a person chooses, **Read its NETCONF capabilities**: one SSH login, the
+  `netconf` subsystem, the server's `<hello>` read (1.0 framing), no `<rpc>` sent, a refused
+  login not retried. Both are audited (`device.discover_services`, `device.netconf_hello`),
+  kept with the observed facts (`extra.services`, `extra.netconf_hello`), refused on a
+  production device without the read setting, and SYNTHETIC on the simulated twin. **Copy the
+  result** gives plain text to send (no secret). Tests reach only this PC's loopback.
+- **Ask Nokia (Q-65):** NETCONF/YANG for software and plan activation, and the Remote Tool
+  with its guide.
+- **Then the driver**, from what is confirmed: NETCONF from the YANG modules the unit
+  publishes (`get-schema`), or Nokia's Remote Tool run on this PC with arguments. The guided
+  steps stay as the fallback; first runs that change a BBU wait for a free unit (none yet).
+

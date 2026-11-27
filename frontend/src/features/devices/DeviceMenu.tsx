@@ -1,7 +1,7 @@
 import { ActionIcon, Button, FileInput, Group, Menu, Modal, Stack, Table, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
-  IconActivity, IconCertificate, IconClipboard, IconDots, IconExternalLink, IconFileText, IconInfoCircle, IconPlugConnected,
+  IconActivity, IconCertificate, IconClipboard, IconDots, IconExternalLink, IconFileText, IconInfoCircle, IconListSearch, IconPlugConnected,
   IconPower, IconRocket, IconRoute, IconTerminal, IconTerminal2, IconTrash, IconWaveSine, IconWorld, IconEdit } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -17,6 +17,7 @@ import type { Device } from '../../types/api';
 import { paths } from '../../paths';
 import { connectionOf } from './connection';
 import { ConsoleWindowDialog } from './ConsoleWindowDialog';
+import { ServicesDialog } from './ServicesDialog';
 
 const can = (d: Device, c: string) => d.capabilities.includes(c);
 
@@ -54,6 +55,7 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
   const consoleOnly = conn.capabilities.includes('supports_serial_console') && !conn.capabilities.includes('supports_ssh');
   const hasSsh = conn.capabilities.includes('supports_ssh');
   const [consoleOpen, consoleWindow] = useDisclosure();
+  const [servicesOpen, servicesWindow] = useDisclosure();
   const makeRestart = useAction(() => api.restartPlan(device.id), undefined, { errorInDialog: true });
   const makeLicense = useAction(async () => {
     const stored = await api.uploadLicense(device.id, licenseFile!);
@@ -96,6 +98,8 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
           <Menu.Divider />
           <Menu.Item leftSection={<IconInfoCircle size={14} />} onClick={() => check.mutate(undefined, { onSuccess: setInfo })}>Read information</Menu.Item>
           <Menu.Item leftSection={<IconPlugConnected size={14} />} onClick={() => run.mutate({ op: 'check_reachability' })}>Test connection</Menu.Item>
+          {can(device, 'supports_service_discovery') && <Menu.Item leftSection={<IconListSearch size={14} />} onClick={servicesWindow.open}>
+            Find its management services…</Menu.Item>}
           {!consoleOnly && <Menu.Item leftSection={<IconActivity size={14} />} onClick={waitUntilAnswers}>Wait until it answers</Menu.Item>}
           <Menu.Item component={Link} to={paths.device(device.id, 'troubleshoot')} leftSection={<IconWaveSine size={14} />}>Ping…</Menu.Item>
           <Menu.Item component={Link} to={paths.device(device.id, 'troubleshoot')} leftSection={<IconRoute size={14} />}>Traceroute…</Menu.Item>
@@ -118,6 +122,7 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
       </Menu>
 
       {consoleOpen && <ConsoleWindowDialog device={device} opened onClose={consoleWindow.close} />}
+      {servicesOpen && <ServicesDialog device={device} opened onClose={servicesWindow.close} />}
 
       <Modal opened={!!info} onClose={() => setInfo(null)} title={`Information · ${device.name}`}>
         {info && <DeviceInfo device={info} />}

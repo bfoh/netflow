@@ -145,6 +145,14 @@ class ConsoleWindowIn(BaseModel):
     console_speed: Literal[1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200] | None = None
 
 
+class NetconfHelloIn(BaseModel):
+    """Read a device's NETCONF <hello> with this login (D-130): one attempt."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    credential_ref_id: str = Field(min_length=1, max_length=36)
+
+
 class TroubleshootIn(BaseModel):
     """Ping or traceroute: from this PC ("pc") or a device of the system, to one address."""
 

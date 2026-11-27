@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, CheckAllRow, PingAnswer, TraceAnswer, FileAddresses, ReachedVia, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, Guided, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, CheckAllRow, DeviceServices, NetconfHelloReading, ServicesReading, PingAnswer, TraceAnswer, FileAddresses, ReachedVia, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, Guided, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -203,6 +203,10 @@ export const api = {
     request<Device>('POST', `/projects/${pid}/devices`, body),
   updateDevice: (id: string, body: DeviceInput) => request<Device>('PATCH', `/devices/${id}`, body),
   openSsh: (id: string) => request<{ command: string }>('POST', `/devices/${id}/open-ssh`),
+  deviceServices: (id: string) => request<DeviceServices>('GET', `/devices/${id}/services`),
+  discoverServices: (id: string) => request<ServicesReading>('POST', `/devices/${id}/services/discover`),
+  netconfHello: (id: string, credentialRefId: string) =>
+    request<NetconfHelloReading>('POST', `/devices/${id}/services/netconf-hello`, { credential_ref_id: credentialRefId }),
   guided: (id: string) => request<Guided>('GET', `/devices/${id}/guided`),
   guidedDone: (id: string, step: string, body: { note?: string; version_id?: string | null; image_id?: string | null }) =>
     request<Guided>('POST', `/devices/${id}/guided/${step}`, body),

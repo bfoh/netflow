@@ -46,6 +46,28 @@ on the bench. Nothing here may be built on as a fact (CLAUDE.md rule 2).
 Default account names appear in those copies. They are not recorded here, and passwords
 found there are never recorded anywhere.
 
+## Research for automation (2026-11-27, D-130): all unverified
+The product owner wants UNDM to stage the BBU itself, without UNDM driving the WebEM pages
+in a browser, and asked about NETCONF. A second, wider web search (again copies of Nokia
+documents on sharing sites, read as search extracts) found:
+
+| Topic | Lead | Source kind |
+|---|---|---|
+| NETCONF / YANG | No source says the FSMF or SBTS offers it. Every Nokia NETCONF document found is for SR OS routers and the 7705 SAR | Nokia documentation (routers), searches |
+| Official automation | WebEM's own interface "is binary, it is not intended to be used by 3rd parties. For automatization purposes, WebEM Remote Tool (former BTS CLI) should be used" | copy of "WebEM User Guide" |
+| The Remote Tool | An SBTS troubleshooting guide has a section "Activating and using WebEM Remote Tool (former BTS CLI)", including a software rollback with it. Its commands are not public | copy of a Nokia SBTS troubleshooting guide |
+| NetAct | NetAct manages the BTS over Nokia's NE3S/WS (SOAP); software download and activation from NetAct's Software Manager | NetAct integration copies |
+| SSH | SSH can be enabled on the FSMF (a service access, not a documented configuration interface) | copy of an SBTS troubleshooting document |
+
+Default service account names and passwords appear in those copies: not recorded and never
+used. Building on WebEM's binary interface would rest on something Nokia says is not for
+third parties, so UNDM does not.
+
+**What UNDM does now (v97, D-130):** device menu → **Find its management services…** asks
+the unit itself, read-only (Q-66), and the product owner asks Nokia (Q-65). The driver that
+stages the BBU follows from what is confirmed: NETCONF from the YANG modules the unit
+publishes, or Nokia's Remote Tool with its guide.
+
 ## Decision (D-113): guided by hand first
 UNDM will not drive the portal: no documented interface is available to the team, and
 nothing may be invented. The first version instead:

@@ -22,6 +22,7 @@ from undm.drivers.base import (
     Capability,
     ConfigFileReport,
     ConfigurationBackup,
+    Credentials,
     DeviceDriver,
     DeviceFacts,
     DriverInfo,
@@ -446,9 +447,40 @@ class MockNokiaFlexiDriver(MockDriver):
         description="Simulated Nokia Flexi BBU (FSMF) for practising the guided steps; the "
                     "steps are done by a person in the real portal",
         simulated=True,
-        capabilities=frozenset({C.GUIDED_STAGING}),
+        capabilities=frozenset({C.GUIDED_STAGING, C.SERVICE_DISCOVERY}),
     )
     guided_procedure = "flexi_bbu"
+
+    # SYNTHETIC answers for practising the reading (D-130): they say nothing about what a
+    # real FSMF offers. Nothing is sent anywhere.
+    def discover_services(self) -> OperationResult:
+        return OperationResult.success(DeviceOperation.DISCOVER_SERVICES, {
+            "address": self.target.management_address, "simulated": True, "ports": [
+                {"port": 22, "kind": "ssh", "name": "SSH", "reference": "RFC 4253",
+                 "open": False, "banner": None, "certificate": None,
+                 "note": "Simulated: nothing was sent."},
+                {"port": 443, "kind": "https", "name": "HTTPS (web portal)",
+                 "reference": "RFC 8446", "open": True, "banner": None,
+                 "certificate": {"subject": "CN=SIMULATED", "issuer": "CN=SIMULATED",
+                                 "not_after": "2099-01-01T00:00:00+00:00", "sha256": "0" * 64,
+                                 "tls": "SIMULATED"},
+                 "note": "Simulated: nothing was sent."},
+                {"port": 830, "kind": "netconf", "name": "NETCONF over SSH",
+                 "reference": "RFC 6242", "open": True, "banner": "SSH-2.0-SIMULATED",
+                 "certificate": None, "note": "Simulated: nothing was sent."},
+            ]}, message="Simulated: 2 of 3 management ports answer")
+
+    def netconf_hello(self, credentials: Credentials) -> OperationResult:
+        return OperationResult.success(DeviceOperation.NETCONF_HELLO, {
+            "session_id": "1", "simulated": True, "base_versions": ["1.0", "1.1"],
+            "capabilities": ["urn:ietf:params:netconf:base:1.0",
+                             "urn:ietf:params:netconf:base:1.1",
+                             "urn:example:simulated:software?module=simulated-software"
+                             "&revision=2026-01-01"],
+            "modules": [{"name": "simulated-software", "namespace":
+                         "urn:example:simulated:software", "revision": "2026-01-01"}],
+            "host_key": "SIMULATED", "note": "Simulated: nothing was sent."},
+            message="Simulated: it announces 3 capabilities and 1 YANG module")
 
 
 MOCK_DRIVERS: tuple[type[MockDriver], ...] = (

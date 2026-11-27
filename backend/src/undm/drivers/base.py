@@ -55,6 +55,9 @@ class Capability(StrEnum):
     # Pings / traces one address from the device, with a documented command (D-128).
     PING = "supports_ping"
     TRACEROUTE = "supports_traceroute"
+    # Says which documented management ports answer and what each presents first, and can
+    # read the NETCONF <hello> with a login chosen by a person (D-130). Read-only.
+    SERVICE_DISCOVERY = "supports_service_discovery"
 
 
 # Capabilities an operation needs before a driver may be asked to perform it.
@@ -71,6 +74,8 @@ REQUIRED_CAPABILITIES: dict[DeviceOperation, frozenset[Capability]] = {
     DeviceOperation.PROVISION_FACTORY_DEFAULT: frozenset({Capability.ZERO_TOUCH_PROVISIONING}),
     DeviceOperation.PING: frozenset({Capability.PING}),
     DeviceOperation.TRACEROUTE: frozenset({Capability.TRACEROUTE}),
+    DeviceOperation.DISCOVER_SERVICES: frozenset({Capability.SERVICE_DISCOVERY}),
+    DeviceOperation.NETCONF_HELLO: frozenset({Capability.SERVICE_DISCOVERY}),
 }
 
 
@@ -478,6 +483,19 @@ class DeviceDriver:
         """The hops to one address from the device. ``data``: {"hops": [{"n", "address",
         "rtt_ms"}], "raw"}."""
         return self._unsupported(DeviceOperation.TRACEROUTE)
+
+    # -- what it offers (D-130) ---------------------------------------------------------
+    def discover_services(self) -> OperationResult:
+        """Which documented management ports answer and what each presents by itself (an
+        SSH identification line, a TLS certificate), without a login and without sending a
+        request. ``data``: {"address", "ports": [PortAnswer as dict]}."""
+        return self._unsupported(DeviceOperation.DISCOVER_SERVICES)
+
+    def netconf_hello(self, credentials: Credentials) -> OperationResult:
+        """One login to its NETCONF subsystem with ``credentials``; the server's <hello>
+        read; no request sent. ``data``: NetconfHello as dict. A refused login is not
+        retried."""
+        return self._unsupported(DeviceOperation.NETCONF_HELLO)
 
 
 def address_range(address: str, mask_or_prefix: str) -> tuple[str, str, int] | None:

@@ -1,7 +1,7 @@
 import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Device } from '../src/types/api';
+import type { Device, DeviceServices } from '../src/types/api';
 import { mockApi, renderAt } from './render';
 
 const device = (over: Partial<Device>): Device => ({
@@ -174,5 +174,52 @@ describe('device menu, tree and watch (D-099)', () => {
     const sent = calls.find((c) => c.url === '/api/devices/fw/license-plan');
     expect(JSON.parse(String(sent?.init?.body))).toEqual({ version_id: 'lic1' });
     expect(calls.find((c) => c.url === '/api/devices/fw/license')?.init?.body).toBeInstanceOf(FormData);
+  });
+});
+
+describe('management services of the Flexi BBU (D-130)', () => {
+  const bbu = device({ id: 'b1', name: 'lab-bbu', manufacturer: 'Nokia', category: 'other', model: 'FSMF',
+    driver_id: 'guided.nokia.flexi', management_address: '192.168.255.1', credential_ref_id: null,
+    capabilities: ['supports_guided_staging', 'supports_service_discovery'] });
+  const reading: DeviceServices = {
+    services: { address: '192.168.255.1', simulated: false, at: '2026-11-27T10:00:00Z', message: '2 of 3 management ports answer',
+      ports: [
+        { port: 22, kind: 'ssh', name: 'SSH', reference: 'RFC 4253', open: false, banner: null, certificate: null, note: 'No connection (closed, filtered or nothing listening).' },
+        { port: 443, kind: 'https', name: 'HTTPS (web portal)', reference: 'RFC 8446', open: true, banner: null,
+          certificate: { subject: 'CN=abc-bbu.example', issuer: 'CN=abc-ca.example', not_after: '2030-01-01T00:00:00+00:00', sha256: '0'.repeat(64) }, note: '' },
+        { port: 830, kind: 'netconf', name: 'NETCONF over SSH', reference: 'RFC 6242', open: true, banner: 'SSH-2.0-AbcSSH', certificate: null, note: '' },
+      ] },
+  };
+
+  it('the menu reads what each port presents, and NETCONF waits for a login', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [bbu], '/devices/b1/services': reading,
+      '/devices/b1/services/discover': reading.services,
+      '/projects/p1/credential-refs': [{ id: 'c9', name: 'bbu-login', provider: 'keyring', locator: 'x', has_secret: true, project_id: 'p1' }] });
+    renderAt('/systems/p1');
+    const table = await screen.findByRole('table');
+    await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-bbu' }));
+    await userEvent.click(await screen.findByText('Find its management services…'));
+    const dialog = await screen.findByRole('dialog', { name: 'Management services · lab-bbu' });
+    const ports = await within(dialog).findByRole('table', { name: 'Management ports' });
+    expect(within(ports).getByText('SSH-2.0-AbcSSH')).toBeInTheDocument();
+    expect(within(ports).getByText('Certificate: CN=abc-bbu.example')).toBeInTheDocument();
+    const read = within(dialog).getByRole('button', { name: 'Read its NETCONF capabilities' });
+    expect(read).toBeDisabled();
+    expect(within(dialog).getByText('Choose a login first.')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Read them again' }));
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/devices/b1/services/discover' && c.init?.method === 'POST')).toBe(true));
+    expect(calls.some((c) => c.url.includes('netconf-hello'))).toBe(false);  // nothing logs in without a person's choice
+  });
+
+  it('the copied result lists the ports and the announced capabilities, never a secret', async () => {
+    const { asText } = await import('../src/features/devices/servicesText');
+    const text = asText(bbu, { ...reading, netconf_hello: { ok: true, at: '2026-11-27T10:01:00Z', login: 'bbu-login',
+      message: 'It announces 2 capabilities and 1 YANG modules', base_versions: ['1.0'], session_id: '7', host_key: 'ssh-rsa SHA256:abc',
+      capabilities: ['urn:ietf:params:netconf:base:1.0', 'urn:example:abc:sw?module=abc-software&revision=2026-01-01'] } });
+    expect(text).toContain('830 NETCONF over SSH: answers | SSH-2.0-AbcSSH');
+    expect(text).toContain('22 SSH: no answer');
+    expect(text).toContain('urn:example:abc:sw?module=abc-software');
+    expect(text).toContain('login "bbu-login"');
   });
 });

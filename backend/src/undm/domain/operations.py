@@ -37,6 +37,10 @@ class DeviceOperation(StrEnum):
     # have their own endpoint instead of the plain operations one.
     PING = "ping"
     TRACEROUTE = "traceroute"
+    # What management services it offers (D-130): read-only; the NETCONF reading needs a
+    # login chosen by a person, so both have their own endpoint.
+    DISCOVER_SERVICES = "discover_services"
+    NETCONF_HELLO = "netconf_hello"
 
 
 IMPACT: dict[DeviceOperation, Impact] = {
@@ -58,6 +62,8 @@ IMPACT: dict[DeviceOperation, Impact] = {
     DeviceOperation.CREATE_CHECKPOINT: Impact.IMPACTING,
     DeviceOperation.PING: Impact.READ_ONLY,
     DeviceOperation.TRACEROUTE: Impact.READ_ONLY,
+    DeviceOperation.DISCOVER_SERVICES: Impact.READ_ONLY,
+    DeviceOperation.NETCONF_HELLO: Impact.READ_ONLY,
 }
 
 

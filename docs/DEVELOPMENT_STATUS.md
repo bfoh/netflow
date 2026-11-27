@@ -1,6 +1,8 @@
 # Development Status
 
-_Last updated: 2026-11-27 — v96, forms and pages tidied after bench feedback: fields and
+_Last updated: 2026-11-27 — v97, the Flexi BBU's management services read from the unit
+(SSH, portal, NETCONF; its NETCONF <hello> with a chosen login), to find a documented way to
+stage it without the browser (D-130). Before: v96, forms and pages tidied after bench feedback: fields and
 buttons aligned, a tag only for simulated and production devices, the firmware upload and
 image table reworked, the Flexi BBU card's package reasons (D-129). Before: v95, after staging: a system is reached on the bench or in the
 network through its BFW, with network addresses read from each device's file and its real
@@ -72,6 +74,7 @@ switches changeable in Settings → Safety, audited (D-082)._
 | Console window for every real device (v92, v95) | Device menu, Troubleshoot tab and In the network tab → Open console window…: COM port and speed (the model's documented speed with its source: 2930F 9600, FortiGate 9600, LIG1014A 115200, modem 115200), saved on the device; PuTTY when installed, else pySerial's terminal; refused while UNDM uses the port; audited (D-118, D-126). Only the modem's window has been opened on hardware |
 | In the network (v95) | System page → In the network: the BFW, each device's network address chosen from its file (line shown, one suggested when the file leaves no doubt) or typed, the file's management limits against this PC, Move to the network / back to the bench (real devices production / lab, audited), the start-up line for UNDM's own logins, route hints to copy, Check all from this PC or the BFW. Plans, console setup and guided steps refused in the network; one resolver for every connection, guarded by a source test (D-125). File readers checked locally on the team's files; **not yet run in a real network** |
 | Modem over SSH (v95) | `ssh.nokia.sar`: facts and backup over SSH in the network, nothing changed (D-127). Fake channel only; **not yet run on hardware** |
+| Flexi BBU management services (v97) | Device menu → Find its management services…: SSH, portal and NETCONF ports read without a login (identification line, certificate), the NETCONF <hello> with a chosen login (one attempt, no request), kept and audited, Copy the result (D-130). Loopback test servers and the simulated twin only; **not yet run on a BBU** (Q-66) |
 | Ping and traceroute (v95) | Device page → Troubleshoot: from this PC (Windows ping/tracert, refused elsewhere), from the BFW or the device where its driver documents a command (FortiOS, 2930F, modem ping only); hops named by device, shared addresses as candidates; raw output kept; audited (D-128). Synthetic output only; **not yet run on hardware** |
 | Flexi BBU in the wizard, guided (v93) | Role Nokia Flexi BBU (FSMF): no login, no plan; UNDM checks its portal answers (port 443), hands out the approved package and the generated SCF (byte for byte) with their SHA-256, and records each step done by hand in the portal (who, when, notes, file hashes); Finish staging and the report count it (D-117). Not yet used on a BBU |
 | Erase dialog (v73) | Shows the login the switch gets after the erase and blocks early when it has no password or is the login being erased (D-101) |
@@ -108,16 +111,15 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-27, v96)
+## Test results (2026-11-27, v97)
 | Suite | Result |
 |---|---|
-| Backend pytest | 688 passed, 2 skipped (PostgreSQL suite skips without DB URL); the checksum mismatch names both values and the file's size |
+| Backend pytest | 717 passed, 2 skipped (PostgreSQL suite skips without DB URL); the BBU's management services read from fake sockets and from SSH/TLS servers on this PC's loopback (a test fixture refuses any other address); one login attempt, nothing sent after it |
 | Backend PostgreSQL integration | 2 passed |
-| ruff / mypy --strict | clean / clean (107 files) |
-| Frontend Vitest | 148 passed (firmware dialog and image table, conventions at 0, audit words vs backend) |
+| ruff / mypy --strict | clean / clean (109 files) |
+| Frontend Vitest | 150 passed (the services dialog waits for a chosen login; the copied result holds no secret) |
 | tsc / oxlint / vite build | clean / clean / success |
-| Playwright | 14 passed: 11 workflows (1280 px, firmware upload from the device model, New plan's Check and preview), axe on every page light and dark (1366 px), no sideways scroll at 1366 and 390 px |
-| Layout review | screenshots of every form and dialog at 1366 px (fictional data): fields, help and buttons aligned (D-129) |
+| Playwright | 15 passed: 12 workflows (1280 px, the simulated BBU's services and NETCONF reading), axe on every page light and dark (1366 px), no sideways scroll at 1366 and 390 px |
 
 ## Known issues and limitations
 - Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole
@@ -141,6 +143,11 @@ secondary flash done once on a new unit (2026-11-19/23); file load: **succeeded 
 FortiGate 101F staging.
 
 ## Next milestone
+**v97 on the bench**: on the staged Flexi BBU, device menu → **Find its management services…**,
+then, if NETCONF answers, **Read its NETCONF capabilities** with the BBU's login; send the
+copied result (Q-66). In parallel the product owner asks Nokia Q-65. The BBU's driver is
+built from what is confirmed (D-130).
+
 **v95 on the bench**: the checklist's "What is new in v95: after staging, in the network"
 (`vendor-support/staging-wizard-bench.md`); its outputs answer Q-59 to Q-64. Then **the
 topology from the product owner's wiring picture, with the packet path of a traceroute**

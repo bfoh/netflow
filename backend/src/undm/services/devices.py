@@ -268,6 +268,9 @@ def run_read_only_operation(
     if op in (DeviceOperation.PING, DeviceOperation.TRACEROUTE):
         raise ConflictError("Ping and traceroute take an address: use the device's "
                             "Troubleshoot tab")
+    if op in (DeviceOperation.DISCOVER_SERVICES, DeviceOperation.NETCONF_HELLO):
+        raise ConflictError("Its management services are read from its device menu: "
+                            "Find its management services")
     if is_impacting(op) or op not in READ_ONLY_OPERATIONS:
         raise ForbiddenError(
             f"{op.value} changes device state; it is only available through an approved "

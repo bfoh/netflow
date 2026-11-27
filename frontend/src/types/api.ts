@@ -81,6 +81,21 @@ export interface CheckAllRow {
   sent?: number; received?: number | null; rtt_ms?: number[]; port?: number; port_open?: boolean; note?: string;
 }
 
+/** What a device's management ports present by themselves (D-130). */
+export interface PortAnswer {
+  port: number; kind: 'ssh' | 'https' | 'netconf'; name: string; reference: string; open: boolean;
+  banner: string | null; certificate: { subject: string; issuer: string; not_after: string; sha256: string; tls?: string } | null;
+  note: string;
+}
+export interface ServicesReading { address: string; ports: PortAnswer[]; simulated: boolean; at: string; message: string }
+export interface NetconfModule { name: string; namespace: string; revision: string }
+export interface NetconfHelloReading {
+  ok: boolean; at: string; login: string; message: string; simulated?: boolean;
+  session_id?: string | null; capabilities?: string[]; modules?: NetconfModule[]; base_versions?: string[];
+  host_key?: string; note?: string;
+}
+export interface DeviceServices { services?: ServicesReading; netconf_hello?: NetconfHelloReading }
+
 export interface CertificateSubject {
   common_name: string;
   org_unit: string;

@@ -22,6 +22,7 @@ from undm.api.schemas import (
     GenerateOut,
     IntentIn,
     IssueOut,
+    NetconfHelloIn,
     NetworkAddressIn,
     OperationOut,
 )
@@ -32,7 +33,7 @@ from undm.domain.operations import DeviceOperation
 from undm.drivers.registry import DriverRegistry
 from undm.inventory.rules import environment_problem
 from undm.security.sanitize import new_mapper, sanitize
-from undm.services import app_settings, audit, reach
+from undm.services import app_settings, audit, discovery, reach
 from undm.services import devices as svc
 from undm.services.errors import ConflictError, NotFoundError, ServiceError
 from undm.services.policy import Policy
@@ -329,6 +330,31 @@ def clear_port_off(device_id: str, session: SessionDep, actor: ActorDep) -> Devi
         audit.record(session, actor, "device.management_port_on", "device", d.id,
                      details={"port": was.get("port"), "by": "person"})
     return d
+
+
+@router.get("/api/devices/{device_id}/services")
+def device_services(device_id: str, session: SessionDep) -> dict[str, Any]:
+    """The last readings of its management services and NETCONF <hello> (D-130)."""
+    return discovery.last(get_device(session, device_id))
+
+
+@router.post("/api/devices/{device_id}/services/discover")
+def discover_services(device_id: str, session: SessionDep, registry: RegistryDep,
+                      settings: SettingsDep, actor: ActorDep) -> dict[str, Any]:
+    """Which documented management ports answer and what each presents by itself, without a
+    login and without a request (D-130). Read-only, audited."""
+    return discovery.discover(session, get_device(session, device_id), registry, actor,
+                              Policy.from_settings(settings))
+
+
+@router.post("/api/devices/{device_id}/services/netconf-hello")
+def read_netconf_hello(device_id: str, body: NetconfHelloIn, session: SessionDep,
+                       registry: RegistryDep, settings: SettingsDep,
+                       actor: ActorDep) -> dict[str, Any]:
+    """One login to its NETCONF subsystem with the chosen login; its <hello> read; no request
+    sent (D-130). Audited."""
+    return discovery.netconf_hello(session, get_device(session, device_id), registry, actor,
+                                   body.credential_ref_id, Policy.from_settings(settings))
 
 
 @router.post("/api/devices/{device_id}/operations/{operation}", response_model=OperationOut)

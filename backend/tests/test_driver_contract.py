@@ -8,6 +8,7 @@ from undm.drivers.base import (
     ApplyMode,
     Capability,
     ConfigurationBackup,
+    Credentials,
     DeviceTarget,
     FirmwareImageRef,
     ResultStatus,
@@ -43,6 +44,9 @@ def call(driver, op):
         DeviceOperation.CREATE_CHECKPOINT: lambda: driver.create_checkpoint("x"),
         DeviceOperation.PING: lambda: driver.ping("192.0.2.10", 2),
         DeviceOperation.TRACEROUTE: lambda: driver.traceroute("192.0.2.10"),
+        DeviceOperation.DISCOVER_SERVICES: driver.discover_services,
+        DeviceOperation.NETCONF_HELLO: lambda: driver.netconf_hello(
+            Credentials("admin", "Example-Only-1")),
     }[op]()
 
 
