@@ -1,4 +1,5 @@
 import { Anchor, Badge, Button, Card, Group, NumberInput, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Beside, FieldRow } from '../../components/FieldRow';
 import { Tag } from '../../components/Badges';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconDownload, IconFileCode, IconScale } from '@tabler/icons-react';
@@ -49,21 +50,21 @@ export function ZoneField({ project }: { project: Project }) {
   const pcis = useQuery({ queryKey: ['pci-row', system], queryFn: () => api.pciRow(system!), enabled: !!system, retry: false });
   return (
     <Card>
-      <Group align="flex-end" gap="sm" wrap="wrap">
+      <FieldRow gap="sm">
         <NumberInput label="Zone" w={120} min={1} max={128} value={value} onChange={setValue}
           error={zoneOk ? undefined : '1 to 128'}
           description={!project.zone && guess ? `From the name: ${guess}` : undefined} />
         <TextInput label="System" w={140} value={sysText} onChange={(e) => setSysText(e.currentTarget.value)}
           placeholder="e.g. B007" error={sysText.trim() && !system ? 'A B system, e.g. B007' : undefined}
           description={!project.system_id && sysGuess ? `From the name: ${sysGuess}` : undefined} />
-        <div style={{ paddingBottom: 8 }} role="status">
+        <Beside role="status">
           {save.isPending || ready
             ? <InlineStatus tone="neutral">Saving…</InlineStatus>
             : save.error ? <InlineStatus tone="danger">Not saved: {save.error.message}</InlineStatus>
               : (project.zone || project.system_id) && <InlineStatus tone="success">Saved</InlineStatus>}
-        </div>
-        {zone && zoneOk && <Text size="sm" c="dimmed" pb={6}>{zoneWords(zone)}</Text>}
-      </Group>
+        </Beside>
+        {zone && zoneOk && <Beside><Text size="sm" c="dimmed">{zoneWords(zone)}</Text></Beside>}
+      </FieldRow>
       {system && (
         <Text size="xs" c="dimmed" mt={4}>
           {system} · MRBTS-{Number(system.slice(1))} · {pcis.data ? `cell PCIs ${pcis.data.pcis.filter((p) => p !== null).join(', ')} (PCI table)`

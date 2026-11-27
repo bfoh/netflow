@@ -65,12 +65,12 @@ function Choose({ device, data, onClose }: { device: Device; data: FileAddresses
           </Stack>
         </Radio.Group>
       )}
-      <Text size="sm" c="dimmed">{data.suggested ? `Suggested: ${data.suggested}. ${data.reason}` : data.reason}</Text>
-      <TextInput label="Or type it" placeholder="for example 198.51.100.10" value={typed}
+      {data.files.length > 0 && <Text size="sm" c="dimmed">{data.suggested ? `Suggested: ${data.suggested}. ${data.reason}` : data.reason}</Text>}
+      <TextInput label={data.addresses.length ? 'Or type it' : 'Its network address'} placeholder="for example 198.51.100.10" value={typed}
         onChange={(e) => setTyped(e.currentTarget.value)}
         error={typed.trim() && !IPV4.test(typed.trim()) ? 'One IPv4 address, for example 198.51.100.10' : undefined} />
       {data.managers.length > 0 && (
-        <Notice kind={data.pc_allowed === false ? 'caution' : 'status'} compact live={false}
+        <Notice kind={data.pc_allowed === false ? 'caution' : 'settled'} compact live={false}
           title={data.pc_allowed === false ? 'This PC is outside the limits its file sets' : 'Its file limits who may manage it'}>
           Allowed: {data.managers.map((m) => m.text).join('; ')}.
           {data.pc_address && <> This PC's address towards it now: <b>{data.pc_address}</b>

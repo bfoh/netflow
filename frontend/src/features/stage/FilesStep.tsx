@@ -41,14 +41,14 @@ function FilePick({ device, label, description, value, onChange, secrets, onSecr
   }, [defaultSecret, slots.map((x) => x.slot_id).join(',')]);
   return (
     <Stack gap={4}>
-      <Group align="flex-end" gap="xs" wrap="wrap">
+      <Stack gap="xs" align="flex-start">
         <Select label={label} description={description} placeholder={files.length ? 'Choose the file' : 'Import it first'}
           data={files.map((v) => ({ value: v.id, label: `${v.reference || 'file'} · ${fmtDate(v.created_at)}` }))}
           value={value} onChange={onChange} clearable w="100%" maw={420} />
         <FileButton onChange={(f) => { if (f) imp.mutate(f, { onSuccess: (v) => onChange(v.id) }); }}>
           {(props) => <Button {...props} variant="light" leftSection={<IconUpload size={14} />} loading={imp.isPending}>Import a file…</Button>}
         </FileButton>
-      </Group>
+      </Stack>
       {report && (
         <Text size="xs" c={report.problems.length || report.blocked_reason ? 'red' : 'dimmed'}>
           {report.summary}{report.blocked_reason ? `. ${report.blocked_reason}` : ''}{report.problems.length ? `. ${report.problems.join('; ')}` : ''}

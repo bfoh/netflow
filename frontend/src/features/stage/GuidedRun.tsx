@@ -94,7 +94,7 @@ export function GuidedRun({ role, device, choice }: { role: Role; device: Device
               <Stack gap={6}>
                 <Text size="xs">{s.detail}</Text>
                 {what(s)}
-                {s.note_label && <Textarea size="xs" label={s.note_label} description={NOTE_HELP[s.kind]} autosize minRows={1} maw={520}
+                {s.note_label && <Textarea label={s.note_label} description={NOTE_HELP[s.kind]} autosize minRows={1} maw={520}
                   value={notes[s.key] ?? ''} onChange={(e) => { const v = e.currentTarget.value; setNotes((n) => ({ ...n, [s.key]: v })); }} />}
                 <Group>
                   <Button size="xs" loading={done.isPending} leftSection={s.kind === 'check' ? <IconPlugConnected size={14} /> : <IconCheck size={14} />}

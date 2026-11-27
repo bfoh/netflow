@@ -67,7 +67,7 @@ export function ReportStep({ project, roles, stagings }: {
           : !plan || plan.steps.length === 0 || plan.steps.some((s) => s.state !== 'succeeded')));
         return <Stack className="no-print">
           {open.length > 0 && !project.staged_at && (
-            <Notice kind="status" title={`${rows.length - open.length} of ${rows.length} devices are staged`}>
+            <Notice kind="settled" title={`${rows.length - open.length} of ${rows.length} devices are staged`}>
               Still to do in step 4 (Run):{' '}
               {open.map(({ device }, i) => (
                 <span key={device.id}>{i > 0 && ', '}<Anchor component={Link} to={paths.stageCard(project.id, device.id)} size="sm" c="inherit" fw={600}>{device.name}</Anchor></span>

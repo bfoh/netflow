@@ -2131,3 +2131,28 @@ From this PC, from the BFW and from any device whose driver has a documented com
   network or an interface its file gives it); an address two devices share gives candidates,
   never a guess. A simulated target starts no program and says "Simulated: nothing was
   sent".
+
+### D-129 Forms: fields and buttons aligned, exceptions tagged only (2026-11-27, v96)
+
+Bench feedback (product owner, 2026-11-27): pages looked clumsy, the "Real device" tag was on
+everything, and the firmware upload's fields were not aligned. Applied across the app:
+- **Environment tag for the exceptions only**: Simulated and Production are tagged; a real
+  device on the bench (lab) carries no tag, since that is the normal case (`EnvironmentBadge`).
+- **One field layout**: label, then the input, then its help and its error under the input
+  (theme `inputWrapperOrder`), so inputs in a grid start at the same height. Labelled form
+  fields use the standard size; the small size is kept for tables and toolbars.
+- **Fields with a button or status beside them** use `FieldRow` / `Beside`
+  (`components/FieldRow.tsx`): aligned at the top, what sits beside starts one label line
+  lower, so help, errors and a button's reason under it never move the row.
+- **Disabled actions on forms say why** (`ReasonButton`, D-119): New plan's "Check and
+  preview", Settings → Templates' download, the troubleshoot buttons.
+- **Message boxes**: the "running" kind (spinner) only for something running; facts use the
+  settled kind. A safety switch is described by what On means.
+- **Firmware**: the upload starts from the device model, the platform is shown under it, the
+  version and models side by side, the vendor checksum only when the vendor publishes one
+  (else approve with a reason, D-062); the image table shows image, models, status and
+  checksum without sideways scrolling, the rarer actions under ⋯. A checksum mismatch shows
+  both values and the file's size (nothing stored).
+- **Flexi BBU card**: long package names and checksums wrap; the step note says what to copy
+  from the portal; step 2 says why no package is offered (not approved yet, or its models do
+  not include FSMF; model names compared ignoring case).

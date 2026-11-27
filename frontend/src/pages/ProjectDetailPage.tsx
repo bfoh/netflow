@@ -185,7 +185,7 @@ export function ProjectDetailPage() {
           <SimpleGrid cols={1}>
             <ProjectSettings key={p.updated_at} project={p} />
             <CertificateSettings key={`cert-${p.updated_at}`} project={p} />
-            <Title order={3} c="dimmed">Created {fmtDate(p.created_at)} · updated {fmtDate(p.updated_at)}</Title>
+            <Text size="xs" c="dimmed">Created {fmtDate(p.created_at)} · updated {fmtDate(p.updated_at)}</Text>
           </SimpleGrid>
         </Tabs.Panel>
       </Tabs>

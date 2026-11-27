@@ -1,5 +1,5 @@
 import { Anchor, Button, Card, Group, Select, Stack, Table, Text, Title } from '@mantine/core';
-import { IconArrowBackUp, IconRoute, IconTerminal, IconWaveSine } from '@tabler/icons-react';
+import { IconArrowBackUp, IconRoute, IconTerminal, IconTerminal2, IconWaveSine } from '@tabler/icons-react';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -90,7 +90,7 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
       </Card>
 
       {readOff && (
-        <Notice kind={network ? 'caution' : 'status'} live={false}
+        <Notice kind={network ? 'caution' : 'settled'} live={false}
           title={network ? "UNDM's own logins to these devices are off" : 'In the network, UNDM’s own logins need a start-up setting'}
           details={<Stack gap={6}>
             <Text size="sm">Add this line to backend\.env on this PC, then restart the backend:</Text>
@@ -116,7 +116,7 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
           empty="No devices yet: add them in Stage a system.">
           <Table.Thead><Table.Tr>
             <Table.Th>Device</Table.Th><Table.Th>Bench address</Table.Th><Table.Th>Network address</Table.Th>
-            <Table.Th>UNDM uses</Table.Th><Table.Th>Limits in its file</Table.Th>
+            <Table.Th>UNDM uses</Table.Th><Table.Th style={{ whiteSpace: 'nowrap' }}>Limits in its file</Table.Th>
             {check.data && <Table.Th>{checkedFrom === 'pc' ? 'Check from this PC' : 'Check from the BFW'}</Table.Th>}<ActionsHeader />
           </Table.Tr></Table.Thead>
           <Table.Tbody>
@@ -127,23 +127,23 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
               return (
                 <Table.Tr key={d.id}>
                   <Table.Td><Group gap="xs" wrap="nowrap">
-                    <Anchor component={Link} to={paths.device(d.id)} fw={600} size="sm">{d.name}</Anchor>
+                    <Anchor component={Link} to={paths.device(d.id)} fw={600} size="sm" style={{ whiteSpace: 'nowrap' }}>{d.name}</Anchor>
                     <EnvironmentBadge env={d.environment} />{d.id === gateway?.id && <Tag tone="info" size="sm">BFW</Tag>}
                   </Group></Table.Td>
                   <Table.Td><Text size="sm" ff="monospace">{d.management_address || '—'}</Text></Table.Td>
                   <Table.Td><Group gap="xs" wrap="nowrap">
-                    <Text size="sm" ff="monospace">{d.network_address || 'Not set'}</Text>
-                    <Button size="compact-xs" variant="light" disabled={!!d.locked_by_deployment_id} onClick={() => setChoosing(d)}
-                      aria-label={`Choose the network address of ${d.name} from its file`}>
-                      {d.network_address ? 'Change…' : 'Choose from its file…'}</Button>
+                    {d.network_address && <Text size="sm" ff="monospace">{d.network_address}</Text>}
+                    <Button size="compact-xs" variant={d.network_address ? 'subtle' : 'light'} disabled={!!d.locked_by_deployment_id}
+                      onClick={() => setChoosing(d)} aria-label={`Choose the network address of ${d.name} from its file`}>
+                      {d.network_address ? 'Change…' : 'Choose…'}</Button>
                   </Group></Table.Td>
                   <Table.Td><Text size="sm" ff="monospace">{conn.address || '—'}</Text>
                     {conn.problem && <Text size="xs" c="dimmed">No network address yet</Text>}</Table.Td>
                   <Table.Td><Limits found={found} /></Table.Td>
                   {check.data && <Table.Td><Checked row={checked.get(d.id)} /></Table.Td>}
                   <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
-                    {d.environment !== 'simulated' && <Button size="compact-xs" variant="default"
-                      onClick={() => setConsoleFor(d)}>Console window…</Button>}
+                    {d.environment !== 'simulated' && <Button size="compact-xs" variant="default" leftSection={<IconTerminal2 size={12} />}
+                      onClick={() => setConsoleFor(d)} aria-label={`Console window for ${d.name}`}>Console…</Button>}
                     {ssh && <SshButton device={d} />}
                     <DeviceMenu device={d} />
                   </Group></Table.Td>
@@ -185,12 +185,12 @@ function Checked({ row }: { row?: CheckAllRow }) {
 function SshButton({ device }: { device: Device }) {
   const ssh = useAction(() => api.openSsh(device.id), () => `SSH window opened for ${device.name}: type the password there`);
   return <Button size="compact-xs" variant="default" leftSection={<IconTerminal size={12} />} loading={ssh.isPending}
-    onClick={() => ssh.mutate(undefined)}>SSH window</Button>;
+    onClick={() => ssh.mutate(undefined)} aria-label={`SSH window for ${device.name}`}>SSH</Button>;
 }
 
 function Limits({ found }: { found?: FileAddresses }) {
   if (!found) return <Text size="sm" c="dimmed">—</Text>;
-  if (!found.reader) return <Text size="sm" c="dimmed">Not read for this model</Text>;
+  if (!found.reader) return <Text size="sm" c="dimmed" title="UNDM reads no management limits from this model's file">Not read</Text>;
   if (found.managers.length === 0) return <Text size="sm" c="dimmed">None in its file</Text>;
   if (found.pc_allowed === false) return <Tag tone="warning" title={found.managers.map((m) => m.text).join('; ')}>This PC is outside them</Tag>;
   if (found.pc_allowed) return <Tag tone="success" title={found.managers.map((m) => m.text).join('; ')}>This PC is allowed</Tag>;

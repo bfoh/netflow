@@ -1,4 +1,6 @@
 import { Button, Card, FileInput, Group, Modal, NumberInput, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Beside, FieldRow } from '../../components/FieldRow';
+import { ReasonButton } from '../../components/ReasonButton';
 import { InlineStatus } from '../../components/InlineStatus';
 import { Tag } from '../../components/Badges';
 import { IconDownload, IconFileImport } from '@tabler/icons-react';
@@ -181,14 +183,15 @@ export function TemplatesCard() {
         The modem&apos;s and the BBU&apos;s files also follow the system (B007, MRBTS-7), and the BBU&apos;s cells take their PCIs from
         the PCI table below. Import a new version when the team releases one. Downloads are byte for byte as the team writes each file.
       </Hint>
-      <Group align="flex-end" gap="sm" mt="xs">
+      <FieldRow gap="sm" mt="xs">
         <NumberInput label="Download for zone" w={150} min={1} max={128} value={zone} onChange={setZone} />
         <TextInput label="and system" w={130} value={sysText} onChange={(e) => setSysText(e.currentTarget.value)} placeholder="e.g. B007"
           error={sysText.trim() && !sys ? 'e.g. B007' : undefined} />
-        <Button variant="default" leftSection={<IconDownload size={16} />} disabled={!z || byRole.size === 0}
+        <Beside><ReasonButton variant="default" leftSection={<IconDownload size={16} />} disabled={!z || byRole.size === 0}
+          reason={byRole.size === 0 ? 'Import the team’s files first.' : !z ? 'Type a zone first.' : null}
           loading={all.isPending} onClick={() => all.mutate(undefined, { onSuccess: (r) => setSkipped(r.skipped) })}>
-          All files for zone {z ?? '…'}{sys ? ` · ${sys}` : ''}</Button>
-      </Group>
+          All files for zone {z ?? '…'}{sys ? ` · ${sys}` : ''}</ReasonButton></Beside>
+      </FieldRow>
       {skipped && skipped.length > 0 && (
         <Notice kind="settled" compact mt="xs" title="Not in the download">{skipped.map((x) => <div key={x}>{x}</div>)}</Notice>
       )}

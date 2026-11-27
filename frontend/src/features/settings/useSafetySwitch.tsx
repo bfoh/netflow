@@ -12,6 +12,8 @@ export interface SwitchInfo {
   label: string;
   /** What the switch does when it is in its less safe position. */
   risky: string;
+  /** What the switch is for, when that is not what its less safe position does (Settings → Safety). */
+  about?: string;
   /** The less safe position: ON for the change switches, OFF for the second approver. */
   riskyValue: boolean;
   needs?: SafetySwitch;
@@ -23,6 +25,7 @@ export const SWITCHES: SwitchInfo[] = [
   { key: 'enable_real_device_firmware', label: 'Firmware changes', riskyValue: true, needs: 'enable_real_device_writes',
     risky: 'Approved firmware plans may upgrade real devices. A device restarts into the new image.' },
   { key: 'firmware_require_separate_approver', label: 'A second person approves firmware plans', riskyValue: false,
+    about: 'On: someone other than the person who made a firmware plan approves it. Turn it off only when you stage alone on the bench.',
     risky: 'The person who made a firmware plan may also approve it. Use this only when you stage alone on the bench.' },
 ];
 

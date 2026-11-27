@@ -49,7 +49,7 @@ export function RoleCard({ role, device, projectId, systemName, simulated }: {
           </Group>
           {role.guided
             ? <Text size="xs" c="dimmed">{LOGIN_HINT[role.key]}</Text>
-            : <LoginSelect projectId={projectId} size="xs" maw={320} description={LOGIN_HINT[role.key]}
+            : <LoginSelect projectId={projectId} maw={420} description={LOGIN_HINT[role.key]}
               value={device.credential_ref_id} onChange={(v) => setLogin.mutate(v)} />}
         </Stack>
       ) : (

@@ -3,6 +3,7 @@ import { IconRoute, IconTerminal2, IconWaveSine } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
+import { Beside, FieldRow } from '../../components/FieldRow';
 import { Tag } from '../../components/Badges';
 import { DialogError } from '../../components/ConfirmDialog';
 import { Hint } from '../../components/Hint';
@@ -52,11 +53,12 @@ export function TroubleshootPanel({ device }: { device: Device }) {
         <Title order={2} mb="xs">Ping and traceroute</Title>
         <Text size="sm" c="dimmed" mb="sm">One address at a time. From this PC, UNDM runs Windows' ping and tracert; from a device,
           its own command where its driver documents one. Nothing is changed anywhere.</Text>
-        <Group align="flex-end" wrap="wrap">
+        <FieldRow>
           <Select label="From" data={sources} value={source} onChange={(v) => setSource(v ?? 'pc')} allowDeselect={false} w={260} />
           <TextInput label="To" value={target} onChange={(e) => setTarget(e.currentTarget.value)} w={220}
             placeholder="for example 198.51.100.10"
             error={target.trim() && !valid ? 'One IPv4 address' : undefined} />
+          <Beside><Group gap="sm" align="flex-start">
           <ReasonButton leftSection={<IconWaveSine size={16} />} disabled={!valid} reason={!valid ? 'Choose or type one address.' : null}
             loading={ping.isPending} onClick={() => ping.mutate(undefined, { onSuccess: (a) => setResult({ kind: 'ping', answer: a }) })}>Ping</ReasonButton>
           <ReasonButton variant="default" leftSection={<IconRoute size={16} />} disabled={!valid || !canTrace}
@@ -64,7 +66,8 @@ export function TroubleshootPanel({ device }: { device: Device }) {
             loading={trace.isPending} onClick={() => trace.mutate(undefined, { onSuccess: (a) => setResult({ kind: 'trace', answer: a }) })}>Traceroute</ReasonButton>
           {device.environment !== 'simulated' && <Button variant="subtle" leftSection={<IconTerminal2 size={16} />}
             onClick={() => setConsoleOpen(true)}>Console window…</Button>}
-        </Group>
+          </Group></Beside>
+        </FieldRow>
         <Group gap="xs" mt="sm" wrap="wrap" aria-label="Addresses of this system">
           {all.filter((d) => connectionOf(d).address).map((d) => (
             <Button key={d.id} size="compact-xs" variant={connectionOf(d).address === target.trim() ? 'light' : 'subtle'}

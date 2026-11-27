@@ -134,7 +134,7 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
   const canMake = steps.length > 0 && missing.length === 0 && !consoleTodo && !network;
   const usable = latest && !fresh;
   const takenNotice = taken && !(finished && !fresh) && (canMoveAside(taken) ? (
-    <Notice kind="status" compact>
+    <Notice kind="settled" compact>
       Its file moves it to {role.addressAfter}, where {taken.name} answers. Stage {taken.name} first. This plan then
       switches off {taken.name}’s management port until its next power-on (nothing is saved on it): no cable to unplug.
     </Notice>

@@ -1,6 +1,8 @@
 # Development Status
 
-_Last updated: 2026-11-27 — v95, after staging: a system is reached on the bench or in the
+_Last updated: 2026-11-27 — v96, forms and pages tidied after bench feedback: fields and
+buttons aligned, a tag only for simulated and production devices, the firmware upload and
+image table reworked, the Flexi BBU card's package reasons (D-129). Before: v95, after staging: a system is reached on the bench or in the
 network through its BFW, with network addresses read from each device's file and its real
 devices marked production there (D-125); a console window for every real device (D-126); the
 modem read over SSH in the network (D-127); ping and traceroute from this PC, the BFW and
@@ -106,15 +108,16 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-27, v95)
+## Test results (2026-11-27, v96)
 | Suite | Result |
 |---|---|
-| Backend pytest | 688 passed, 2 skipped (PostgreSQL suite skips without DB URL); no test starts ping or tracert, and a source test guards every read of a device address |
+| Backend pytest | 688 passed, 2 skipped (PostgreSQL suite skips without DB URL); the checksum mismatch names both values and the file's size |
 | Backend PostgreSQL integration | 2 passed |
 | ruff / mypy --strict | clean / clean (107 files) |
-| Frontend Vitest | 148 passed (network tab and address chooser, console window, troubleshoot hop table, conventions at 0, audit words vs backend) |
+| Frontend Vitest | 148 passed (firmware dialog and image table, conventions at 0, audit words vs backend) |
 | tsc / oxlint / vite build | clean / clean / success |
-| Playwright | 14 passed: 11 workflows (1280 px, a practice system moved to the network and back, Check all from the BFW, a simulated ping and traceroute), axe on every page light and dark including the In the network and Troubleshoot tabs (1366 px), no sideways scroll at 1366 and 390 px |
+| Playwright | 14 passed: 11 workflows (1280 px, firmware upload from the device model, New plan's Check and preview), axe on every page light and dark (1366 px), no sideways scroll at 1366 and 390 px |
+| Layout review | screenshots of every form and dialog at 1366 px (fictional data): fields, help and buttons aligned (D-129) |
 
 ## Known issues and limitations
 - Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole

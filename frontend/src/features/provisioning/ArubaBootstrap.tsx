@@ -184,11 +184,11 @@ export function ArubaBootstrap({ device, simulated, back }: {
           <Card withBorder padding="sm">
             <Stack gap={6}>
               <Text size="sm" fw={600}>Logins</Text>
-              <Select size="xs" label="Login it has now" clearable data={loginOptions} value={currentLogin}
+              <Select label="Login it has now" clearable data={loginOptions} value={currentLogin}
                 description="Factory or preconfigured login. Leave empty for a new switch. UNDM uses it if the approved login is refused, and for an erase."
                 placeholder={refs.data?.length ? 'Choose its current login' : "Add it on the system's Logins tab"}
                 onChange={(v) => { setCurrentLogin(v); setSeen(null); setEraseOk(false); }} />
-              <Select size="xs" label="Approved login (its login after the setup)" data={loginOptions} value={device.credential_ref_id}
+              <Select label="Approved login (its login after the setup)" data={loginOptions} value={device.credential_ref_id}
                 description="Set on a new or erased switch; saved as this device's login."
                 placeholder="Choose the approved login" onChange={(v) => chooseOwn.mutate(v)} />
               {ownProblem && <Notice kind="error" compact>{ownProblem} Choose the approved login here.</Notice>}

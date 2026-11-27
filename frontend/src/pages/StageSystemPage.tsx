@@ -191,7 +191,7 @@ function StageSystem({ projectId }: { projectId: string }) {
         ))}
       </Stepper>
       {project.data.reached_via === 'network' && (
-        <Notice kind="status" mb="md" live={false} title="This system is in the network"
+        <Notice kind="settled" mb="md" title="This system is in the network"
           action={<Button size="xs" variant="default" component={Link} to={paths.system(projectId, 'network')}>In the network</Button>}>
           Its devices are reached through its BFW at their network addresses. Plans, console setup and staging steps run on the
           bench only: move the system back to the bench on its In the network tab to stage again.

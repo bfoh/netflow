@@ -73,10 +73,10 @@ test('import config, draw topology, upgrade firmware (simulated)', async ({ page
   const upload = page.getByRole('dialog', { name: 'Upload a firmware image' });
   await upload.getByRole('combobox', { name: 'Device model' }).click();
   await page.getByRole('option', { name: /6300M/ }).click();
-  await expect(upload.getByRole('textbox', { name: 'Platform' })).toHaveValue('Aruba AOS-CX');
+  await expect(upload.getByText('Platform: Aruba AOS-CX')).toBeVisible();
   await upload.locator('input[type=file]').setInputFiles({ name: `cx-${id}.swi`, mimeType: 'application/octet-stream', buffer: image });
   await upload.getByRole('textbox', { name: 'Version', exact: true }).fill('10.2.0');
-  await upload.getByLabel('Vendor checksum (SHA-256 or SHA-512)').fill(createHash('sha256').update(image).digest('hex'));
+  await upload.getByRole('textbox', { name: 'Vendor checksum' }).fill(createHash('sha256').update(image).digest('hex'));
   await upload.getByRole('button', { name: 'Upload', exact: true }).click();
   await expect(upload).toBeHidden();
   const row = page.getByRole('row', { name: new RegExp(`cx-${id}`) });

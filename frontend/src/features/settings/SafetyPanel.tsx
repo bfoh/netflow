@@ -35,7 +35,7 @@ export function SafetyPanel() {
                     {on ? 'ON' : 'off'}
                   </Tag>
                 </Group>
-                <Text size="sm" c="dimmed">{info.risky}</Text>
+                <Text size="sm" c="dimmed">{info.about ?? info.risky}</Text>
                 {info.needs && <Text size="xs" c="dimmed">Works only together with Real-device changes.</Text>}
                 {blockedBy && <InlineStatus tone="warning" size="xs">Real-device changes are off, so this has no effect yet.</InlineStatus>}
                 {locked && (
