@@ -68,8 +68,12 @@ Stage a system:
 2. **Step 2.**
    - **Generate** makes its SCF for the system's zone and system, with the cells' PCIs from the
      PCI table.
-   - Choose the approved **software package**. Upload it once on the Firmware page, platform
-     "Nokia Flexi BBU (SBTS)", with its SHA-256, then approve it.
+   - Choose the approved **software package** (the ZIP WebEM takes). Upload it once on the
+     Firmware page, platform "Nokia Flexi BBU (SBTS)". Type a checksum only if Nokia
+     publishes one for this ZIP; otherwise leave it empty and **Approve without checksum…**
+     with a reason naming where the file came from and its SHA-256 from `certutil -hashfile
+     <zip> SHA256` (D-062). A SHA-256 computed on your own copy is not the vendor's: typed in
+     the checksum field it would mark the image as vendor-verified.
 3. **Step 3.** The PC needs 192.168.255.126/24 on the adapter of the LMP cable. Test checks
    port 443.
 4. **Step 4.** The BBU's card has **Open its portal** and the four steps:

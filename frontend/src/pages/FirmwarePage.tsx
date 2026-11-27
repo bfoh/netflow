@@ -85,7 +85,7 @@ function UploadForm({ initialModel, onDone }: { initialModel: string | null; onD
           <FileInput label="Firmware image file" placeholder="Choose the vendor image" value={file} onChange={setFile} required />
           <TextInput label="Version" placeholder="as reported by the device, e.g. WC.16.11.0003" value={version} onChange={(e) => setVersion(e.currentTarget.value)} required />
           <TagsInput label="Compatible models" placeholder="choose from the list, or type and press Enter" data={suggestions} value={compatible} onChange={setCompatible} />
-          <TextInput label="Vendor checksum (SHA-256 or SHA-512)" description="From the vendor's download page; needed to approve it." value={sha} onChange={(e) => setSha(e.currentTarget.value)} />
+          <TextInput label="Vendor checksum (SHA-256 or SHA-512)" description="Only the one the vendor publishes for this file. None? Leave it empty and approve with a reason." value={sha} onChange={(e) => setSha(e.currentTarget.value)} />
           <TextInput label="Minimum version to upgrade from (optional)" description="Upgrade-path rule from the release notes" value={minFrom} onChange={(e) => setMinFrom(e.currentTarget.value)} />
         </SimpleGrid>
         <Textarea label="Release notes / reference" autosize minRows={2} value={notes} onChange={(e) => setNotes(e.currentTarget.value)} />

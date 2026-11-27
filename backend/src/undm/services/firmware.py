@@ -48,6 +48,18 @@ def vendor_checksum(value: str | None) -> tuple[str, str] | None:
                        "SHA-512 (128 hexadecimal characters)")
 
 
+def _mismatch(algorithm: str, typed: str, actual: str, size: int, filename: str,
+              then: str) -> str:
+    """Both checksums side by side, so a person sees which one is off (bench 2026-11-27)."""
+    name = algorithm.upper().replace("SHA", "SHA-")
+    return (f"{name} mismatch. Typed: {typed}. The file UNDM received ({filename}, {size:,} "
+            f"bytes): {actual}. {then} Check the file on this PC with: certutil -hashfile "
+            f"\"{filename}\" {algorithm.upper()}. If certutil shows the file's value, the "
+            "checksum typed belongs to another file; if it shows the typed one, the file "
+            "changed on its way to UNDM. Type only the checksum the vendor publishes for this "
+            "file; without one, leave it empty and approve the image with a written reason.")
+
+
 def _file_digest(path: Path, algorithm: str) -> str:
     digest = hashlib.new(algorithm)
     with path.open("rb") as f:
@@ -99,10 +111,8 @@ class FirmwareRepository:
                 algorithm, expected = published
                 actual = sha if algorithm == "sha256" else digest512.hexdigest()
                 if expected != actual:
-                    raise ServiceError(
-                        f"{algorithm.upper()} mismatch: the file does not match the checksum "
-                        f"published by the vendor (file {actual}). The download may be "
-                        "corrupted or the wrong file.")
+                    raise ServiceError(_mismatch(algorithm, expected, actual, size, filename,
+                                                 "Nothing was stored."))
             if self.s.scalars(select(FirmwareImage).where(FirmwareImage.sha256 == sha)).first():
                 raise ConflictError("This image file is already in the repository")
             final = self.root / f"{sha}_{_SAFE.sub('_', filename)[:120]}"
@@ -142,9 +152,9 @@ class FirmwareRepository:
             audit.record(self.s, actor, "firmware.verify", "firmware_image", img.id, "failed",
                          {"algorithm": algorithm, "file": actual})
             self.s.commit()  # keep the record of a failed integrity check
-            raise ServiceError(
-                f"{algorithm.upper()} mismatch: the stored file does not match the vendor's "
-                f"checksum (file {actual}). It may be corrupted or the wrong file; delete it.")
+            raise ServiceError(_mismatch(algorithm, expected, actual, img.size_bytes, img.filename,
+                                         "If the vendor's checksum is right, the stored file is "
+                                         "corrupted or the wrong file: delete it."))
         if algorithm == "sha256":
             img.vendor_sha256 = expected
         else:

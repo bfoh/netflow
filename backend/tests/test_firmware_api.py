@@ -41,6 +41,9 @@ def setup_switch(client):
 def test_upload_checksum_and_approval_rules(client, tmp_path):
     bad = upload(client, sha="0" * 64)
     assert bad.status_code == 400 and "mismatch" in bad.json()["error"]
+    # Both values and the size are shown, so a person sees which side is off (2026-11-27).
+    assert f"Typed: {'0' * 64}" in bad.json()["error"] and "bytes): " in bad.json()["error"]
+    assert "Nothing was stored" in bad.json()["error"]
     assert not any((tmp_path / "firmware").glob("*.swi"))  # rejected file not kept
     unverified = upload(client, sha=None).json()
     assert unverified["integrity_verified"] is False
@@ -137,7 +140,7 @@ def test_sha512_checksum_is_accepted_and_md5_refused(client):
         files={"file": ("FGT_101F.out", IMAGE, "application/octet-stream")})
     assert md5.status_code in (400, 422) and "MD5" in md5.json()["error"]
     wrong = upload(client, sha="ab" * 64)
-    assert wrong.status_code in (400, 422) and "SHA512 mismatch" in wrong.json()["error"]
+    assert wrong.status_code in (400, 422) and "SHA-512 mismatch" in wrong.json()["error"]
     ok = upload(client, sha=hashlib.sha512(IMAGE).hexdigest().upper())
     assert ok.status_code == 201, ok.text
     img = ok.json()

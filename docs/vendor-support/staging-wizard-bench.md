@@ -304,8 +304,10 @@ It is also the first hardware run of:
 ## Nokia Flexi BBU: guided steps (since v93, D-117)
 Done by hand in its portal; UNDM checks, hands out the files and records:
 1. **Before.**
-   - Upload the software package once on the Firmware page (platform "Nokia Flexi BBU
-     (SBTS)") with its SHA-256 from `certutil -hashfile <file> SHA256`, then approve it.
+   - Upload the software package (the ZIP WebEM takes) once on the Firmware page (platform
+     "Nokia Flexi BBU (SBTS)"). Type a checksum only if Nokia publishes one for this ZIP;
+     otherwise leave it empty, then **Approve without checksum…** with a reason naming where
+     the file came from and its SHA-256 from `certutil -hashfile <zip> SHA256` (D-062).
    - Import the SCF template and the PCI table (Settings → Templates).
 2. **Step 1.** Add the BBU (no login). **Step 2.** Generate (it gets its SCF) and choose the
    software package.
