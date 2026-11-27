@@ -33,6 +33,38 @@ printed, with addresses, serials, names and logins masked (D-090).
 - **Step 5:** the Finish checklist also checks that "A second person approves firmware
   plans" is back on (**Put it back on**).
 
+## What is new in v95: after staging, in the network (D-125 to D-128)
+Nothing about staging changed. Every step below only **reads** devices; none changes them.
+
+1. **Update and upgrade the database** (the updater prints the command: `alembic upgrade
+   head`). Restart the backend.
+2. **Network addresses.** System page → **In the network** tab. For each device: **Choose from
+   its file…** lists the addresses its file gives it (file and line); UNDM suggests one when
+   the file leaves no doubt. Check it is the address the device has on site; else type it.
+   The modem's address may be in its boot options, not its file: type it if it is missing.
+   Note what the **Limits in its file** column says about this PC (send it if a device says
+   "This PC is outside them").
+3. **The BFW**: the FortiGate is chosen by itself (the system's only firewall).
+4. **UNDM's own logins in the network.** The devices become *production* there. To let UNDM
+   test and read them, add `UNDM_ALLOW_PRODUCTION_READ_ONLY=true` to `backend\.env` and
+   restart the backend (the tab shows the line to copy). Without it, only ping/traceroute
+   from this PC and the SSH and console windows work, which is fine for a first look.
+5. **Cable**: this PC into a port of the BFW (not the bench switch). Then **Move to the
+   network…** and confirm. If the PC cannot reach a device, the tab shows a `route add …`
+   command: an administrator can run it in a Windows command prompt (it lasts until the PC
+   restarts). Send whether it was needed (Q-62: does the BFW translate addresses?).
+6. **Check all from this PC**: every device should show its replies and "port open". Then
+   **Check all from the BFW** (needs step 4): send the result and the device log of the BFW.
+7. **The modem over SSH** (Q-61): device menu → **Test connection**, then **Read
+   information**. Send whether it logged in, and which address answered.
+8. **Troubleshoot tab** on one device: **Ping** and **Traceroute** from this PC, then from the
+   BFW. Open **Technical details** and send each output (Q-59, Q-64): UNDM has not seen these
+   devices' answers yet and reads them tolerantly.
+9. **Console window…** on each device type (device menu): the speed shown should open a
+   working terminal (2930F 9600, FortiGate 9600, LIG1014A 115200, modem 115200). Send
+   whether each one worked (Q-60 for the FortiGate).
+10. **Move back to the bench…** when done: the devices are lab devices again.
+
 ## Before you start (once)
 1. **UNDM v94 installed** (or later). Run the latest `undm_update_vNN.py` in the `undm`
    folder, then restart the backend.

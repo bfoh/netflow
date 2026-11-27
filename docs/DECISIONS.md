@@ -2025,3 +2025,109 @@ The 7705 SAR-Hmc's first access sets the approved login (D-112), but Settings ha
 login for it, so every new system's modem started without one. `LoginDefaults` gains
 `modem: {login}` (`services/app_settings.DEFAULT_FIELDS`); defaults stored before read back
 with it empty. No migration: the defaults are one JSON value.
+
+### D-125 After staging: a system is reached on the bench or in the network, through its BFW (2026-11-27)
+
+Once a system is staged, its devices leave the bench switch and sit in the network on the
+addresses their files gave them, all reached through the system's FortiGate 101F, the
+**BFW** (the product owner's term), the central point of the architecture. The modem, for
+instance, is then reached over SSH on its new address, not over its console cable.
+
+**Decision (product owner, 2026-11-27).**
+- **Through the BFW means this PC is on a BFW port.** The BFW routes it to each device's
+  network address and UNDM connects straight to it. UNDM never changes the PC's network
+  settings: when a route is missing it shows the Windows `route add` command to copy, marked
+  as a suggestion.
+- **A system is reached on the bench or in the network** (`projects.reached_via`, with its
+  BFW in `projects.network_gateway_id`). Each device keeps its **bench address**
+  (`management_address`) and gains its **network address** (`devices.network_address`),
+  migration `9a1c5e7b3d20`.
+- **One resolver.** `services/reach.reach_of` gives the address, port and driver of every
+  connection; `build_driver` (the only place a `DeviceTarget` is made), the SSH window, the
+  reachability check and the screens (`DeviceOut.connection`) use it. A driver may name the
+  driver that reaches the same model in the network (`network_driver_id`; the modem's
+  console driver names `ssh.nokia.sar`, D-127). `tests/test_reach_guard.py` lists every other
+  read of a device address in the code, with its reason.
+- **Changes stay on the bench.** Every way to make, approve or run a plan, console setup, the
+  modem's first access and the guided steps are refused in the network; plans build their
+  drivers for the bench. A verified load can therefore only ever move the bench address.
+- **The network can be a live site.** Moving a system to the network marks its real devices
+  **production**, so UNDM's own logins to them (Test connection, Read information, Back up
+  now, ping and traceroute from a device, Check all from the BFW) need the start-up setting
+  `UNDM_ALLOW_PRODUCTION_READ_ONLY` (the existing read gate). Ping and traceroute from this
+  PC and the SSH and console windows stay available. Moving back to the bench marks them lab
+  again. Both moves are refused while a plan runs, and audited
+  (`system.reached_via_changed`).
+- **Network addresses come from the files.** Readers per platform (`file_addresses`) give
+  the addresses a file sets, with their line and the management limits the file sets:
+  2930F VLAN addresses and `ip authorized-managers`; LIG1014A VLAN interfaces and `access
+  management`; FortiOS interfaces with their VDOM and `allowaccess`, and the admins'
+  `trusthost`; SR OS `interface` addresses. The LE2700A XML and the BBU's file have no
+  reader. UNDM reads the files it last loaded, in step order (a FortiGate's base then site
+  file), suggests one address only when the files leave no doubt (off the bench; allowing
+  SSH; or in the BFW's networks), says whether this PC is inside the file's limits, and the
+  person confirms it or types it (`device.network_address_set`, with the file and line).
+  The readers were checked on the team's own files, locally and by counts only.
+- **The simulated lab** keeps one unit per device at both addresses, so a practice system can
+  move back and forth; the system package carries network addresses and console speeds, not
+  where the system is reached (a copy starts on the bench).
+
+**Not decided here.** Plans in the network: only after a bench run and after Q-62 (whether
+the BFW translates addresses, which would break file transfers).
+
+### D-126 A console window for every real device (2026-11-27, amends D-118)
+
+For troubleshooting after staging, any device can be looked at over its console cable from
+UNDM, not only the console-only modem. The window no longer depends on capabilities:
+- the **COM port** is the one chosen, else the device's saved one, else the port of its last
+  console setup or first access;
+- the **speed** is the one chosen, else the device's saved one (`devices.console_speed`),
+  else the one its model's driver documents, shown with its source, else the person chooses:
+  2930F 9600 (the team's setting, bench); FortiGate 9600 (Fortinet's FortiOS CLI reference,
+  `config system console`, default; not used on the bench yet, Q-60); LIG1014A 115200 8N1
+  (Black Box's quick start guide; not used on the bench yet); 7705 SAR-Hmc 115200 (Nokia,
+  bench).
+
+What is chosen is saved on the device and audited (`device.console_port_set`), as are the
+port and speed of a successful console setup or first access. The rest is as in D-118: PuTTY
+(`-serial COMx -sercfg speed,8,n,1,N`) or pySerial's terminal, the port lock, from this PC
+only, simulated devices refused, and UNDM types nothing.
+
+### D-127 The modem in the network: read over SSH (2026-11-27)
+
+Once its file is loaded the 7705 SAR-Hmc answers SSH on its network address (product owner;
+not yet run from UNDM, Q-61). New driver `ssh.nokia.sar`, experimental, reads only: Netmiko's
+`generic` type opens the session (in Netmiko 4.8 its terminal-server class, which sends
+nothing at login; its `nokia_sros` type would send `//environment more false`, unverified on
+this unit); the channel is used like the console and the bench-proven `SarConsole` sends
+`environment no more`, `show system information`, `admin display-config` and `logout` (one
+Enter only if no prompt shows up). Applying and saving are unsupported. A contract test checks
+every declared network driver: same platform and simulated flag, SSH or a portal, no apply.
+
+### D-128 Ping and traceroute for troubleshooting (2026-11-27)
+
+From this PC, from the BFW and from any device whose driver has a documented command
+(product owner, 2026-11-27), one address at a time:
+- **The target** is one IPv4 unicast address chosen or typed by a person; never a name, a
+  range or a network (`domain/troubleshoot.check_target`). Check all covers only the
+  system's own addresses. Each request is audited (`troubleshoot.ping`,
+  `troubleshoot.traceroute`, `troubleshoot.check_all`), the hops by device, for the
+  topology's packet path to come.
+- **From this PC**: Windows' own `ping -n N -w 1000` and `tracert -d -h 20 -w 1000` from
+  System32 (Microsoft's Windows Commands reference), as an argument list, no shell, no
+  window, a time limit; refused when UNDM does not run on Windows. A reply counts only from a
+  line with `TTL=` from the target (ping exits 0 when a router says unreachable); hops are
+  read from tokens that do not depend on the language (Q-64); the raw output is always kept.
+- **From a device**, declared only with a vendor source, experimental, every command through
+  `_dialogue` with no answers (a question ends it): FortiOS `execute ping <dest>` and
+  `execute traceroute <dest>` (Fortinet cookbook "Running ping and traceroute", CLI
+  reference), inside `config vdom` / `edit <vdom>` on a multi-VDOM unit, the VDOM of the
+  interface whose network holds the target (Q-63); ArubaOS-Switch `ping <ip> repetitions
+  <n>` and `traceroute <ip>` (its Management and Configuration Guide); the 7705 SAR-Hmc `ping
+  <ip> count <n>` (Nokia's Basic Command Reference), without traceroute, whose syntax could
+  not be confirmed. The Black Box has none. Their answers have not been seen yet (Q-59): they
+  are read tolerantly (a statistics line, else replies with a time) and shown as printed.
+- **Hops are named by device** where exactly one device of the system has the address (bench,
+  network or an interface its file gives it); an address two devices share gives candidates,
+  never a guess. A simulated target starts no program and says "Simulated: nothing was
+  sent".

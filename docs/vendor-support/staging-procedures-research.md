@@ -69,3 +69,22 @@ Evidence: **DOC** = vendor documentation; **COMM** = community post / third-part
 - Black Box LE2700A quick start: https://bbpimassetsp-aza7efghcfa8c2dh.a03.azurefd.net/resources/le2700a_qsg_rev1_21165.pdf ; user manual: https://www.manualslib.com/manual/976500/Black-Box-Le2700a.html
 - Aruba 2930F: https://arubanetworking.hpe.com/techdocs/AOS-S/16.11/MCG/WC/content/home.htm ; https://network-faq.blogspot.com/2023/12/aruba-2930f-switch-firmware-upgrade.html ; https://manualslib.com/manual/1536241/Aruba-2530.html?page=277 ; https://airheads.hpe.com/discussion/copy-startup-config-tftp-on-2530-switch
 - FortiGate 7.6.5 CLI reference: https://docs.fortinet.com/document/fortigate/7.6.5/cli-reference/150608926
+
+## Ping, traceroute and console speeds after staging (v95, D-126, D-128)
+
+Found by web search on 2026-11-27. The vendor pages themselves could not be opened from the
+development environment (their hosts are not reachable from it), so what is recorded here
+is what the search results quote from them; every command stays experimental until the
+bench shows its output (Q-59, Q-60).
+
+| Platform | What | Source (as quoted by the search results) |
+|---|---|---|
+| FortiOS (FortiGate) | `execute ping <dest>`; options with `execute ping-options` before the ping (left at their defaults by UNDM) | Fortinet, FortiGate cookbook "Running ping and traceroute" (docs.fortinet.com/document/fortigate/6.2.0/cookbook/982816/running-ping-and-traceroute); FortiOS CLI reference "execute ping-options" (docs.fortinet.com/document/fortigate/7.2.13/cli-reference/221756471/execute-ping-options) |
+| FortiOS (FortiGate) | `execute traceroute <dest>` | Fortinet, FortiOS CLI reference "execute traceroute" (docs.fortinet.com/document/fortigate/8.0.0/cli-reference/868095304/execute-traceroute); admin guide example output: a header with "32 hops max", numbered hops with three times in ms |
+| FortiOS (FortiGate) | console 9600 baud default (`config system console`: 9600, 19200, 38400, 57600, 115200) | Fortinet, FortiOS 6.0 CLI reference "system console" (docs.fortinet.com/document/fortigate/6.0.6/cli-reference/363838/system-console) |
+| ArubaOS-Switch (2930F) | `ping <ip> repetitions <1-10000>` (example "ping 10.10.10.10 repetitions 3"); `traceroute <ip>` with `maxttl` | HPE/Aruba, 2930F/2930M Management and Configuration Guide (16.05 to 16.11), troubleshooting chapter ("Number of ping packets", "A low maxttl causes traceroute to halt…") |
+| Nokia 7705 SAR | `ping {ip-address \| dns-name} … [count requests] … [router router-instance]`, router Base by default | Nokia, 7705 SAR Basic Command Reference (infocenter.nokia.com, root commands) |
+| Nokia 7705 SAR | traceroute | **Not confirmed**: the results describe what it does, not its syntax. Not offered by UNDM. |
+| Black Box LIG1014A | console 115200 bps, 8 data bits, 1 stop bit, no parity, no flow control | Black Box, LIG1014A/LIG1082A/LIG1080A quick start guide |
+| Black Box LIG1014A | ping, traceroute | **Not found**. Not offered by UNDM. |
+| Windows (bench PC) | `ping -n <count> -w <timeout ms>`, `tracert -d -h <max hops> -w <timeout ms>` | Microsoft, Windows Commands reference "ping" and "tracert" (learn.microsoft.com) |

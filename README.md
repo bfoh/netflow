@@ -17,6 +17,12 @@ backup, verification and recovery; design topologies; manage firmware images and
   **Advanced** (Devices of all systems, Plans, Console tool, Topology, Audit log). Light or
   dark (the moon at the top right); designed for WCAG 2.2 AA.
 - Systems and devices (simulated, or real lab devices over SSH or their console).
+- **After staging, in the network** (system page → In the network): each device's network
+  address read from its file, the system reached through its BFW (the FortiGate this PC is
+  connected to); UNDM only reads devices there, and its own logins to them need
+  `UNDM_ALLOW_PRODUCTION_READ_ONLY=true` in `backend\.env` (they are production devices).
+- **Troubleshoot** (device page): ping and traceroute from this PC, the BFW or the device,
+  hops named by device; a **console window** for every real device (device menu).
 - Vendor-neutral intent (hostname, VLANs, L3 interfaces, static routes) → generated
   configuration for ArubaOS-Switch (e.g. 2930F), AOS-CX, FortiOS, IOS-XE; or
   **import a configuration file**.

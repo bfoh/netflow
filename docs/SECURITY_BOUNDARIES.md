@@ -62,7 +62,10 @@ environment cannot be `simulated` with a real driver or vice versa.
 
 Strong recommendation for the current phase: real devices only on an **isolated lab network**,
 never operational systems (including equipment managed by other vendor tools), until each
-driver has passed acceptance tests for the exact model and firmware.
+driver has passed acceptance tests for the exact model and firmware. The one exception is
+the product owner's decision of 2026-11-27: after staging, a system may be **read** in its
+live network, through its BFW, with the start-up setting below (see "After staging: in the
+network").
 
 - No scanning, discovery broadcasts, DHCP/TFTP/ZTP services or provisioning traffic on
   any network other than an isolated lab, and only after approval.
@@ -82,8 +85,32 @@ driver has passed acceptance tests for the exact model and firmware.
   SHA-256 or SHA-512, or when the approver writes a reason for approving it without one
   (D-062). Such an image stays marked "not verified" in the repository, the planner and
   every firmware plan, and the reason is audited.
-- Telnet is not offered (plaintext). Interactive terminal access is not planned until
-  a security review.
+- Telnet is not offered (plaintext). UNDM has no terminal of its own: it starts this PC's
+  SSH client (D-098) or PuTTY / pySerial's terminal on a console port (D-118, D-126) in a
+  window for a person, passes no password and types nothing. What is done in such a window
+  is outside UNDM's plans and audit; opening it is audited.
+- **Host keys are not checked** by UNDM's own SSH sessions or by the SSH windows it opens:
+  bench units are reset and re-used at the same addresses. In the network (D-125) this is a
+  review item: a device's key should be recorded on the bench and checked afterwards.
+
+### After staging: in the network (D-125 to D-128)
+- **Product owner, 2026-11-27: the network a system is moved to can be a live site.**
+  Moving a system to the network marks its real devices **production**. UNDM then only
+  **reads** them: its own logins (Test connection, Read information, Back up now, ping or
+  traceroute from a device, Check all from the BFW) need the start-up setting
+  `UNDM_ALLOW_PRODUCTION_READ_ONLY`, which is off by default. UNDM **never changes a device
+  in the network**: plans, console setup, first access and guided steps are refused there;
+  changes are made on the bench. The SSH and console windows stay available: what a person
+  does in them is theirs.
+- **Ping and traceroute are troubleshooting, not scanning**: one target per request, an IPv4
+  unicast address chosen or typed by a person (no names, ranges or networks), from this PC
+  or from one device, audited. **Check all** covers only the system's own addresses (two
+  echoes each, plus the management port from this PC), at most 8 at a time.
+- UNDM never changes this PC's network settings: a missing route is shown as a command to
+  copy, marked as a suggestion.
+- A lab unit staged on the bench and then moved to an isolated test network is still a lab
+  unit for the product owner: name it in "Approved lab devices" below; UNDM still treats
+  it as production while its system is in the network.
 
 ### Approved lab devices
 | Date | Device | Firmware | Status | Allowed operations |

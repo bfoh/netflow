@@ -27,6 +27,23 @@ password is sent if an enable password is requested), then `terminal width 511` 
 `no page` for the session; answers "no" to the save prompt on logout. Needs a manager login.
 Checklist: `aruba-2930f-acceptance.md`.
 
+## After staging: in the network (v95, D-125 to D-128)
+Everything here only reads; nothing is changed in the network. All of it **experimental and
+not yet run on hardware**.
+
+| Family | Network address from its file | Console window speed | Ping / traceroute from the device |
+|---|---|---|---|
+| Fortinet FortiOS (`ssh.fortinet.fortios`) | `config system interface`: `set ip`, `set vdom`, `allowaccess`; admins' `trusthost` | 9600 (FortiOS CLI reference default; Q-60) | `execute ping <dest>`, `execute traceroute <dest>` (Fortinet docs), inside `config vdom` / `edit <vdom>` on a multi-VDOM unit (Q-63) |
+| ArubaOS-Switch 2930F (`ssh.aruba.aos_switch`) | VLAN `ip address`; `ip authorized-managers` | 9600 (the team's setting, bench) | `ping <ip> repetitions <n>`, `traceroute <ip>` (Management and Configuration Guide) |
+| Black Box LIG1014A (`ssh.blackbox.lig1014a`) | `interface vlan` `ip address`; `access management` | 115200 (Black Box quick start guide) | ✘ no documented command found |
+| Black Box LE2700A | ✘ typed (XML not read) | — | ✘ |
+| Nokia 7705 SAR-Hmc (`console.nokia.sar`, in the network `ssh.nokia.sar`) | `interface "<name>"` → `address a.b.c.d/nn` (the boot options' address is not in the file) | 115200 (Nokia, bench) | `ping <ip> count <n>` (Nokia Basic Command Reference); traceroute ✘ (syntax not confirmed) |
+| Nokia Flexi BBU (`guided.nokia.flexi`) | ✘ typed | — | ✘ (staged by a person in its portal) |
+
+From this PC: Windows' `ping -n N -w 1000` and `tracert -d -h 20 -w 1000` (Microsoft's
+Windows Commands reference), when UNDM runs on Windows. `ssh.nokia.sar` reads the modem over
+SSH (`show system information`, `admin display-config`); applying is unsupported (D-127).
+
 ## Console bootstrap (factory-default devices)
 | Family | Procedure | Status |
 |---|---|---|

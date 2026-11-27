@@ -1,6 +1,10 @@
 # Development Status
 
-_Last updated: 2026-11-26 — v94, UI/UX pass 2: one design system checked for WCAG 2.2 AA
+_Last updated: 2026-11-27 — v95, after staging: a system is reached on the bench or in the
+network through its BFW, with network addresses read from each device's file and its real
+devices marked production there (D-125); a console window for every real device (D-126); the
+modem read over SSH in the network (D-127); ping and traceroute from this PC, the BFW and
+capable devices (D-128). Before: 2026-11-26 — v94, UI/UX pass 2: one design system checked for WCAG 2.2 AA
 (D-119), navigation in three groups with one place for every address (D-120), Stage a system
 with Check and run, Start all ready, staging alone and safety switches in place (D-121),
 device/system/plan pages with one main action (D-122), one word for each thing and a setup
@@ -63,7 +67,10 @@ switches changeable in Settings → Safety, audited (D-082)._
 | Template import reads the file (v89) | Zone and system from the file name (zone also without leading zeros, `MRBTS-<n>`, eNodeB's `eNB1` ignored), else from its text; the source shown; a name and text that disagree pointed out. A team file's own `${…}` (FortiOS report variables) is kept; only UNDM's markers are refused (D-114 amendments) |
 | Logins for all systems from the systems (v89) | Settings → For all systems → Logins made in the systems: a preview with suggested names (devices' model + user name), editable; one step moves them, merging logins with the same user name and password; devices, plans and the wizard's choices follow (D-115) |
 | Modem configuration load over the console (v90) | The modem's file (from its template) loaded by a plan over the console port its first access saved: line by line, stop at the first refused line unsaved, `admin save`, then log in again and check the system name (D-116). Experimental: passed once on a real modem, 2026-11-26 (149 lines, about one minute, saved and verified; Q-58). Finish staging needs the modem's plan; a modem first accessed before v90 gets its port from that first access (v91) |
-| Console window for console-only devices (v92) | Device menu → Open console window on the modem's saved port at 115200: PuTTY when installed, else pySerial's terminal; refused while UNDM uses the port; audited (D-118) |
+| Console window for every real device (v92, v95) | Device menu, Troubleshoot tab and In the network tab → Open console window…: COM port and speed (the model's documented speed with its source: 2930F 9600, FortiGate 9600, LIG1014A 115200, modem 115200), saved on the device; PuTTY when installed, else pySerial's terminal; refused while UNDM uses the port; audited (D-118, D-126). Only the modem's window has been opened on hardware |
+| In the network (v95) | System page → In the network: the BFW, each device's network address chosen from its file (line shown, one suggested when the file leaves no doubt) or typed, the file's management limits against this PC, Move to the network / back to the bench (real devices production / lab, audited), the start-up line for UNDM's own logins, route hints to copy, Check all from this PC or the BFW. Plans, console setup and guided steps refused in the network; one resolver for every connection, guarded by a source test (D-125). File readers checked locally on the team's files; **not yet run in a real network** |
+| Modem over SSH (v95) | `ssh.nokia.sar`: facts and backup over SSH in the network, nothing changed (D-127). Fake channel only; **not yet run on hardware** |
+| Ping and traceroute (v95) | Device page → Troubleshoot: from this PC (Windows ping/tracert, refused elsewhere), from the BFW or the device where its driver documents a command (FortiOS, 2930F, modem ping only); hops named by device, shared addresses as candidates; raw output kept; audited (D-128). Synthetic output only; **not yet run on hardware** |
 | Flexi BBU in the wizard, guided (v93) | Role Nokia Flexi BBU (FSMF): no login, no plan; UNDM checks its portal answers (port 443), hands out the approved package and the generated SCF (byte for byte) with their SHA-256, and records each step done by hand in the portal (who, when, notes, file hashes); Finish staging and the report count it (D-117). Not yet used on a BBU |
 | Erase dialog (v73) | Shows the login the switch gets after the erase and blocks early when it has no password or is the login being erased (D-101) |
 | FortiGate license (v72) | "Load license…" in a FortiGate's menu: the team's file is kept for the device (never shown or exported) and loaded through an approved plan with `execute restore manual-license tftp` (Fortinet-documented; **experimental, not yet run on hardware**, Q-46, D-100) |
@@ -99,15 +106,15 @@ replace mode and rollback for real devices; addressing plans and site hierarchy;
 library; intent beyond the first slice; project export/import; persistent job runner
 (deployments run inside the HTTP request — long real-device runs block that request).
 
-## Test results (2026-11-26, v94)
+## Test results (2026-11-27, v95)
 | Suite | Result |
 |---|---|
-| Backend pytest | 606 passed, 2 skipped (PostgreSQL suite skips without DB URL) |
+| Backend pytest | 688 passed, 2 skipped (PostgreSQL suite skips without DB URL); no test starts ping or tracert, and a source test guards every read of a device address |
 | Backend PostgreSQL integration | 2 passed |
-| ruff / mypy --strict | clean / clean (100 files) |
-| Frontend Vitest | 141 passed (theme contrast, conventions at 0, audit words vs backend, solo approval, start order, wizard, pages) |
+| ruff / mypy --strict | clean / clean (107 files) |
+| Frontend Vitest | 148 passed (network tab and address chooser, console window, troubleshoot hop table, conventions at 0, audit words vs backend) |
 | tsc / oxlint / vite build | clean / clean / success |
-| Playwright | 13 passed: 10 workflows (1280 px), axe on every page light and dark plus the Start all dialog (1366 px), no sideways scroll at 1366 and 390 px |
+| Playwright | 14 passed: 11 workflows (1280 px, a practice system moved to the network and back, Check all from the BFW, a simulated ping and traceroute), axe on every page light and dark including the In the network and Troubleshoot tabs (1366 px), no sideways scroll at 1366 and 390 px |
 
 ## Known issues and limitations
 - Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole
@@ -131,6 +138,11 @@ secondary flash done once on a new unit (2026-11-19/23); file load: **succeeded 
 FortiGate 101F staging.
 
 ## Next milestone
+**v95 on the bench**: the checklist's "What is new in v95: after staging, in the network"
+(`vendor-support/staging-wizard-bench.md`); its outputs answer Q-59 to Q-64. Then **the
+topology from the product owner's wiring picture, with the packet path of a traceroute**
+drawn through it (the hops are already recorded by device, D-128).
+
 **v94 on the bench** (2026-11-27): the reworked screens on real devices, with the checklist's
 "What is new in v94" (`vendor-support/staging-wizard-bench.md`): Test all, Check and run,
 console setup inside the wizard, staging alone, Start all ready. Earlier plan below.
