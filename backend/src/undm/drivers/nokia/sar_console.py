@@ -39,6 +39,7 @@ from undm.drivers.base import (
     DeviceTarget,
     DriverInfo,
     DriverMaturity,
+    FileAddresses,
     OperationResult,
 )
 from undm.drivers.nokia import sar_files
@@ -104,6 +105,10 @@ class NokiaSarConsole(DeviceDriver):
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
         return sar_files.inspect_sros_file(text)
+
+    @classmethod
+    def file_addresses(cls, text: str) -> FileAddresses | None:
+        return sar_files.file_addresses(text) if sar_files.is_sros_configuration(text) else None
 
     # -- the console session ---------------------------------------------------------
     def connect(self) -> OperationResult:

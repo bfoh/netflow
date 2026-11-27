@@ -46,10 +46,11 @@ from undm.drivers.base import (
     DeviceFacts,
     DriverInfo,
     DriverMaturity,
+    FileAddresses,
     FirmwareImageRef,
     OperationResult,
 )
-from undm.drivers.blackbox.config_files import inspect_blackbox_config
+from undm.drivers.blackbox.config_files import blackbox_file_addresses, inspect_blackbox_config
 from undm.drivers.ssh import base as ssh_base
 from undm.drivers.ssh.base import SshCliDriver
 from undm.security.redaction import redact_text
@@ -137,6 +138,10 @@ class BlackBoxLig1014aSsh(SshCliDriver):
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
         return inspect_blackbox_config(text)
+
+    @classmethod
+    def file_addresses(cls, text: str) -> FileAddresses | None:
+        return blackbox_file_addresses(text)
 
     # -- reading ----------------------------------------------------------------------
     def _prompt_pattern(self) -> str:

@@ -15,13 +15,20 @@ setting ``UNDM_ALLOW_PRODUCTION_READ_ONLY`` (the existing read gate).
 from __future__ import annotations
 
 import ipaddress
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from undm.db.models import Device, Project
+from undm.db.models import (
+    ConfigVersion,
+    DeploymentRecord,
+    DeploymentTargetRecord,
+    Device,
+    Project,
+)
 from undm.domain.enums import DeviceCategory, DeviceEnvironment
 from undm.drivers.registry import DriverRegistry
 from undm.services import audit
@@ -178,3 +185,160 @@ def set_reached_via(session: Session, project: Project, via: str, actor: str,
                                               if marked else None),
                               "devices": sorted(marked)})
     return project
+
+
+# -- the addresses a device's files give it ---------------------------------------------------
+
+def _loaded_files(session: Session, device: Device) -> tuple[list[ConfigVersion], bool]:
+    """The files UNDM last loaded on the device, in the order loaded (the steps of its latest
+    staging plan, e.g. a FortiGate's base then site file); else its latest file, not loaded
+    by UNDM (False)."""
+    rows = session.execute(
+        select(DeploymentRecord, DeploymentTargetRecord.config_version_id)
+        .join(DeploymentTargetRecord, DeploymentTargetRecord.deployment_id == DeploymentRecord.id)
+        .where(DeploymentTargetRecord.device_id == device.id,
+               DeploymentRecord.kind == "configuration",
+               DeploymentRecord.state == "succeeded", DeploymentRecord.dry_run.is_(False),
+               DeploymentTargetRecord.config_version_id.is_not(None))
+        .order_by(DeploymentRecord.created_at.desc())).all()
+    if rows:
+        latest = rows[0][0]
+        same = [(r, v) for r, v in rows if latest.staging_id and r.staging_id == latest.staging_id]
+        chosen = sorted(same, key=lambda rv: rv[0].staging_step or 0) if same else [rows[0]]
+        files = [session.get(ConfigVersion, v) for _, v in chosen]
+        return [f for f in files if f is not None], True
+    last = session.scalars(
+        select(ConfigVersion).where(ConfigVersion.device_id == device.id,
+                                    ConfigVersion.kind.in_(("imported", "generated")))
+        .order_by(ConfigVersion.created_at.desc()).limit(1)).first()
+    return ([last] if last else []), False
+
+
+def _network_of(address: str, prefix: int | None) -> ipaddress.IPv4Network | None:
+    try:
+        return ipaddress.IPv4Network(f"{address}/{prefix if prefix is not None else 32}",
+                                     strict=False)
+    except ValueError:
+        return None
+
+
+def _on_bench(address: str, prefix: int | None, bench: list[str]) -> bool:
+    net = _network_of(address, prefix)
+    if net is None:
+        return False
+    for b in bench:
+        try:
+            if b == address or ipaddress.IPv4Address(b) in net:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _pc_address_towards(address: str) -> str | None:
+    """This PC's own address on the way to ``address`` (nothing is sent)."""
+    from undm.transfer.hub import local_address_towards
+
+    try:
+        return local_address_towards(address)
+    except OSError:
+        return None
+
+
+@dataclass(frozen=True)
+class Candidate:
+    address: str
+    prefix: int | None
+    where: str
+    line: int
+    vdom: str | None
+    allows: str
+    file: str
+    version_id: str
+    on_bench: bool
+
+
+def _candidates(session: Session, device: Device, registry: DriverRegistry
+                ) -> tuple[list[ConfigVersion], bool, bool, list[Candidate],
+                           list[dict[str, object]]]:
+    driver = registry.get(device.driver_id) if device.driver_id in registry else None
+    files, loaded = _loaded_files(session, device)
+    bench = [d.management_address for d in device.project.devices if d.management_address]
+    found_any = False
+    candidates: list[Candidate] = []
+    managers: list[dict[str, object]] = []
+    for f in files:
+        found = driver.file_addresses(f.text) if driver else None
+        if found is None:
+            continue
+        found_any = True
+        name = f.reference or f.kind
+        candidates += [Candidate(a.address, a.prefix, a.where, a.line, a.vdom, a.allows, name,
+                                 f.id, _on_bench(a.address, a.prefix, bench))
+                       for a in found.addresses]
+        managers += [{"first": m.first, "last": m.last, "text": m.text, "line": m.line,
+                      "file": name} for m in found.managers]
+    return files, loaded, found_any, candidates, managers
+
+
+def file_addresses(session: Session, device: Device, registry: DriverRegistry,
+                   *, pc_address: Callable[[str], str | None] | None = None
+                   ) -> dict[str, object]:
+    """The addresses the device's files give it, read offline, with a suggestion for its
+    network address (D-125). Nothing is sent to any device."""
+    pc_address = pc_address or _pc_address_towards
+    files, loaded, reader, candidates, managers = _candidates(session, device, registry)
+    suggested, reason = _suggest(session, device, registry, candidates)
+    toward = device.network_address or suggested
+    pc = pc_address(toward) if toward else None
+    allowed: bool | None = None
+    if pc and managers:
+        here = ipaddress.IPv4Address(pc)
+        allowed = any(ipaddress.IPv4Address(str(m["first"])) <= here
+                      <= ipaddress.IPv4Address(str(m["last"])) for m in managers)
+    return {
+        "files": [{"version_id": f.id, "name": f.reference or f.kind, "loaded": loaded,
+                   "created_at": f.created_at} for f in files],
+        "reader": reader, "addresses": [asdict(c) for c in candidates],
+        "managers": managers, "suggested": suggested, "reason": reason,
+        "pc_address": pc, "pc_allowed": allowed,
+        "route_hint": route_hint(device, candidates),
+    }
+
+
+def _suggest(session: Session, device: Device, registry: DriverRegistry,
+             candidates: list[Candidate]) -> tuple[str | None, str]:
+    """One address only when the files leave no doubt; else the person chooses."""
+    off_bench = [c for c in candidates if not c.on_bench]
+    unique = {c.address for c in off_bench}
+    if not candidates:
+        return None, "Its files give it no address UNDM can read: type it."
+    if not off_bench:
+        return None, "Its files give it only bench addresses: type its network address."
+    with_ssh = {c.address for c in off_bench if "ssh" in c.allows.split()}
+    if len(with_ssh) == 1:
+        return with_ssh.pop(), "The only address outside the bench that allows SSH."
+    if len(unique) == 1:
+        return next(iter(unique)), "The only address its files give it outside the bench."
+    gateway = default_gateway(device.project)
+    if gateway is not None and gateway.id != device.id:
+        nets = [n for c in _candidates(session, gateway, registry)[3]
+                if not c.on_bench and (n := _network_of(c.address, c.prefix)) is not None]
+        inside = {a for a in unique if any(ipaddress.IPv4Address(a) in n for n in nets)}
+        if len(inside) == 1:
+            return inside.pop(), f"The only one in a network of {gateway.name} (the BFW)."
+    return None, f"Its files give it {len(unique)} addresses outside the bench: choose one."
+
+
+def route_hint(device: Device, candidates: list[Candidate]) -> str | None:
+    """A Windows route command for this PC to reach the device's network through the BFW,
+    shown only (UNDM never changes this PC's network settings)."""
+    gateway = default_gateway(device.project)
+    if gateway is None or gateway.id == device.id or not device.network_address \
+            or not gateway.network_address:
+        return None
+    match = next((c for c in candidates if c.address == device.network_address), None)
+    net = _network_of(device.network_address, match.prefix if match else 32)
+    if net is None or ipaddress.IPv4Address(gateway.network_address) in net:
+        return None
+    return f"route add {net.network_address} mask {net.netmask} {gateway.network_address}"

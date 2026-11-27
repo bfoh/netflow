@@ -283,6 +283,14 @@ def device_log(device_id: str, session: SessionDep,
     return rows
 
 
+@router.get("/api/devices/{device_id}/file-addresses")
+def file_addresses(device_id: str, session: SessionDep,
+                   registry: RegistryDep) -> dict[str, object]:
+    """The addresses the device's files give it, read offline, and a suggestion for its
+    network address (D-125). No device is contacted."""
+    return reach.file_addresses(session, get_device(session, device_id), registry)
+
+
 @router.put("/api/devices/{device_id}/network-address", response_model=DeviceOut)
 def set_network_address(device_id: str, body: NetworkAddressIn, session: SessionDep,
                         registry: RegistryDep, actor: ActorDep) -> DeviceOut:

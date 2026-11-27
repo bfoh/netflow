@@ -19,6 +19,7 @@ test('every page meets WCAG 2.2 AA (axe)', async ({ page, request }) => {
     ...[0, 1, 2, 3, 4].map((s) => [`stage step ${s + 1}`, `/stage/${ids.projectId}?step=${s}`] as [string, string]),
     ['systems', '/systems'],
     ['system', `/systems/${ids.projectId}`],
+    ['system in the network', `/systems/${ids.projectId}?tab=network`],
     ['devices', '/devices'],
     ['device', `/devices/${ids.deviceId}`],
     ['firmware', '/firmware'],

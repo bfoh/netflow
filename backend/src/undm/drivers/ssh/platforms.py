@@ -20,6 +20,7 @@ from undm.drivers.aruba.config_files import (
     inspect_aos_switch_file,
     where_after_loading,
 )
+from undm.drivers.aruba.config_files import file_addresses as aos_switch_file_addresses
 from undm.drivers.aruba.config_files import parse as parse_aos_switch_file
 from undm.drivers.base import (
     ApplyMode,
@@ -28,6 +29,7 @@ from undm.drivers.base import (
     DeviceFacts,
     DriverInfo,
     DriverMaturity,
+    FileAddresses,
     FirmwareImageRef,
     OperationResult,
 )
@@ -180,6 +182,10 @@ class ArubaOSSwitchSsh(SshCliDriver):
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
         return inspect_aos_switch_file(text)
+
+    @classmethod
+    def file_addresses(cls, text: str) -> FileAddresses | None:
+        return aos_switch_file_addresses(text)
 
     # -- HTTPS certificate before a file that needs one (EXPERIMENTAL) --------------------
     # The team's commands and the switch's questions (screenshots, 2026-11-19):

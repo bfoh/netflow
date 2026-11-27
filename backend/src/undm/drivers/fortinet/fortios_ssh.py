@@ -39,6 +39,7 @@ from undm.drivers.base import (
     DeviceFacts,
     DriverInfo,
     DriverMaturity,
+    FileAddresses,
     FirmwareImageRef,
     OperationResult,
 )
@@ -49,6 +50,7 @@ from undm.drivers.fortinet.config_files import (
     is_secret_setting,
     script_statements,
 )
+from undm.drivers.fortinet.config_files import file_addresses as fortios_file_addresses
 from undm.drivers.ssh import base as ssh_base
 from undm.drivers.ssh.base import SSH_CAPABILITIES, Dialogue, LoginDialogueError, SshCliDriver
 from undm.security.redaction import redact_text
@@ -152,6 +154,10 @@ class FortiOSSsh(SshCliDriver):
     def needs_file_server(cls, kind: str, mode: ApplyMode | None = None) -> bool:
         return kind in ("firmware", "license") or (kind == "configuration"
                                                     and mode is ApplyMode.REPLACE)
+
+    @classmethod
+    def file_addresses(cls, text: str) -> FileAddresses | None:
+        return fortios_file_addresses(text)
 
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:

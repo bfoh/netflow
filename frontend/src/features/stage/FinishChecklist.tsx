@@ -62,8 +62,12 @@ export function FinishChecklist({ project, rows, allStaged, licenseLoaded, ticks
   if (project.staged_at) {
     return (
       <Notice kind="success" title={`Staging finished · ${fmtDate(project.staged_at)}${project.staged_by ? ` by ${project.staged_by}` : ''}`}
-        action={<Button size="xs" variant="default" loading={reopen.isPending} onClick={() => reopen.mutate(undefined)}>Reopen</Button>}>
-        This system is done. A new staging plan on one of its devices reopens it by itself.
+        action={<Group gap="xs">
+          {project.reached_via !== 'network' && <Button size="xs" component={Link} to={paths.system(project.id, 'network')}>Move to the network…</Button>}
+          <Button size="xs" variant="default" loading={reopen.isPending} onClick={() => reopen.mutate(undefined)}>Reopen</Button>
+        </Group>}>
+        This system is done. A new staging plan on one of its devices reopens it by itself. Next: set each device's network address
+        from its file and reach the system through its BFW.
       </Notice>
     );
   }

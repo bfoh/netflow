@@ -16,7 +16,14 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 
-from undm.drivers.base import ApplyMode, ConfigFileReport
+from undm.drivers.base import (
+    ApplyMode,
+    ConfigFileReport,
+    FileAddress,
+    FileAddresses,
+    ManagerRange,
+    address_range,
+)
 
 _HEADER = re.compile(r"^; (?P<pn>[A-Z0-9]+) Configuration Editor; Created on release "
                      r"#(?P<release>\S+)")
@@ -101,6 +108,33 @@ def parse(text: str) -> SwitchFile:
                 v.address = (m.group(1), m.group(2))
     return SwitchFile(hostname, head.group("pn") if head else None,
                       head.group("release") if head else None, ports, vlans, order, lines)
+
+
+def file_addresses(text: str) -> FileAddresses:
+    """The VLAN addresses the file gives the switch and its 'ip authorized-managers', with
+    their line numbers (D-125). Read from the file only."""
+    addresses: list[FileAddress] = []
+    managers: list[ManagerRange] = []
+    vlan: int | None = None
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith(";"):
+            continue
+        if m := re.match(r"^vlan (\d+)$", line):
+            vlan = int(m.group(1))
+        elif line == "exit":
+            vlan = None
+        elif vlan is not None and (m := re.match(r"^ip address (\S+) (\S+)$", line)):
+            span = address_range(m.group(1), m.group(2))
+            if span:
+                addresses.append(FileAddress(m.group(1), span[2], f"VLAN {vlan}", n))
+        elif m := _MANAGER.match(line):
+            span = address_range(m.group(1), m.group(2))
+            if span:
+                managers.append(ManagerRange(span[0], span[1],
+                                             f"{span[0]}/{span[2]} ({m.group(3) or 'manager'})",
+                                             n))
+    return FileAddresses(tuple(addresses), tuple(managers))
 
 
 def address_after_loading(text: str, current: str) -> str | None:

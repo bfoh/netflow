@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from undm.domain.operations import DeviceOperation
+from undm.drivers.aruba.config_files import file_addresses as aos_switch_file_addresses
 from undm.drivers.aruba.config_files import inspect_aos_switch_file
 from undm.drivers.base import (
     ApplyMode,
@@ -24,16 +25,20 @@ from undm.drivers.base import (
     DeviceDriver,
     DeviceFacts,
     DriverInfo,
+    FileAddresses,
     FirmwareImageRef,
     OperationResult,
 )
-from undm.drivers.blackbox.config_files import inspect_blackbox_config
+from undm.drivers.blackbox.config_files import blackbox_file_addresses, inspect_blackbox_config
+from undm.drivers.fortinet.config_files import file_addresses as fortios_file_addresses
 from undm.drivers.fortinet.config_files import (
     insert_secret_values,
     inspect_fortios_file,
     is_secret_setting,
 )
 from undm.drivers.mock.lab import SimulatedDevice, default_lab
+from undm.drivers.nokia.sar_files import file_addresses as sar_file_addresses
+from undm.drivers.nokia.sar_files import is_sros_configuration
 
 Op = DeviceOperation
 C = Capability
@@ -290,6 +295,10 @@ class MockFortiGateDriver(MockDriver):
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
         return inspect_fortios_file(text)
 
+    @classmethod
+    def file_addresses(cls, text: str) -> FileAddresses | None:
+        return fortios_file_addresses(text)
+
     def prepare_for_device(self, config: str, secrets: Mapping[str, str]) -> str:
         # Checked like a real unit, but the simulation never holds the value: it keeps an
         # encrypted-looking placeholder, as a FortiGate displays secrets.
@@ -315,6 +324,10 @@ class MockBlackBoxSwitchDriver(MockDriver):
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
         return inspect_blackbox_config(text)
+
+    @classmethod
+    def file_addresses(cls, text: str) -> FileAddresses | None:
+        return blackbox_file_addresses(text)
 
 
 class MockArubaAOSCXDriver(MockDriver):
@@ -367,6 +380,10 @@ class MockArubaOSSwitchDriver(MockDriver):
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
         return inspect_aos_switch_file(text)
 
+    @classmethod
+    def file_addresses(cls, text: str) -> FileAddresses | None:
+        return aos_switch_file_addresses(text)
+
 
 class MockNokiaSarDriver(MockDriver):
     model = "SIM-SAR-Hmc"
@@ -382,6 +399,10 @@ class MockNokiaSarDriver(MockDriver):
         capabilities=frozenset({C.SERIAL_CONSOLE, C.CONFIGURATION_BACKUP,
                                 C.CONFIGURATION_APPLY}),
     )
+
+    @classmethod
+    def file_addresses(cls, text: str) -> FileAddresses | None:
+        return sar_file_addresses(text) if is_sros_configuration(text) else None
 
 
 class MockNokiaFlexiDriver(MockDriver):

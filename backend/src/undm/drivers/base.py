@@ -7,6 +7,7 @@ so the orchestrator can reason about capability gaps explicitly.
 
 from __future__ import annotations
 
+import ipaddress
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -202,6 +203,34 @@ class ConfigFileReport:
     required_settings: dict[str, str] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class FileAddress:
+    """An address a configuration file gives the device, and where in the file (D-125)."""
+
+    address: str
+    prefix: int | None  # None when the file does not say
+    where: str  # e.g. "VLAN 222", 'interface "port3"'
+    line: int
+    vdom: str | None = None  # FortiOS: the VDOM of the interface
+    allows: str = ""  # management access on it, as written (FortiOS 'allowaccess')
+
+
+@dataclass(frozen=True)
+class ManagerRange:
+    """Addresses a file allows to manage the device (inclusive range), as written there."""
+
+    first: str
+    last: str
+    text: str
+    line: int
+
+
+@dataclass(frozen=True)
+class FileAddresses:
+    addresses: tuple[FileAddress, ...] = ()
+    managers: tuple[ManagerRange, ...] = ()
+
+
 class TransferInfo(Protocol):
     size: int
     bytes_sent: int
@@ -254,6 +283,12 @@ class DeviceDriver:
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:
         """Describe a supplied configuration file offline; None if the driver cannot tell."""
+        return None
+
+    @classmethod
+    def file_addresses(cls, text: str) -> FileAddresses | None:
+        """The addresses a supplied file gives the device, read offline (D-125); None if the
+        driver has no reader for its files (the person types the address)."""
         return None
 
     @classmethod
@@ -424,3 +459,13 @@ class DeviceDriver:
     def create_checkpoint(self, label: str) -> OperationResult:
         """Keep a named restore point of the current configuration on the device."""
         return self._unsupported(DeviceOperation.CREATE_CHECKPOINT)
+
+
+def address_range(address: str, mask_or_prefix: str) -> tuple[str, str, int] | None:
+    """(first, last, prefix) of the network ``address`` / mask (or prefix length); None if
+    either is not IPv4."""
+    try:
+        net = ipaddress.IPv4Network(f"{address}/{mask_or_prefix}", strict=False)
+    except ValueError:
+        return None
+    return str(net.network_address), str(net.broadcast_address), net.prefixlen

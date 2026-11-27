@@ -8,6 +8,7 @@ import { StateBadge, Tag } from '../../components/Badges';
 import { InlineStatus } from '../../components/InlineStatus';
 import { LoadingLines } from '../../components/Page';
 import { ReasonButton } from '../../components/ReasonButton';
+import { inNetwork } from '../devices/connection';
 import { DialogError } from '../../components/ConfirmDialog';
 import { useAction, useStaging } from '../../hooks/queries';
 import { api } from '../../services/api';
@@ -128,7 +129,9 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
   const [checkOpen, { open: openCheck, close: closeCheck }] = useDisclosure();
   const check = useAction(() => api.createDeviceStaging(projectId, { device_id: device.id, steps }), undefined, { errorInDialog: true });
   const finished = latest && latest.states.every((x) => x === 'succeeded');
-  const canMake = steps.length > 0 && missing.length === 0 && !consoleTodo;
+  // In the network, plans only run on the bench (D-125).
+  const network = inNetwork(device);
+  const canMake = steps.length > 0 && missing.length === 0 && !consoleTodo && !network;
   const usable = latest && !fresh;
   const takenNotice = taken && !(finished && !fresh) && (canMoveAside(taken) ? (
     <Notice kind="status" compact>
@@ -186,7 +189,8 @@ function DeviceRun({ projectId, role, device, choice, latest, all }: {
           <DialogError error={make.error} />
           <Group align="flex-start">
             <ReasonButton size="xs" color="orange" disabled={!canMake} loading={check.isPending}
-              reason={consoleTodo ? (role.consoleCable ? 'Its first access comes first.' : 'Its console setup comes first.')
+              reason={network ? 'The system is in the network: plans run on the bench only.'
+                : consoleTodo ? (role.consoleCable ? 'Its first access comes first.' : 'Its console setup comes first.')
                 : missing.length > 0 ? 'Choose what is still needed in step 2.' : steps.length === 0 ? 'Nothing to do: choose a file or an image in step 2.' : null}
               onClick={() => { check.reset(); openCheck(); check.mutate(undefined, { onSuccess: () => setFresh(false) }); }}>Check and run…</ReasonButton>
             {fresh && latest && <Button size="xs" variant="subtle" onClick={() => setFresh(false)}>Back to the last plan</Button>}
@@ -212,14 +216,16 @@ export function RunStep({ projectId, roles, choices, stagings }: {
   }, [hash, roles.length]);
   if (roles.length === 0) return <EmptyState>Add the devices first (step 1: System and devices).</EmptyState>;
   const order = startOrder(roles, choices, stagings);
+  const network = roles.some(({ device }) => inNetwork(device));
   const ready = order.filter((i) => i.ready).length;
   return (
     <Stack>
       <Group justify="space-between" align="flex-start" wrap="wrap">
         <Text size="sm" c="dimmed" maw={760}>Devices run independently: start one while another restarts. The runs continue on the
           server if you leave this page. Two devices that end at the same address (the two 2930F) run one after the other.</Text>
-        <ReasonButton variant={ready > 0 ? "filled" : "default"} leftSection={<IconPlayerPlay size={16} />} disabled={order.length === 0}
-          reason={order.length === 0 ? 'Every device is staged or staged by hand.' : null}
+        <ReasonButton variant={ready > 0 ? "filled" : "default"} leftSection={<IconPlayerPlay size={16} />} disabled={order.length === 0 || network}
+          reason={network ? 'The system is in the network: plans run on the bench only.'
+            : order.length === 0 ? 'Every device is staged or staged by hand.' : null}
           onClick={openStartAll}>Start all ready ({ready})…</ReasonButton>
       </Group>
       <StartAllDialog opened={startAll} onClose={closeStartAll} projectId={projectId} items={order} />

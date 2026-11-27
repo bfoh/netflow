@@ -13,6 +13,7 @@ import { AddDeviceModal } from '../features/devices/AddDeviceModal';
 import { CredentialsPanel } from '../features/devices/CredentialsPanel';
 import { DeviceTable } from '../features/devices/DeviceTable';
 import { BenchLogDialog } from '../features/systems/BenchLogButton';
+import { NetworkTab } from '../features/network/NetworkTab';
 import { SystemTree } from '../features/systems/SystemTree';
 import { StagedBadge } from '../features/systems/StagedBadge';
 import { DownloadBackupsDialog, ExportSystemDialog } from '../features/systems/SystemPackage';
@@ -128,6 +129,7 @@ export function ProjectDetailPage() {
       <Tabs value={tab} onChange={(v) => setParams(v && v !== 'devices' ? { tab: v } : {}, { replace: true })} keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="devices">Devices ({devices.data?.length ?? 0})</Tabs.Tab>
+          <Tabs.Tab value="network">In the network{p.reached_via === 'network' ? ' (now)' : ''}</Tabs.Tab>
           <Tabs.Tab value="plans">Plans ({deployments.data?.length ?? 0})</Tabs.Tab>
           <Tabs.Tab value="logins">Logins</Tabs.Tab>
           <Tabs.Tab value="settings">System settings</Tabs.Tab>
@@ -154,6 +156,7 @@ export function ProjectDetailPage() {
           ) : <DeviceTable devices={devices.data ?? []} selected={selected} onSelectedChange={setSelected}
             reach={watch ? reachMap : undefined} />}
         </Tabs.Panel>
+        <Tabs.Panel value="network"><NetworkTab project={p} devices={devices.data ?? []} /></Tabs.Panel>
         <Tabs.Panel value="plans">
           {deleteDialog}
           <Card withBorder padding={0}>

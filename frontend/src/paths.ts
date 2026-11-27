@@ -11,7 +11,7 @@ const q = (params: Record<string, string | number | null | undefined>) => {
 
 export type SettingsTab = 'logins' | 'templates' | 'certificate' | 'safety' | 'identity' | 'about';
 export type DeviceTab = 'overview' | 'files' | 'log' | 'intent';
-export type SystemTab = 'devices' | 'plans' | 'logins' | 'settings';
+export type SystemTab = 'devices' | 'network' | 'plans' | 'logins' | 'settings';
 
 export const paths = {
   home: '/',

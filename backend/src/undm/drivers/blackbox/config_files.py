@@ -19,7 +19,14 @@ import binascii
 import re
 import xml.etree.ElementTree as ET
 
-from undm.drivers.base import ApplyMode, ConfigFileReport
+from undm.drivers.base import (
+    ApplyMode,
+    ConfigFileReport,
+    FileAddress,
+    FileAddresses,
+    ManagerRange,
+    address_range,
+)
 
 _PORT = re.compile(r"^interface\s+GigabitEthernet\s+(\d+/\d+)\s*$")
 _VLAN_IF = re.compile(r"^interface\s+vlan\s+(\d+)\s*$", re.IGNORECASE)
@@ -59,6 +66,40 @@ def _blocks(lines: list[str]) -> list[tuple[str, list[str]]]:
         else:
             blocks.append((ln.strip(), []))
     return blocks
+
+
+def file_addresses(text: str) -> FileAddresses:
+    """The VLAN interface addresses the LIG1014A file gives the switch and its 'access
+    management' ranges, with line numbers (D-125). The LE2700A's XML is not read here."""
+    addresses: list[FileAddress] = []
+    managers: list[ManagerRange] = []
+    vlan: int | None = None
+    for n, raw in enumerate(text.splitlines(), 1):
+        if not raw.strip() or raw.strip().startswith("!"):
+            continue
+        line = raw.strip()
+        if raw[0] not in " \t":
+            m = _VLAN_IF.match(line)
+            vlan = int(m.group(1)) if m else None
+            if (a := _ACCESS.match(line)) and _IPV4.match(a.group(3)):
+                last = a.group(4) if a.group(4) and _IPV4.match(a.group(4)) else a.group(3)
+                services = a.group(5).strip() or "all services"
+                span = f"{a.group(3)}–{a.group(4)}" if a.group(4) else a.group(3)
+                managers.append(ManagerRange(a.group(3), last,
+                                             f"VLAN {a.group(2)} {span} ({services})", n))
+        elif vlan is not None and (m := re.match(r"ip address (\S+) (\S+)$", line)):
+            span_ = address_range(m.group(1), m.group(2))
+            if span_:
+                addresses.append(FileAddress(m.group(1), span_[2], f"VLAN {vlan}", n))
+    return FileAddresses(tuple(addresses), tuple(managers))
+
+
+_IPV4 = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
+
+
+def blackbox_file_addresses(text: str) -> FileAddresses | None:
+    """The LIG1014A CLI file's addresses; None for the LE2700A's XML (no reader yet)."""
+    return None if text.lstrip().startswith("<") else file_addresses(text)
 
 
 def inspect_blackbox_file(text: str) -> ConfigFileReport:

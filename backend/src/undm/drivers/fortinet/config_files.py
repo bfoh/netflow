@@ -19,7 +19,15 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 
-from undm.drivers.base import ApplyMode, ConfigFileReport, SecretSlot
+from undm.drivers.base import (
+    ApplyMode,
+    ConfigFileReport,
+    FileAddress,
+    FileAddresses,
+    ManagerRange,
+    SecretSlot,
+    address_range,
+)
 
 # "#config-version=FG101F-7.2.7-FW-build1577-240131:opmode=0:vdom=1:user=admin"
 _HEADER = re.compile(
@@ -93,6 +101,68 @@ def configured_hostname(text: str) -> str | None:
 
 def _name(text: str) -> str:
     return text.strip().strip('"')
+
+
+def file_addresses(text: str) -> FileAddresses:
+    """The interface addresses a FortiOS file sets ('config system interface': 'set ip',
+    with each interface's 'set vdom' and 'set allowaccess') and the admins' trusted hosts
+    ('config system admin': 'set trusthostN'), with line numbers (D-125)."""
+    addresses: list[FileAddress] = []
+    managers: list[ManagerRange] = []
+    path: list[tuple[str, str]] = []
+    current: dict[str, str | int] = {}
+
+    def flush() -> None:
+        ip = current.get("ip")
+        if isinstance(ip, str):
+            addr, _, mask = ip.partition(" ")
+            if "/" in addr:
+                addr, _, mask = addr.partition("/")
+            span = address_range(addr, mask or "32")
+            if span and addr != "0.0.0.0":  # noqa: S104 - "no address" in FortiOS files
+                addresses.append(FileAddress(
+                    addr, span[2], f'interface "{current["name"]}"', int(current["line"]),
+                    vdom=str(current["vdom"]) if "vdom" in current else None,
+                    allows=str(current.get("allows", ""))))
+        current.clear()
+
+    def inside(block: str) -> bool:
+        return any(kind == "config" and name == block for kind, name in path)
+
+    for number, line in _statements(text):
+        verb, _, rest = line.partition(" ")
+        if verb == "config":
+            path.append(("config", rest.strip()))
+        elif verb == "edit":
+            path.append(("edit", _name(rest)))
+            if inside("system interface"):
+                current.clear()
+                current["name"] = _name(rest)
+        elif verb == "next":
+            if inside("system interface") and current:
+                flush()
+            if path and path[-1][0] == "edit":
+                path.pop()
+        elif verb == "end":
+            if inside("system interface") and current:
+                flush()
+            while path and path.pop()[0] != "config":
+                pass
+        elif inside("system interface") and current:
+            if m := re.match(r"set\s+ip\s+(\S+(?:\s+\d+\.\d+\.\d+\.\d+)?)\s*$", line):
+                current["ip"], current["line"] = m.group(1), number
+            elif m := re.match(r"set\s+vdom\s+(.+)$", line):
+                current["vdom"] = _name(m.group(1))
+            elif m := re.match(r"set\s+allowaccess\s+(.+)$", line):
+                current["allows"] = m.group(1).strip()
+        elif inside("system admin") and (
+                m := re.match(r"set\s+trusthost\d+\s+(\S+)\s+(\S+)\s*$", line)):
+            span = address_range(m.group(1), m.group(2))
+            admin = next((name for kind, name in reversed(path) if kind == "edit"), "")
+            if span and span[2] > 0:  # 0.0.0.0 0.0.0.0 is any address
+                managers.append(ManagerRange(span[0], span[1],
+                                             f"{span[0]}/{span[2]} (admin {admin})", number))
+    return FileAddresses(tuple(addresses), tuple(managers))
 
 
 def secret_slots(text: str) -> tuple[SecretSlot, ...]:

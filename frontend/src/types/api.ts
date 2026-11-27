@@ -40,6 +40,28 @@ export interface DeviceConnection {
   problem: string | null;
 }
 
+/** An address a device's file gives it (D-125), read offline, with where in the file. */
+export interface FileAddressCandidate {
+  address: string; prefix: number | null; where: string; line: number; vdom: string | null;
+  allows: string; file: string; version_id: string; on_bench: boolean;
+}
+export interface FileManagerRange { first: string; last: string; text: string; line: number; file: string }
+export interface FileAddresses {
+  files: { version_id: string; name: string; loaded: boolean; created_at: string }[];
+  /** False: no reader for this device's files (the person types the address). */
+  reader: boolean;
+  addresses: FileAddressCandidate[];
+  /** The addresses its file allows to manage it. */
+  managers: FileManagerRange[];
+  suggested: string | null;
+  reason: string;
+  /** This PC's own address towards it now, and whether its file's limits allow it. */
+  pc_address: string | null;
+  pc_allowed: boolean | null;
+  /** A route command for this PC, shown only (UNDM never changes the PC's network). */
+  route_hint: string | null;
+}
+
 export interface CertificateSubject {
   common_name: string;
   org_unit: string;

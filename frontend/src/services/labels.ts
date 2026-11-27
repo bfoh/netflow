@@ -13,7 +13,10 @@
  *   configuration, *additions* add to it;
  * - *console setup* is the first setup over the console cable (a modem's is its *first
  *   access*); *read information* reads a device's facts; *back up now* saves its
- *   configuration in UNDM; the *backup slot* is a device's second firmware image.
+ *   configuration in UNDM; the *backup slot* is a device's second firmware image;
+ * - a system is reached *on the bench* (each device at its *bench address*, while it is
+ *   staged) or *in the network* (after staging, each device at its *network address*,
+ *   through the system's *BFW*, the FortiGate this PC is connected to), D-125.
  */
 import type { Driver } from '../types/api';
 

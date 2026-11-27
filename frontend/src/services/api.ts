@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, ReachedVia, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, Guided, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, FileAddresses, ReachedVia, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, Guided, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -218,6 +218,7 @@ export const api = {
   },
   licensePlan: (id: string, versionId: string) => request<Deployment>('POST', `/devices/${id}/license-plan`, { version_id: versionId }),
   reachability: (pid: string) => request<Reachability[]>('GET', `/projects/${pid}/reachability`),
+  fileAddresses: (id: string) => request<FileAddresses>('GET', `/devices/${id}/file-addresses`),
   setNetworkAddress: (id: string, body: { address: string | null; file?: string | null; line?: number | null }) =>
     request<Device>('PUT', `/devices/${id}/network-address`, body),
   setReachedVia: (pid: string, via: ReachedVia, gatewayDeviceId?: string | null) =>

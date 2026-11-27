@@ -16,6 +16,8 @@ ALLOWED = {
     ("services/reach.py", "device.network_address"): "the resolver and its setter",
     ("services/reach.py", "Device.network_address"): "duplicate check in the system",
     ("services/reach.py", "gateway.network_address"): "the BFW needs one to move",
+    ("services/reach.py", "d.management_address for d in device.project.devices"):
+        "the bench networks, to leave bench addresses out of a file's suggestion",
     ("services/devices.py", "device.management_address, device.network_address"):
         "masking shared text (no connection)",
     ("services/deployments.py", "from_version=device.management_address"):

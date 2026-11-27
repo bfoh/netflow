@@ -190,6 +190,13 @@ function StageSystem({ projectId }: { projectId: string }) {
               : i === STEPS.length - 1 && project.data!.staged_at ? `finished ${fmtDate(project.data!.staged_at)}` : undefined} />
         ))}
       </Stepper>
+      {project.data.reached_via === 'network' && (
+        <Notice kind="status" mb="md" live={false} title="This system is in the network"
+          action={<Button size="xs" variant="default" component={Link} to={paths.system(projectId, 'network')}>In the network</Button>}>
+          Its devices are reached through its BFW at their network addresses. Plans, console setup and staging steps run on the
+          bench only: move the system back to the bench on its In the network tab to stage again.
+        </Notice>
+      )}
       {consoleId && (
         <WizardConsole device={(devices.data ?? []).find((d) => d.id === consoleId)} loading={devices.isLoading}
           back={{ label: `Back to ${STEPS[active]}`, onClick: () => { void qc.invalidateQueries(); setActive(active); } }} />

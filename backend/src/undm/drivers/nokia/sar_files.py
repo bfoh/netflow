@@ -17,7 +17,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from undm.drivers.base import ApplyMode, ConfigFileReport
+from undm.drivers.base import (
+    ApplyMode,
+    ConfigFileReport,
+    FileAddress,
+    FileAddresses,
+    address_range,
+)
 
 SLOT = "${admin_password}"  # the template's password slot (D-114)
 _COMMENT = re.compile(r"^\s*#")
@@ -73,6 +79,32 @@ def plan_load(text: str) -> LoadPlan:
         out.markers += [m for m in _MARKER.findall(line) if m != SLOT and m not in out.markers]
         out.lines.append((n, line))
     return out
+
+
+_INTERFACE = re.compile(r'^(\s*)interface\s+"([^"]+)"')
+_ADDRESS = re.compile(r"^\s+address\s+(\d+\.\d+\.\d+\.\d+)/(\d+)\b")
+
+
+def file_addresses(text: str) -> FileAddresses:
+    """The addresses the file gives the modem's interfaces ('interface "<name>"', then
+    'address a.b.c.d/nn' under it), with line numbers (D-125). The boot options' address
+    is not in this file."""
+    addresses: list[FileAddress] = []
+    current: tuple[str, int] | None = None  # (name, indent)
+    for n, raw in enumerate(text.replace("\r\n", "\n").split("\n"), 1):
+        if _COMMENT.match(raw) or not raw.strip():
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        if m := _INTERFACE.match(raw):
+            current = (m.group(2), indent)
+        elif current and raw.strip() == "exit" and indent <= current[1]:
+            current = None
+        elif current and (m := _ADDRESS.match(raw)):
+            span = address_range(m.group(1), m.group(2))
+            if span:
+                addresses.append(FileAddress(m.group(1), span[2],
+                                             f'interface "{current[0]}"', n))
+    return FileAddresses(tuple(addresses))
 
 
 def fill_password(text: str, password: str) -> str:
