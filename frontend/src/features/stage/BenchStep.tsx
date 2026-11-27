@@ -1,10 +1,10 @@
 import { Box, Anchor, Button, Card, Code, Group, List, Stack, Table, Text, Title } from '@mantine/core';
 import { InlineStatus } from '../../components/InlineStatus';
-import { IconPlugConnected, IconTerminal2 } from '@tabler/icons-react';
+import { IconCheck, IconPlugConnected, IconTerminal2 } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
-import { EnvironmentBadge, StateBadge, Tag } from '../../components/Badges';
+import { EnvironmentBadge, Tag } from '../../components/Badges';
 import { Hint } from '../../components/Hint';
 import { SafetyHint } from '../../components/SafetyHint';
 import { useAction, usePolicy } from '../../hooks/queries';
@@ -98,7 +98,8 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
         </Group>
         <Table.ScrollContainer minWidth={640}>
           <Table verticalSpacing="sm" horizontalSpacing="md" aria-label="Test connection per device">
-            <Table.Thead><Table.Tr><Table.Th>Device</Table.Th><Table.Th>Address</Table.Th><Table.Th>Console setup</Table.Th><Table.Th>Test connection</Table.Th></Table.Tr></Table.Thead>
+            <Table.Thead><Table.Tr><Table.Th>Device</Table.Th><Table.Th w={180}>Address</Table.Th><Table.Th w={190}>Console setup</Table.Th>
+              <Table.Th w={300}>Connection</Table.Th></Table.Tr></Table.Thead>
             <Table.Tbody>
               {roles.map(({ role, device }) => {
                 const r = results[device.id];
@@ -113,15 +114,18 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
                       <Anchor component={Link} to={paths.device(device.id)} fw={600} size="sm">{device.name}</Anchor>
                       <Group gap={6} mt={2}><Text size="xs" c="dimmed">{role.title}</Text><EnvironmentBadge env={device.environment} /></Group>
                     </Table.Td>
-                    <Table.Td><Text size="sm" ff="monospace">{device.management_address
-                      || (role.consoleCable ? `console ${device.console_port || '—'}` : '—')}</Text></Table.Td>
+                    <Table.Td>{device.management_address
+                      ? <Text size="sm" ff="monospace">{device.management_address}</Text>
+                      : role.consoleCable
+                        ? <Text size="sm">Console <Text span size="sm" ff="monospace">{device.console_port || '—'}</Text></Text>
+                        : <Text size="sm" c="dimmed">—</Text>}</Table.Td>
                     <Table.Td>
                       {needsConsole ? (
                         CONSOLE_DONE.has(device.provisioning_status)
-                          ? <StateBadge state={device.provisioning_status} />
+                          ? <Tag tone="success" icon={<IconCheck size={12} />}>Done</Tag>
                           : <Button size="xs" variant="light" component={Link} to={paths.stage(device.project_id, 2, { console: device.id })}
                             leftSection={<IconTerminal2 size={14} />}>Open console setup</Button>
-                      ) : <Text size="sm" c="dimmed">Not needed</Text>}
+                      ) : <Text size="sm" c="dimmed">—</Text>}
                     </Table.Td>
                     <Table.Td>
                       {waitsFor(role, device) === 'console' ? (

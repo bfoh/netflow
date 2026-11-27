@@ -77,7 +77,7 @@ export const ROLES: Role[] = [
   { key: 'modem', title: 'Nokia 7705 SAR-Hmc (modem)', model: '7705 SAR-Hmc', modelId: 'nokia-7705-sar-hmc',
     realDriver: 'console.nokia.sar', simulatedDriver: 'mock.nokia.sar', nameSuffix: 'modem',
     address: '', steps: ['console', 'file'], consoleCable: true, fileKeepsLogin: true,
-    fileWords: "The modem's configuration file (Generate above makes it from its template), loaded over its console line by line.",
+    fileWords: "The modem's configuration file, loaded over its console line by line. “Generate the files for zone …” at the top of this step makes it.",
     hint: 'Console cable only. Its first access starts it once without its factory configuration and sets the admin password.',
     cable: 'USB console cable only (speed 115200); no network cable on the bench', addressAfter: '',
     consoleWords: 'First access (console)' },
@@ -86,7 +86,7 @@ export const ROLES: Role[] = [
     realDriver: 'guided.nokia.flexi', simulatedDriver: 'mock.nokia.flexi', nameSuffix: 'bbu',
     address: '192.168.255.129', protocol: 'https_api', port: 443, steps: ['firmware', 'file'], guided: true,
     fileKeepsLogin: true,
-    fileWords: "The site configuration file (SCF): Generate above makes it for this system's zone and system, with its cells' PCIs from the PCI table.",
+    fileWords: "The site configuration file (SCF). “Generate the files for zone …” at the top of this step makes it for this system, with its cells' PCIs from the PCI table.",
     hint: 'Staged by hand in its portal (WebEM): UNDM hands out the software package and the SCF and records each step. UNDM never logs in to it.',
     cable: 'LMP port → this PC (or the small switch); the PC also needs 192.168.255.126/24', addressAfter: '192.168.255.129' },
 ];

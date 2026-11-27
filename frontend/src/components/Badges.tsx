@@ -20,15 +20,16 @@ export function Tag({ tone = 'neutral', children, icon, ...rest }: { tone?: Tone
   return <Badge color={TONE_COLOR[tone]} style={{ flexShrink: 0 }} leftSection={icon} styles={keepWhole} {...rest}>{children}</Badge>;
 }
 
-const ENV: Record<DeviceEnvironment, { tone: Tone; label: string }> = {
+const ENV: Partial<Record<DeviceEnvironment, { tone: Tone; label: string }>> = {
   simulated: { tone: 'simulated', label: 'Simulated' },
-  lab: { tone: 'warning', label: 'Real device' },
   production: { tone: 'danger', label: 'Production' },
 };
 
+/** Marks the exceptions only (2026-11-27): a simulated device, or a production device. A
+ *  real device on the bench is the usual case and carries no tag. */
 export function EnvironmentBadge({ env }: { env: DeviceEnvironment }) {
-  const e = ENV[env] ?? ENV.simulated;
-  return <Tag tone={e.tone}>{e.label}</Tag>;
+  const e = ENV[env];
+  return e ? <Tag tone={e.tone}>{e.label}</Tag> : null;
 }
 
 /** A plan, step or device state in words, with its colour and an icon (see services/labels),

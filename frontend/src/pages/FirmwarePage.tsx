@@ -1,12 +1,13 @@
-import { Box, Button, Card, Checkbox, FileInput, Group, Modal, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput,
+import { ActionIcon, Box, Button, Card, Checkbox, FileInput, Group, Menu, Modal, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput,
   Text, Textarea, TextInput, Tooltip,
 } from '@mantine/core';
 import { InlineStatus } from '../components/InlineStatus';
 import { Tag } from '../components/Badges';
-import { IconAlertTriangle, IconCheck, IconShieldCheck, IconUpload, IconX } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCheck, IconDots, IconShieldCheck, IconUpload, IconX } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
+import { ActionsHeader } from '../components/DataTable';
 import { Hint } from '../components/Hint';
 import { Notice } from '../components/Notice';
 import { PageHeader, QueryState } from '../components/Page';
@@ -74,21 +75,25 @@ function UploadForm({ initialModel, onDone }: { initialModel: string | null; onD
 
   return (
       <Stack>
+        <Select label="Device model" placeholder="The model this image is for" searchable data-autofocus
+          data={real.map((m) => ({ value: m.model_id, label: `${m.manufacturer} ${m.model}` }))}
+          value={chosen?.model_id ?? null} onChange={(v) => { setModelId(v); setCompatible(null); }}
+          description={chosen && derived ? `Platform: ${PLATFORMS.find((x) => x.value === derived)?.label ?? derived}` : undefined} />
+        {!(chosen && derived) && (
+          <Select label="Platform" placeholder="Choose the platform" data={PLATFORMS} value={platformChoice} onChange={setPlatform} />
+        )}
+        <FileInput label="Image file" placeholder="Choose the vendor's file" value={file} onChange={setFile} required />
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <Select label="Device model" placeholder="The model this image is for" searchable data-autofocus
-            data={real.map((m) => ({ value: m.model_id, label: `${m.manufacturer} ${m.model}` }))}
-            value={chosen?.model_id ?? null} onChange={(v) => { setModelId(v); setCompatible(null); }} />
-          {chosen && derived
-            ? <TextInput label="Platform" value={PLATFORMS.find((x) => x.value === derived)?.label ?? derived} readOnly
-              description="Follows from the model." />
-            : <Select label="Platform" placeholder="Choose the platform" data={PLATFORMS} value={platformChoice} onChange={setPlatform} />}
-          <FileInput label="Firmware image file" placeholder="Choose the vendor image" value={file} onChange={setFile} required />
-          <TextInput label="Version" placeholder="as reported by the device, e.g. WC.16.11.0003" value={version} onChange={(e) => setVersion(e.currentTarget.value)} required />
-          <TagsInput label="Compatible models" placeholder="choose from the list, or type and press Enter" data={suggestions} value={compatible} onChange={setCompatible} />
-          <TextInput label="Vendor checksum (SHA-256 or SHA-512)" description="Only the one the vendor publishes for this file. None? Leave it empty and approve with a reason." value={sha} onChange={(e) => setSha(e.currentTarget.value)} />
-          <TextInput label="Minimum version to upgrade from (optional)" description="Upgrade-path rule from the release notes" value={minFrom} onChange={(e) => setMinFrom(e.currentTarget.value)} />
+          <TextInput label="Version" placeholder="e.g. WC.16.11.0003" description="As the device reports it." value={version}
+            onChange={(e) => setVersion(e.currentTarget.value)} required />
+          <TagsInput label="Compatible models" placeholder="Choose, or type and press Enter" data={suggestions} value={compatible}
+            onChange={setCompatible} description="The models it may be loaded on." />
+          <TextInput label="Vendor checksum" placeholder="SHA-256 or SHA-512" value={sha} onChange={(e) => setSha(e.currentTarget.value)}
+            description="Only one the vendor publishes. None? Leave it empty and approve with a reason." />
+          <TextInput label="Oldest version it upgrades from" placeholder="Optional" value={minFrom}
+            onChange={(e) => setMinFrom(e.currentTarget.value)} description="From the release notes, if they say." />
         </SimpleGrid>
-        <Textarea label="Release notes / reference" autosize minRows={2} value={notes} onChange={(e) => setNotes(e.currentTarget.value)} />
+        <Textarea label="Release notes or reference" placeholder="Optional" autosize minRows={2} value={notes} onChange={(e) => setNotes(e.currentTarget.value)} />
         <Hint more={<>Fortinet publishes the SHA-512 under “Checksum” next to the download; MD5 is not accepted. Without it the
           image can be uploaded, and the checksum added later (“Add vendor checksum…”). Only upload images obtained from the
           vendor: the file is kept in UNDM's data folder.</>}>The checksum proves the file is the vendor's, undamaged.</Hint>
@@ -155,46 +160,52 @@ function ImageTable({ images }: { images: FirmwareImage[] }) {
     </Modal>
     {confirmDialog}
     <Card withBorder padding={0}>
-      <Table.ScrollContainer minWidth={900}>
-        <Table aria-label="Firmware images" verticalSpacing="xs" horizontalSpacing="md">
-          <Table.Thead><Table.Tr><Table.Th>Version</Table.Th><Table.Th>For</Table.Th><Table.Th>File</Table.Th><Table.Th>Models</Table.Th>
-            <Table.Th>Checksum</Table.Th><Table.Th>Status</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
+      <Table.ScrollContainer minWidth={760}>
+        <Table aria-label="Firmware images" verticalSpacing="sm" horizontalSpacing="md">
+          <Table.Thead><Table.Tr><Table.Th>Image</Table.Th><Table.Th>For</Table.Th><Table.Th>Status</Table.Th>
+            <Table.Th>Checksum</Table.Th><ActionsHeader /></Table.Tr></Table.Thead>
           <Table.Tbody>
             {images.map((i) => (
               <Table.Tr key={i.id}>
-                <Table.Td><Text fw={600} size="sm">{i.version}</Text>{i.min_from_version && <Text size="xs" c="dimmed">from ≥ {i.min_from_version}</Text>}</Table.Td>
-                <Table.Td>{platformLabel(i.platform)}</Table.Td>
-                <Table.Td><Text size="sm">{i.filename}</Text><Text size="xs" c="dimmed">{fmtSize(i.size_bytes)}</Text></Table.Td>
-                <Table.Td><Text size="sm">{i.compatible_models.join(', ')}</Text></Table.Td>
+                <Table.Td maw={340}>
+                  <Text fw={600} size="sm" style={{ overflowWrap: 'anywhere' }}>{i.version}</Text>
+                  <Text size="xs" c="dimmed" style={{ overflowWrap: 'anywhere' }}>{i.filename} · {fmtSize(i.size_bytes)}</Text>
+                  {i.min_from_version && <Text size="xs" c="dimmed">Upgrades from {i.min_from_version} or later</Text>}
+                </Table.Td>
+                <Table.Td><Text size="sm">{platformLabel(i.platform)}</Text>
+                  <Text size="xs" c="dimmed">{i.compatible_models.join(', ') || 'no models listed'}</Text></Table.Td>
+                <Table.Td><Tag tone={i.status === 'approved' ? 'success' : i.status === 'retired' ? 'neutral' : 'info'}>{stateLabel(i.status)}</Tag>
+                  {i.approved_by && <Text size="xs" c="dimmed" mt={2}>by {i.approved_by}</Text>}</Table.Td>
                 <Table.Td>{i.integrity_verified
                   ? <Tooltip label={`${i.vendor_sha512 ? 'SHA-512' : 'SHA-256'} matched the vendor-published checksum`}><Tag tone="success" icon={<IconShieldCheck size={12} />}>Verified</Tag></Tooltip>
-                  : <Group gap={4} wrap="nowrap">
-                      {i.status === 'approved' && i.unverified_reason
-                        ? <Tooltip multiline w={320} label={`Approved by ${i.approved_by ?? '?'} without the vendor's checksum. Reason: ${i.unverified_reason}`}>
-                            <Tag tone="warning" icon={<IconAlertTriangle size={12} />}>Not verified · approved with reason</Tag></Tooltip>
-                        : <Tooltip label="No vendor checksum was supplied. Add it, or approve the image with a written reason."><Tag tone="warning" icon={<IconAlertTriangle size={12} />}>Not verified</Tag></Tooltip>}
-                      {i.status !== 'retired' && <Button size="compact-xs" variant="light" onClick={() => { setChecksum(''); setChecking(i); }}>Add vendor checksum…</Button>}
-                    </Group>}</Table.Td>
-                <Table.Td><Tag tone={i.status === 'approved' ? 'success' : i.status === 'retired' ? 'neutral' : 'info'}>{stateLabel(i.status)}</Tag>
-                  {i.approved_by && <Text size="xs" c="dimmed">by {i.approved_by}</Text>}</Table.Td>
+                  : i.status === 'approved' && i.unverified_reason
+                    ? <Tooltip multiline w={320} label={`Approved by ${i.approved_by ?? '?'} without the vendor's checksum. Reason: ${i.unverified_reason}`}>
+                        <Tag tone="warning" icon={<IconAlertTriangle size={12} />}>Approved with a reason</Tag></Tooltip>
+                    : <Tooltip label="No vendor checksum was supplied. Add it, or approve the image with a written reason."><Tag tone="warning" icon={<IconAlertTriangle size={12} />}>Not verified</Tag></Tooltip>}</Table.Td>
                 <Table.Td>
-                  <Group gap={4}>
+                  <Group gap={4} justify="flex-end" wrap="nowrap">
                     {i.status === 'uploaded' && (i.integrity_verified
-                      ? <Button size="compact-xs" onClick={() => approve.mutate(i.id)}>Approve</Button>
-                      : <Button size="compact-xs" color="orange" variant="light" onClick={() => { setReason(''); setOverriding(i); }}>Approve without checksum…</Button>)}
-                    {i.status === 'approved' && <Button size="compact-xs" variant="default" onClick={() => ask({
-                      title: `Retire ${i.filename}?`, confirmLabel: 'Retire image', color: 'orange',
-                      message: 'New upgrade plans can no longer use it. Plans already made keep their record. The file stays until you delete it.',
-                      onConfirm: () => retire.mutateAsync(i.id) })}>Retire</Button>}
-                    <Button size="compact-xs" variant="subtle" color="red" onClick={() => ask({
-                      title: `Delete ${i.filename}?`, confirmLabel: 'Delete image',
-                      message: 'The file is removed from this PC. Upload it again if you need it later.',
-                      onConfirm: () => del.mutateAsync(i.id) })}>Delete</Button>
+                      ? <Button size="compact-sm" onClick={() => approve.mutate(i.id)}>Approve</Button>
+                      : <Button size="compact-sm" variant="light" onClick={() => { setReason(''); setOverriding(i); }}>Approve…</Button>)}
+                    <Menu position="bottom-end" withinPortal>
+                      <Menu.Target><ActionIcon variant="subtle" aria-label={`More for ${i.filename}`}><IconDots size={16} /></ActionIcon></Menu.Target>
+                      <Menu.Dropdown>
+                        {!i.integrity_verified && i.status !== 'retired' && <Menu.Item onClick={() => { setChecksum(''); setChecking(i); }}>Add vendor checksum…</Menu.Item>}
+                        {i.status === 'approved' && <Menu.Item onClick={() => ask({
+                          title: `Retire ${i.filename}?`, confirmLabel: 'Retire image', color: 'orange',
+                          message: 'New upgrade plans can no longer use it. Plans already made keep their record. The file stays until you delete it.',
+                          onConfirm: () => retire.mutateAsync(i.id) })}>Retire…</Menu.Item>}
+                        <Menu.Item color="red" onClick={() => ask({
+                          title: `Delete ${i.filename}?`, confirmLabel: 'Delete image',
+                          message: 'The file is removed from this PC. Upload it again if you need it later.',
+                          onConfirm: () => del.mutateAsync(i.id) })}>Delete…</Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
                   </Group>
                 </Table.Td>
               </Table.Tr>
             ))}
-            {images.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text c="dimmed" ta="center" p="md">No firmware images yet. Upload one above.</Text></Table.Td></Table.Tr>}
+            {images.length === 0 && <Table.Tr><Table.Td colSpan={5}><Text c="dimmed" ta="center" p="md">No firmware images yet. Upload one above.</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
       </Table.ScrollContainer>

@@ -7,10 +7,10 @@ import { Link } from 'react-router';
 
 import { paths } from '../../paths';
 
-import { useAction, useConfig, useConfigs, useCredentialRefs, useFirmwareImages, useLoginDefaults } from '../../hooks/queries';
+import { useAction, useConfig, useConfigs, useCredentialRefs, useDrivers, useFirmwareImages, useLoginDefaults } from '../../hooks/queries';
 import { api } from '../../services/api';
 import { fmtDate } from '../../services/format';
-import type { Device, Project } from '../../types/api';
+import type { Device, FirmwareImage, Project } from '../../types/api';
 import { LoginSelect } from '../logins/LoginSelect';
 import { keptPreviousLogin, type Choice, type Choices, EMPTY_CHOICE, planSteps } from './choices';
 import { GeneratePanel } from './GeneratePanel';
@@ -94,10 +94,25 @@ function LicensePick({ device, choice, onChange }: {
 
 function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: Device; choice: Choice; onChange: (c: Choice) => void }) {
   const images = useFirmwareImages();
+  const drivers = useDrivers();
   const refs = useCredentialRefs(device.project_id);
   const logins = (refs.data ?? []).map((r) => ({ value: r.id, label: r.name }));
-  const fitting = (images.data ?? []).filter((i) => i.status === 'approved'
-    && (i.compatible_models.length === 0 || i.compatible_models.includes(device.model)));
+  // Model names compared as the backend compares them: ignoring case and spaces at the ends.
+  const fits = (i: FirmwareImage) => i.compatible_models.length === 0
+    || i.compatible_models.some((m) => m.trim().toLowerCase() === device.model.trim().toLowerCase());
+  const fitting = (images.data ?? []).filter((i) => i.status === 'approved' && fits(i));
+  // Why none is offered, in the person's words (bench 2026-11-27).
+  const waiting = (images.data ?? []).filter((i) => i.status === 'uploaded' && fits(i));
+  const notForIt = (images.data ?? []).filter((i) => i.status === 'approved' && !fits(i)
+    && i.platform === drivers.data?.find((d) => d.driver_id === device.driver_id)?.platform);
+  const firmwareLink = (words: string) => <Anchor component={Link} to={paths.firmware(device.model)} size="xs">{words}</Anchor>;
+  const noImage = () => (waiting.length
+    ? <>{waiting[0].version} is uploaded but not approved yet: approve it on the {firmwareLink('Firmware page')} (Approve… in its row).</>
+    : notForIt.length
+      ? <>{notForIt[0].version} is approved, but its models ({notForIt[0].compatible_models.join(', ')}) do not include {device.model}: upload it
+        again on the {firmwareLink('Firmware page')} with {device.model} as its model.</>
+      : <>No approved {role.guided ? 'package' : 'image'} for {device.model} yet: {firmwareLink('upload it on the Firmware page')} and
+        approve it.</>);
   const set = (part: Partial<Choice>) => onChange({ ...choice, ...part });
   const { missing } = planSteps(role, choice, device);
   const hasFile = role.steps.includes('base') || role.steps.includes('file');
@@ -142,10 +157,8 @@ function DeviceFiles({ role, device, choice, onChange }: { role: Role; device: D
         {role.steps.includes('firmware') && <Stack gap={4}>
           <Select label={role.guided ? 'Software package' : 'Firmware'}
             description={role.guided
-              ? (fitting.length ? 'The approved package UNDM hands out for its portal (with its SHA-256).'
-                : <>No approved package for this model yet: <Anchor component={Link} to={paths.firmware(device.model)} size="xs">upload it on the Firmware page</Anchor> with its SHA-256 and approve it.</>)
-              : (fitting.length ? 'An approved image for this model, or leave it as it is.'
-                : <>No approved image for this model yet: <Anchor component={Link} to={paths.firmware(device.model)} size="xs">upload and approve it on the Firmware page</Anchor>.</>)}
+              ? (fitting.length ? 'The approved package UNDM hands out for its portal (with its SHA-256).' : noImage())
+              : (fitting.length ? 'An approved image for this model, or leave it as it is.' : noImage())}
             placeholder={role.guided ? 'Choose the package' : 'Keep the firmware it has'} clearable w="100%" maw={420}
             data={fitting.map((i) => ({ value: i.id, label: `${i.version} · ${i.filename}` }))}
             value={choice.imageId} onChange={(v) => set({ imageId: v, alsoSecondary: !!v && bothBanks })} />

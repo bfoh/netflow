@@ -49,6 +49,10 @@ export const SURFACES = {
     inputBorder: '#7a7a7a', error: C.red[4], success: C.teal[4] },
 } as const;
 
+const FIELD_ORDER = ['label', 'input', 'description', 'error'] as const;
+const FIELDS = ['TextInput', 'PasswordInput', 'NumberInput', 'Textarea', 'Select', 'MultiSelect', 'TagsInput',
+  'Autocomplete', 'FileInput', 'NativeSelect', 'JsonInput'];
+
 export const theme = createTheme({
   primaryColor: 'blue',
   primaryShade: { light: 8, dark: 8 },
@@ -77,6 +81,9 @@ export const theme = createTheme({
     Notification: { defaultProps: { closeButtonProps: { 'aria-label': 'Close' } } },
     Tooltip: { defaultProps: { withArrow: true, openDelay: 300, events: { hover: true, focus: true, touch: true } } },
     Table: { defaultProps: { verticalSpacing: 'sm', horizontalSpacing: 'md' } },
+    // Help text sits under its field, so fields side by side line up whatever their help
+    // says (forms aligned, 2026-11-27).
+    ...Object.fromEntries(FIELDS.map((name) => [name, { defaultProps: { inputWrapperOrder: FIELD_ORDER } }])),
   },
 });
 

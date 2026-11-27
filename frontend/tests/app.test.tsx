@@ -245,7 +245,7 @@ describe('application shell', () => {
       min_from_version: null, release_notes: '', status: 'uploaded', approved_by: null, approved_at: null,
       created_by: 'x', created_at: '2026-01-01T00:00:00Z' }] });
     renderAt('/firmware');
-    expect(await screen.findByText('cx.swi')).toBeInTheDocument();
+    expect(await screen.findByText(/^cx\.swi · /)).toBeInTheDocument();
     expect(screen.getByText('Verified')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
   });
@@ -439,7 +439,7 @@ describe('firmware repository', () => {
     renderAt('/firmware?model=2930F');
     const dialog = await screen.findByRole('dialog', { name: 'Upload a firmware image' });
     expect(await within(dialog).findByDisplayValue('Aruba 2930F')).toBeInTheDocument();
-    expect(within(dialog).getByRole('textbox', { name: 'Platform' })).toHaveValue('ArubaOS-Switch (e.g. 2930F)');
+    expect(within(dialog).getByText('Platform: ArubaOS-Switch (e.g. 2930F)')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Upload' })).toHaveAccessibleDescription(/Still needed: the image file, the version\./);
   });
 
@@ -452,7 +452,8 @@ describe('firmware repository', () => {
     const calls = mockApi({ '/firmware/images': [img], '/firmware/images/fg/checksum': { ...img, integrity_verified: true } });
     renderAt('/firmware');
     expect(await screen.findByRole('button', { name: 'Upload image…' })).toBeInTheDocument();
-    await userEvent.click(await screen.findByRole('button', { name: 'Add vendor checksum…' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'More for FGT_101F.out' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Add vendor checksum…' }));
     const dialog = await screen.findByRole('dialog');
     await userEvent.type(within(dialog).getByLabelText('Vendor checksum'), 'ab'.repeat(64));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Verify' }));
@@ -472,7 +473,7 @@ describe('firmware approval without a vendor checksum', () => {
     const calls = mockApi({ '/firmware/images': [img],
       '/firmware/images/fg/approve': { ...img, status: 'approved', approved_by: 'tester', unverified_reason: reason } });
     renderAt('/firmware');
-    await userEvent.click(await screen.findByRole('button', { name: 'Approve without checksum…' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve…' }));
     const dialog = await screen.findByRole('dialog');
     const confirm = within(dialog).getByRole('button', { name: 'Approve without checksum' });
     await userEvent.type(within(dialog).getByLabelText(/Reason for approving without the checksum/), 'short');
@@ -492,8 +493,10 @@ describe('firmware approval without a vendor checksum', () => {
       approved_at: '2026-11-24T08:10:00Z', created_by: 'tester', created_at: '2026-11-24T08:00:00Z' };
     mockApi({ '/firmware/images': [img] });
     renderAt('/firmware');
-    expect(await screen.findByText('Not verified · approved with reason')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Add vendor checksum…' })).toBeInTheDocument();
+    const { default: userEvent } = await import('@testing-library/user-event');
+    expect(await screen.findByText('Approved with a reason')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'More for FGT_101F.out' }));
+    expect(await screen.findByRole('menuitem', { name: 'Add vendor checksum…' })).toBeInTheDocument();
   });
 });
 
