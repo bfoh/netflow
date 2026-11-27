@@ -88,6 +88,7 @@ class NokiaSarConsole(DeviceDriver):
         ),
     )
     console_speed: ClassVar[int | None] = sros_sar.CONSOLE_SPEED
+    console_speed_source: ClassVar[str] = "Nokia's documentation, used on the bench"
     # Replaced in tests by a simulated console.
     open_console: ClassVar[Callable[[str, int], Transport]] = staticmethod(open_serial)
     wake_timeout: ClassVar[float] = 10.0

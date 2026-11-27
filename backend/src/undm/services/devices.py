@@ -81,10 +81,9 @@ def set_login_after_loading_needed(device: Device, needed: bool) -> None:
     device.observed_facts = facts
 
 
-def _first_access_port(device: Device) -> str | None:
-    """The serial port of the device's last successful first access, for devices set up
-    before UNDM saved the port (v90, D-116). It is the port the person chose then; it is
-    saved on the device and audited."""
+def _last_console_port(device: Device) -> tuple[str, datetime] | None:
+    """The serial port of the device's last successful console setup or first access, and
+    when (read only)."""
     session = object_session(device)
     if session is None:
         return None
@@ -96,11 +95,22 @@ def _first_access_port(device: Device) -> str | None:
             .order_by(AuditEvent.timestamp.desc())):
         port = (event.details or {}).get("serial_port")
         if isinstance(port, str) and _CONSOLE_PORT.fullmatch(port) and port != "SIMULATED":
-            audit.record(session, "undm", "device.console_port_set", "device", device.id,
-                         details={"console_port": port,
-                                  "from": f"first access on {event.timestamp:%Y-%m-%d %H:%M}"})
-            return port
+            return port, event.timestamp
     return None
+
+
+def _first_access_port(device: Device) -> str | None:
+    """The serial port of the device's last successful first access, for devices set up
+    before UNDM saved the port (v90, D-116). It is the port the person chose then; it is
+    saved on the device and audited."""
+    found = _last_console_port(device)
+    session = object_session(device)
+    if found is None or session is None:
+        return None
+    audit.record(session, "undm", "device.console_port_set", "device", device.id,
+                 details={"console_port": found[0],
+                          "from": f"first access on {found[1]:%Y-%m-%d %H:%M}"})
+    return found[0]
 
 
 _CONSOLE_PORT = re.compile(r"[A-Za-z0-9_./:\\-]{1,64}")
@@ -431,32 +441,75 @@ def _putty() -> str | None:
     return None
 
 
-def console_command(device: Device, registry: DriverRegistry) -> tuple[str, list[str]]:
-    """(program, command) that opens a terminal on the device's console port. PuTTY when it
-    is installed ("-serial", "-sercfg" from PuTTY's manual), else pySerial's own terminal
-    (miniterm, installed with UNDM). Nothing is typed into it by UNDM."""
+# Speeds a serial console can be set to (the person may type another model's speed).
+CONSOLE_SPEEDS = (1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200)
+
+
+def console_settings(device: Device, registry: DriverRegistry, *, port: str | None = None,
+                     speed: int | None = None) -> tuple[str | None, int | None, str]:
+    """The COM port and speed for the device's console window (D-126), and where the
+    speed comes from: the one chosen, else the device's saved one, else the one its model's
+    driver documents (with its source); the port likewise, else its last console setup."""
+    driver_cls = registry.get(device.driver_id) if device.driver_id in registry else None
+    last = _last_console_port(device)
+    chosen_port = port or device.console_port or (last[0] if last else None)
+    if speed:
+        return chosen_port, speed, "chosen now"
+    if device.console_speed:
+        return chosen_port, device.console_speed, "saved for this device"
+    if driver_cls is not None and driver_cls.console_speed:
+        return chosen_port, driver_cls.console_speed, driver_cls.console_speed_source or "its model"
+    return chosen_port, None, ""
+
+
+def console_command(device: Device, registry: DriverRegistry, *, port: str | None = None,
+                    speed: int | None = None) -> tuple[str, list[str], str, int]:
+    """(program, command, port, speed) that opens a terminal on the device's console cable,
+    for any real device (D-126, amends D-118). PuTTY when it is installed ("-serial",
+    "-sercfg" from PuTTY's manual), else pySerial's own terminal (miniterm, installed with
+    UNDM). Nothing is typed into it by UNDM."""
     if device.driver_id not in registry:
         raise ServiceError(f"Unknown driver {device.driver_id!r}")
-    driver_cls = registry.get(device.driver_id)
-    if driver_cls.info.simulated:
+    if registry.get(device.driver_id).info.simulated:
         raise ConflictError("A simulated device has no console to open")
-    speed = driver_cls.console_speed
-    if speed is None or Capability.SERIAL_CONSOLE not in driver_cls.info.capabilities:
-        raise ConflictError(f"UNDM does not reach {device.name} over a console port")
-    port = device.console_port or _first_access_port(device)
-    if not port:
-        raise ConflictError(f"Say which serial port of this PC {device.name}'s console cable "
-                            "is on: Edit on its device page, Console port.")
-    device.console_port = port
-    if not _CONSOLE_PORT.fullmatch(port) or port.startswith("-"):
-        raise ConflictError("The device's console port cannot be passed to a terminal program")
-    if port_lock(port).locked():
-        raise ConflictError(f"UNDM is using {port} now (Console setup or a plan): open the "
+    chosen_port, chosen_speed, _source = console_settings(device, registry, port=port,
+                                                          speed=speed)
+    if not chosen_port:
+        raise ConflictError(f"Choose the COM port of this PC that {device.name}'s console cable "
+                            "is on.")
+    if chosen_port == "SIMULATED" or not _CONSOLE_PORT.fullmatch(chosen_port) \
+            or chosen_port.startswith("-"):
+        raise ConflictError("That console port cannot be passed to a terminal program")
+    if not chosen_speed:
+        raise ConflictError(f"Choose the console speed of {device.name}: UNDM has no documented "
+                            "speed for its model.")
+    if chosen_speed not in CONSOLE_SPEEDS:
+        raise ConflictError(f"{chosen_speed} is not a console speed UNDM offers "
+                            f"({', '.join(map(str, CONSOLE_SPEEDS))})")
+    if port_lock(chosen_port).locked():
+        raise ConflictError(f"UNDM is using {chosen_port} now (Console setup or a plan): open the "
                             "window when it has finished.")
     putty = _putty()
     if putty:
-        return "putty", [putty, "-serial", port, "-sercfg", f"{speed},8,n,1,N"]
-    return "miniterm", [sys.executable, "-m", "serial.tools.miniterm", port, str(speed)]
+        return ("putty", [putty, "-serial", chosen_port, "-sercfg", f"{chosen_speed},8,n,1,N"],
+                chosen_port, chosen_speed)
+    return ("miniterm", [sys.executable, "-m", "serial.tools.miniterm", chosen_port,
+                         str(chosen_speed)], chosen_port, chosen_speed)
+
+
+def save_console_settings(session: Session, device: Device, port: str | None,
+                          speed: int | None, actor: str, why: str) -> None:
+    """Keep the console port and speed used, so the next window opens with them."""
+    changes: dict[str, object] = {}
+    if port and port != "SIMULATED" and port != device.console_port:
+        changes["console_port"] = port
+        device.console_port = port
+    if speed and speed != device.console_speed:
+        changes["console_speed"] = speed
+        device.console_speed = speed
+    if changes:
+        audit.record(session, actor, "device.console_port_set", "device", device.id,
+                     details={**changes, "from": why})
 
 
 def launch_console(argv: list[str]) -> None:
@@ -469,12 +522,18 @@ def launch_console(argv: list[str]) -> None:
 
 
 def open_console(session: Session, device: Device, registry: DriverRegistry,
-                 actor: str) -> dict[str, str]:
-    program, argv = console_command(device, registry)
+                 actor: str, *, port: str | None = None,
+                 speed: int | None = None) -> dict[str, str | int]:
+    program, argv, used_port, used_speed = console_command(device, registry, port=port,
+                                                           speed=speed)
     launch_console(argv)
+    # What the person chose is kept; a port found from its last console setup too.
+    save_console_settings(session, device, used_port if port or not device.console_port
+                          else None, speed, actor, "console window")
     audit.record(session, actor, "device.session_opened", "device", device.id,
-                 details={"program": program, "console_port": device.console_port})
-    return {"program": program, "console_port": device.console_port or "",
+                 details={"program": program, "console_port": used_port,
+                          "console_speed": used_speed})
+    return {"program": program, "console_port": used_port, "console_speed": used_speed,
             "command": " ".join(argv)}
 
 

@@ -32,8 +32,10 @@ def list_drivers(registry: RegistryDep) -> list[DriverOut]:
         DriverOut(driver_id=i.driver_id, vendor=i.vendor, platform=i.platform,
                   os_family=i.os_family, description=i.description, simulated=i.simulated,
                   capabilities=sorted(c.value for c in i.capabilities),
-                  maturity=i.maturity.value, transport=i.transport, notes=list(i.notes))
-        for i in registry.list()
+                  maturity=i.maturity.value, transport=i.transport, notes=list(i.notes),
+                  console_speed=cls.console_speed, console_speed_source=cls.console_speed_source,
+                  network_driver_id=cls.network_driver_id)
+        for i in registry.list() for cls in [registry.get(i.driver_id)]
     ]
 
 

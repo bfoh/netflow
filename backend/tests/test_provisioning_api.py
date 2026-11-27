@@ -178,6 +178,10 @@ def test_default_console_speed_is_9600(monkeypatch):
             "serial_port": "COM3", "profile": PROFILE, "confirm_device_name": "lab-sw"}).json()
     assert out["status"] == "bootstrapped" and opened == [9600]
     assert out["network_reachable"] is True
+    # Its console window opens with the port and speed that worked (D-126).
+    with client:
+        device = client.get(f"/api/devices/{did}").json()
+    assert (device["console_port"], device["console_speed"]) == ("COM3", 9600)
 
 
 def test_new_switch_first_login_sets_the_attached_login(monkeypatch):

@@ -16,6 +16,7 @@ import { showError, showSuccess } from '../../services/notify';
 import type { Device } from '../../types/api';
 import { paths } from '../../paths';
 import { connectionOf } from './connection';
+import { ConsoleWindowDialog } from './ConsoleWindowDialog';
 
 const can = (d: Device, c: string) => d.capabilities.includes(c);
 
@@ -52,8 +53,7 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
   // Reached over its console only (the modem on the bench): a terminal on its console port instead (D-118).
   const consoleOnly = conn.capabilities.includes('supports_serial_console') && !conn.capabilities.includes('supports_ssh');
   const hasSsh = conn.capabilities.includes('supports_ssh');
-  const terminal = useAction(() => api.openConsole(device.id), (r) => `Console window opened on ${r.console_port}`
-    + (r.program === 'putty' ? ' (PuTTY)' : ' (close it with Ctrl+])') + ': close it before UNDM uses this port again');
+  const [consoleOpen, consoleWindow] = useDisclosure();
   const makeRestart = useAction(() => api.restartPlan(device.id), undefined, { errorInDialog: true });
   const makeLicense = useAction(async () => {
     const stored = await api.uploadLicense(device.id, licenseFile!);
@@ -88,7 +88,7 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
           <Menu.Label>{device.name}</Menu.Label>
           {network && <Menu.Label>In the network: {address || 'no network address yet'}</Menu.Label>}
           {real && hasSsh && address && <Menu.Item leftSection={<IconTerminal size={14} />} onClick={() => ssh.mutate(undefined)}>Open SSH window</Menu.Item>}
-          {real && consoleOnly && <Menu.Item leftSection={<IconTerminal size={14} />} onClick={() => terminal.mutate(undefined)}>Open console window</Menu.Item>}
+          {real && <Menu.Item leftSection={<IconTerminal2 size={14} />} onClick={consoleWindow.open}>Open console window…</Menu.Item>}
           {real && address && <Menu.Item leftSection={<IconWorld size={14} />} component="a" href={`https://${address}`} target="_blank"
             rel="noreferrer" rightSection={<IconExternalLink size={12} />}>Open web page</Menu.Item>}
           {address && <Menu.Item leftSection={<IconClipboard size={14} />}
@@ -114,6 +114,8 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
             <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!!device.locked_by_deployment_id} onClick={onDelete}>Delete…</Menu.Item></>}
         </Menu.Dropdown>
       </Menu>
+
+      {consoleOpen && <ConsoleWindowDialog device={device} opened onClose={consoleWindow.close} />}
 
       <Modal opened={!!info} onClose={() => setInfo(null)} title={`Information · ${device.name}`}>
         {info && <DeviceInfo device={info} />}

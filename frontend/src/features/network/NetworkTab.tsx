@@ -14,6 +14,7 @@ import { paths } from '../../paths';
 import { api } from '../../services/api';
 import type { Device, FileAddresses, Project } from '../../types/api';
 import { connectionOf } from '../devices/connection';
+import { ConsoleWindowDialog } from '../devices/ConsoleWindowDialog';
 import { DeviceMenu } from '../devices/DeviceMenu';
 import { ChooseNetworkAddress } from './ChooseNetworkAddress';
 import { CopyCommand } from './CopyCommand';
@@ -28,6 +29,7 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
   const policy = usePolicy();
   const [ask, confirmDialog] = useConfirm();
   const [choosing, setChoosing] = useState<Device | null>(null);
+  const [consoleFor, setConsoleFor] = useState<Device | null>(null);
   const network = project.reached_via === 'network';
   const gateway = gatewayOf(project, devices);
   const real = devices.filter((d) => d.environment !== 'simulated');
@@ -124,6 +126,8 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
                     {conn.problem && <Text size="xs" c="dimmed">No network address yet</Text>}</Table.Td>
                   <Table.Td><Limits found={found} /></Table.Td>
                   <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
+                    {d.environment !== 'simulated' && <Button size="compact-xs" variant="default"
+                      onClick={() => setConsoleFor(d)}>Console window…</Button>}
                     {ssh && <SshButton device={d} />}
                     <DeviceMenu device={d} />
                   </Group></Table.Td>
@@ -148,6 +152,7 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
       )}
 
       {choosing && <ChooseNetworkAddress device={choosing} opened onClose={() => setChoosing(null)} />}
+      {consoleFor && <ConsoleWindowDialog device={consoleFor} opened onClose={() => setConsoleFor(null)} />}
     </Stack>
   );
 }

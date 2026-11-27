@@ -14,6 +14,7 @@ from undm.api.schemas import (
     ConfigVersionFull,
     ConfigVersionOut,
     ConnectionOut,
+    ConsoleWindowIn,
     DeviceIn,
     DeviceOut,
     DevicePatch,
@@ -247,13 +248,27 @@ def open_ssh(device_id: str, request: Request, session: SessionDep, registry: Re
 
 @router.post("/api/devices/{device_id}/open-console")
 def open_console(device_id: str, request: Request, session: SessionDep, registry: RegistryDep,
-                 actor: ActorDep) -> dict[str, str]:
-    """Open a terminal on the device's console port on this PC (D-118). UNDM types nothing
-    into it; what is done there is outside UNDM's plans and audit."""
+                 actor: ActorDep, body: ConsoleWindowIn | None = None) -> dict[str, str | int]:
+    """Open a terminal on the device's console cable on this PC, for any real device (D-118,
+    D-126). UNDM types nothing into it; what is done there is outside UNDM's plans and
+    audit. The port and speed chosen are saved on the device."""
     d = get_device(session, device_id)
     if not _from_this_pc(request):
         raise ConflictError("A console window can only be opened from the PC that runs UNDM")
-    return svc.open_console(session, d, registry, actor)
+    return svc.open_console(session, d, registry, actor,
+                            port=body.console_port if body else None,
+                            speed=body.console_speed if body else None)
+
+
+@router.get("/api/devices/{device_id}/console-settings")
+def console_settings(device_id: str, session: SessionDep,
+                     registry: RegistryDep) -> dict[str, object]:
+    """The COM port and speed a console window would use now, and where the speed comes
+    from (D-126). Nothing is opened."""
+    d = get_device(session, device_id)
+    port, speed, source = svc.console_settings(d, registry)
+    return {"console_port": port, "console_speed": speed, "source": source,
+            "speeds": list(svc.CONSOLE_SPEEDS)}
 
 
 @router.get("/api/projects/{project_id}/reachability")

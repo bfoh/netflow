@@ -131,6 +131,12 @@ class BlackBoxLig1014aSsh(SshCliDriver):
         ),
     )
 
+    # Black Box's quick start guide for the LIG1014A (with LIG1082A, LIG1080A): console
+    # 115200 bps, 8 data bits, 1 stop bit, no parity, no flow control; not used on the bench.
+    console_speed: ClassVar[int | None] = 115200
+    console_speed_source: ClassVar[str] = ("Black Box's quick start guide; not used on the "
+                                           "bench yet")
+
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         self._restarting = False

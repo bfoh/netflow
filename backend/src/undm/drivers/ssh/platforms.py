@@ -174,6 +174,10 @@ class ArubaOSSwitchSsh(SshCliDriver):
         assert self._credentials is not None
         return {"secret": self._credentials.password}
 
+    # The 2930F console speed the team uses, and Console setup's default (bench): 9600 8N1.
+    console_speed: ClassVar[int | None] = 9600
+    console_speed_source: ClassVar[str] = "the team's setting, used on the bench"
+
     @classmethod
     def needs_file_server(cls, kind: str, mode: ApplyMode | None = None) -> bool:
         # The switch pulls the image, or a complete configuration file, by TFTP.

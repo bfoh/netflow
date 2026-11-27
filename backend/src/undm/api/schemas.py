@@ -34,6 +34,11 @@ class DriverOut(BaseModel):
     maturity: str
     transport: str
     notes: list[str]
+    # Its model's documented console speed and where it comes from (D-126).
+    console_speed: int | None = None
+    console_speed_source: str = ""
+    # The driver that reaches the same model in the network after staging (D-125).
+    network_driver_id: str | None = None
 
 
 class PolicyOut(BaseModel):
@@ -128,6 +133,16 @@ class ReachedViaIn(BaseModel):
 
     via: Literal["bench", "network"]
     gateway_device_id: str | None = None
+
+
+class ConsoleWindowIn(BaseModel):
+    """The COM port and speed for a console window; missing: the device's saved ones, else
+    its model's documented speed (D-126). What is chosen is saved on the device."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    console_port: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_./:\\-]{1,64}$")
+    console_speed: Literal[1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200] | None = None
 
 
 class NetworkAddressIn(BaseModel):
@@ -263,6 +278,8 @@ class DeviceBase(BaseModel):
     management_protocol: ManagementProtocol | None = None
     management_port: int | None = Field(default=None, ge=1, le=65535)
     console_port: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_./:\\-]{1,64}$")
+    # Its console speed for the console window (D-126); one of the usual serial speeds.
+    console_speed: Literal[1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200] | None = None
     management_vrf: str | None = None
     site: str | None = None
     rack_location: str | None = None

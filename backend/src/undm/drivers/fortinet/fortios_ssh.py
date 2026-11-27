@@ -150,6 +150,13 @@ class FortiOSSsh(SshCliDriver):
         self._sent_secrets: list[str] = []
 
     # -- what this driver can do with supplied files ----------------------------------
+    # FortiOS CLI reference, 'config system console': baudrate 9600 is the default
+    # (docs.fortinet.com, FortiOS 6.0 CLI reference "system console"); not used on the
+    # bench yet (Q-60).
+    console_speed: ClassVar[int | None] = 9600
+    console_speed_source: ClassVar[str] = ("Fortinet's FortiOS CLI reference (default 9600); "
+                                           "not used on the bench yet")
+
     @classmethod
     def needs_file_server(cls, kind: str, mode: ApplyMode | None = None) -> bool:
         return kind in ("firmware", "license") or (kind == "configuration"

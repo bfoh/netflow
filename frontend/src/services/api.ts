@@ -209,7 +209,10 @@ export const api = {
   guidedUndo: (id: string, step: string) => request<Guided>('DELETE', `/devices/${id}/guided/${step}`),
   guidedFileUrl: (id: string, versionId: string) => `/api/devices/${id}/guided-file/${versionId}`,
   firmwareFileUrl: (imageId: string) => `/api/firmware/images/${imageId}/file`,
-  openConsole: (id: string) => request<{ program: string; console_port: string; command: string }>('POST', `/devices/${id}/open-console`),
+  openConsole: (id: string, body?: { console_port?: string | null; console_speed?: number | null }) =>
+    request<{ program: string; console_port: string; console_speed: number; command: string }>('POST', `/devices/${id}/open-console`, body),
+  consoleSettings: (id: string) => request<{ console_port: string | null; console_speed: number | null; source: string; speeds: number[] }>(
+    'GET', `/devices/${id}/console-settings`),
   restartPlan: (id: string) => request<Deployment>('POST', `/devices/${id}/restart-plan`),
   uploadLicense: (id: string, file: File) => {
     const form = new FormData();

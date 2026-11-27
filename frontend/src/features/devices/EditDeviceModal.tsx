@@ -2,6 +2,7 @@ import { Accordion, Button, Group, Modal, NumberInput, Select, SimpleGrid, Stack
 
 import { useState } from 'react';
 
+import { CONSOLE_SPEEDS } from './consoleSpeeds';
 import { LoginSelect } from '../logins/LoginSelect';
 import { DialogError } from '../../components/ConfirmDialog';
 import { useAction, useDrivers } from '../../hooks/queries';
@@ -40,7 +41,7 @@ export function EditDeviceModal({ device, opened, onClose }: { device: Device; o
       name: f.name, role: f.role, model: f.model, hardware_revision: f.hardware_revision, os_family: f.os_family,
       firmware_version: f.firmware_version, management_address: f.management_address,
       management_protocol: f.management_protocol, management_port: f.management_port ?? null,
-      ...(overConsole ? { console_port: f.console_port?.trim() || null } : {}),
+      ...(driver && !driver.simulated ? { console_port: f.console_port?.trim() || null, console_speed: f.console_speed ?? null } : {}),
       management_vrf: f.management_vrf, site: f.site, rack_location: f.rack_location, driver_id: f.driver_id,
       environment: f.environment, credential_ref_id: f.credential_ref_id ?? null, notes: f.notes, tags: f.tags,
     };
@@ -91,6 +92,16 @@ export function EditDeviceModal({ device, opened, onClose }: { device: Device; o
                 <TextInput label="Hardware revision" value={f.hardware_revision ?? ''} onChange={set('hardware_revision')} />
                 <TextInput label="Operating system" value={f.os_family ?? ''} onChange={set('os_family')} />
                 <TextInput label="Firmware version (declared)" value={f.firmware_version ?? ''} onChange={set('firmware_version')} />
+                {driver && !driver.simulated && !overConsole && (
+                  <TextInput label="Console port" placeholder="e.g. COM3" value={f.console_port ?? ''} onChange={set('console_port')}
+                    description="The PC's serial port its console cable is on, for its console window." />
+                )}
+                {driver && !driver.simulated && (
+                  <Select label="Console speed" placeholder={driver.console_speed ? `${driver.console_speed} (its model's)` : 'Choose its speed'}
+                    clearable data={CONSOLE_SPEEDS.map((s) => String(s))} value={f.console_speed ? String(f.console_speed) : null}
+                    onChange={(v) => setF({ ...f, console_speed: v ? Number(v) : null })}
+                    description={driver.console_speed ? `Empty: ${driver.console_speed}, from ${driver.console_speed_source}.` : 'No documented speed for its model.'} />
+                )}
               </SimpleGrid>
               {driver && !driver.simulated && (
                 <Hint more={driver.notes.length ? <ul style={{ margin: 0, paddingLeft: 18 }}>{driver.notes.map((n) => <li key={n}>{n}</li>)}</ul> : undefined}>

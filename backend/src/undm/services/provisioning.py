@@ -36,7 +36,7 @@ from undm.provisioning.simulated_sar import SimulatedSarConsole
 from undm.security import credentials as creds
 from undm.security.sanitize import new_mapper, sanitize
 from undm.services import app_settings, audit
-from undm.services.devices import set_login_after_loading_needed
+from undm.services.devices import save_console_settings, set_login_after_loading_needed
 from undm.services.errors import ConflictError, ForbiddenError, ServiceError
 from undm.services.policy import Policy
 from undm.services.reach import require_bench
@@ -392,6 +392,9 @@ def run_console_bootstrap(
         if not device.management_address:
             device.management_address = address
         if not simulated:
+            # Its console window opens with the port and speed that worked (D-126).
+            save_console_settings(session, device, serial_port, baudrate, actor,
+                                  "console setup")
             reachable = _tcp_reachable(address)
             hint = ("SSH port answers: continue with Test connection on the device page."
                     if reachable else
@@ -486,7 +489,8 @@ def _run_sar_first_access(
     if ok:
         device.provisioning_status = ProvisioningStatus.BOOTSTRAPPED.value
         if not simulated:  # its file is loaded over the same port later (D-116)
-            device.console_port = serial_port
+            save_console_settings(session, device, serial_port, baudrate, actor,
+                                  "first access")
     known = [("hostname", device.name)]
     if result.facts.get("name"):
         known.append(("hostname", result.facts["name"]))

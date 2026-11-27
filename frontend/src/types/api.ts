@@ -151,6 +151,11 @@ export interface Driver {
   maturity: 'simulation' | 'experimental' | 'lab_validated';
   transport: string;
   notes: string[];
+  /** Its model's documented console speed and where it comes from (D-126). */
+  console_speed?: number | null;
+  console_speed_source?: string;
+  /** The driver that reaches the same model in the network after staging (D-125). */
+  network_driver_id?: string | null;
 }
 
 /** One login for all systems made from systems' own logins (D-115). Never a password. */

@@ -63,15 +63,43 @@ describe('device menu, tree and watch (D-099)', () => {
     const modem = device({ id: 'm1', name: 'lab-modem', category: 'router', model: '7705 SAR-Hmc', driver_id: 'console.nokia.sar',
       management_address: '', console_port: 'COM7', capabilities: ['supports_serial_console', 'supports_configuration_apply'] });
     const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [modem],
-      '/devices/m1/open-console': { program: 'putty', console_port: 'COM7', command: 'putty -serial COM7' } });
+      '/devices/m1/console-settings': { console_port: 'COM7', console_speed: 115200, source: "Nokia's documentation, used on the bench", speeds: [] },
+      '/provisioning/serial-ports': [{ port: 'SIMULATED', description: '', hardware_id: '' }, { port: 'COM7', description: 'USB Serial Port', hardware_id: '' }],
+      '/devices/m1/open-console': { program: 'putty', console_port: 'COM7', console_speed: 115200, command: 'putty -serial COM7' } });
     renderAt('/systems/p1');
     const table = await screen.findByRole('table');
     await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-modem' }));
-    expect(await screen.findByText('Open console window')).toBeInTheDocument();
+    expect(await screen.findByText('Open console window…')).toBeInTheDocument();
     expect(screen.queryByText('Open SSH window')).not.toBeInTheDocument();
     expect(screen.queryByText('Wait until it answers')).not.toBeInTheDocument();  // no network address
-    await userEvent.click(screen.getByText('Open console window'));
+    await userEvent.click(screen.getByText('Open console window…'));
+    const dialog = await screen.findByRole('dialog', { name: 'Console window · lab-modem' });
+    expect(await within(dialog).findByText(/115200: Nokia's documentation/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Open console window' }));
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/devices/m1/open-console' && c.init?.method === 'POST')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/devices/m1/open-console');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ console_port: 'COM7', console_speed: null });  // its own speed: not saved
+  });
+
+  it('every real device has a console window, a 2930F included (D-126)', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const calls = mockApi({ '/projects/p1': project, '/projects/p1/devices': [sw],
+      '/devices/sw/console-settings': { console_port: null, console_speed: 9600, source: "the team's setting, used on the bench", speeds: [] },
+      '/provisioning/serial-ports': [{ port: 'COM4', description: 'USB Serial Port', hardware_id: '' }],
+      '/devices/sw/open-console': { program: 'miniterm', console_port: 'COM4', console_speed: 9600, command: '' } });
+    renderAt('/systems/p1');
+    const table = await screen.findByRole('table');
+    await userEvent.click(await within(table).findByRole('button', { name: 'Actions for lab-sw-a' }));
+    await userEvent.click(await screen.findByText('Open console window…'));
+    const dialog = await screen.findByRole('dialog', { name: 'Console window · lab-sw-a' });
+    const open = within(dialog).getByRole('button', { name: 'Open console window' });
+    expect(open).toBeDisabled();  // no port chosen yet
+    await userEvent.click(within(dialog).getByLabelText('COM port of this PC'));
+    await userEvent.click(await screen.findByRole('option', { name: /COM4/, hidden: true }));
+    await userEvent.click(open);
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/devices/sw/open-console')).toBe(true));
+    const sent = calls.find((c) => c.url === '/api/devices/sw/open-console');
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ console_port: 'COM4', console_speed: null });
   });
 
   it('a 2930F offers restart and console setup', async () => {

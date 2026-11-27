@@ -235,7 +235,7 @@ def test_a_console_window_on_the_modems_port(monkeypatch):
             did = add(client, dict(SIM_MODEM, name="bench-modem", driver_id="console.nokia.sar",
                                    environment="lab"))
             r = client.post(f"/api/devices/{did}/open-console")
-            assert r.status_code == 409 and "Console port" in r.json()["error"]
+            assert r.status_code == 409 and "COM port" in r.json()["error"]
             client.patch(f"/api/devices/{did}", json={"console_port": "COM7"})
             monkeypatch.setattr(devsvc, "_putty", lambda: None)
             out = client.post(f"/api/devices/{did}/open-console").json()
