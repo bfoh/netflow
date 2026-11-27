@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, FileAddresses, ReachedVia, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, Guided, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, CheckAllRow, PingAnswer, TraceAnswer, FileAddresses, ReachedVia, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, Guided, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -221,6 +221,11 @@ export const api = {
   },
   licensePlan: (id: string, versionId: string) => request<Deployment>('POST', `/devices/${id}/license-plan`, { version_id: versionId }),
   reachability: (pid: string) => request<Reachability[]>('GET', `/projects/${pid}/reachability`),
+  ping: (pid: string, body: { source: string; target: string; count?: number }) =>
+    request<PingAnswer>('POST', `/projects/${pid}/troubleshoot/ping`, body),
+  traceroute: (pid: string, body: { source: string; target: string }) =>
+    request<TraceAnswer>('POST', `/projects/${pid}/troubleshoot/traceroute`, body),
+  checkAll: (pid: string, source = 'pc') => request<CheckAllRow[]>('POST', `/projects/${pid}/troubleshoot/check-all`, { source }),
   fileAddresses: (id: string) => request<FileAddresses>('GET', `/devices/${id}/file-addresses`),
   setNetworkAddress: (id: string, body: { address: string | null; file?: string | null; line?: number | null }) =>
     request<Device>('PUT', `/devices/${id}/network-address`, body),

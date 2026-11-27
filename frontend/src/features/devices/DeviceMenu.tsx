@@ -2,7 +2,7 @@ import { ActionIcon, Button, FileInput, Group, Menu, Modal, Stack, Table, Text }
 import { useDisclosure } from '@mantine/hooks';
 import {
   IconActivity, IconCertificate, IconClipboard, IconDots, IconExternalLink, IconFileText, IconInfoCircle, IconPlugConnected,
-  IconPower, IconRocket, IconTerminal, IconTerminal2, IconTrash, IconWorld, IconEdit } from '@tabler/icons-react';
+  IconPower, IconRocket, IconRoute, IconTerminal, IconTerminal2, IconTrash, IconWaveSine, IconWorld, IconEdit } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 
@@ -97,6 +97,8 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
           <Menu.Item leftSection={<IconInfoCircle size={14} />} onClick={() => check.mutate(undefined, { onSuccess: setInfo })}>Read information</Menu.Item>
           <Menu.Item leftSection={<IconPlugConnected size={14} />} onClick={() => run.mutate({ op: 'check_reachability' })}>Test connection</Menu.Item>
           {!consoleOnly && <Menu.Item leftSection={<IconActivity size={14} />} onClick={waitUntilAnswers}>Wait until it answers</Menu.Item>}
+          <Menu.Item component={Link} to={paths.device(device.id, 'troubleshoot')} leftSection={<IconWaveSine size={14} />}>Ping…</Menu.Item>
+          <Menu.Item component={Link} to={paths.device(device.id, 'troubleshoot')} leftSection={<IconRoute size={14} />}>Traceroute…</Menu.Item>
           <Menu.Item leftSection={<IconFileText size={14} />} onClick={() => run.mutate({ op: 'backup_configuration' })}>Back up now</Menu.Item>
           <Menu.Item component={Link} to={paths.device(device.id, 'files')} leftSection={<IconFileText size={14} />}>Files and compare</Menu.Item>
           <Menu.Item component={Link} to={paths.device(device.id, 'log')} leftSection={<IconActivity size={14} />}>Device log</Menu.Item>

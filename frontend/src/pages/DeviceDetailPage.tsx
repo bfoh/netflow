@@ -21,6 +21,7 @@ import { IntentEditor } from '../features/devices/IntentEditor';
 import { useAction, useDevice, useDeviceLog, useDrivers } from '../hooks/queries';
 import { showSuccess } from '../services/notify';
 import { DeviceMenu } from '../features/devices/DeviceMenu';
+import { TroubleshootPanel } from '../features/troubleshoot/TroubleshootPanel';
 import { connectionOf, inNetwork } from '../features/devices/connection';
 import { api } from '../services/api';
 import type { Device } from '../types/api';
@@ -260,12 +261,14 @@ export function DeviceDetailPage() {
           <Tabs.Tab value="overview">Overview</Tabs.Tab>
           <Tabs.Tab value="files">Files</Tabs.Tab>
           <Tabs.Tab value="log">Log</Tabs.Tab>
+          <Tabs.Tab value="troubleshoot">Troubleshoot</Tabs.Tab>
           <Tabs.Tab value="intent">Intended settings</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="overview"><Overview d={d} /></Tabs.Panel>
         <Tabs.Panel value="intent"><IntentEditor key={d.updated_at} device={d} /></Tabs.Panel>
         <Tabs.Panel value="files"><ConfigWorkbench device={d} initialVersion={params.get('version')} /></Tabs.Panel>
         <Tabs.Panel value="log"><DeviceLog deviceId={d.id} /></Tabs.Panel>
+        <Tabs.Panel value="troubleshoot"><TroubleshootPanel device={d} /></Tabs.Panel>
       </Tabs>
     </>
   );

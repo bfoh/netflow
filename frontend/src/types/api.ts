@@ -62,6 +62,25 @@ export interface FileAddresses {
   route_hint: string | null;
 }
 
+/** Ping and traceroute answers (D-128); a simulated target starts no program. */
+export interface PingAnswer {
+  source: string; target: string; sent: number; received: number; rtt_ms: number[];
+  simulated: boolean; raw: string; note: string; answered: boolean; target_device: string | null;
+}
+export interface HopAnswer {
+  n: number; address: string | null; rtt_ms: (number | null)[]; timed_out: boolean;
+  /** The system's device with this address; candidates when several share it. */
+  device_id: string | null; interface: string | null; candidates: string[];
+}
+export interface TraceAnswer {
+  source: string; target: string; hops: HopAnswer[]; reached: boolean; simulated: boolean;
+  raw: string; note: string; target_device: string | null;
+}
+export interface CheckAllRow {
+  device_id: string; address: string; via: ReachedVia; state: 'answers' | 'no_answer' | 'simulated' | 'no_address';
+  sent?: number; received?: number | null; rtt_ms?: number[]; port?: number; port_open?: boolean; note?: string;
+}
+
 export interface CertificateSubject {
   common_name: string;
   org_unit: string;

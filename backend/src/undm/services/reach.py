@@ -281,6 +281,12 @@ def _candidates(session: Session, device: Device, registry: DriverRegistry
     return files, loaded, found_any, candidates, managers
 
 
+def file_candidates(session: Session, device: Device,
+                    registry: DriverRegistry) -> list[Candidate]:
+    """The addresses the device's files give it (offline)."""
+    return _candidates(session, device, registry)[3]
+
+
 def file_addresses(session: Session, device: Device, registry: DriverRegistry,
                    *, pc_address: Callable[[str], str | None] | None = None
                    ) -> dict[str, object]:

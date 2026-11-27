@@ -22,6 +22,7 @@ from undm.api.routers import (
     systems,
     templates,
     topology,
+    troubleshoot,
 )
 from undm.config import Settings, get_settings
 from undm.db.schema_check import UPGRADE_HINT, database_problem
@@ -108,7 +109,7 @@ def create_app(
     for r in (system.router, projects.router, projects.credentials_router,
               projects.settings_router, devices.router,
               deployments.router, firmware.router, topology.router, provisioning.router,
-              systems.router, templates.router, guided.router):
+              systems.router, templates.router, guided.router, troubleshoot.router):
         app.include_router(r)
     return app
 

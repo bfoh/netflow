@@ -1,5 +1,5 @@
 import { Anchor, Button, Card, Group, Select, Stack, Table, Text, Title } from '@mantine/core';
-import { IconArrowBackUp, IconRoute, IconTerminal } from '@tabler/icons-react';
+import { IconArrowBackUp, IconRoute, IconTerminal, IconWaveSine } from '@tabler/icons-react';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -12,7 +12,7 @@ import { useAction, usePolicy } from '../../hooks/queries';
 import { useConfirm } from '../../hooks/useConfirm';
 import { paths } from '../../paths';
 import { api } from '../../services/api';
-import type { Device, FileAddresses, Project } from '../../types/api';
+import type { CheckAllRow, Device, FileAddresses, Project } from '../../types/api';
 import { connectionOf } from '../devices/connection';
 import { ConsoleWindowDialog } from '../devices/ConsoleWindowDialog';
 import { DeviceMenu } from '../devices/DeviceMenu';
@@ -36,6 +36,8 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
   const files = useQueries({ queries: devices.map((d) => ({
     queryKey: ['file-addresses', d.id], queryFn: () => api.fileAddresses(d.id) })) });
   const fileOf = new Map<string, FileAddresses | undefined>(devices.map((d, i) => [d.id, files[i]?.data]));
+  const check = useAction(() => api.checkAll(project.id), (rows) => `Checked ${rows.length} devices from this PC`);
+  const checked = new Map((check.data ?? []).map((r) => [r.device_id, r]));
   const move = useAction((via: 'bench' | 'network') => api.setReachedVia(project.id, via, gateway?.id ?? null),
     (p) => (p.reached_via === 'network' ? `${p.name} is reached in the network now` : `${p.name} is back on the bench`), { errorInDialog: true });
   const setGateway = useAction((id: string) => api.setReachedVia(project.id, project.reached_via ?? 'bench', id), 'BFW chosen');
@@ -97,12 +99,18 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
         </Notice>
       )}
 
+      <Group justify="space-between" wrap="wrap">
+        <Text size="sm" c="dimmed">Check all pings each device twice at the address UNDM uses and tries its management port, from this
+          PC. Only this system's addresses.</Text>
+        <Button variant="default" leftSection={<IconWaveSine size={16} />} loading={check.isPending}
+          onClick={() => check.mutate(undefined)}>Check all from this PC</Button>
+      </Group>
       <Card withBorder padding={0}>
         <DataTable label="Devices of this system in the network" rowCount={devices.length} minWidth={900}
           empty="No devices yet: add them in Stage a system.">
           <Table.Thead><Table.Tr>
             <Table.Th>Device</Table.Th><Table.Th>Bench address</Table.Th><Table.Th>Network address</Table.Th>
-            <Table.Th>UNDM uses</Table.Th><Table.Th>Limits in its file</Table.Th><ActionsHeader />
+            <Table.Th>UNDM uses</Table.Th><Table.Th>Limits in its file</Table.Th>{check.data && <Table.Th>Check</Table.Th>}<ActionsHeader />
           </Table.Tr></Table.Thead>
           <Table.Tbody>
             {devices.map((d) => {
@@ -125,6 +133,7 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
                   <Table.Td><Text size="sm" ff="monospace">{conn.address || '—'}</Text>
                     {conn.problem && <Text size="xs" c="dimmed">No network address yet</Text>}</Table.Td>
                   <Table.Td><Limits found={found} /></Table.Td>
+                  {check.data && <Table.Td><Checked row={checked.get(d.id)} /></Table.Td>}
                   <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
                     {d.environment !== 'simulated' && <Button size="compact-xs" variant="default"
                       onClick={() => setConsoleFor(d)}>Console window…</Button>}
@@ -155,6 +164,15 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
       {consoleFor && <ConsoleWindowDialog device={consoleFor} opened onClose={() => setConsoleFor(null)} />}
     </Stack>
   );
+}
+
+function Checked({ row }: { row?: CheckAllRow }) {
+  if (!row) return <Text size="sm" c="dimmed">—</Text>;
+  if (row.state === 'no_address') return <Text size="sm" c="dimmed">No address</Text>;
+  const replies = row.received === null || row.received === undefined ? null : `${row.received}/${row.sent ?? 2} replies`;
+  const port = row.port_open === undefined ? '' : row.port_open ? ' · port open' : ' · port closed';
+  const tone = row.state === 'simulated' ? 'simulated' : row.state === 'answers' ? 'success' : 'danger';
+  return <Tag tone={tone} title={row.note}>{row.state === 'simulated' ? 'Simulated' : (replies ?? 'ping: Windows only') + port}</Tag>;
 }
 
 function SshButton({ device }: { device: Device }) {

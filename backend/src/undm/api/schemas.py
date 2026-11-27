@@ -145,6 +145,22 @@ class ConsoleWindowIn(BaseModel):
     console_speed: Literal[1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200] | None = None
 
 
+class TroubleshootIn(BaseModel):
+    """Ping or traceroute: from this PC ("pc") or a device of the system, to one address."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(default="pc", max_length=36)
+    target: str = Field(min_length=1, max_length=64)
+    count: int = Field(default=4, ge=1, le=10)
+
+
+class CheckAllIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(default="pc", max_length=36)
+
+
 class NetworkAddressIn(BaseModel):
     """A device's network address, confirmed by a person: read from its file or typed."""
 

@@ -220,6 +220,7 @@ export const AUDIT_ACTIONS: Record<string, string> = {
   'system.backups_export': 'Backups downloaded', 'system.bench_log': 'Bench log made', 'system.export': 'System exported',
   'system.import': 'System imported', 'system.reopened': 'Staging reopened', 'system.staged': 'Staging finished',
   'system.reached_via_changed': 'Moved between the bench and the network',
+  'troubleshoot.ping': 'Ping', 'troubleshoot.traceroute': 'Traceroute', 'troubleshoot.check_all': 'Check all devices',
   'template.delete': 'Template deleted', 'template.files_export': 'Files downloaded from the templates',
   'template.import': 'Template imported',
   'topology.link.create': 'Link added', 'topology.link.delete': 'Link deleted', 'topology.link.update': 'Link edited',

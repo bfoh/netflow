@@ -10,7 +10,7 @@ const q = (params: Record<string, string | number | null | undefined>) => {
 };
 
 export type SettingsTab = 'logins' | 'templates' | 'certificate' | 'safety' | 'identity' | 'about';
-export type DeviceTab = 'overview' | 'files' | 'log' | 'intent';
+export type DeviceTab = 'overview' | 'files' | 'log' | 'troubleshoot' | 'intent';
 export type SystemTab = 'devices' | 'network' | 'plans' | 'logins' | 'settings';
 
 export const paths = {

@@ -22,6 +22,7 @@ test('every page meets WCAG 2.2 AA (axe)', async ({ page, request }) => {
     ['system in the network', `/systems/${ids.projectId}?tab=network`],
     ['devices', '/devices'],
     ['device', `/devices/${ids.deviceId}`],
+    ['device troubleshoot', `/devices/${ids.deviceId}?tab=troubleshoot`],
     ['firmware', '/firmware'],
     ['console tool', '/console'],
     ['plans', '/plans'],

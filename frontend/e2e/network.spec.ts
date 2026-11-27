@@ -48,4 +48,12 @@ test('a practice system is reached in the network through its BFW, then back on 
   await expect(page.getByRole('button', { name: 'Move to the network…' })).toBeVisible();
   const back = await json(await request.get(`/api/devices/${sw.id}`));
   expect(back.connection.address).toBe('192.168.1.1');
+
+  // Troubleshoot (D-128): a simulated target starts no program.
+  await page.goto(`/devices/${sw.id}?tab=troubleshoot`);
+  await expect(page.getByLabel('To', { exact: true })).toHaveValue('192.168.1.1');
+  await page.getByRole('button', { name: 'Ping', exact: true }).click();
+  await expect(page.getByText('Simulated: nothing was sent.')).toBeVisible();
+  await page.getByRole('button', { name: 'Traceroute', exact: true }).click();
+  await expect(page.getByRole('table', { name: 'Hops to 192.168.1.1' }).getByRole('link', { name: `abc-sw-${tag}` })).toBeVisible();
 });

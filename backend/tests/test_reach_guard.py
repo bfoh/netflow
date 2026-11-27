@@ -18,6 +18,12 @@ ALLOWED = {
     ("services/reach.py", "gateway.network_address"): "the BFW needs one to move",
     ("services/reach.py", "d.management_address for d in device.project.devices"):
         "the bench networks, to leave bench addresses out of a file's suggestion",
+    ("services/troubleshoot.py", "(d.management_address, \"bench address\")"):
+        "every address of the system, to name traceroute hops (no connection)",
+    ("services/troubleshoot.py", "(d.network_address, \"network address\")"):
+        "every address of the system, to name traceroute hops (no connection)",
+    ("services/troubleshoot.py", "gateway.network_address"):
+        "a simulated trace passes the BFW (no connection)",
     ("services/devices.py", "device.management_address, device.network_address"):
         "masking shared text (no connection)",
     ("services/deployments.py", "from_version=device.management_address"):
@@ -46,7 +52,7 @@ def _hits() -> list[tuple[str, int, str]]:
         for n, line in enumerate(path.read_text().splitlines(), 1):
             for m in _READ.finditer(line):
                 owner = m.group(1)
-                if owner in {"target", "network"} or rel.startswith("drivers/"):
+                if owner in {"target", "network", "net"} or rel.startswith("drivers/"):
                     continue  # a driver's own target, or ipaddress' network_address
                 out.append((rel, n, line.strip()))
     return out
