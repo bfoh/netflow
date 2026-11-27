@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { EnvironmentBadge, StateBadge } from '../components/Badges';
+import { ReasonButton } from '../components/ReasonButton';
 import { Hint } from '../components/Hint';
 import { Notice } from '../components/Notice';
 import { PageHeader, QueryState } from '../components/Page';
@@ -122,14 +123,14 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
       <QueryState isLoading={devices.isLoading} error={devices.error} />
       <Table.ScrollContainer minWidth={760}>
       <Table aria-label="What the file needs" verticalSpacing={4} mb="md">
-        <Table.Thead><Table.Tr><Table.Th w={36} /><Table.Th>Device</Table.Th><Table.Th>Model</Table.Th><Table.Th>Kind</Table.Th><Table.Th>Status</Table.Th><Table.Th>File to load</Table.Th></Table.Tr></Table.Thead>
+        <Table.Thead><Table.Tr><Table.Th w={36} /><Table.Th>Device</Table.Th><Table.Th>Model</Table.Th><Table.Th>Status</Table.Th><Table.Th>File to load</Table.Th></Table.Tr></Table.Thead>
         <Table.Tbody>
           {(devices.data ?? []).map((d) => (
             <Table.Tr key={d.id}>
               <Table.Td w={36}><Checkbox aria-label={`Include ${d.name}`} checked={sel.includes(d.id)}
                 onChange={() => setSel((s) => (s.includes(d.id) ? s.filter((x) => x !== d.id) : [...s, d.id]))} /></Table.Td>
-              <Table.Td>{d.name}</Table.Td><Table.Td>{d.manufacturer} {d.model}</Table.Td>
-              <Table.Td><EnvironmentBadge env={d.environment} /></Table.Td><Table.Td><StateBadge state={d.deployment_status} /></Table.Td>
+              <Table.Td><Group gap={6} wrap="nowrap"><Text size="sm">{d.name}</Text><EnvironmentBadge env={d.environment} /></Group></Table.Td>
+              <Table.Td>{d.manufacturer} {d.model}</Table.Td><Table.Td><StateBadge state={d.deployment_status} /></Table.Td>
               <Table.Td>{sel.includes(d.id) && (
                 <>
                   <ConfigChoice deviceId={d.id} value={choice[d.id] ?? null}
@@ -156,7 +157,7 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
         </Table.Tbody>
       </Table>
       </Table.ScrollContainer>
-      <Group mb="md" wrap="wrap">
+      <Group mb="md" wrap="wrap" gap="xl">
         <Switch label="Dry run (read-only, no approval needed)" checked={dryRun} onChange={(e) => setDryRun(e.currentTarget.checked)} />
         <Group gap="xs"><Text size="sm">Apply mode</Text>
           <SegmentedControl size="xs" aria-label="How the file is applied" value={effectiveMode} onChange={setMode} disabled={!!forced}
@@ -173,10 +174,13 @@ function NewPlan({ projectId, preselected, version }: { projectId: string; prese
           A complete file makes the device's configuration equal to it: everything else is removed.
         </Hint>
       )}
-      <Button disabled={sel.length === 0 || required.length > 1} loading={create.isPending}
-        onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(paths.plan(d.id)) })}>
-        Validate and preview
-      </Button>
+      <Group justify="flex-end">
+        <ReasonButton disabled={sel.length === 0 || required.length > 1} loading={create.isPending}
+          reason={sel.length === 0 ? 'Tick at least one device.' : required.length > 1 ? 'Make one plan per kind of file.' : null}
+          onClick={() => create.mutate(undefined, { onSuccess: (d) => void navigate(paths.plan(d.id)) })}>
+          Check and preview
+        </ReasonButton>
+      </Group>
     </Card>
   );
 }

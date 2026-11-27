@@ -81,7 +81,7 @@ test('create project, add devices, generate, deploy (simulated), audit', async (
   await page.getByRole('option', { name: project }).click();
   await page.getByLabel(`Include sw-${suffix}`).check();
   await page.getByLabel(`Include fw-${suffix}`).check();
-  await page.getByRole('button', { name: 'Validate and preview' }).click();
+  await page.getByRole('button', { name: 'Check and preview' }).click();
   await expect(page.getByText('Waiting for approval').first()).toBeVisible();
 
   // 12-13. approve, execute, inspect progress and outcome

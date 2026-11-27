@@ -13,6 +13,11 @@ import { type Choice, planSteps } from './choices';
 import type { Role } from './roles';
 
 const short = (sha: string | null) => (sha ? `${sha.slice(0, 12)}…` : '');
+/** What to write in a step's note: copied from the portal's screen (UNDM does not know its menus). */
+const NOTE_HELP: Partial<Record<GuidedStepState['kind'], string>> = {
+  software: 'Copy from the portal: the page where you loaded it, and the active version after the restart.',
+  file: 'Copy from the portal: the page where you loaded it, and what it reported.',
+};
 
 /** A device staged by a person in its own portal (the Flexi BBU, D-117): UNDM checks the portal
  *  answers, hands out the files and records each step. It never logs in to the device. */
@@ -36,8 +41,9 @@ export function GuidedRun({ role, device, choice }: { role: Role; device: Device
     if (s.kind === 'software') {
       return image ? (
         <Stack gap={2}>
-          <Text size="sm">{image.filename} · {image.version}</Text>
-          <Text size="xs">SHA-256 <Code>{image.sha256}</Code></Text>
+          <Text size="sm" style={{ overflowWrap: 'anywhere' }}>{image.filename} · {image.version}</Text>
+          <Text size="xs">SHA-256</Text>
+          <Code block style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{image.sha256}</Code>
           <Anchor size="xs" href={api.firmwareFileUrl(image.id)}><IconDownload size={12} /> Download it from UNDM</Anchor>
         </Stack>
       ) : <InlineStatus tone="warning" size="sm">Choose the software package in step 2.</InlineStatus>;
@@ -45,7 +51,7 @@ export function GuidedRun({ role, device, choice }: { role: Role; device: Device
     if (s.kind === 'file') {
       return scf ? (
         <Stack gap={2}>
-          <Text size="sm">{scf.reference}</Text>
+          <Text size="sm" style={{ overflowWrap: 'anywhere' }}>{scf.reference}</Text>
           <Anchor size="xs" href={api.guidedFileUrl(device.id, scf.id)}><IconDownload size={12} /> Download the SCF (as the team writes it)</Anchor>
         </Stack>
       ) : <InlineStatus tone="warning" size="sm">Generate or choose the SCF in step 2.</InlineStatus>;
@@ -80,7 +86,7 @@ export function GuidedRun({ role, device, choice }: { role: Role; device: Device
             {s.done_by ? (
               <Stack gap={2}>
                 <Text size="xs" c="dimmed">By {s.done_by}{s.done_at ? `, ${fmtDate(s.done_at)}` : ''}{s.note ? ` · ${s.note}` : ''}</Text>
-                {s.file_name && <Text size="xs" c="dimmed">{s.file_name} · SHA-256 <span title={s.file_sha256 ?? ''}>{short(s.file_sha256)}</span></Text>}
+                {s.file_name && <Text size="xs" c="dimmed" style={{ overflowWrap: 'anywhere' }}>{s.file_name} · SHA-256 <span title={s.file_sha256 ?? ''}>{short(s.file_sha256)}</span></Text>}
                 <Group><Button size="compact-xs" variant="subtle" color="gray" loading={undo.isPending && undo.variables === s.key}
                   onClick={() => undo.mutate(s.key)}>Undo (and the steps after it)</Button></Group>
               </Stack>
@@ -88,7 +94,7 @@ export function GuidedRun({ role, device, choice }: { role: Role; device: Device
               <Stack gap={6}>
                 <Text size="xs">{s.detail}</Text>
                 {what(s)}
-                {s.note_label && <Textarea size="xs" label={s.note_label} autosize minRows={1} maw={520}
+                {s.note_label && <Textarea size="xs" label={s.note_label} description={NOTE_HELP[s.kind]} autosize minRows={1} maw={520}
                   value={notes[s.key] ?? ''} onChange={(e) => { const v = e.currentTarget.value; setNotes((n) => ({ ...n, [s.key]: v })); }} />}
                 <Group>
                   <Button size="xs" loading={done.isPending} leftSection={s.kind === 'check' ? <IconPlugConnected size={14} /> : <IconCheck size={14} />}

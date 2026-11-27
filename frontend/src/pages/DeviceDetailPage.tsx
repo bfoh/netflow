@@ -11,7 +11,7 @@ import { Hint } from '../components/Hint';
 import { Notice } from '../components/Notice';
 import { PageHeader, QueryState } from '../components/Page';
 import { useSystemCrumbs } from '../features/systems/crumbs';
-import { SafetyHint } from '../components/SafetyHint';
+import { SafetyHints } from '../components/SafetyHint';
 import { fmtDate } from '../services/format';
 import { ConfigWorkbench } from '../features/configurations/ConfigWorkbench';
 import { DiagnosticsButton } from '../features/devices/DiagnosticsButton';
@@ -212,8 +212,7 @@ function RealDeviceNotice({ d }: { d: Device }) {
       {!d.credential_ref_id && <Notice kind="caution" compact>No login chosen yet: UNDM cannot connect. Use Edit device.</Notice>}
       <Hint>Real device on your bench, reached over {driver.transport.toUpperCase()}
         {driver.maturity === 'experimental' ? '; its procedures are marked experimental until proven on the bench.' : '.'}</Hint>
-      <SafetyHint real />
-      {driver.capabilities.includes('supports_firmware_upgrade') && <SafetyHint real firmware />}
+      <SafetyHints firmware={driver.capabilities.includes('supports_firmware_upgrade')} />
     </Stack>
   );
 }

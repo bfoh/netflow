@@ -6,7 +6,7 @@ import { Link } from 'react-router';
 
 import { EnvironmentBadge, Tag } from '../../components/Badges';
 import { Hint } from '../../components/Hint';
-import { SafetyHint } from '../../components/SafetyHint';
+import { SafetyHints } from '../../components/SafetyHint';
 import { useAction, usePolicy } from '../../hooks/queries';
 import { api } from '../../services/api';
 import type { Device, OperationResult } from '../../types/api';
@@ -85,7 +85,7 @@ export function BenchStep({ roles }: { roles: { role: Role; device: Device }[] }
           ) : null;
         })}
       </Card>
-      {real && <><SafetyHint real /><SafetyHint real firmware /></>}
+      {real && <SafetyHints firmware />}
       {real && policy.data?.firmware_require_separate_approver !== false && (
         <Hint>Staging alone? Firmware plans need a second person to approve them: when you approve one you made,
           tick “I am staging alone”. The rule is off for that approval only.</Hint>

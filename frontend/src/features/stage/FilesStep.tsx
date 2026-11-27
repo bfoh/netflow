@@ -55,7 +55,7 @@ function FilePick({ device, label, description, value, onChange, secrets, onSecr
         </Text>
       )}
       {secrets && onSecrets && (report?.secret_slots ?? []).map((slot) => (
-        <Select key={slot.slot_id} size="xs" w="100%" maw={420} clearable label={`Value for ${slot.setting}`}
+        <Select key={slot.slot_id} w="100%" maw={420} clearable label={`Value for ${slot.setting}`}
           description={secrets[slot.slot_id] ? 'Sent from Credential Manager; never shown or stored with the plan.' : 'Not chosen: the value written in the file is sent.'}
           data={logins} value={secrets[slot.slot_id] ?? null}
           onChange={(v) => { const next = { ...secrets }; if (v) next[slot.slot_id] = v; else delete next[slot.slot_id]; onSecrets(next, false); }} />
@@ -82,7 +82,7 @@ function LicensePick({ device, choice, onChange }: {
       ) : (
         <Group gap="xs" align="center">
           <FileButton onChange={(f) => { if (f) upload.mutate(f, { onSuccess: (v) => onChange(v.id, v.filename) }); }}>
-            {(props) => <Button {...props} size="xs" variant="light" leftSection={<IconUpload size={14} />} loading={upload.isPending}>Choose the license file…</Button>}
+            {(props) => <Button {...props} variant="light" leftSection={<IconUpload size={14} />} loading={upload.isPending}>Choose the license file…</Button>}
           </FileButton>
           <Text size="xs" c="dimmed">Not here yet? Leave it: load it later from the FortiGate's menu (⋯ → Load license…).</Text>
         </Group>

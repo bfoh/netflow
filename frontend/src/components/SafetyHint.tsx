@@ -47,3 +47,16 @@ export function SafetyHint({ real, firmware = false }: { real: boolean; firmware
     </Group>
   );
 }
+
+/** Both switches for a place that can change settings and firmware (the bench check, a
+ *  device page): the firmware line only once real-device changes are on, so a person never
+ *  reads "Real-device changes are off" twice. */
+export function SafetyHints({ firmware }: { firmware: boolean }) {
+  const policy = usePolicy();
+  return (
+    <>
+      <SafetyHint real />
+      {firmware && policy.data?.enable_real_device_writes && <SafetyHint real firmware />}
+    </>
+  );
+}
