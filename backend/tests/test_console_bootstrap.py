@@ -153,8 +153,13 @@ def test_silently_ignored_command_is_caught_by_read_back():
 
 
 def test_dead_console_times_out_cleanly():
-    r = run(SimulatedArubaConsole(silent=True))
-    assert r.status is BootstrapStatus.FAILED and "No expected prompt" in r.message
+    sim = SimulatedArubaConsole(silent=True)
+    r = run(sim)
+    # Nothing at all came back (bench 2026-11-27, a switch still starting): said plainly,
+    # with what to check, and nothing was changed.
+    assert r.status is BootstrapStatus.FAILED and "Nothing at all came back" in r.message
+    assert "finished starting" in r.message and "Refresh ports" in r.message
+    assert sim.saved_config is None
 
 
 def test_parsing_helpers():

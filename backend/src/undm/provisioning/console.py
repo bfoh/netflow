@@ -32,6 +32,17 @@ class ConsoleTimeoutError(ConsoleError):
     pass
 
 
+def silent_console(seconds: float) -> str:
+    """The message for a console that sent nothing at all (bench 2026-11-27: a 2930F still
+    starting). Nothing reached the device's software, so nothing was changed."""
+    return (f"Nothing at all came back from the console within {seconds:.0f} s, so nothing "
+            "was changed. Check: the device has finished starting (a 2930F takes 2 to 3 "
+            "minutes after power-on); the cable is in the device's console port; the COM port "
+            "is the right one (Refresh ports: a USB console cable gets a new COM number on "
+            "each device); no other program has the port open. Open console window… shows "
+            "what the device sends.")
+
+
 # Codes that move to a new line become real line breaks, as Netmiko does for this switch
 # family ("Aruba and ProCurve switches can use code_insert_line for <enter>").
 _INSERT_LINES = re.compile(r"\x1b\[(\d*)L")
@@ -178,6 +189,8 @@ class ConsoleSession:
                 return idx, self._take(end)
             if time.monotonic() > deadline:
                 text = self._take(len(self._buffer))
+                if not self._raw:
+                    raise ConsoleTimeoutError(silent_console(timeout or self.read_timeout))
                 raise ConsoleTimeoutError(
                     "No expected question from the console within "
                     f"{timeout or self.read_timeout:.0f}s. Last output: {text[-200:]!r}")
@@ -209,6 +222,8 @@ class ConsoleSession:
                 if time.monotonic() > deadline:
                     text, self._buffer = self.mask(self._buffer), ""
                     self.transcript.append(text)
+                    if not self._raw:
+                        raise ConsoleTimeoutError(silent_console(timeout or self.read_timeout))
                     raise ConsoleTimeoutError(
                         "No expected prompt from the console within "
                         f"{timeout or self.read_timeout:.0f}s. Last output: {text[-200:]!r}")

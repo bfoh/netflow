@@ -122,6 +122,9 @@ library; intent beyond the first slice; project export/import; persistent job ru
 | Playwright | 15 passed: 12 workflows (1280 px, the simulated BBU's services and NETCONF reading), axe on every page light and dark (1366 px), no sideways scroll at 1366 and 390 px |
 
 ## Known issues and limitations
+- A 2930F whose network cable is in during its console setup takes a DHCP address on VLAN 1
+  in the bench network; the switch then refuses the setup's address. UNDM stops before saving
+  and says how to recover (bench 2026-11-27); the checklist now says to keep the cable out.
 - Merge-mode previews list intended lines only (fixed 2026-11-19; previously the whole
   running configuration appeared as removed on devices with existing configuration).
 - SSH verification is textual (stripped line presence); real platforms may display some

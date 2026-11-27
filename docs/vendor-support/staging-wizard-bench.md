@@ -206,8 +206,16 @@ One small switch, connected to nothing else, one cable per device (two would mak
 | 2930F B | port 3, plugged in after its console setup | 192.168.1.2 (temporary) | **192.168.1.1** |
 
 The USB console cable goes from the PC to a 2930F's console port for its console setup; one
-cable is enough, moved from A to B. Plug a 2930F's port into the small switch only after its
-console setup: a preconfigured unit may still use an address another device has.
+cable is enough, moved from A to B. **Keep every network cable out of a 2930F until its
+console setup has succeeded**, then plug its port into the small switch:
+- a new unit's VLAN 1 takes an address by DHCP from the bench network if a cable is in, and
+  the switch then refuses the setup's address in the same network ("an overlapping network
+  … already exists", bench 2026-11-27). UNDM stops before saving; to recover, unplug every
+  network cable, switch it off and on, and run the console setup again;
+- a preconfigured unit may still use an address another device has.
+
+A console that sends nothing at all usually means the switch has not finished starting
+(2 to 3 minutes after power-on): wait and run the console setup again.
 
 **Both 2930F end at 192.168.1.1.** Once B's file loads, A and B would share the address. B's
 plan has a step "Make room". Since v79 (D-107, experimental) it switches off A's management
