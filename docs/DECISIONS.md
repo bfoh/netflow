@@ -2186,4 +2186,8 @@ commands are not public; NetAct uses NE3S/WS; SSH on the FSMF is a service acces
 - **Then the driver**, from what is confirmed: NETCONF from the YANG modules the unit
   publishes (`get-schema`), or Nokia's Remote Tool run on this PC with arguments. The guided
   steps stay as the fallback; first runs that change a BBU wait for a free unit (none yet).
+- **First answer (2026-11-27):** the factory-default FSMF offers only its portal (443); SSH
+  and NETCONF do not answer (Q-66). NETCONF is not a way in as delivered: the route left is
+  Nokia's Remote Tool (Q-65); the reading is repeated once the SCF is active. A guided
+  device's page no longer asks for a login or shows the safety switches (it needs none).
 

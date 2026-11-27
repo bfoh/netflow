@@ -89,8 +89,10 @@ function Overview({ d }: { d: Device }) {
           <Row k="Bench address" v={<Text size="sm" ff="monospace">{d.management_address}</Text>} />
           {(d.network_address || inNetwork(d)) && <Row k="Network address" v={<Text size="sm" ff="monospace">
             {d.network_address || 'Not set yet'}</Text>} />}
-          <Row k="Login" v={<LoginSelect projectId={d.project_id} size="xs" maw={260} label={null} placeholder="None yet: choose one"
-            value={d.credential_ref_id} disabled={!!d.locked_by_deployment_id} onChange={(v) => setLogin.mutate(v)} />} />
+          <Row k="Login" v={d.capabilities.includes('supports_guided_staging')
+            ? <Text size="sm">None needed: UNDM never logs in to it</Text>
+            : <LoginSelect projectId={d.project_id} size="xs" maw={260} label={null} placeholder="None yet: choose one"
+              value={d.credential_ref_id} disabled={!!d.locked_by_deployment_id} onChange={(v) => setLogin.mutate(v)} />} />
           <Row k="Connects by" v={driverLabel(d.driver_id, drivers.data)} />
           <Row k="Setup" v={<StateBadge state={d.provisioning_status} />} />
           <Row k="Site / rack" v={[d.site, d.rack_location].filter(Boolean).join(' · ')} />
@@ -206,6 +208,11 @@ function RealDeviceNotice({ d }: { d: Device }) {
   if (!driver || driver.simulated) return null;
   if (d.environment === 'production') {
     return <Notice kind="error" mb="md" title="Production device">UNDM is for staging on the bench: production devices are blocked.</Notice>;
+  }
+  if (driver.capabilities.includes('supports_guided_staging')) {
+    // Staged by hand in its own portal (D-117): UNDM needs no login for it and changes nothing on it.
+    return <Hint mb="md">Real device on your bench, staged by hand in its portal: UNDM checks that it answers, hands out its files
+      and records each step. It never logs in to it or changes it.</Hint>;
   }
   return (
     <Stack gap={4} mb="md">

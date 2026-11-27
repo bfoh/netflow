@@ -63,6 +63,11 @@ Default service account names and passwords appear in those copies: not recorded
 used. Building on WebEM's binary interface would rest on something Nokia says is not for
 third parties, so UNDM does not.
 
+**The unit's answer (Q-66, 2026-11-27):** a factory-default FSMF on its LMP offers only its
+portal: SSH (22) and NETCONF (830) do not answer; HTTPS (443) presents Nokia's factory
+certificate over TLS 1.3. So NETCONF is not a way in as delivered; the route left is Nokia's
+Remote Tool (Q-65). The reading is to be repeated once the SCF is active.
+
 **What UNDM does now (v97, D-130):** device menu → **Find its management services…** asks
 the unit itself, read-only (Q-66), and the product owner asks Nokia (Q-65). The driver that
 stages the BBU follows from what is confirmed: NETCONF from the YANG modules the unit
