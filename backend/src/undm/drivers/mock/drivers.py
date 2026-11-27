@@ -255,10 +255,40 @@ class MockDriver(DeviceDriver):
         dev.startup_config = dev.running_config
         return OperationResult.success(op, message="bootstrapped (simulated)")
 
+    # -- troubleshooting: answered for the units of the simulated lab (SYNTHETIC) --------
+    def ping(self, target: str, count: int = 4,
+             context: Mapping[str, str] | None = None) -> OperationResult:
+        op = Op.PING
+        if r := self._require(op):
+            return r
+        dev = self._device(op)
+        if isinstance(dev, OperationResult):
+            return dev
+        unit = default_lab().get(target)
+        received = count if unit is not None and unit.reachable else 0
+        return OperationResult.success(op, {
+            "sent": count, "received": received, "rtt_ms": [1.0] * received,
+            "raw": f"(simulated) {received} of {count} replies from {target}"})
+
+    def traceroute(self, target: str,
+                   context: Mapping[str, str] | None = None) -> OperationResult:
+        op = Op.TRACEROUTE
+        if r := self._require(op):
+            return r
+        dev = self._device(op)
+        if isinstance(dev, OperationResult):
+            return dev
+        unit = default_lab().get(target)
+        hop = ({"n": 1, "address": target, "rtt_ms": [1.0, 1.0, 1.0]}
+               if unit is not None and unit.reachable
+               else {"n": 1, "address": None, "rtt_ms": [None, None, None]})
+        return OperationResult.success(op, {"hops": [hop],
+                                            "raw": f"(simulated) traceroute to {target}"})
+
 
 _COMMON = frozenset(
     {C.SSH, C.CONFIGURATION_BACKUP, C.CONFIGURATION_APPLY, C.FIRMWARE_UPGRADE, C.REBOOT,
-     C.RESTART}
+     C.RESTART, C.PING, C.TRACEROUTE}
 )
 
 
@@ -397,7 +427,7 @@ class MockNokiaSarDriver(MockDriver):
                     "access runs on the simulated console",
         simulated=True,
         capabilities=frozenset({C.SERIAL_CONSOLE, C.CONFIGURATION_BACKUP,
-                                C.CONFIGURATION_APPLY}),
+                                C.CONFIGURATION_APPLY, C.PING}),
     )
 
     @classmethod

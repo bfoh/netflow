@@ -265,6 +265,9 @@ def run_read_only_operation(
     session: Session, device: Device, op: DeviceOperation, registry: DriverRegistry, actor: str,
     policy: Policy | None = None,
 ) -> dict[str, Any]:
+    if op in (DeviceOperation.PING, DeviceOperation.TRACEROUTE):
+        raise ConflictError("Ping and traceroute take an address: use the device's "
+                            "Troubleshoot tab")
     if is_impacting(op) or op not in READ_ONLY_OPERATIONS:
         raise ForbiddenError(
             f"{op.value} changes device state; it is only available through an approved "

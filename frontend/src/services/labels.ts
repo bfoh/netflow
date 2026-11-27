@@ -177,6 +177,7 @@ const CAPABILITIES: Record<string, string> = {
   supports_rest_api: 'Reach it over its REST API',
   supports_zero_touch_provisioning: 'Zero-touch provisioning',
   supports_serial_console: 'Use its serial console',
+  supports_ping: 'Ping from it', supports_traceroute: 'Traceroute from it',
 };
 
 export function capabilityLabel(cap: string): string {

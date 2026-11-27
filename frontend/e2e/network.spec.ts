@@ -36,6 +36,10 @@ test('a practice system is reached in the network through its BFW, then back on 
   const table = page.getByRole('table', { name: 'Devices of this system in the network' });
   await expect(table.getByRole('row', { name: new RegExp(`abc-sw-${tag}`) }).getByText('198.51.100.11').first()).toBeVisible();
 
+  // Check all from the BFW (D-128): the simulated FortiGate pings the others in one session.
+  await page.getByRole('button', { name: 'Check all from the BFW' }).click();
+  await expect(table.getByRole('columnheader', { name: 'Check from the BFW' })).toBeVisible();
+
   // UNDM's own test reaches the simulated unit at its network address.
   const test1 = await json(await request.post(`/api/devices/${sw.id}/operations/check_reachability`));
   expect(test1.status).toBe('success');

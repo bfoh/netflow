@@ -36,7 +36,9 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
   const files = useQueries({ queries: devices.map((d) => ({
     queryKey: ['file-addresses', d.id], queryFn: () => api.fileAddresses(d.id) })) });
   const fileOf = new Map<string, FileAddresses | undefined>(devices.map((d, i) => [d.id, files[i]?.data]));
-  const check = useAction(() => api.checkAll(project.id), (rows) => `Checked ${rows.length} devices from this PC`);
+  const [checkedFrom, setCheckedFrom] = useState('pc');
+  const check = useAction((source: string) => api.checkAll(project.id, source), (rows) => `Checked ${rows.length} devices`);
+  const bfwPings = !!gateway && connectionOf(gateway).capabilities.includes('supports_ping');
   const checked = new Map((check.data ?? []).map((r) => [r.device_id, r]));
   const move = useAction((via: 'bench' | 'network') => api.setReachedVia(project.id, via, gateway?.id ?? null),
     (p) => (p.reached_via === 'network' ? `${p.name} is reached in the network now` : `${p.name} is back on the bench`), { errorInDialog: true });
@@ -100,17 +102,22 @@ export function NetworkTab({ project, devices }: { project: Project; devices: De
       )}
 
       <Group justify="space-between" wrap="wrap">
-        <Text size="sm" c="dimmed">Check all pings each device twice at the address UNDM uses and tries its management port, from this
-          PC. Only this system's addresses.</Text>
-        <Button variant="default" leftSection={<IconWaveSine size={16} />} loading={check.isPending}
-          onClick={() => check.mutate(undefined)}>Check all from this PC</Button>
+        <Text size="sm" c="dimmed" maw={640}>Check all pings each device twice at the address UNDM uses (from this PC it also tries its
+          management port). Only this system's addresses.</Text>
+        <Group gap="xs">
+          {bfwPings && <Button variant="default" leftSection={<IconWaveSine size={16} />} loading={check.isPending && checkedFrom !== 'pc'}
+            onClick={() => { setCheckedFrom(gateway!.id); check.mutate(gateway!.id); }}>Check all from the BFW</Button>}
+          <Button variant="default" leftSection={<IconWaveSine size={16} />} loading={check.isPending && checkedFrom === 'pc'}
+            onClick={() => { setCheckedFrom('pc'); check.mutate('pc'); }}>Check all from this PC</Button>
+        </Group>
       </Group>
       <Card withBorder padding={0}>
         <DataTable label="Devices of this system in the network" rowCount={devices.length} minWidth={900}
           empty="No devices yet: add them in Stage a system.">
           <Table.Thead><Table.Tr>
             <Table.Th>Device</Table.Th><Table.Th>Bench address</Table.Th><Table.Th>Network address</Table.Th>
-            <Table.Th>UNDM uses</Table.Th><Table.Th>Limits in its file</Table.Th>{check.data && <Table.Th>Check</Table.Th>}<ActionsHeader />
+            <Table.Th>UNDM uses</Table.Th><Table.Th>Limits in its file</Table.Th>
+            {check.data && <Table.Th>{checkedFrom === 'pc' ? 'Check from this PC' : 'Check from the BFW'}</Table.Th>}<ActionsHeader />
           </Table.Tr></Table.Thead>
           <Table.Tbody>
             {devices.map((d) => {

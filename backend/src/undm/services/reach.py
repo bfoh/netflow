@@ -214,6 +214,11 @@ def _loaded_files(session: Session, device: Device) -> tuple[list[ConfigVersion]
     return ([last] if last else []), False
 
 
+def network_of(address: str, prefix: int | None) -> ipaddress.IPv4Network | None:
+    """The network of an address with its prefix (a /32 when unknown)."""
+    return _network_of(address, prefix)
+
+
 def _network_of(address: str, prefix: int | None) -> ipaddress.IPv4Network | None:
     try:
         return ipaddress.IPv4Network(f"{address}/{prefix if prefix is not None else 32}",

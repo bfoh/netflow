@@ -33,6 +33,10 @@ class DeviceOperation(StrEnum):
     PROVISION_FACTORY_DEFAULT = "provision_factory_default"
     SET_CREDENTIALS = "set_credentials"
     CREATE_CHECKPOINT = "create_checkpoint"
+    # From the device to one address (D-128): read-only, but they take a target, so they
+    # have their own endpoint instead of the plain operations one.
+    PING = "ping"
+    TRACEROUTE = "traceroute"
 
 
 IMPACT: dict[DeviceOperation, Impact] = {
@@ -52,6 +56,8 @@ IMPACT: dict[DeviceOperation, Impact] = {
     DeviceOperation.PROVISION_FACTORY_DEFAULT: Impact.IMPACTING,
     DeviceOperation.SET_CREDENTIALS: Impact.IMPACTING,
     DeviceOperation.CREATE_CHECKPOINT: Impact.IMPACTING,
+    DeviceOperation.PING: Impact.READ_ONLY,
+    DeviceOperation.TRACEROUTE: Impact.READ_ONLY,
 }
 
 

@@ -11,6 +11,7 @@ A target that belongs to a simulated device starts no program: the answer is sim
 
 from __future__ import annotations
 
+import ipaddress
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
@@ -28,9 +29,11 @@ from undm.domain.troubleshoot import (
     check_target,
     match_hops,
 )
+from undm.drivers.base import Capability, DeviceDriver, OperationResult
 from undm.drivers.registry import DriverRegistry
 from undm.services import audit, pc_tools, reach
-from undm.services.errors import ConflictError, NotFoundError
+from undm.services import devices as devsvc
+from undm.services.errors import ConflictError, ForbiddenError, NotFoundError
 from undm.services.policy import Policy
 
 PC = "pc"
@@ -199,18 +202,110 @@ def check_all(session: Session, project: Project, registry: DriverRegistry, acto
     return results
 
 
-# -- from a device (S6 adds the drivers that can) --------------------------------------------
+# -- from a device of the system (D-128) ---------------------------------------------------
+
+def _context(session: Session, device: Device, registry: DriverRegistry,
+             target: str) -> dict[str, str]:
+    """Where on the device to run it: the VDOM of its interface whose network holds the
+    target, read from its files (FortiOS; other platforms have none)."""
+    for c in reach.file_candidates(session, device, registry):
+        net = reach.network_of(c.address, c.prefix)
+        if c.vdom and net is not None and ipaddress.IPv4Address(target) in net:
+            return {"vdom": c.vdom}
+    return {}
+
+
+def _driver_for(device: Device, registry: DriverRegistry, policy: Policy | None,
+                capability: Capability) -> DeviceDriver:
+    simulated = _simulated(device, registry)
+    problem = (policy or Policy()).read_problem(device.name, device.environment, simulated)
+    if problem:
+        raise ForbiddenError(problem)
+    driver = devsvc.build_driver(device, registry)
+    if capability not in driver.capabilities():
+        what = "ping" if capability is Capability.PING else "traceroute"
+        raise ConflictError(f"UNDM has no documented {what} command for {device.name}: "
+                            "choose this PC")
+    return driver
+
+
+def _connected(driver: DeviceDriver) -> None:
+    conn = driver.connect()
+    if not conn.ok:
+        raise ConflictError(conn.message)
+
+
+def _ping_result(device: Device, target: str, r: OperationResult, count: int) -> PingResult:
+    if not r.ok:
+        raise ConflictError(f"{device.name}: {r.message}")
+    data = dict(r.data or {})
+    received = data.get("received")
+    return PingResult(device.id, target, int(data.get("sent") or count),
+                      int(received) if received is not None else 0,
+                      tuple(float(x) for x in data.get("rtt_ms") or ()),
+                      simulated=False, raw=str(data.get("raw", "")),
+                      note="" if received is not None else
+                      "UNDM could not read the answer: see the output below.")
+
 
 def _device_ping(session: Session, device: Device, registry: DriverRegistry, target: str,
                  count: int, policy: Policy | None) -> PingResult:
-    raise ConflictError(f"UNDM cannot ping from {device.name} yet: choose this PC")
+    driver = _driver_for(device, registry, policy, Capability.PING)
+    _connected(driver)
+    try:
+        r = driver.ping(target, count, _context(session, device, registry, target))
+    finally:
+        driver.disconnect()
+    return _ping_result(device, target, r, count)
 
 
 def _device_trace(session: Session, device: Device, registry: DriverRegistry, target: str,
                   policy: Policy | None) -> TraceResult:
-    raise ConflictError(f"UNDM cannot trace from {device.name} yet: choose this PC")
+    driver = _driver_for(device, registry, policy, Capability.TRACEROUTE)
+    _connected(driver)
+    try:
+        r = driver.traceroute(target, _context(session, device, registry, target))
+    finally:
+        driver.disconnect()
+    if not r.ok:
+        raise ConflictError(f"{device.name}: {r.message}")
+    data = dict(r.data or {})
+    hops = [Hop(int(h["n"]), h.get("address"), tuple(h.get("rtt_ms") or ()),
+                timed_out=h.get("address") is None) for h in data.get("hops") or ()]
+    return TraceResult(device.id, target, hops, any(h.address == target for h in hops),
+                       raw=str(data.get("raw", "")))
 
 
 def _device_check_all(session: Session, project: Project, registry: DriverRegistry,
                       actor: str, source: str, policy: Policy | None) -> list[dict[str, Any]]:
-    raise ConflictError("Check all runs from this PC")
+    """From one device (the BFW) to every other device of the system, in one session."""
+    device = _source(project, source)
+    assert device is not None
+    driver = _driver_for(device, registry, policy, Capability.PING)
+    _connected(driver)
+    results: list[dict[str, Any]] = []
+    try:
+        for d in project.devices:
+            if d.id == device.id:
+                continue
+            where = reach.reach_of(d, registry)
+            row: dict[str, Any] = {"device_id": d.id, "address": where.address,
+                                   "via": where.via}
+            if not where.address:
+                results.append({**row, "state": "no_address",
+                                "note": where.problem or "No address"})
+                continue
+            r = driver.ping(where.address, 2,
+                            _context(session, device, registry, where.address))
+            data = dict(r.data or {}) if r.ok else {}
+            received = data.get("received")
+            results.append({**row, "sent": 2, "received": received,
+                            "rtt_ms": data.get("rtt_ms") or [],
+                            "state": "answers" if received else "no_answer",
+                            "note": "" if r.ok else r.message})
+    finally:
+        driver.disconnect()
+    audit.record(session, actor, "troubleshoot.check_all", "project", project.id, details={
+        "source": source, "devices": len(results),
+        "answered": sum(1 for r in results if r["state"] == "answers")})
+    return results

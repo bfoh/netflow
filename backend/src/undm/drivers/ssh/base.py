@@ -231,6 +231,22 @@ class SshCliDriver(DeviceDriver):
                             f"{type(e).__name__}: {redact_text(str(e))[:200]}",
                             answered_at=answered)
 
+    def _diagnostic(self, op: DeviceOperation, commands: list[str], timeout: float
+                    ) -> tuple[OperationResult | None, str]:
+        """Run read-only commands one after the other (ping, traceroute, D-128). No
+        question is ever answered: a command that asks one ends without an answer."""
+        if r := self._need(op):
+            return r, ""
+        out = ""
+        for command in commands:
+            talk = self._dialogue(command, [], timeout=timeout, idle_timeout=min(timeout, 30))
+            out += talk.output
+            if talk.ended != "prompt":
+                return OperationResult.failed(
+                    op, f"'{command}' did not end at the prompt ({talk.ended}: {talk.detail})",
+                    {"device_output": talk.tail}), out
+        return None, out
+
     def _settled_transfer(self, name: str, wait: float = 5.0,
                           since: TransferInfo | None = None) -> TransferInfo | None:
         """The device's latest fetch of ``name``, once the server has finished recording it.

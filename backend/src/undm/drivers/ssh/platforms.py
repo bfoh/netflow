@@ -15,6 +15,7 @@ from typing import Any, ClassVar
 
 from undm.domain.operations import DeviceOperation
 from undm.domain.versions import compare
+from undm.drivers import diagnostics
 from undm.drivers.aruba.config_files import (
     address_after_loading,
     inspect_aos_switch_file,
@@ -146,7 +147,8 @@ class ArubaOSSwitchSsh(SshCliDriver):
         capabilities=SSH_CAPABILITIES | {Capability.MANAGEMENT_PORT_OFF, Capability.RESTART,
                                          Capability.FIRMWARE_UPGRADE, Capability.REBOOT,
                                          Capability.CONFIGURATION_REPLACE,
-                                         Capability.FIRMWARE_SECONDARY_IMAGE},
+                                         Capability.FIRMWARE_SECONDARY_IMAGE,
+                                         Capability.PING, Capability.TRACEROUTE},
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
         notes=(
@@ -182,6 +184,32 @@ class ArubaOSSwitchSsh(SshCliDriver):
     def needs_file_server(cls, kind: str, mode: ApplyMode | None = None) -> bool:
         # The switch pulls the image, or a complete configuration file, by TFTP.
         return kind == "firmware" or (kind == "configuration" and mode is ApplyMode.REPLACE)
+
+    # -- troubleshooting (D-128, EXPERIMENTAL) ------------------------------------------
+    # The ArubaOS-Switch Management and Configuration Guide's troubleshooting chapter:
+    # "ping <ip-address> repetitions <1-10000>" (its example: "ping 10.10.10.10 repetitions
+    # 3") and "traceroute <ip-address>" (default limits). Not run on the bench yet: the
+    # answers are read tolerantly and always shown as printed (Q-59).
+    def ping(self, target: str, count: int = 4,
+             context: Mapping[str, str] | None = None) -> OperationResult:
+        op = DeviceOperation.PING
+        problem, out = self._diagnostic(op, [f"ping {target} repetitions {count}"],
+                                        timeout=30 + 5 * count)
+        if problem:
+            return problem
+        answer = diagnostics.ping_answer(out, target, count)
+        if answer["received"] is None:
+            alive = sum(1 for line in out.splitlines() if target in line and "is alive" in line)
+            answer["received"] = alive or None
+        return OperationResult.success(op, answer)
+
+    def traceroute(self, target: str,
+                   context: Mapping[str, str] | None = None) -> OperationResult:
+        op = DeviceOperation.TRACEROUTE
+        problem, out = self._diagnostic(op, [f"traceroute {target}"], timeout=120)
+        if problem:
+            return problem
+        return OperationResult.success(op, {"hops": diagnostics.trace_hops(out), "raw": out})
 
     @classmethod
     def inspect_config_file(cls, text: str) -> ConfigFileReport | None:

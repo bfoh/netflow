@@ -41,6 +41,8 @@ def call(driver, op):
         DeviceOperation.PROVISION_FACTORY_DEFAULT:
             lambda: driver.provision_factory_default_device("hostname x\n"),
         DeviceOperation.CREATE_CHECKPOINT: lambda: driver.create_checkpoint("x"),
+        DeviceOperation.PING: lambda: driver.ping("192.0.2.10", 2),
+        DeviceOperation.TRACEROUTE: lambda: driver.traceroute("192.0.2.10"),
     }[op]()
 
 

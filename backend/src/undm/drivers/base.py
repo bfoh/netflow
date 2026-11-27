@@ -52,6 +52,9 @@ class Capability(StrEnum):
     GUIDED_STAGING = "supports_guided_staging"
     # Loads a license file the team supplies, fetched from UNDM (D-100).
     LICENSE_FILE = "supports_license_file"
+    # Pings / traces one address from the device, with a documented command (D-128).
+    PING = "supports_ping"
+    TRACEROUTE = "supports_traceroute"
 
 
 # Capabilities an operation needs before a driver may be asked to perform it.
@@ -66,6 +69,8 @@ REQUIRED_CAPABILITIES: dict[DeviceOperation, frozenset[Capability]] = {
     DeviceOperation.REBOOT: frozenset({Capability.REBOOT}),
     DeviceOperation.CREATE_CHECKPOINT: frozenset({Capability.CONFIGURATION_CHECKPOINT}),
     DeviceOperation.PROVISION_FACTORY_DEFAULT: frozenset({Capability.ZERO_TOUCH_PROVISIONING}),
+    DeviceOperation.PING: frozenset({Capability.PING}),
+    DeviceOperation.TRACEROUTE: frozenset({Capability.TRACEROUTE}),
 }
 
 
@@ -459,6 +464,20 @@ class DeviceDriver:
     def create_checkpoint(self, label: str) -> OperationResult:
         """Keep a named restore point of the current configuration on the device."""
         return self._unsupported(DeviceOperation.CREATE_CHECKPOINT)
+
+    # -- troubleshooting from the device (D-128) ----------------------------------------
+    def ping(self, target: str, count: int = 4,
+             context: Mapping[str, str] | None = None) -> OperationResult:
+        """Ping one address from the device. ``data``: {"sent", "received" (None when the
+        answer could not be read), "rtt_ms", "raw"}. ``context`` may name where on the
+        device to run it (e.g. "vdom"). Never asks or answers anything."""
+        return self._unsupported(DeviceOperation.PING)
+
+    def traceroute(self, target: str,
+                   context: Mapping[str, str] | None = None) -> OperationResult:
+        """The hops to one address from the device. ``data``: {"hops": [{"n", "address",
+        "rtt_ms"}], "raw"}."""
+        return self._unsupported(DeviceOperation.TRACEROUTE)
 
 
 def address_range(address: str, mask_or_prefix: str) -> tuple[str, str, int] | None:

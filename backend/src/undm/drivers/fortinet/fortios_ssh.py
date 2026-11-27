@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from undm.domain.operations import DeviceOperation
+from undm.drivers import diagnostics
 from undm.drivers.base import (
     ApplyMode,
     Capability,
@@ -76,7 +77,8 @@ class FortiOSSsh(SshCliDriver):
         capabilities=SSH_CAPABILITIES | {
             Capability.FIRMWARE_UPGRADE, Capability.REBOOT, Capability.CONFIGURATION_REPLACE,
             Capability.LICENSE_FILE,
-            Capability.CONFIGURATION_CHECKPOINT, Capability.FIRST_LOGIN_SETUP},
+            Capability.CONFIGURATION_CHECKPOINT, Capability.FIRST_LOGIN_SETUP,
+            Capability.PING, Capability.TRACEROUTE},
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
         notes=(
@@ -252,6 +254,43 @@ class FortiOSSsh(SshCliDriver):
         finally:
             if entered and self._conn is not None and not self._restarting:
                 self._dialogue("end", [], timeout=30, idle_timeout=15)
+
+    # -- troubleshooting (D-128, EXPERIMENTAL) ------------------------------------------
+    # Fortinet: "execute ping <dest>" (FortiGate cookbook "Running ping and traceroute") and
+    # "execute traceroute <dest>" (FortiOS CLI reference, execute traceroute). The options
+    # (execute ping-options) are left at the unit's defaults. On a multi-VDOM unit they run
+    # inside the VDOM of the interface that holds the target (Q-63): "config vdom",
+    # "edit <vdom>", then "end", as the team's site script enters it. Not run on the
+    # bench yet: the answers are read tolerantly and always shown as printed (Q-59).
+    def _in_vdom(self, context: Mapping[str, str] | None, command: str) -> list[str]:
+        if not _VDOMS_ON.search(self._status()):
+            return [command]
+        vdom = (context or {}).get("vdom") or "root"
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,31}", vdom):
+            vdom = "root"
+        return ["config vdom", f"edit {vdom}", command, "end"]
+
+    def ping(self, target: str, count: int = 4,
+             context: Mapping[str, str] | None = None) -> OperationResult:
+        op = Op.PING
+        if r := self._need(op):
+            return r
+        problem, out = self._diagnostic(op, self._in_vdom(context, f"execute ping {target}"),
+                                        timeout=60)
+        if problem:
+            return problem
+        return OperationResult.success(op, diagnostics.ping_answer(out, target, None))
+
+    def traceroute(self, target: str,
+                   context: Mapping[str, str] | None = None) -> OperationResult:
+        op = Op.TRACEROUTE
+        if r := self._need(op):
+            return r
+        problem, out = self._diagnostic(
+            op, self._in_vdom(context, f"execute traceroute {target}"), timeout=120)
+        if problem:
+            return problem
+        return OperationResult.success(op, {"hops": diagnostics.trace_hops(out), "raw": out})
 
     # -- read-only ------------------------------------------------------------------
     def parse_facts(self, outputs: dict[str, str], prompt: str) -> DeviceFacts:

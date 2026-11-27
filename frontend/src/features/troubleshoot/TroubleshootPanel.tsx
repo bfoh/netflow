@@ -34,6 +34,8 @@ export function TroubleshootPanel({ device }: { device: Device }) {
   const [result, setResult] = useState<{ kind: 'ping'; answer: PingAnswer } | { kind: 'trace'; answer: TraceAnswer } | null>(null);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const canPing = (d: Device) => connectionOf(d).capabilities.includes('supports_ping');
+  const from = all.find((d) => d.id === source);
+  const canTrace = !from || connectionOf(from).capabilities.includes('supports_traceroute');
   const sources = [{ value: 'pc', label: 'This PC' },
     ...(bfw && bfw.id !== device.id && canPing(bfw) ? [{ value: bfw.id, label: `${bfw.name} (the BFW)` }] : []),
     ...(canPing(device) ? [{ value: device.id, label: `${device.name} (this device)` }] : [])];
@@ -57,7 +59,8 @@ export function TroubleshootPanel({ device }: { device: Device }) {
             error={target.trim() && !valid ? 'One IPv4 address' : undefined} />
           <ReasonButton leftSection={<IconWaveSine size={16} />} disabled={!valid} reason={!valid ? 'Choose or type one address.' : null}
             loading={ping.isPending} onClick={() => ping.mutate(undefined, { onSuccess: (a) => setResult({ kind: 'ping', answer: a }) })}>Ping</ReasonButton>
-          <ReasonButton variant="default" leftSection={<IconRoute size={16} />} disabled={!valid} reason={!valid ? 'Choose or type one address.' : null}
+          <ReasonButton variant="default" leftSection={<IconRoute size={16} />} disabled={!valid || !canTrace}
+            reason={!canTrace ? `UNDM has no documented traceroute for ${from?.name}.` : !valid ? 'Choose or type one address.' : null}
             loading={trace.isPending} onClick={() => trace.mutate(undefined, { onSuccess: (a) => setResult({ kind: 'trace', answer: a }) })}>Traceroute</ReasonButton>
           {device.environment !== 'simulated' && <Button variant="subtle" leftSection={<IconTerminal2 size={16} />}
             onClick={() => setConsoleOpen(true)}>Console window…</Button>}
@@ -68,8 +71,10 @@ export function TroubleshootPanel({ device }: { device: Device }) {
               onClick={() => setTarget(connectionOf(d).address)}>{d.name} · {connectionOf(d).address}</Button>
           ))}
         </Group>
-        {sources.length === 1 && <Hint mt="sm">From the BFW or this device: when its driver has a documented ping command
-          (they are listed on the Drivers page).</Hint>}
+        {sources.length === 1 ? <Hint mt="sm">From the BFW or this device: when its driver has a documented ping command
+          (they are listed on the Drivers page).</Hint>
+          : source !== 'pc' && from?.environment === 'production' && <Hint mt="sm">From a production device, UNDM logs in to it: that
+          needs the start-up setting UNDM_ALLOW_PRODUCTION_READ_ONLY (the In the network tab shows the line).</Hint>}
         <DialogError error={ping.error ?? trace.error} />
       </Card>
 

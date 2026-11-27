@@ -75,7 +75,8 @@ class NokiaSarSsh(NokiaSarConsole):
         description="Nokia 7705 SAR-Hmc in the network, over SSH (experimental): reads only "
                     "(facts, backup)",
         simulated=False,
-        capabilities=frozenset({Capability.SSH, Capability.CONFIGURATION_BACKUP}),
+        capabilities=frozenset({Capability.SSH, Capability.CONFIGURATION_BACKUP,
+                                Capability.PING}),
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="ssh",
         notes=(

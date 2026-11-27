@@ -28,6 +28,7 @@ from collections.abc import Callable, Mapping
 from typing import ClassVar
 
 from undm.domain.operations import DeviceOperation
+from undm.drivers import diagnostics
 from undm.drivers.base import (
     ApplyMode,
     Capability,
@@ -75,7 +76,7 @@ class NokiaSarConsole(DeviceDriver):
                     "and its configuration file loaded line by line",
         simulated=False,
         capabilities=frozenset({Capability.SERIAL_CONSOLE, Capability.CONFIGURATION_BACKUP,
-                                Capability.CONFIGURATION_APPLY}),
+                                Capability.CONFIGURATION_APPLY, Capability.PING}),
         maturity=DriverMaturity.EXPERIMENTAL,
         transport="console",
         notes=(
@@ -247,6 +248,22 @@ class NokiaSarConsole(DeviceDriver):
         return OperationResult.success(_OP.BACKUP_CONFIGURATION, ConfigurationBackup(
             self.target.device_id, str(running.data),
             "running configuration before loading (unsaved until 'admin save')"))
+
+    # -- troubleshooting (D-128, EXPERIMENTAL) ------------------------------------------
+    # Nokia's 7705 SAR Basic Command Reference: "ping {ip-address | dns-name} ... [count
+    # requests] ... [router router-instance]" (router Base by default). Traceroute's exact
+    # syntax was not confirmed from Nokia's documentation, so it is not offered (Q-59).
+    def ping(self, target: str, count: int = 4,
+             context: Mapping[str, str] | None = None) -> OperationResult:
+        problem, out = self._command(_OP.PING, f"ping {target} count {count}")
+        if problem:
+            return problem
+        refused = sros_sar.ERROR.search(out)
+        if refused:
+            return OperationResult.failed(_OP.PING, f"the modem answered "
+                                          f"'{refused.group(0)[:200]}'",
+                                          diagnostics={"device_output": out[-1500:]})
+        return OperationResult.success(_OP.PING, diagnostics.ping_answer(out, target, count))
 
     # -- the load ----------------------------------------------------------------------
     def prepare_for_device(self, config: str, secrets: Mapping[str, str]) -> str:
