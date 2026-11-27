@@ -68,6 +68,11 @@ portal: SSH (22) and NETCONF (830) do not answer; HTTPS (443) presents Nokia's f
 certificate over TLS 1.3. So NETCONF is not a way in as delivered; the route left is Nokia's
 Remote Tool (Q-65). The reading is to be repeated once the SCF is active.
 
+**WebEM's Terminal (Q-67, 2026-11-27):** Diagnostic → Terminal lists only queries (time,
+radio and system modules, cells, alarms, files, GNSS, SFPs, cell mapping, output to a file);
+it has no software, SCF or commissioning command, so it cannot stage the unit. It is not the
+Remote Tool.
+
 **What UNDM does now (v97, D-130):** device menu → **Find its management services…** asks
 the unit itself, read-only (Q-66), and the product owner asks Nokia (Q-65). The driver that
 stages the BBU follows from what is confirmed: NETCONF from the YANG modules the unit
