@@ -95,6 +95,13 @@ bench PC, not in this repository; the tool requires a Nokia licence). From the g
   enabling of SSH Service Account status") and `ChangeEthernetSecurityTool4.zip`, which it
   uses by itself. The Admin CLI is the next lead for the SCF and the unit's state (Q-68).
 
+**RFSTool 2.52 on this unit (Q-69, 2026-11-27):** it cannot get in. Its older steps fail
+(socket on .1, test port over HTTP 404, its SSH helper), and with Service Account SSH
+enabled in WebEM its SSH client stops at "Incompatible ssh peer (no acceptable host key)":
+the 2022 tool does not support SBTS 26R2's SSH host keys. A newer version is needed from
+Nokia. The security settings changed for the test (Service Account SSH, Ethernet Port
+Security, the system account permission) are switched back before the unit leaves the bench.
+
 **What UNDM does now (v97, D-130):** device menu → **Find its management services…** asks
 the unit itself, read-only (Q-66), and the product owner asks Nokia (Q-65). The driver that
 stages the BBU follows from what is confirmed: NETCONF from the YANG modules the unit

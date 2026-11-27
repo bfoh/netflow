@@ -2234,4 +2234,8 @@ cannot commission (no SCF). Its package ships Nokia's Admin CLI, the next lead (
   approval, real-device and firmware switches, audit), experimental. The guided SCF steps stay.
 - The Admin CLI: read-only first, then the SCF if its own help documents it.
 - Default account names and example passwords in the guide are not recorded.
+- **Bench result (2026-11-27, Q-69):** RFSTool 2.52 cannot reach the FSMF on SBTS 26R2: with
+  Service Account SSH enabled its SSH client stops at "Incompatible ssh peer (no acceptable
+  host key)". Nothing is built on it; the request to Nokia is for a version that supports
+  SBTS 26R2 (or the Admin CLI / Remote Tool). The guided steps stay.
 
