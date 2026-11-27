@@ -39,6 +39,7 @@ from undm.services import app_settings, audit
 from undm.services.devices import set_login_after_loading_needed
 from undm.services.errors import ConflictError, ForbiddenError, ServiceError
 from undm.services.policy import Policy
+from undm.services.reach import require_bench
 
 log = logging.getLogger(__name__)
 
@@ -106,6 +107,7 @@ def _params(device: Device, profile: dict[str, Any] | None) -> aos_switch.Bootst
 
 def preview(device: Device, registry: DriverRegistry, policy: Policy,
             profile: dict[str, Any] | None) -> dict[str, Any]:
+    require_bench(device.project, "console setup is done")
     if not supports_console_bootstrap(device, registry):
         return {"supported": False, "commands": [], "notes": [
             "No console bootstrap procedure exists for this device's platform yet."]}
@@ -203,6 +205,7 @@ def identify_console(
     Logs in with the switch's current login and returns the hostname of its prompt and
     whether it holds configuration, so a person confirms an erase by the name UNDM read
     instead of typing a name they would first have to look up with a terminal program."""
+    require_bench(device.project, "console setup is done")
     if not supports_console_bootstrap(device, registry):
         raise ServiceError("No console procedure exists for this device's platform")
     if registry.get(device.driver_id).info.platform == SAR_PLATFORM:
@@ -279,6 +282,7 @@ def run_console_bootstrap(
     erase_existing: bool = False, current_credential_ref_id: str | None = None,
     confirm_hostname: str | None = None,
 ) -> dict[str, Any]:
+    require_bench(device.project, "console setup and first access are done")
     if not supports_console_bootstrap(device, registry):
         raise ServiceError("No console bootstrap procedure exists for this device's platform")
     if confirm_device_name.strip() != device.name:

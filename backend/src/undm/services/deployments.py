@@ -70,6 +70,7 @@ from undm.services.errors import ConflictError, ForbiddenError, NotFoundError
 from undm.services.firmware import FirmwareRepository, device_compatibility
 from undm.services.jobs import DeploymentJobs
 from undm.services.policy import Policy
+from undm.services.reach import require_bench
 from undm.transfer.hub import TransferHub
 from undm.transfer.tftp import TftpServerError
 
@@ -126,6 +127,9 @@ class DeploymentService:
         self.firmware_separate_approver = firmware_separate_approver
         self.transfer_hub = transfer_hub
 
+    def _bench_only(self, project_id: str, what: str = "plans are made") -> None:
+        require_bench(self.s.get(Project, project_id), what)
+
     def _policy_problem(self, device: Device, dry_run: bool,
                         firmware: bool = False) -> str | None:
         simulated = self.registry.get(device.driver_id).info.simulated
@@ -171,6 +175,8 @@ class DeploymentService:
         for t in rec.targets:
             device = self.s.get(Device, t.device_id)
             assert device is not None
+            # Plans run on the bench only (D-125); checked again where each one is made.
+            require_bench(device.project, "plans run")
             text = ""
             label: str | None = None
             if t.config_version_id:
@@ -183,7 +189,8 @@ class DeploymentService:
                 elif cfg.kind == "license":
                     label = PurePath(cfg.reference or "license.lic").name[:80]
             serial = (device.observed_facts or {}).get("serial_number")
-            dt = DeploymentTarget(device.id, device.name, build_driver(device, self.registry),
+            dt = DeploymentTarget(device.id, device.name,
+                                  build_driver(device, self.registry, via="bench"),
                                   text, expected_serial=serial)
             dt.state = TargetState(t.state)
             dt.checkpoint_label = label
@@ -270,6 +277,7 @@ class DeploymentService:
         credentials_after: dict[str, str] | None = None,
         staging: tuple[str, int] | None = None, defer_preview: str | None = None,
     ) -> DeploymentRecord:
+        self._bench_only(project_id)
         if not device_ids:
             raise ConflictError("Select at least one device")
         if len(set(device_ids)) != len(device_ids):
@@ -337,6 +345,7 @@ class DeploymentService:
     def create_first_login(self, project_id: str, device_id: str, actor: str, *,
                            staging: tuple[str, int] | None = None) -> DeploymentRecord:
         """A plan that sets the device's login on a new unit at its first login."""
+        self._bench_only(project_id)
         device = self.s.get(Device, device_id)
         if device is None or device.project_id != project_id:
             raise NotFoundError(f"Device {device_id} not found in project")
@@ -367,6 +376,7 @@ class DeploymentService:
     # -- take a device off its address until its next restart (D-107) -------------------
     def create_free_address(self, project_id: str, device_id: str, actor: str,
                             *, staging: tuple[str, int] | None = None) -> DeploymentRecord:
+        self._bench_only(project_id)
         device = self.s.get(Device, device_id)
         if device is None or device.project_id != project_id:
             raise NotFoundError(f"Device {device_id} not found in project")
@@ -402,6 +412,7 @@ class DeploymentService:
 
     # -- restart a device on request (D-099) --------------------------------------------
     def create_restart(self, project_id: str, device_id: str, actor: str) -> DeploymentRecord:
+        self._bench_only(project_id)
         device = self.s.get(Device, device_id)
         if device is None or device.project_id != project_id:
             raise NotFoundError(f"Device {device_id} not found in project")
@@ -456,6 +467,7 @@ class DeploymentService:
     def create_license(self, project_id: str, device_id: str, version_id: str,
                        actor: str, *, staging: tuple[str, int] | None = None,
                        defer_preview: str | None = None) -> DeploymentRecord:
+        self._bench_only(project_id)
         device = self.s.get(Device, device_id)
         if device is None or device.project_id != project_id:
             raise NotFoundError(f"Device {device_id} not found in project")
@@ -495,6 +507,7 @@ class DeploymentService:
 
         Step 2 is previewed at its run, once the base file is on the device: a site file
         loaded over an earlier site configuration can be refused part-way (D-070)."""
+        self._bench_only(project_id)
         device = self.s.get(Device, device_id)
         if device is None or device.project_id != project_id:
             raise NotFoundError(f"Device {device_id} not found in project")
@@ -541,6 +554,7 @@ class DeploymentService:
         """Any sequence of first login, firmware and file steps for one device, as one plan
         (D-085). Every step is checked offline before any is made; steps after the first
         are previewed at their run, because the earlier steps change the device."""
+        self._bench_only(project_id)
         device = self.s.get(Device, device_id)
         if device is None or device.project_id != project_id:
             raise NotFoundError(f"Device {device_id} not found in project")
@@ -665,6 +679,7 @@ class DeploymentService:
         """One approval for every step still awaiting it; firmware steps take the
         maintenance window given."""
         steps = self.staging_steps(staging_id)
+        self._bench_only(steps[0].project_id, "plans are approved")
         waiting = [r for r in steps if r.state == S.AWAITING_APPROVAL.value]
         if not waiting:
             raise ConflictError("No step of this staging plan is awaiting approval")
@@ -850,7 +865,7 @@ class DeploymentService:
         if unknown:
             raise ConflictError(f"{device.name}: the chosen file has no secret setting "
                                 f"{', '.join(unknown)}")
-        driver = build_driver(device, self.registry)
+        driver = build_driver(device, self.registry, via="bench")
         try:
             driver.prepare_for_device(cfg.text, self._secret_values(device, refs))
         except ValueError as e:
@@ -872,6 +887,7 @@ class DeploymentService:
     def approve(self, deployment_id: str, actor: str, window_start: datetime | None = None,
                 window_end: datetime | None = None) -> DeploymentRecord:
         rec = self.get(deployment_id)
+        self._bench_only(rec.project_id, "plans are approved")
         if rec.state != S.AWAITING_APPROVAL.value:
             raise ConflictError(f"Deployment is not awaiting approval (state {rec.state})")
         dep = self._to_domain(rec)
@@ -894,6 +910,7 @@ class DeploymentService:
         *, dry_run: bool, allow_downgrade: bool = False, also_secondary: bool = False,
         staging: tuple[str, int] | None = None, defer_preview: str | None = None,
     ) -> DeploymentRecord:
+        self._bench_only(project_id)
         if not device_ids:
             raise ConflictError("Select at least one device")
         if len(set(device_ids)) != len(device_ids):
@@ -951,6 +968,7 @@ class DeploymentService:
     def check_can_execute(self, deployment_id: str) -> DeploymentRecord:
         """Everything that must hold before a run starts; raises the reason if not."""
         rec = self.get(deployment_id)
+        self._bench_only(rec.project_id, "plans run")
         if rec.state != S.READY.value:
             raise ConflictError(f"Deployment must be ready to execute (state {rec.state})")
         if rec.staging_id and (rec.staging_step or 1) > 1:

@@ -21,6 +21,7 @@ import { IntentEditor } from '../features/devices/IntentEditor';
 import { useAction, useDevice, useDeviceLog, useDrivers } from '../hooks/queries';
 import { showSuccess } from '../services/notify';
 import { DeviceMenu } from '../features/devices/DeviceMenu';
+import { connectionOf, inNetwork } from '../features/devices/connection';
 import { api } from '../services/api';
 import type { Device } from '../types/api';
 import { portOff } from '../features/stage/roles';
@@ -84,7 +85,9 @@ function Overview({ d }: { d: Device }) {
         <Table aria-label="What you entered" verticalSpacing={4}><Table.Tbody>
           <Row k="Model" v={`${d.manufacturer} ${d.model}`} />
           <Row k="Role" v={d.role} />
-          <Row k="Address" v={<Text size="sm" ff="monospace">{d.management_address}</Text>} />
+          <Row k="Bench address" v={<Text size="sm" ff="monospace">{d.management_address}</Text>} />
+          {(d.network_address || inNetwork(d)) && <Row k="Network address" v={<Text size="sm" ff="monospace">
+            {d.network_address || 'Not set yet'}</Text>} />}
           <Row k="Login" v={<LoginSelect projectId={d.project_id} size="xs" maw={260} label={null} placeholder="None yet: choose one"
             value={d.credential_ref_id} disabled={!!d.locked_by_deployment_id} onChange={(v) => setLogin.mutate(v)} />} />
           <Row k="Connects by" v={driverLabel(d.driver_id, drivers.data)} />
@@ -234,7 +237,7 @@ export function DeviceDetailPage() {
       <PageHeader title={d.name}
         breadcrumbs={crumbs}
         badges={<><EnvironmentBadge env={d.environment} />{d.provisioning_status !== 'planned' && <StateBadge state={d.provisioning_status} />}</>}
-        description={`${d.manufacturer} ${d.model}${d.management_address ? ` · ${d.management_address}` : ''}`}
+        description={`${d.manufacturer} ${d.model}${connectionOf(d).address ? ` · ${connectionOf(d).address}` : ''}${inNetwork(d) ? ' (in the network)' : ''}`}
         secondary={<Button variant="default" leftSection={<IconEdit size={16} />} onClick={openEdit} disabled={!!d.locked_by_deployment_id}>Edit</Button>}
         primary={<Button leftSection={<IconPlugConnected size={16} />} loading={test.isPending} onClick={() => test.mutate(undefined)}>Test connection</Button>}
         more={<DeviceMenu device={d} size="lg" onEdit={openEdit} onDelete={() => ask({

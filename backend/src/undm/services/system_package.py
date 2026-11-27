@@ -56,6 +56,8 @@ DEVICE_FIELDS = (
     "os_family", "firmware_version", "management_address", "management_protocol",
     "management_port", "console_port", "management_vrf", "site", "rack_location", "driver_id",
     "environment", "notes", "tags", "intent", "bootstrap_profile",
+    # v95 (D-125, D-126); older packages lack them and still import.
+    "network_address", "console_speed",
 )
 
 
@@ -94,6 +96,10 @@ def export_system(session: Session, project: Project, actor: str, *,
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for d in devices:
             entry = {f: getattr(d, f) for f in DEVICE_FIELDS}
+            if project.reached_via == "network" and entry["environment"] == "production":
+                # Production only because the system is in the network (D-125): where it
+                # is reached is not exported, so the copy starts on the bench, as a lab device.
+                entry["environment"] = "lab"
             entry["key"] = keys[d.id]
             ref = refs.get(d.credential_ref_id or "") or shared.get(d.credential_ref_id or "")
             entry["login"] = ref.name if ref else None

@@ -7,6 +7,7 @@ const LOOK: Record<string, { color: string; label: string }> = {
   no_answer: { color: 'var(--mantine-color-red-6)', label: 'No answer on its management port' },
   simulated: { color: 'var(--mantine-color-violet-4)', label: 'Simulated device' },
   no_address: { color: 'var(--mantine-color-gray-5)', label: 'No management address' },
+  no_network_address: { color: 'var(--mantine-color-gray-5)', label: 'No network address yet' },
 };
 
 /** A dot for the live reachability of a device (D-099); grey while not yet known. */

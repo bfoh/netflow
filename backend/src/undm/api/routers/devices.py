@@ -13,6 +13,7 @@ from undm.api.schemas import (
     ConfigImportIn,
     ConfigVersionFull,
     ConfigVersionOut,
+    ConnectionOut,
     DeviceIn,
     DeviceOut,
     DevicePatch,
@@ -20,16 +21,17 @@ from undm.api.schemas import (
     GenerateOut,
     IntentIn,
     IssueOut,
+    NetworkAddressIn,
     OperationOut,
 )
 from undm.configgen.diff import diff_configs
-from undm.db.models import ConfigVersion, CredentialRef, Device
+from undm.db.models import ConfigVersion, CredentialRef, Device, Project
 from undm.domain.enums import DeviceEnvironment
 from undm.domain.operations import DeviceOperation
 from undm.drivers.registry import DriverRegistry
 from undm.inventory.rules import environment_problem
 from undm.security.sanitize import new_mapper, sanitize
-from undm.services import app_settings, audit
+from undm.services import app_settings, audit, reach
 from undm.services import devices as svc
 from undm.services.errors import ConflictError, NotFoundError, ServiceError
 from undm.services.policy import Policy
@@ -41,6 +43,7 @@ def to_out(device: Device, registry: RegistryDep) -> DeviceOut:
     out = DeviceOut.model_validate(device)
     if device.driver_id in registry:
         out.capabilities = sorted(c.value for c in registry.get(device.driver_id).capabilities())
+    out.connection = ConnectionOut(**svc.connection(device, registry))
     return out
 
 
@@ -62,6 +65,17 @@ def _check_refs(session: SessionDep, registry: RegistryDep, project_id: str,
         problem = environment_problem(driver_id, str(environment), registry)
         if problem:
             raise ServiceError(problem)
+        project = session.get(Project, project_id)
+        if (reach.via_of(project) == "network" and driver_id in registry
+                and not registry.get(driver_id).info.simulated
+                and environment != DeviceEnvironment.PRODUCTION.value):
+            if current is None:
+                values["environment"] = DeviceEnvironment.PRODUCTION.value
+            else:
+                raise ConflictError(
+                    "This system is in the network, where its real devices are production "
+                    "devices (it may be a live site). Move it back to the bench to make them "
+                    "lab devices.")
     ref_id = values.get("credential_ref_id")
     if ref_id:
         ref = session.get(CredentialRef, ref_id)
@@ -127,6 +141,8 @@ def delete_device(device_id: str, session: SessionDep, actor: ActorDep) -> None:
     d = get_device(session, device_id)
     if d.locked_by_deployment_id:
         raise ConflictError("Device is locked by a running deployment")
+    if d.project.network_gateway_id == d.id:
+        d.project.network_gateway_id = None  # it was the system's BFW
     session.delete(d)
     audit.record(session, actor, "device.delete", "device", device_id, details={"name": d.name})
 
@@ -258,14 +274,25 @@ def device_log(device_id: str, session: SessionDep,
     if masked:
         facts = dict(d.observed_facts or {})
         known = [("device", d.name), ("hostname", str(facts.get("hostname") or "")),
-                 ("serial", str(facts.get("serial_number") or "")),
-                 ("ip", d.management_address or "")]
+                 ("serial", str(facts.get("serial_number") or "")), *svc.known_addresses(d)]
         known = [(k, v) for k, v in known if v]
         mapper = new_mapper()
         for r in rows:
             r["message"] = sanitize(str(r["message"]), known, mapper)
             r["actor"] = ""
     return rows
+
+
+@router.put("/api/devices/{device_id}/network-address", response_model=DeviceOut)
+def set_network_address(device_id: str, body: NetworkAddressIn, session: SessionDep,
+                        registry: RegistryDep, actor: ActorDep) -> DeviceOut:
+    """The address the device has in the network after staging, confirmed by a person
+    (D-125). Changes only UNDM's record; no device is contacted."""
+    d = get_device(session, device_id)
+    source: dict[str, object] = ({"source": "file", "file": body.file, "line": body.line}
+                                 if body.file else {"source": "typed"})
+    reach.set_network_address(session, d, body.address, actor, source=source)
+    return to_out(d, registry)
 
 
 @router.post("/api/devices/{device_id}/port-off/clear", response_model=DeviceOut)

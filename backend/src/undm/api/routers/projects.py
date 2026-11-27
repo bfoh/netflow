@@ -4,7 +4,7 @@ from fastapi import APIRouter, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from undm.api.deps import ActorDep, SessionDep
+from undm.api.deps import ActorDep, RegistryDep, SessionDep
 from undm.api.schemas import (
     CertificateSetting,
     CredentialRefIn,
@@ -14,13 +14,14 @@ from undm.api.schemas import (
     ProjectIn,
     ProjectOut,
     ProjectPatch,
+    ReachedViaIn,
     SharedLoginGroupOut,
     SharedLoginsResultOut,
     ShareLoginsIn,
 )
 from undm.db.models import CredentialRef, Device, Project
 from undm.security import credentials as creds
-from undm.services import app_settings, audit, shared_logins
+from undm.services import app_settings, audit, reach, shared_logins
 from undm.services.errors import ConflictError, NotFoundError, ServiceError
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -71,6 +72,17 @@ def update_project(
         raise ConflictError("Project name already in use") from e
     audit.record(session, actor, "project.update", "project", p.id, details=changes)
     return p
+
+
+@router.put("/{project_id}/reached-via", response_model=ProjectOut)
+def set_reached_via(project_id: str, body: ReachedViaIn, session: SessionDep,
+                    registry: RegistryDep, actor: ActorDep) -> Project:
+    """On the bench, or in the network through its BFW (D-125). In the network its real
+    devices are production devices; back on the bench they are lab devices. No device is
+    contacted."""
+    p = get_project(session, project_id)
+    return reach.set_reached_via(session, p, body.via, actor, registry,
+                                 gateway_device_id=body.gateway_device_id)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

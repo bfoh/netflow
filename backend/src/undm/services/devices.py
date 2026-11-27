@@ -29,7 +29,7 @@ from undm.drivers.base import (
 from undm.drivers.registry import DriverRegistry
 from undm.provisioning.console import port_lock
 from undm.security import credentials as creds
-from undm.services import audit
+from undm.services import audit, reach
 from undm.services.errors import ConflictError, ForbiddenError, ServiceError
 from undm.services.policy import Policy
 
@@ -106,15 +106,19 @@ def _first_access_port(device: Device) -> str | None:
 _CONSOLE_PORT = re.compile(r"[A-Za-z0-9_./:\\-]{1,64}")
 
 
-def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
-    if device.driver_id not in registry:
-        raise ServiceError(f"Unknown driver {device.driver_id!r}")
-    driver_cls = registry.get(device.driver_id)
+def build_driver(device: Device, registry: DriverRegistry,
+                 via: reach.Via | None = None) -> DeviceDriver:
+    """The driver for the device where its system reaches it (``via``: plans pass "bench",
+    D-125). The only place a ``DeviceTarget`` is made."""
+    where = reach.reach_of(device, registry, via)
+    if where.driver_id not in registry:
+        raise ServiceError(f"Unknown driver {where.driver_id!r}")
+    driver_cls = registry.get(where.driver_id)
     caps = driver_cls.info.capabilities
     console_only = Capability.SERIAL_CONSOLE in caps and Capability.SSH not in caps
-    if not device.management_address:
+    if not where.address:
         if not console_only:
-            raise ServiceError(f"Device {device.name} has no management address")
+            raise ServiceError(where.problem or f"Device {device.name} has no management address")
         if Capability.CONFIGURATION_APPLY not in caps:
             raise ServiceError(
                 f"{device.name} is reached over its console cable only: use Console setup. "
@@ -138,9 +142,23 @@ def build_driver(device: Device, registry: DriverRegistry) -> DeviceDriver:
             f"{device.name} has no login chosen. Choose one on its device page (Edit), or in "
             "Stage a system, step 1 ('Its login'). Logins are added on the system page's "
             "Logins tab.")
-    target = DeviceTarget(device.id, device.management_address,
-                          device.management_port, console_port=device.console_port)
-    return registry.create(device.driver_id, target, credentials)
+    target = DeviceTarget(device.id, where.address, where.port,
+                          console_port=device.console_port)
+    return registry.create(where.driver_id, target, credentials)
+
+
+def connection(device: Device, registry: DriverRegistry) -> dict[str, Any]:
+    """How UNDM reaches the device now, for the screens (menu, web link, Copy address)."""
+    where = reach.reach_of(device, registry)
+    caps = (sorted(c.value for c in registry.get(where.driver_id).capabilities())
+            if where.driver_id in registry else [])
+    return {"via": where.via, "address": where.address, "port": where.port,
+            "driver_id": where.driver_id, "capabilities": caps, "problem": where.problem}
+
+
+def known_addresses(device: Device) -> list[tuple[str, str]]:
+    """The device's addresses, for masking text that is shared."""
+    return [("ip", a) for a in (device.management_address, device.network_address) if a]
 
 
 def latest_config(session: Session, device_id: str, kind: str) -> ConfigVersion | None:
@@ -309,8 +327,7 @@ def sanitized_diagnostics(session: Session, device: Device, registry: DriverRegi
     extra = dict(facts.pop("extra", {}) or {})
     raw = dict(extra.pop("raw_output", {}) or {})
     known = [("hostname", device.name), ("hostname", str(facts.get("hostname") or "")),
-             ("serial", str(facts.get("serial_number") or "")),
-             ("ip", device.management_address)]
+             ("serial", str(facts.get("serial_number") or "")), *known_addresses(device)]
     mapper = new_mapper()
 
     def s(text: object) -> str:
@@ -350,8 +367,17 @@ def ssh_command(device: Device, registry: DriverRegistry) -> list[str]:
     the person types it in the window."""
     if device.driver_id in registry and registry.get(device.driver_id).info.simulated:
         raise ConflictError("A simulated device has no SSH server to open")
-    address = device.management_address
-    if not address or not _ADDRESS.match(address):
+    where = reach.reach_of(device, registry)
+    if where.driver_id in registry and \
+            Capability.SSH not in registry.get(where.driver_id).info.capabilities:
+        raise ConflictError(
+            f"UNDM does not reach {device.name} over SSH "
+            + ("in the network" if where.via == "network" else "on the bench")
+            + ": open its console window or its web page instead")
+    address = where.address
+    if where.problem:
+        raise ConflictError(where.problem)
+    if not address or not _ADDRESS.match(address) or address.startswith("-"):
         raise ConflictError(f"{device.name} has no usable management address")
     user = "admin"
     if device.credential_ref is not None:
@@ -362,7 +388,7 @@ def ssh_command(device: Device, registry: DriverRegistry) -> list[str]:
             raise ServiceError(str(e)) from e
     if not _USER.match(user):
         raise ConflictError("The login's user name cannot be passed to the SSH program")
-    port = device.management_port or 22
+    port = where.port or 22
     # Bench units are reset and re-used at the same addresses, so their host keys change
     # often: like UNDM's own sessions, this window does not keep or check them (D-098).
     return ["ssh", "-o", "StrictHostKeyChecking=no", "-o",
@@ -466,15 +492,17 @@ def reachability(session: Session, project_id: str,
 
     def check(d: Device) -> dict[str, str]:
         simulated = d.driver_id in registry and registry.get(d.driver_id).info.simulated
-        address = d.management_address
+        where = reach.reach_of(d, registry)
+        address = where.address
         if simulated:
             state = "simulated"
         elif not address:
-            state = "no_address"
+            state = "no_network_address" if where.via == "network" else "no_address"
         else:
-            state = ("answers" if ssh_base.tcp_port_open(address, d.management_port or 22,
+            state = ("answers" if ssh_base.tcp_port_open(address, where.port or 22,
                                                          timeout=2.0) else "no_answer")
-        return {"device_id": d.id, "address": address or "", "state": state}
+        return {"device_id": d.id, "address": address or "", "state": state,
+                "via": where.via}
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         return list(pool.map(check, devices))

@@ -1,5 +1,5 @@
 import type {
-  AuditEvent, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, Guided, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
+  AuditEvent, ReachedVia, BootstrapPreview, BootstrapProfile, BootstrapResult, ConsoleProgress, PciMapping, Compatibility, ConfigDiff, ConfigVersion, CredentialRef, CertificateSubject, Guided, SharedLoginGroup, SharedLoginsResult, ComparedFile, ConfigTemplate, GeneratedFile, LoginDefaults, TemplateFile, TemplateRole, Deployment, DeploymentSummary, Device, DeviceInput, DeviceIntent, DeviceModel, Driver, FirmwareImage, GenerateResult, OperationResult, Policy, Project, SafetySwitch, SerialPort, StagingIndex, StagingPlan, StagingStepInput, Topology, TopologyLink, TopologyLinkInput,
 } from '../types/api';
 
 const ACTOR_KEY = 'undm.actor';
@@ -104,7 +104,10 @@ async function download(path: string, fallbackName: string): Promise<string> {
   return name;
 }
 
-export interface Reachability { device_id: string; address: string; state: 'answers' | 'no_answer' | 'simulated' | 'no_address' }
+export interface Reachability {
+  device_id: string; address: string; state: 'answers' | 'no_answer' | 'simulated' | 'no_address' | 'no_network_address';
+  via?: ReachedVia;
+}
 export interface DeviceLogEntry {
   time: string; source: 'audit' | 'plan'; kind: string; status: string; message: string; actor: string; plan_id: string | null;
 }
@@ -215,6 +218,10 @@ export const api = {
   },
   licensePlan: (id: string, versionId: string) => request<Deployment>('POST', `/devices/${id}/license-plan`, { version_id: versionId }),
   reachability: (pid: string) => request<Reachability[]>('GET', `/projects/${pid}/reachability`),
+  setNetworkAddress: (id: string, body: { address: string | null; file?: string | null; line?: number | null }) =>
+    request<Device>('PUT', `/devices/${id}/network-address`, body),
+  setReachedVia: (pid: string, via: ReachedVia, gatewayDeviceId?: string | null) =>
+    request<Project>('PUT', `/projects/${pid}/reached-via`, { via, gateway_device_id: gatewayDeviceId ?? null }),
   deviceLog: (id: string, masked = false) => request<DeviceLogEntry[]>('GET', `/devices/${id}/log${masked ? '?masked=true' : ''}`),
   clearPortOff: (id: string) => request<Device>('POST', `/devices/${id}/port-off/clear`),
   deleteDevice: (id: string) => request<void>('DELETE', `/devices/${id}`),

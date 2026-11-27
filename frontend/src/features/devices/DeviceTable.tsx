@@ -10,6 +10,7 @@ import { api, type Reachability } from '../../services/api';
 import { DeviceMenu } from './DeviceMenu';
 import { openDeviceMenu } from './openDeviceMenu';
 import { ReachDot } from './ReachDot';
+import { connectionOf } from './connection';
 import type { Device, OperationResult } from '../../types/api';
 import { humanize } from '../../services/labels';
 import { paths } from '../../paths';
@@ -142,7 +143,7 @@ export function DeviceTable({ devices, showProject, projectNames, selected: oute
                 <Table.Td><Text size="sm">{d.manufacturer} {d.model}</Text></Table.Td>
                 <Table.Td><Text size="sm">{humanize(d.category)}</Text></Table.Td>
                 <Table.Td><Text size="sm">{d.role || '—'}</Text></Table.Td>
-                <Table.Td><Text size="sm" ff="monospace">{d.management_address || '—'}</Text></Table.Td>
+                <Table.Td><Text size="sm" ff="monospace">{connectionOf(d).address || '—'}</Text></Table.Td>
                 <Table.Td><EnvironmentBadge env={d.environment} /></Table.Td>
                 <Table.Td><StateBadge state={d.deployment_status} /></Table.Td>
               </Table.Tr>

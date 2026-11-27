@@ -15,6 +15,7 @@ import { factLabel, MAIN_FACTS } from '../../services/labels';
 import { showError, showSuccess } from '../../services/notify';
 import type { Device } from '../../types/api';
 import { paths } from '../../paths';
+import { connectionOf } from './connection';
 
 const can = (d: Device, c: string) => d.capabilities.includes(c);
 
@@ -28,7 +29,11 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
 }) {
   const navigate = useNavigate();
   const real = device.environment !== 'simulated';
-  const address = device.management_address;
+  // Where UNDM reaches it now: its bench address, or its network address after staging (D-125).
+  const conn = connectionOf(device);
+  const address = conn.address;
+  const network = conn.via === 'network';
+  const benchOnly = network ? 'On the bench only: move the system back to the bench first' : undefined;
   const [info, setInfo] = useState<Device | null>(null);
   const [restartOpen, restart] = useDisclosure();
   const [licenseOpen, license] = useDisclosure();
@@ -44,8 +49,9 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
     return api.device(device.id);
   }, undefined);
   const ssh = useAction(() => api.openSsh(device.id), () => `SSH window opened for ${device.name}: type the password there`);
-  // Reached over its console only (the modem): a terminal on its console port instead (D-118).
-  const consoleOnly = can(device, 'supports_serial_console') && !can(device, 'supports_ssh');
+  // Reached over its console only (the modem on the bench): a terminal on its console port instead (D-118).
+  const consoleOnly = conn.capabilities.includes('supports_serial_console') && !conn.capabilities.includes('supports_ssh');
+  const hasSsh = conn.capabilities.includes('supports_ssh');
   const terminal = useAction(() => api.openConsole(device.id), (r) => `Console window opened on ${r.console_port}`
     + (r.program === 'putty' ? ' (PuTTY)' : ' (close it with Ctrl+])') + ': close it before UNDM uses this port again');
   const makeRestart = useAction(() => api.restartPlan(device.id), undefined, { errorInDialog: true });
@@ -80,7 +86,8 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
           aria-label={`Actions for ${device.name}`} data-device-menu=""><IconDots size={size === 'lg' ? 18 : 16} /></ActionIcon></Menu.Target>
         <Menu.Dropdown>
           <Menu.Label>{device.name}</Menu.Label>
-          {real && !consoleOnly && <Menu.Item leftSection={<IconTerminal size={14} />} onClick={() => ssh.mutate(undefined)}>Open SSH window</Menu.Item>}
+          {network && <Menu.Label>In the network: {address || 'no network address yet'}</Menu.Label>}
+          {real && hasSsh && address && <Menu.Item leftSection={<IconTerminal size={14} />} onClick={() => ssh.mutate(undefined)}>Open SSH window</Menu.Item>}
           {real && consoleOnly && <Menu.Item leftSection={<IconTerminal size={14} />} onClick={() => terminal.mutate(undefined)}>Open console window</Menu.Item>}
           {real && address && <Menu.Item leftSection={<IconWorld size={14} />} component="a" href={`https://${address}`} target="_blank"
             rel="noreferrer" rightSection={<IconExternalLink size={12} />}>Open web page</Menu.Item>}
@@ -94,11 +101,13 @@ export function DeviceMenu({ device, onDelete, onEdit, size = 'md' }: {
           <Menu.Item component={Link} to={paths.device(device.id, 'files')} leftSection={<IconFileText size={14} />}>Files and compare</Menu.Item>
           <Menu.Item component={Link} to={paths.device(device.id, 'log')} leftSection={<IconActivity size={14} />}>Device log</Menu.Item>
           <Menu.Label>Changes the device (approved plan)</Menu.Label>
-          {can(device, 'supports_restart') && <Menu.Item leftSection={<IconPower size={14} />} onClick={restart.open}>Restart…</Menu.Item>}
-          {can(device, 'supports_license_file') && <Menu.Item leftSection={<IconCertificate size={14} />} onClick={license.open}>Load license…</Menu.Item>}
+          {benchOnly && <Menu.Item disabled>{benchOnly}</Menu.Item>}
+          {can(device, 'supports_restart') && <Menu.Item leftSection={<IconPower size={14} />} disabled={network} onClick={restart.open}>Restart…</Menu.Item>}
+          {can(device, 'supports_license_file') && <Menu.Item leftSection={<IconCertificate size={14} />} disabled={network} onClick={license.open}>Load license…</Menu.Item>}
           {(device.driver_id.includes('aos_switch') || consoleOnly) && <Menu.Item component={Link} to={paths.console(device.id)}
-            leftSection={<IconTerminal2 size={14} />}>Console setup</Menu.Item>}
-          <Menu.Item leftSection={<IconRocket size={14} />} onClick={() => void navigate(paths.planNew({ system: device.project_id, devices: device.id }))}>Make a plan…</Menu.Item>
+            disabled={network} leftSection={<IconTerminal2 size={14} />}>Console setup</Menu.Item>}
+          <Menu.Item leftSection={<IconRocket size={14} />} disabled={network}
+            onClick={() => void navigate(paths.planNew({ system: device.project_id, devices: device.id }))}>Make a plan…</Menu.Item>
           {onEdit && <><Menu.Divider />
             <Menu.Item leftSection={<IconEdit size={14} />} disabled={!!device.locked_by_deployment_id} onClick={onEdit}>Edit device…</Menu.Item></>}
           {onDelete && <><Menu.Divider />

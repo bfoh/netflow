@@ -114,8 +114,31 @@ class ProjectOut(ORM):
     staged_by: str = ""
     zone: int | None = None  # its files are generated for this zone (D-111)
     system_id: str | None = None  # e.g. B007: the modem's and BBU's files depend on it (D-114)
+    # "bench" or "network" (after staging, through its BFW, D-125), and the BFW's device id.
+    reached_via: str = "bench"
+    network_gateway_id: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class ReachedViaIn(BaseModel):
+    """Move a system to the network (through its BFW) or back to the bench (D-125)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    via: Literal["bench", "network"]
+    gateway_device_id: str | None = None
+
+
+class NetworkAddressIn(BaseModel):
+    """A device's network address, confirmed by a person: read from its file or typed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: str | None = Field(default=None, max_length=64)  # None or "": clear it
+    # Where it came from, kept in the audit (the file's name and line), when read from a file.
+    file: str | None = Field(default=None, max_length=200)
+    line: int | None = Field(default=None, ge=1)
 
 
 class LoginDefaults(BaseModel):
@@ -263,6 +286,17 @@ class DevicePatch(DeviceBase):
     name: str | None = Field(default=None, min_length=1, max_length=120)
 
 
+class ConnectionOut(BaseModel):
+    """How UNDM reaches the device now (D-125)."""
+
+    via: str  # bench | network
+    address: str
+    port: int | None = None
+    driver_id: str
+    capabilities: list[str] = []
+    problem: str | None = None
+
+
 class DeviceOut(ORM):
     id: str
     project_id: str
@@ -279,6 +313,8 @@ class DeviceOut(ORM):
     management_protocol: str
     management_port: int | None
     console_port: str | None = None
+    console_speed: int | None = None
+    network_address: str | None = None
     management_vrf: str
     site: str
     rack_location: str
@@ -298,6 +334,7 @@ class DeviceOut(ORM):
     locked_by_deployment_id: str | None
     bootstrap_profile: dict[str, Any] | None
     capabilities: list[str] = []
+    connection: ConnectionOut | None = None
     created_at: datetime
     updated_at: datetime
 

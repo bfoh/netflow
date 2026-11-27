@@ -19,8 +19,25 @@ export interface Project {
   zone?: number | null;
   /** Its system, e.g. B007 (D-114): the modem's and BBU's files depend on it. */
   system_id?: string | null;
+  /** Where UNDM reaches its devices (D-125): on the bench, or in the network through its BFW. */
+  reached_via?: ReachedVia;
+  /** The device that is its BFW (the FortiGate the laptop is connected to in the network). */
+  network_gateway_id?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type ReachedVia = 'bench' | 'network';
+
+/** How UNDM reaches a device now (D-125): its address, port and driver there. */
+export interface DeviceConnection {
+  via: ReachedVia;
+  address: string;
+  port: number | null;
+  driver_id: string;
+  capabilities: string[];
+  /** Why UNDM cannot reach it there (no network address yet). */
+  problem: string | null;
 }
 
 export interface CertificateSubject {
@@ -70,6 +87,10 @@ export interface Device {
   management_port: number | null;
   /** The PC's serial port for a device reached over its console only (D-116). */
   console_port?: string | null;
+  /** The console speed chosen for its console window (D-126); null: its model's own. */
+  console_speed?: number | null;
+  /** Its address in the network after staging (D-125); management_address stays its bench address. */
+  network_address?: string | null;
   management_vrf: string;
   site: string;
   rack_location: string;
@@ -89,11 +110,13 @@ export interface Device {
   locked_by_deployment_id: string | null;
   bootstrap_profile: BootstrapProfile | null;
   capabilities: string[];
+  /** How UNDM reaches it now; absent in older answers (then: on the bench). */
+  connection?: DeviceConnection | null;
   created_at: string;
   updated_at: string;
 }
 
-export type DeviceInput = Partial<Omit<Device, 'id' | 'project_id' | 'created_at' | 'updated_at'>>;
+export type DeviceInput = Partial<Omit<Device, 'id' | 'project_id' | 'created_at' | 'updated_at' | 'connection' | 'network_address'>>;
 
 export interface Driver {
   driver_id: string;

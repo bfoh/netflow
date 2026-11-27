@@ -69,7 +69,8 @@ class MockDriver(DeviceDriver):
     def connect(self) -> OperationResult:
         op = Op.CHECK_REACHABILITY
         dev = default_lab().get_or_create(
-            self.target.management_address, self.info.vendor, self.model, self.initial_os_version
+            self.target.management_address, self.info.vendor, self.model,
+            self.initial_os_version, device_id=self.target.device_id,
         )
         if dev is None:
             return OperationResult.failed(op, "No simulated device at this address")

@@ -40,6 +40,10 @@ class SimulatedDevice:
 class SimulatedLab:
     def __init__(self, autocreate: bool = True) -> None:
         self._devices: dict[str, SimulatedDevice] = {}
+        # UNDM's device id -> its simulated unit, so one unit answers at its bench address
+        # and at its network address (D-125). SYNTHETIC: a real unit has one address at a
+        # time; the lab keeps both so a practice system can move back and forth.
+        self._by_device: dict[str, SimulatedDevice] = {}
         self._lock = threading.Lock()
         self.autocreate = autocreate
 
@@ -53,10 +57,16 @@ class SimulatedLab:
             return self._devices.get(address)
 
     def get_or_create(
-        self, address: str, vendor: str, model: str, os_version: str
+        self, address: str, vendor: str, model: str, os_version: str,
+        device_id: str | None = None,
     ) -> SimulatedDevice | None:
+        """The unit at ``address``; else the unit UNDM's device ``device_id`` reached
+        before (at its other address), which then also answers here; else a new one."""
         with self._lock:
             dev = self._devices.get(address)
+            if dev is None and device_id and device_id in self._by_device:
+                dev = self._by_device[device_id]
+                self._devices[address] = dev
             if dev is None and self.autocreate:
                 dev = SimulatedDevice(
                     address=address,
@@ -66,11 +76,14 @@ class SimulatedLab:
                     serial_number=f"SIM-{abs(hash(address)) % 10**8:08d}",
                 )
                 self._devices[address] = dev
+            if dev is not None and device_id:
+                self._by_device[device_id] = dev
             return dev
 
     def clear(self) -> None:
         with self._lock:
             self._devices.clear()
+            self._by_device.clear()
 
 
 _default_lab = SimulatedLab()

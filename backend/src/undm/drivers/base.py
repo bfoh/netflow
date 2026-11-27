@@ -227,8 +227,13 @@ class DeviceDriver:
     """Base class; subclasses override only what they actually support."""
 
     info: ClassVar[DriverInfo]
-    # The console speed of a device reached over its console (opens a console window).
+    # The console speed of the model's console port, where a source documents it (D-126).
     console_speed: ClassVar[int | None] = None
+    # Where that speed comes from, shown next to it ("Nokia documentation", ...).
+    console_speed_source: ClassVar[str] = ""
+    # The driver that reaches the same model in the network after staging, where it differs
+    # from this one (D-125): e.g. a console-only driver on the bench, SSH in the network.
+    network_driver_id: ClassVar[str | None] = None
     # Set by a running deployment: True once a stop was requested. Drivers that wait long
     # (transfers, device questions) check it and end the wait early.
     should_stop: Callable[[], bool] | None = None

@@ -24,6 +24,7 @@ from undm.services import audit
 from undm.services import devices as devsvc
 from undm.services import templates as tplsvc
 from undm.services.errors import ConflictError, NotFoundError
+from undm.services.reach import require_bench
 
 NOTE_MAX = 2000
 
@@ -109,6 +110,7 @@ def _image(session: Session, device: Device, registry: DriverRegistry,
 def mark_done(session: Session, device: Device, registry: DriverRegistry, actor: str,
               step_key: str, note: str = "", version_id: str | None = None,
               image_id: str | None = None) -> GuidedStepRecord:
+    require_bench(device.project, "staging steps are recorded")
     key, _title, _steps = _need(device, registry)
     current = states(session, device, registry)
     found = next((s for s in current if s.step.key == step_key), None)
@@ -124,7 +126,7 @@ def mark_done(session: Session, device: Device, registry: DriverRegistry, actor:
     step = found.step
     file_name = file_sha = file_ref = None
     if step.kind == "check":
-        result = devsvc.build_driver(device, registry).connect()
+        result = devsvc.build_driver(device, registry, via="bench").connect()
         if not result.ok:
             raise ConflictError(result.message)
         note = note or result.message
@@ -151,6 +153,7 @@ def mark_done(session: Session, device: Device, registry: DriverRegistry, actor:
 def undo(session: Session, device: Device, registry: DriverRegistry, actor: str,
          step_key: str) -> list[str]:
     """Clear a step and every later one (they followed from it). Returns the steps cleared."""
+    require_bench(device.project, "staging steps are recorded")
     current = states(session, device, registry)
     found = next((s for s in current if s.step.key == step_key), None)
     if found is None:

@@ -84,6 +84,13 @@ class Project(TimestampMixin, Base):
     # Its system, a letter and three digits such as B007 (D-114): the modem's and the BBU's
     # files depend on it, and its cells' PCIs come from the team's PCI table.
     system_id: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # Where UNDM reaches its devices (D-125): "bench" (the staging bench, the bench
+    # addresses) or "network" (after staging, their network addresses through the BFW).
+    reached_via: Mapped[str] = mapped_column(String(10), default="bench",
+                                             server_default="bench")
+    # The device of this system that is its BFW (the FortiGate every other device is
+    # reached through in the network). Checked in the service; no foreign key.
+    network_gateway_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     devices: Mapped[list[Device]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
@@ -129,6 +136,11 @@ class Device(TimestampMixin, Base):
     # Declared: the serial port of the PC that this device's console cable is on (COM3),
     # for devices reached over their console only (D-116).
     console_port: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Declared: its console speed, chosen by a person (D-126); None: the driver's own.
+    console_speed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Declared: the address it has in the network after staging, confirmed by a person from
+    # its file or typed (D-125). ``management_address`` stays its bench address.
+    network_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     management_vrf: Mapped[str] = mapped_column(String(80), default="")
     site: Mapped[str] = mapped_column(String(200), default="")
     rack_location: Mapped[str] = mapped_column(String(200), default="")
