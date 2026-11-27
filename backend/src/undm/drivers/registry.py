@@ -41,9 +41,11 @@ def default_registry() -> DriverRegistry:
     from undm.drivers.mock.drivers import MOCK_DRIVERS
     from undm.drivers.nokia.flexi import GUIDED_DRIVERS
     from undm.drivers.nokia.sar_console import CONSOLE_DRIVERS
+    from undm.drivers.nokia.sar_ssh import NETWORK_DRIVERS
     from undm.drivers.ssh.platforms import SSH_DRIVERS
 
     registry = DriverRegistry()
-    for cls in (*MOCK_DRIVERS, *SSH_DRIVERS, *CONSOLE_DRIVERS, *GUIDED_DRIVERS):
+    for cls in (*MOCK_DRIVERS, *SSH_DRIVERS, *CONSOLE_DRIVERS, *NETWORK_DRIVERS,
+                *GUIDED_DRIVERS):
         registry.register(cls)
     return registry

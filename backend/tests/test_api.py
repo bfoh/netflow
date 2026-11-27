@@ -47,7 +47,7 @@ def test_health_drivers_models(client):
         "mock.blackbox.switch", "mock.nokia.sar", "console.nokia.sar", "mock.nokia.flexi",
         "guided.nokia.flexi",
         "ssh.aruba.aoscx", "ssh.fortinet.fortios", "ssh.cisco.iosxe", "ssh.aruba.aos_switch",
-        "ssh.blackbox.lig1014a"}
+        "ssh.blackbox.lig1014a", "ssh.nokia.sar"}
     for d in drivers:
         assert d["simulated"] == d["driver_id"].startswith("mock.")
         assert d["maturity"] == ("simulation" if d["simulated"] else "experimental")
