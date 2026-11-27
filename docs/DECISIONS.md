@@ -2215,3 +2215,23 @@ the switch ended staged on a non-approved password.
   the services Copy hides the unit-specific part of a certificate name.
 - The wrong sentence "the file sets the approved password" is gone.
 
+### D-132 The Flexi BBU's software through Nokia's RFSTool; the Admin CLI next (2026-11-27)
+
+The product owner found Nokia's RFSTool 2.52 with its user guide on the team's PC. It loads and
+activates a BTS software package on an FSMF from this PC, in a console dialogue (y/n per
+optional step, then "Do you wish to restore FSMF unit?"), and writes a report per run. It
+cannot commission (no SCF). Its package ships Nokia's Admin CLI, the next lead (Q-68).
+
+**Decision (plan, not built yet):**
+- UNDM does not ship, copy into its own folder, analyse or change RFSTool; it may run the copy
+  the team holds under its Nokia licence, from a folder chosen in Settings (kept in the local
+  database only: its path names the PC's user).
+- After one recorded dialogue on the bench that changes nothing (Q-69), a software step for
+  the BBU runs RFSTool with the approved package in its `BTSSW` folder, answers only the
+  recorded questions (an unknown one ends the step with the tool's words, as D-031), chooses
+  the load whose name equals the approved package's, confirms, streams the output into the
+  plan and reads the report; then waits for the portal. Through the lifecycle (preview,
+  approval, real-device and firmware switches, audit), experimental. The guided SCF steps stay.
+- The Admin CLI: read-only first, then the SCF if its own help documents it.
+- Default account names and example passwords in the guide are not recorded.
+

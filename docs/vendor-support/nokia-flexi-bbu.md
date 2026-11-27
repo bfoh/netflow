@@ -73,6 +73,28 @@ radio and system modules, cells, alarms, files, GNSS, SFPs, cell mapping, output
 it has no software, SCF or commissioning command, so it cannot stage the unit. It is not the
 Remote Tool.
 
+**Nokia RFSTool (Q-69, D-132):** the team holds Nokia's RFSTool 2.52 (Restore Factory
+Settings) and its user guide (Nokia, v2.25, 14 June 2022; vendor documentation, kept on the
+bench PC, not in this repository; the tool requires a Nokia licence). From the guide:
+- a Windows console tool; it finds the unit by ping (192.168.255.1, .3, .119, .127, .129,
+  .131), asks to use the FSM found, logs in over TCP/SSH with the unit's default local and
+  service accounts (their names and passwords are not recorded here), and prints the unit
+  name, product code, serial number, active and passive SW;
+- for an FSMF it then asks y/n for each optional step (local account, service account,
+  operator certificate, rollback to the passive partition, clear BTS configuration), lists
+  the loads found in its `BTSSW` folder (the same `…_release_BTSSM_downloadable_….zip`
+  with `bts_sw` as the team's package), and only after "Do you wish to restore FSMF unit?
+  (y/n)" cleans, uploads and verifies the files and activates the new SW in the passive
+  partition (FSMF: 2 to 6 minutes, with a restart). Clearing the BTS configuration leaves
+  the unit not commissioned. It cannot commission (no SCF);
+- each run writes a report to `C:\Temp\logs\<serial>_<product code>_<date>.txt`;
+- options `-W` (encrypt a password file), `-D` (SSH port), `-N` (failsafe partition); answers
+  typed ahead are taken in order ("The input from user is saved to cache and is fed to RFS
+  tool");
+- its package also holds `admin-cli.zip` ("Admin CLI 2.5.0", used "to support automatic
+  enabling of SSH Service Account status") and `ChangeEthernetSecurityTool4.zip`, which it
+  uses by itself. The Admin CLI is the next lead for the SCF and the unit's state (Q-68).
+
 **What UNDM does now (v97, D-130):** device menu → **Find its management services…** asks
 the unit itself, read-only (Q-66), and the product owner asks Nokia (Q-65). The driver that
 stages the BBU follows from what is confirmed: NETCONF from the YANG modules the unit
